@@ -13,6 +13,9 @@ import pytest
 from precondition_library.signatures import StateFingerprint
 
 
+# `upstream_ahead` is how many commits upstream has that HEAD lacks; `upstream_behind`
+# is how many HEAD has that upstream lacks. They describe the same ref pair from
+# opposite sides, so a state cannot be both without being incoherent.
 def _make_state(**overrides) -> StateFingerprint:
     base = {
         "dirty_worktree": False,
@@ -35,19 +38,17 @@ def make_state():
 
 # sync_fork_with_upstream: three resolutions, plus the benign state.
 DIVERGED_STATES = {
-    "benign_nothing_local": _make_state(
-        local_only_commits=0, upstream_behind=3, upstream_touched_files=["app.py"]
-    ),
+    "benign_nothing_local": _make_state(upstream_touched_files=["app.py"]),
     "empty_local_commits": _make_state(
-        local_only_commits=2, local_touched_files=[], upstream_touched_files=["app.py"]
+        upstream_behind=2, local_touched_files=[], upstream_touched_files=["app.py"]
     ),
     "disjoint_files": _make_state(
-        local_only_commits=2,
+        upstream_behind=2,
         local_touched_files=["docs/readme.md"],
         upstream_touched_files=["app.py"],
     ),
     "overlapping_files": _make_state(
-        local_only_commits=2,
+        upstream_behind=2,
         local_touched_files=["app.py", "docs/readme.md"],
         upstream_touched_files=["app.py"],
     ),

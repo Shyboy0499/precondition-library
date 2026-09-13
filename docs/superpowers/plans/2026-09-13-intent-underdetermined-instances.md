@@ -99,13 +99,13 @@ def test_conflicting_files_empty_when_disjoint(make_state) -> None:
 
 
 def test_has_local_only_commits_counts_not_flags(make_state) -> None:
-    assert make_state(local_only_commits=0).has_local_only_commits is False
-    assert make_state(local_only_commits=2).has_local_only_commits is True
+    assert make_state(upstream_behind=0).has_local_only_commits is False
+    assert make_state(upstream_behind=2).has_local_only_commits is True
 
 
 def test_defaults_keep_existing_construction_valid() -> None:
-    """Existing call sites construct fingerprints positionally/by keyword with the
-    original seven fields; adding fields must not break them."""
+    """Existing call sites construct fingerprints by keyword with the original
+    fields; adding fields with defaults must not break them."""
     state = StateFingerprint(
         dirty_worktree=False,
         branch="main",
@@ -113,9 +113,12 @@ def test_defaults_keep_existing_construction_valid() -> None:
         upstream_behind=0,
         has_locked_branch=False,
         has_submodule_reference=False,
+        remotes=[],
     )
-    assert state.local_only_commits == 0
+    assert state.has_local_only_commits is False
     assert state.submodule_initialised is False
+    assert state.local_touched_files == []
+    assert state.submodule_pin_matches_upstream is True
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -142,14 +145,14 @@ class StateFingerprint(BaseModel):
     dirty_worktree: bool
     branch: str
     upstream_ahead: int
+    """Commits upstream has that HEAD lacks: `git rev-list --count HEAD..upstream/main`."""
     upstream_behind: int
+    """Commits HEAD has that upstream lacks: `git rev-list --count upstream/main..HEAD`."""
     has_locked_branch: bool
     has_submodule_reference: bool
     remotes: list[str] = []
 
-    # Discriminators for the ambiguous intents (see tasks/intent.py).
-    local_only_commits: int = 0
-    """Commits present locally that upstream lacks: `git rev-list --count upstream/main..HEAD`."""
+    # Discriminators for the ambiguous intents (see the intent model added in the next task).
     local_touched_files: list[str] = []
     """Files the local-only commits change: `git diff --name-only upstream/main...HEAD`."""
     upstream_touched_files: list[str] = []
@@ -159,7 +162,7 @@ class StateFingerprint(BaseModel):
     `git submodule status` prefixes an uninitialised entry with `-`."""
     submodule_pin_matches_upstream: bool = True
     """Whether the recorded submodule commit equals the one upstream pins:
-    `git diff --name-only upstream/main -- <submodule_path>` is empty when it does."""
+    `git diff --name-only upstream/main HEAD -- <submodule_path>` is empty when it does."""
     upstream_still_references_submodule: bool = True
     """Whether upstream's tree still contains the submodule path at all:
     `git ls-tree upstream/main -- <submodule_path>` is non-empty when it does."""
@@ -178,11 +181,14 @@ class StateFingerprint(BaseModel):
     def has_local_only_commits(self) -> bool:
         """Whether the local branch is ahead of upstream at all.
 
-        A count rather than a flag because the zero case is the *benign* state:
-        nothing to resolve, so every program must refuse to fire. Negative
-        examples are half of what a dispatcher has to get right.
+        Derived from `upstream_behind` rather than carried as its own field: the
+        two are the same measurement, and having two names for one quantity is how
+        a fingerprint ends up asserting two contradictory things at once. A count
+        rather than a flag because the zero case is the *benign* state -- nothing
+        to resolve, so every program must refuse to fire, and a dispatcher that
+        always fires can only be caught by states that require refusal.
         """
-        return self.local_only_commits > 0
+        return self.upstream_behind > 0
 
     @classmethod
     def observe(cls, env) -> StateFingerprint:
@@ -235,6 +241,9 @@ import pytest
 from precondition_library.signatures import StateFingerprint
 
 
+# `upstream_ahead` is how many commits upstream has that HEAD lacks; `upstream_behind`
+# is how many HEAD has that upstream lacks. They describe the same ref pair from
+# opposite sides, so a state cannot be both without being incoherent.
 def _make_state(**overrides) -> StateFingerprint:
     base = {
         "dirty_worktree": False,
@@ -257,19 +266,17 @@ def make_state():
 
 # sync_fork_with_upstream: three resolutions, plus the benign state.
 DIVERGED_STATES = {
-    "benign_nothing_local": _make_state(
-        local_only_commits=0, upstream_behind=3, upstream_touched_files=["app.py"]
-    ),
+    "benign_nothing_local": _make_state(upstream_touched_files=["app.py"]),
     "empty_local_commits": _make_state(
-        local_only_commits=2, local_touched_files=[], upstream_touched_files=["app.py"]
+        upstream_behind=2, local_touched_files=[], upstream_touched_files=["app.py"]
     ),
     "disjoint_files": _make_state(
-        local_only_commits=2,
+        upstream_behind=2,
         local_touched_files=["docs/readme.md"],
         upstream_touched_files=["app.py"],
     ),
     "overlapping_files": _make_state(
-        local_only_commits=2,
+        upstream_behind=2,
         local_touched_files=["app.py", "docs/readme.md"],
         upstream_touched_files=["app.py"],
     ),
@@ -645,7 +652,7 @@ depends on what the local-only commits actually contain:
   merge    both sides changed the same file, so rewriting local history would
            discard a resolution someone already made.
 
-The discriminators are all observable (`local_only_commits`,
+The discriminators are all observable (`upstream_behind`,
 `local_touched_files`, `upstream_touched_files`), which matters: arm 3 decides by
 running probes, so a resolution that needed a *judgement* could not be decided by
 either mechanism and the comparison would be between two blind dispatchers.
@@ -1471,7 +1478,7 @@ def test_positive_control_the_detector_fires_on_a_leaky_intent(leaky_intent) -> 
         upstream_behind=0,
         has_locked_branch=False,
         has_submodule_reference=False,
-        local_only_commits=1,
+        upstream_behind=1,
         local_touched_files=["a.py"],
     )
     pairs = [label(leaky_intent, seed, state) for seed in TRAIN_SEEDS + EVAL_SEEDS]
