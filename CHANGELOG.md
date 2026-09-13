@@ -8,7 +8,7 @@ Versions are **0.x** and the design is still moving. Nothing below claims a
 measured result; there are none yet. See
 [`docs/decisions/`](docs/decisions/) for reversals and the reasoning behind them.
 
-## [Unreleased]
+## Unreleased
 
 ### Added
 
@@ -45,9 +45,14 @@ measured result; there are none yet. See
   must not be included in any dispatch measurement until they gain an
   `IntentSpec`, and are tracked in issue #25.
 
-## [0.0.1] — 2026-09-13
+## 0.0.1 — 2026-09-13
 
 Design-phase release. No agent exists and no result is claimed.
+
+Untagged and deliberately so: nothing here is releasable, and the tag that once
+marked it was dropped because a rebase-merge left it pointing at a commit
+reachable only through the tag itself. Versions get tagged when there is an
+artifact worth downloading and a released snapshot would mean something.
 
 ### Added
 
@@ -71,6 +76,3 @@ Design-phase release. No agent exists and no result is claimed.
   project's own gate has not been verified by anyone.
 - The pre-registered analysis was revised **before any data existed**; the
   revision is logged in the spec's revision history.
-
-[Unreleased]: https://github.com/Shyboy0499/precondition-library/compare/v0.0.1...HEAD
-[0.0.1]: https://github.com/Shyboy0499/precondition-library/commits/v0.0.1
