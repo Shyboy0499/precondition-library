@@ -27,7 +27,7 @@ Stated first, because the prior art is real and the honest framing depends on it
 | That compiling a task into a persistent program and replaying it without an LLM is novel | Already published: PreAct, SkillDroid, and Auto each compile a trace and replay it cheaply or with no per-step LLM calls (see [Prior work](#prior-work)). |
 | That dispatching a cached plan by testing **executable preconditions** is a new mechanism | It is MACROPS, 1972: a cached generalized plan is dispatched by testing precondition *kernels* against live state, with an explicit replan fallback. |
 | That "the most similar case is not the most reusable" is a new insight | Smyth & Keane argued it in 1998, in a peer-reviewed journal, at length. |
-| That any number in this repository has been measured | Nothing has been run. There is no figure, no table, and no `.jsonl`. |
+| That any number in this repository has been measured | No dispatch comparison and no episode has been run. The only measured numbers are the text-only control's AUCs below; there is no figure and no `.jsonl`. |
 
 Amortization is still what makes the project *useful* — it is an engineering
 assumption here, not a finding. It is reported as a cost model, never as a
@@ -94,6 +94,22 @@ Two properties make a mis-fire visible rather than invisible:
    postconditions on a freshly faulted sandbox **and** its preconditions *reject*
    negative sandboxes — states where firing would be wrong. A precondition set
    that accepts everything is recorded as a defect, not a convenience.
+
+The request text is held to the same standard. It has two declared channels: the
+shared **uninformed** `phrasings` list — what someone says when they do not know
+what is wrong, or when nothing is wrong — and an **informed** entry in a
+resolution's `variant_phrasings`, wording that reveals the situation. A
+bag-of-words classifier trained on the text alone (`bench/textcontrol.py`, over
+the test state grid, train n=120 / eval n=120 on disjoint seed sets) scores **AUC
+0.500 for uninformed requests** on both converted intents — no signal at all, so
+a dispatch comparison there measures state-reading — and **0.962 / 0.945 for
+informed requests** (`diverged`'s and `submodule_moved`'s intents, in that
+order) — the boundary condition, where the wording nearly
+determines the resolution and the mechanism is not needed. An earlier draft
+pooled the two regimes into one number (0.795 / 0.801, the control's pre-split
+figures) that described neither. The uninformed AUC is gated; the informed AUC is
+reported, never gated. Three of the five faults still return one fixed sentence
+and are excluded from dispatch measurement until converted (issue #25).
 
 The end-to-end episode loop survives as a small demonstration, explicitly
 labelled underpowered. It is not the claim.
