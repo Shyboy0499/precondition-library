@@ -21,13 +21,18 @@ Two rules keep this directory trustworthy:
    program that has not passed both lives in `bench/` scratch space, not here.
 2. **Nothing is deleted.** A program that mis-fired is marked `demoted` or
    `quarantined` and stays. Removing it would erase the mismatch evidence that
-   the headline claim depends on.
+   the primary claim depends on.
 
 `status` is the field to read first:
 
 | status | meaning |
 | --- | --- |
 | `candidate` | compiled, not yet admitted; never replayed |
-| `verified` | passed admission; dispatchable |
+| `admitted` | passed the two-sided admission gate; dispatchable |
 | `demoted` | fired on a real episode, postconditions failed |
 | `quarantined` | withdrawn from dispatch, retained for analysis |
+
+`admitted` was previously named `verified`. The rename is deliberate: a program
+that passed *this project's own* gate has not been verified by anyone, and the
+word would imply an assurance the gate cannot confer. Nothing was lost in the
+rename — no program has been through admission yet.
