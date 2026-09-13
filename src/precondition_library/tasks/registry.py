@@ -26,4 +26,16 @@ def ambiguous_intents() -> list[IntentSpec]:
     )
 
 
-__all__ = ["INTENTS", "ambiguous_intents"]
+EXCLUDED_FROM_BENCHMARK: set[str] = {"dirty_tree", "branch_renamed", "lockfile_conflict"}
+"""Faults that must never be measured, because they return a fixed request sentence.
+
+Excluded explicitly rather than left merely absent, so that every fault is
+accounted for somewhere. A fault that is neither intent-covered nor listed here
+would enter a dispatch measurement with the text acting as its class label -- the
+original defect, where a text-reading dispatcher cannot mis-fire and the
+comparison measures nothing. `test_every_fault_is_accounted_for` makes that state
+unreachable, and the reason for each exclusion is in the spec, open risk 6.
+"""
+
+
+__all__ = ["EXCLUDED_FROM_BENCHMARK", "INTENTS", "ambiguous_intents"]

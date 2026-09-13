@@ -167,3 +167,21 @@ def test_registry_intents_name_a_real_fault() -> None:
 
     for intent in ambiguous_intents():
         assert intent.fault in ALL_FAULTS
+
+
+def test_every_fault_is_accounted_for() -> None:
+    """Each fault is measured through an intent, or excluded on the record.
+
+    A fault in neither set could enter a dispatch measurement carrying a fixed
+    request sentence, which is the original defect: the text would be the class
+    label and a text-reading dispatcher could not mis-fire. Silence is the failure
+    mode, so silence is what this forbids.
+    """
+    from precondition_library.tasks import ALL_FAULTS
+    from precondition_library.tasks.registry import EXCLUDED_FROM_BENCHMARK, INTENTS
+
+    covered = {intent.fault for intent in INTENTS.values()}
+    assert covered & EXCLUDED_FROM_BENCHMARK == set(), "a fault is both measured and excluded"
+    assert covered | EXCLUDED_FROM_BENCHMARK == set(ALL_FAULTS), (
+        f"unaccounted faults: {sorted(set(ALL_FAULTS) - covered - EXCLUDED_FROM_BENCHMARK)}"
+    )

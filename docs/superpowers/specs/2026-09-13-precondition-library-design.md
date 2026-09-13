@@ -693,7 +693,10 @@ claim.
    sentence, so for them the text remains a perfect class label — the original
    defect. They are scoped out of this change and **must not be included in any
    dispatch measurement** until they gain an `IntentSpec` with two or more
-   state-decided resolutions. Tracked in issue #25.
+   state-decided resolutions. Tracked in issue #25, and enforced rather than
+   merely stated: `EXCLUDED_FROM_BENCHMARK` in `tasks/registry.py` names them, and
+   a test asserts every fault is either intent-covered or listed there, so a fault
+   cannot be silently absent from both.
 
 ---
 
