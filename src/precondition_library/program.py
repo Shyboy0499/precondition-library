@@ -96,7 +96,14 @@ class GroundTruthResult(BaseModel):
 
 
 class EpisodeOutcome(StrEnum):
-    """How an episode ended. `mismatch` is the failure this project exists to reduce."""
+    """How an episode ended. `mismatch` is the failure this project exists to reduce.
+
+    FAIL, MISMATCH, FALLBACK and REFUSAL all count in the metric denominators,
+    carrying their token spend: an episode that crashed after 4,000 tokens still
+    cost 4,000 tokens, and dropping it would make amortization look better than
+    it is. INVALID is the exception -- the episode never ran, so it is recorded
+    and counted separately rather than averaged in (see the design spec, §7).
+    """
 
     SUCCESS = "success"
     FAIL = "fail"
@@ -104,3 +111,9 @@ class EpisodeOutcome(StrEnum):
     """A program's preconditions claimed applicability and it did not work."""
     FALLBACK = "fallback"
     """No program applicable; the LLM solved it. Expected, not a failure."""
+    REFUSAL = "refusal"
+    """The guard refused the generated body, so nothing executed. Kept distinct
+    from FALLBACK because a high refusal rate is a safety finding, not a cost."""
+    INVALID = "invalid"
+    """The episode could not run (sandbox or infrastructure failure). Excluded
+    from metric denominators, reported as its own rate."""
