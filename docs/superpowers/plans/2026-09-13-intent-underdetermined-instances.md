@@ -45,7 +45,7 @@ Live git sandboxes and `inject()` (#4/#5) · the compile and admission pipeline 
 | `src/precondition_library/tasks/faults/submodule_moved.py` | **Modify.** Add `INTENT` with three resolutions (init / repin / remove); delegate `task_text` to it. |
 | `src/precondition_library/tasks/registry.py` | **Create.** `INTENTS` and `ambiguous_intents()` — the only intents with an experimental surface. |
 | `src/precondition_library/bench/pairs.py` | **Create.** `LabelledPair`, `label`, `labelled_pairs`, `ambiguous_subset`, `decision_is_correct`, `denominator_report`. |
-| `src/precondition_library/bench/textcontrol.py` | **Create.** Bag-of-words logistic regression, rank-based AUC, full-determination verdict. |
+| `src/precondition_library/bench/textcontrol.py` | **Create.** Bag-of-words logistic regression, rank-based AUC, per-regime verdict: gates the uninformed channel as a plumbing tripwire and measures the informed one. |
 | `tests/conftest.py` | **Create.** State grids and a `make_state` helper shared across tests. |
 | `tests/test_intent_ambiguity.py` | **Create.** Variant count, partition of the state space, label invariance under wording. |
 | `tests/test_task_text_is_not_a_label.py` | **Create.** The control, plus the positive control that proves the control works. |
