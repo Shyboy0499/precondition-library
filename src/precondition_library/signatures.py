@@ -28,14 +28,14 @@ class StateFingerprint(BaseModel):
     dirty_worktree: bool
     branch: str
     upstream_ahead: int
+    """Commits upstream has that HEAD lacks: `git rev-list --count HEAD..upstream/main`."""
     upstream_behind: int
+    """Commits HEAD has that upstream lacks: `git rev-list --count upstream/main..HEAD`."""
     has_locked_branch: bool
     has_submodule_reference: bool
     remotes: list[str] = []
 
-    # Discriminators for the ambiguous intents (see tasks/intent.py).
-    local_only_commits: int = 0
-    """Commits present locally that upstream lacks: `git rev-list --count upstream/main..HEAD`."""
+    # Discriminators for the ambiguous intents (see the intent model added in the next task).
     local_touched_files: list[str] = []
     """Files the local-only commits change: `git diff --name-only upstream/main...HEAD`."""
     upstream_touched_files: list[str] = []
@@ -45,7 +45,7 @@ class StateFingerprint(BaseModel):
     `git submodule status` prefixes an uninitialised entry with `-`."""
     submodule_pin_matches_upstream: bool = True
     """Whether the recorded submodule commit equals the one upstream pins:
-    `git diff --name-only upstream/main -- <submodule_path>` is empty when it does."""
+    `git diff --name-only upstream/main HEAD -- <submodule_path>` is empty when it does."""
     upstream_still_references_submodule: bool = True
     """Whether upstream's tree still contains the submodule path at all:
     `git ls-tree upstream/main -- <submodule_path>` is non-empty when it does."""
@@ -64,11 +64,14 @@ class StateFingerprint(BaseModel):
     def has_local_only_commits(self) -> bool:
         """Whether the local branch is ahead of upstream at all.
 
-        A count rather than a flag because the zero case is the *benign* state:
-        nothing to resolve, so every program must refuse to fire. Negative
-        examples are half of what a dispatcher has to get right.
+        Derived from `upstream_behind` rather than carried as its own field: the
+        two are the same measurement, and having two names for one quantity is how
+        a fingerprint ends up asserting two contradictory things at once. A count
+        rather than a flag because the zero case is the *benign* state -- nothing
+        to resolve, so every program must refuse to fire, and a dispatcher that
+        always fires can only be caught by states that require refusal.
         """
-        return self.local_only_commits > 0
+        return self.upstream_behind > 0
 
     @classmethod
     def observe(cls, env) -> StateFingerprint:

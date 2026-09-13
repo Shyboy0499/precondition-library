@@ -24,13 +24,13 @@ def test_conflicting_files_empty_when_disjoint(make_state) -> None:
 
 
 def test_has_local_only_commits_counts_not_flags(make_state) -> None:
-    assert make_state(local_only_commits=0).has_local_only_commits is False
-    assert make_state(local_only_commits=2).has_local_only_commits is True
+    assert make_state(upstream_behind=0).has_local_only_commits is False
+    assert make_state(upstream_behind=2).has_local_only_commits is True
 
 
 def test_defaults_keep_existing_construction_valid() -> None:
-    """Existing call sites construct fingerprints positionally/by keyword with the
-    original seven fields; adding fields must not break them."""
+    """Existing call sites construct fingerprints by keyword with the original
+    fields; adding fields with defaults must not break them."""
     state = StateFingerprint(
         dirty_worktree=False,
         branch="main",
@@ -38,6 +38,9 @@ def test_defaults_keep_existing_construction_valid() -> None:
         upstream_behind=0,
         has_locked_branch=False,
         has_submodule_reference=False,
+        remotes=[],
     )
-    assert state.local_only_commits == 0
+    assert state.has_local_only_commits is False
     assert state.submodule_initialised is False
+    assert state.local_touched_files == []
+    assert state.submodule_pin_matches_upstream is True
