@@ -11,6 +11,7 @@ import pytest
 
 from precondition_library.signatures import StateFingerprint
 from precondition_library.tasks.faults.diverged import INTENT as DIVERGED
+from precondition_library.tasks.faults.submodule_moved import INTENT as SUBMODULE
 
 
 def test_conflicting_files_is_the_intersection(make_state) -> None:
@@ -75,3 +76,26 @@ def test_diverged_phrasings_mostly_do_not_name_the_fault() -> None:
 def test_diverged_variants_each_explain_themselves() -> None:
     for variant in DIVERGED.variants:
         assert variant.rationale.strip(), f"{variant.id} needs a rationale"
+
+
+@pytest.mark.parametrize(
+    ("state_name", "expected"),
+    [
+        ("benign_pin_matches", None),
+        ("not_initialised", "init"),
+        ("pin_drifted", "repin"),
+        ("upstream_dropped_it", "remove"),
+    ],
+)
+def test_submodule_resolution_is_decided_by_state(state_grid, state_name, expected) -> None:
+    variant = SUBMODULE.correct_variant(state_grid["restore_submodule_state"][state_name])
+    assert (variant.id if variant else None) == expected
+
+
+def test_submodule_has_three_distinct_resolutions() -> None:
+    assert {v.id for v in SUBMODULE.variants} == {"init", "repin", "remove"}
+    assert SUBMODULE.is_ambiguous
+
+
+def test_submodule_phrasings_mostly_do_not_name_the_fault() -> None:
+    assert SUBMODULE.naming_fraction(range(50)) <= 0.35
