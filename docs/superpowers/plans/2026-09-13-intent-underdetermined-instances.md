@@ -2773,7 +2773,7 @@ gh pr create --base main \
 - The spec's revision history gains a **v3** row: the informed/uninformed channel split, the primary claim scoped to the uninformed regime, and the gold resolutions.
 - The spec's Open risks gains item 6: three of the five faults still return a single fixed sentence, are scoped out of this change, must not be measured, and are tracked in issue #25.
 - `README.md` gains the boundary-condition paragraph in "How the measurement works", and its "no number has been measured" row is corrected — the text control has produced numbers, even though no dispatch comparison has run.
-- The `[0.0.1]` changelog link is repointed from the deleted release object to `https://github.com/Shyboy0499/precondition-library/commits/v0.0.1`, which resolves for a tag. No release is created.
+- The changelog's link definitions are removed rather than repointed. An earlier revision of this step sent them to `commits/v0.0.1`; the tag was then dropped as well, so the version section is now plain text with no reference to resolve, and the section says why it is untagged. No release is created.
 
 ---
 
