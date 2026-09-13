@@ -68,7 +68,22 @@ If something is not implemented, the documentation must not imply it is. A skipp
 test must name the phase that implements it. "Enforced by tests" is false if the
 test is skipped — and that exact sentence was a defect here once.
 
-### 5. Design reversals get a decision record
+### 5. Python in markdown is formatted by CI
+
+`ruff format --check` runs over the Python code inside fenced blocks in committed
+markdown, so a snippet in a plan or a spec has to be ruff-clean like any other
+code. Two consequences:
+
+- **Complete files** go in a ` ```python ` fence and must be formatted.
+- **Fragments** — a few lines lifted from the middle of a file — go in a
+  ` ```text ` fence. Ruff will happily reformat a fragment into something that is
+  no longer a faithful excerpt, which is worse than no highlighting.
+
+This bit the first version of the issue #3 plan: CI failed on a docs-only PR
+because a snippet was four characters over the line limit. That is the system
+working — but knowing the rule saves a red build.
+
+### 6. Design reversals get a decision record
 
 Anything that reverses or narrows an earlier decision gets an ADR in
 `docs/decisions/`, using `TEMPLATE.md`. The ADR records the alternatives that were
@@ -76,7 +91,7 @@ rejected and what would reverse *this* decision — the second part is what make
 a record rather than a rationalisation. See
 [ADR-0001](docs/decisions/ADR-0001-reframe-after-prior-art.md).
 
-### 6. Measurements follow the pre-registration
+### 7. Measurements follow the pre-registration
 
 Tuning happens on a set disjoint from the evaluation set. Failed runs stay in the
 denominator with their cost. Any revision to a pre-registered analysis is logged
