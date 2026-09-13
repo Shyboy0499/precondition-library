@@ -12,6 +12,12 @@ measured result; there are none yet. See
 
 ### Added
 
+- `EpisodeRecord` now stores correctness as facts — `correct_variant`,
+  `fired_variant`, `ground_truth_ok` — with `misfired` and `succeeded` derived from
+  them, so the quadrant that matters is expressible: a wrong fire in an episode that
+  nevertheless succeeded via the fallback. Both facts are required fields, because
+  `None` is a meaningful ground truth and a defaulted field could be forgotten and
+  read as a benign state (`bench/ledger.py`).
 - `IntentSpec` and `ResolutionVariant`: intents carry a paraphrase distribution
   and two or more resolutions decided only by observable state
   (`tasks/intent.py`, `tasks/registry.py`).
@@ -72,6 +78,9 @@ artifact worth downloading and a released snapshot would mean something.
 
 ### Changed
 
+- `EpisodeOutcome.MISMATCH` is removed. `outcome` now records only how the arm's
+  mechanism completed, never whether the episode was correct — a stored outcome
+  could not hold "misfired" and "succeeded" in one row without the two disagreeing.
 - `ProgramStatus.VERIFIED` renamed to `ADMITTED`. A program that passed this
   project's own gate has not been verified by anyone.
 - The pre-registered analysis was revised **before any data existed**; the

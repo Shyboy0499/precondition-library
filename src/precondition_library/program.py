@@ -107,21 +107,28 @@ class GroundTruthResult(BaseModel):
 
 
 class EpisodeOutcome(StrEnum):
-    """How an episode ended. `mismatch` is the failure this project exists to reduce.
+    """How the arm's mechanism completed. NOT whether the episode was correct.
 
-    FAIL, MISMATCH, FALLBACK and REFUSAL all count in the metric denominators,
-    carrying their token spend: an episode that crashed after 4,000 tokens still
-    cost 4,000 tokens, and dropping it would make amortization look better than
-    it is. INVALID is the exception -- the episode never ran, so it is recorded
-    and counted separately rather than averaged in (see the design spec, §7).
+    Those are different questions, and conflating them hides the failure this
+    project exists to reduce: a program can fire wrongly and the episode still end
+    successfully, because the wrong fire falls back to the agent. So correctness is
+    recorded as facts (`EpisodeRecord.correct_variant`, `.fired_variant`,
+    `.ground_truth_ok`) and the verdicts are *derived* from them -- a stored
+    `mismatch` outcome could not sit in the same row as a stored success without
+    the two disagreeing.
+
+    FAIL, FALLBACK and REFUSAL all count in the metric denominators, carrying their
+    token spend: an episode that crashed after 4,000 tokens still cost 4,000
+    tokens, and dropping it would make amortization look better than it is. INVALID
+    is the exception -- the episode never ran, so it is recorded and counted
+    separately rather than averaged in (see the design spec, §7).
     """
 
     SUCCESS = "success"
     FAIL = "fail"
-    MISMATCH = "mismatch"
-    """A program's preconditions claimed applicability and it did not work."""
     FALLBACK = "fallback"
-    """No program applicable; the LLM solved it. Expected, not a failure."""
+    """No program applicable, or the fired one failed and the agent took over.
+    Expected, not a failure."""
     REFUSAL = "refusal"
     """The guard refused the generated body, so nothing executed. Kept distinct
     from FALLBACK because a high refusal rate is a safety finding, not a cost."""

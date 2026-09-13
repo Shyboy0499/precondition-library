@@ -414,13 +414,22 @@ One JSONL line per episode; every number reported is a grouping over this file.
 ```
 {arm, task_id, fault_type, occurrence_index, seed,
  tokens_in, tokens_out, cached_tokens_in, llm_calls, wall_clock_s,
- outcome: success|fail|mismatch|fallback|refusal|invalid, timed_out,
+ outcome: success|fail|fallback|refusal|invalid, timed_out,
+ correct_variant, fired_variant, ground_truth_ok,
  program_id, dispatch_score, admitted, refusal_reason, model}
 ```
 
 - `occurrence_index` — 1 for the first time this fault type is seen, 2 for the
   second, and so on. Grouping by it produces the headline curve.
-- **Denominator rule.** `fail`, `mismatch`, `fallback` and `refusal` all carry
+- **Correctness is derived, not stored.** `correct_variant` is the ground truth for
+  the state (from the intent's decision rules, in separate code from the programs'
+  probe strings), `fired_variant` is what the program that ran actually resolves,
+  and `ground_truth_ok` is whether the environment reached the expected state.
+  `misfired` and `succeeded` are computed from those, so the quadrant that matters —
+  a wrong fire in an episode that nevertheless succeeded via the fallback — is
+  expressible. A stored outcome could not hold both halves without the two
+  disagreeing, and `outcome` therefore records only how the mechanism completed.
+- **Denominator rule.** `fail`, `fallback` and `refusal` all carry
   their token spend into the means — an episode that crashed after 4,000 tokens
   still cost 4,000 tokens. `invalid` is the sole exception: the episode never
   ran, so it is counted and reported as its own rate but excluded from metric
@@ -534,7 +543,7 @@ to an arm and recorded with a reason.
 
 | event | action | recorded as |
 | --- | --- | --- |
-| replay misses postconditions | demote program; fall back to ReAct **for this episode only**; fallback tokens attributed to the arm | `mismatch` |
+| replay misses postconditions | demote program; fall back to ReAct **for this episode only**; fallback tokens attributed to the arm | `misfired` (derived), with `outcome` showing how the episode then ended |
 | same program mismatches twice | withdraw from dispatch; retain for analysis | `quarantined` |
 | compile fails admission | not stored; episode keeps its token cost | `candidate`, `admitted=false` |
 | guard refuses the body | no execution; fall back to ReAct | `refusal` + `refusal_reason` |
