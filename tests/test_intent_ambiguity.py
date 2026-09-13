@@ -12,6 +12,7 @@ import pytest
 from precondition_library.signatures import StateFingerprint
 from precondition_library.tasks.faults.diverged import INTENT as DIVERGED
 from precondition_library.tasks.faults.submodule_moved import INTENT as SUBMODULE
+from precondition_library.tasks.registry import ambiguous_intents
 
 
 def test_conflicting_files_is_the_intersection(make_state) -> None:
@@ -99,3 +100,70 @@ def test_submodule_has_three_distinct_resolutions() -> None:
 
 def test_submodule_phrasings_mostly_do_not_name_the_fault() -> None:
     assert SUBMODULE.naming_fraction(range(50)) <= 0.35
+
+
+def test_every_grid_state_is_labelable(state_grid) -> None:
+    """No state in the grid may raise: overlap is a defect, and a grid state that
+    matches nothing but is not benign is a hole in the decision rules."""
+    for intent in ambiguous_intents():
+        for name, state in state_grid[intent.name].items():
+            intent.correct_variant(state)  # raises on overlap
+
+
+def test_each_resolution_is_reachable(state_grid) -> None:
+    """Every declared variant must be the answer for at least one grid state.
+
+    Otherwise the variant is dead weight, and the ambiguity is smaller than the
+    spec claims -- an unreachable variant makes the task family look harder than
+    it is, which flatters whichever arm happens to be tested on it.
+    """
+    for intent in ambiguous_intents():
+        seen = {
+            intent.correct_variant(state).id
+            for state in state_grid[intent.name].values()
+            if intent.correct_variant(state) is not None
+        }
+        assert seen == {v.id for v in intent.variants}, f"{intent.name}: unreachable variants"
+
+
+def test_at_least_one_benign_state_per_intent(state_grid) -> None:
+    """A dispatcher that always fires must be catchable."""
+    for intent in ambiguous_intents():
+        benign = [
+            state
+            for state in state_grid[intent.name].values()
+            if intent.correct_variant(state) is None
+        ]
+        assert benign, f"{intent.name}: no benign state, so never-refusing cannot be detected"
+
+
+def test_label_does_not_depend_on_wording(state_grid) -> None:
+    """The load-bearing property of this whole change.
+
+    Holding the state fixed and varying the seed -- and therefore the request
+    text -- must not change the correct resolution. If it did, the label would be
+    a property of the phrasing and the comparison would be circular.
+    """
+    for intent in ambiguous_intents():
+        for state in state_grid[intent.name].values():
+            answers = {
+                (intent.correct_variant(state).id if intent.correct_variant(state) else None)
+                for _ in range(1)
+            }
+            for seed in range(30):
+                intent.task_text(seed)  # vary the request
+                resolved = intent.correct_variant(state)
+                answers.add(resolved.id if resolved else None)
+            assert len(answers) == 1, f"{intent.name}: label moved with the wording"
+
+
+def test_registry_exposes_only_intents_with_a_surface() -> None:
+    names = [intent.name for intent in ambiguous_intents()]
+    assert names == ["restore_submodule_state", "sync_fork_with_upstream"]  # sorted
+
+
+def test_registry_intents_name_a_real_fault() -> None:
+    from precondition_library.tasks import ALL_FAULTS
+
+    for intent in ambiguous_intents():
+        assert intent.fault in ALL_FAULTS

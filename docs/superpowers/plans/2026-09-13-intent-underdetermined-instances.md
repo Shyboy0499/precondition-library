@@ -984,12 +984,12 @@ git commit -m "feat(tasks): give submodule_moved three state-decided resolutions
 
 - [ ] **Step 1: Write the failing test**
 
-Append to `tests/test_intent_ambiguity.py`:
+Add `from precondition_library.tasks.registry import ambiguous_intents` to the
+file's existing top import block, in sorted order. It belongs there, not beside
+the new tests: ruff enforces `E402` and `I001`, so an import appended mid-file
+fails CI. Then append these tests:
 
 ```python
-from precondition_library.tasks.registry import ambiguous_intents
-
-
 def test_every_grid_state_is_labelable(state_grid) -> None:
     """No state in the grid may raise: overlap is a defect, and a grid state that
     matches nothing but is not benign is a hole in the decision rules."""
@@ -1052,7 +1052,7 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'precondition_library.t
 
 - [ ] **Step 3: Commit once Task 7 lands**
 
-This task has no implementation of its own; it is the property suite that pins Task 7's registry. Leave it uncommitted until then.
+This task has no implementation of its own; it is the property suite that pins Task 7's registry. Leave it uncommitted until then. It lands in the same commit as Task 7's registry and the un-skipping of the two `test_text_determinism.py` tests deferred from Task 3, because the file's top-level `ambiguous_intents` import makes Task 6's tests uncollectable until the registry exists.
 
 ---
 
