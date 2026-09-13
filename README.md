@@ -187,11 +187,12 @@ reports success while being wrong.
   preconditions buy no dispatch accuracy over embeddings in this domain, and the
   negative-sandbox admission factor becomes the whole contribution.
 - **The faults leak a marker.** If injected faults are recognisable from the task
-  text, semantic dispatch wins for the wrong reason. No cross-fault
-  recognisability check exists yet: the text control in `bench/textcontrol.py` is
-  a plumbing tripwire for state reaching the uninformed sampler, and its 0.500 is
-  an identity of that construction, so it cannot detect a leaky phrasing
-  distribution. A genuine wording-leak control is tracked in issue #27.
+  text, semantic dispatch wins for the wrong reason. A phrasing that *names* a
+  resolution is caught directly: `test_no_phrasing_names_a_resolution` rejects any
+  whole-word variant id in either wording channel, which is precisely what the AUC
+  gates cannot see — the uninformed one is fixed at 0.500 by construction, whatever
+  the words say. A paraphrase that reveals the answer *without* naming it stays a
+  review obligation rather than a test, and is stated as such in the spec.
 - **Probes encode the answer.** If writing the precondition vocabulary requires
   the very knowledge being measured, the comparison is confounded by author
   effort rather than measured.

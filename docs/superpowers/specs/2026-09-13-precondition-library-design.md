@@ -79,11 +79,12 @@ measuring nothing.
   preconditions buy no dispatch accuracy over embeddings in this domain, and the
   negative-sandbox admission factor (Claim 3) becomes the contribution.
 - **The injected faults leak a marker.** If faults are recognisable from the task
-  text, semantic dispatch wins for the wrong reason. No cross-fault
-  recognisability check exists yet: the text control in `bench/textcontrol.py` is
-  a plumbing tripwire for state reaching the uninformed sampler, and its 0.500 is
-  an identity of that construction, not a measurement, so it cannot detect a
-  leaky phrasing distribution (§10; a genuine control is issue #27).
+  text, semantic dispatch wins for the wrong reason. A phrasing that names a
+  resolution is rejected directly (`test_no_phrasing_names_a_resolution` matches
+  whole-word variant ids in both wording channels), which is the case the AUC gates
+  cannot see: the uninformed AUC is fixed at 0.500 by construction whatever the
+  words say. A paraphrase that reveals the answer without naming it is a review
+  obligation, not a test (§10).
 - **Probes encode the answer.** If authoring the precondition vocabulary requires
   the knowledge being measured, the comparison is confounded by author effort
   rather than measured.
@@ -612,7 +613,11 @@ TEXT CONTROL    a bag-of-words classifier trained on the request text alone
                 consults state, so the AUC is 0.500 for any classifier and any
                 phrasing list); LEAKAGE_CEILING gates it as a plumbing tripwire
                 for state reaching the sampler, not as a leak detector, so it
-                cannot certify the phrasing distribution. The informed regime
+                cannot certify the phrasing distribution. The wording is therefore
+                checked directly instead: `test_no_phrasing_names_a_resolution`
+                rejects any whole-word variant id in either channel, which is the
+                literal leak the AUCs cannot see. A revealing paraphrase remains a
+                review obligation. The informed regime
                 is a genuine measurement: 0.962 / 0.945 -- the boundary
                 condition where the wording nearly determines the resolution
                 and the mechanism is not needed. Pinned by a positive control
@@ -690,8 +695,9 @@ claim.
    three occurrences is enough structure.
 3. **Fault leakage.** Injected faults may leave detectable artifacts (a
    suspiciously named branch, a telltale commit message) that make recognition
-   artificially easy. Phase 1 must include an inspection step for this; no such
-   check is implemented yet (issue #27).
+   artificially easy. Two halves, and only one is checked: the *wording* half is
+   gated by `test_no_phrasing_names_a_resolution`, while the *injected artifact*
+   half needs a repo to inspect and so waits on the live sandbox (issue #4).
 4. **Five faults may be too few** for a mismatch comparison with usable
    intervals. The extension rule in §7 covers it, at the cost of episodes.
 5. **Model drift.** Provider-side model updates mid-experiment would confound
