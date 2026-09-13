@@ -13,7 +13,41 @@ structurally different repos must not resolve to the same program.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from pydantic import BaseModel
+
+from .sandbox import Sandbox, run_git
+
+
+def _has_locked_branch(work: Path, branch: str) -> bool:
+    """Whether git holds a lock file for the branch ref.
+
+    A `<ref>.lock` file is git's marker that a ref update is in progress, so that
+    is what the probe reads, via git's own `--git-path` rather than a hard-coded
+    layout. Nothing in this repository creates such a lock, so on the current
+    sandboxes the probe is always false; it is here because the fingerprint
+    declares the field.
+    """
+    lock = Path(
+        run_git(("rev-parse", "--git-path", f"refs/heads/{branch}.lock"), cwd=work).stdout.strip()
+    )
+    if not lock.is_absolute():
+        lock = work / lock
+    return lock.exists()
+
+
+def _submodule_path(work: Path) -> str | None:
+    """The submodule's path from `.gitmodules`, or None when there is none."""
+    result = run_git(
+        ("config", "--file", ".gitmodules", "--get-regexp", r"^submodule\..*\.path$"),
+        cwd=work,
+        check=False,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+    # One submodule is all the grid models; take the first declared path.
+    return result.stdout.split()[-1]
 
 
 class StateFingerprint(BaseModel):
@@ -74,15 +108,60 @@ class StateFingerprint(BaseModel):
         return self.upstream_behind > 0
 
     @classmethod
-    def observe(cls, env) -> StateFingerprint:
-        """Run the probes. Must not mutate the environment.
+    def observe(cls, env: Sandbox) -> StateFingerprint:
+        """Read the environment into a fingerprint; never mutate it.
 
-        Still unimplemented: the real probes belong with the live sandbox
-        (issues #4/#5). Until then, fingerprints are constructed directly, which
-        is sufficient for labelling dispatch decisions because the benchmark
-        consumes states, not repositories.
+        The fields whose docstrings name a command use exactly that command; the
+        rest (dirty state, branch, ref lock, submodule reference, remotes) are
+        read with the direct git equivalent. The count and touch probes read
+        remote-tracking refs, which the fault injector leaves current rather than
+        `observe` refreshing them -- fetching here would write to the repo.
         """
-        raise NotImplementedError("implemented per plan: phase 1 (issues #4/#5)")
+        work = env.work
+
+        def out(*args: str) -> str:
+            return run_git(args, cwd=work).stdout.strip()
+
+        branch = out("rev-parse", "--abbrev-ref", "HEAD")
+        upstream_ahead = int(out("rev-list", "--count", "HEAD..upstream/main"))
+        upstream_behind = int(out("rev-list", "--count", "upstream/main..HEAD"))
+        local_touched = out("diff", "--name-only", "upstream/main...HEAD").split()
+        upstream_touched = out("diff", "--name-only", "HEAD...upstream/main").split()
+
+        submodule_path = _submodule_path(work)
+        if submodule_path is None:
+            submodule_initialised = False
+            pin_matches = True
+            upstream_references = True
+        else:
+            status = out("submodule", "status", "--", submodule_path)
+            submodule_initialised = bool(status) and not status.startswith("-")
+            pin_matches = (
+                run_git(
+                    ("diff", "--name-only", "upstream/main", "HEAD", "--", submodule_path),
+                    cwd=work,
+                    check=False,
+                ).stdout.strip()
+                == ""
+            )
+            upstream_references = bool(out("ls-tree", "upstream/main", "--", submodule_path))
+
+        return cls(
+            dirty_worktree=bool(out("status", "--porcelain")),
+            branch=branch,
+            upstream_ahead=upstream_ahead,
+            upstream_behind=upstream_behind,
+            has_locked_branch=_has_locked_branch(work, branch),
+            has_submodule_reference=any(
+                line.startswith("160000 ") for line in out("ls-tree", "-r", "HEAD").splitlines()
+            ),
+            remotes=out("remote").split(),
+            local_touched_files=local_touched,
+            upstream_touched_files=upstream_touched,
+            submodule_initialised=submodule_initialised,
+            submodule_pin_matches_upstream=pin_matches,
+            upstream_still_references_submodule=upstream_references,
+        )
 
 
 class TaskSignature(BaseModel):
