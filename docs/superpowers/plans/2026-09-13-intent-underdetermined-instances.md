@@ -392,9 +392,7 @@ def test_text_does_not_depend_on_process_hash_seed() -> None:
 
 
 def test_intent_rejects_duplicate_variant_ids(make_state) -> None:
-    variant = ResolutionVariant(
-        id="only", decided_by=lambda state: True, rationale="test fixture"
-    )
+    variant = ResolutionVariant(id="only", decided_by=lambda state: True, rationale="test fixture")
     with pytest.raises(ValueError, match="duplicate variant ids"):
         IntentSpec(
             name="dupe",
@@ -924,7 +922,7 @@ SPEC = SubmoduleMovedFault()
 
 Every phrasing currently names the submodule, so the intent leaks. Rewrite the `phrasings` list so that at most a third name it — the rest must describe the *symptom* without the word, for example:
 
-```python
+```text
     phrasings=[
         "The submodule in this fork is out of step with upstream. Bring it back into line.",
         "Something is off with the nested repository here. Put it right.",
@@ -936,6 +934,8 @@ Every phrasing currently names the submodule, so the intent leaks. Rewrite the `
     ],
     naming_markers=["submodule"],
 ```
+
+Fenced as `text`, not `python`, on purpose: this is a **fragment** of an `IntentSpec(...)` call rather than a complete statement, and CI runs `ruff format --check` over Python code inside markdown files. A fragment in a `python` fence gets reformatted into something that is no longer a faithful excerpt of the file it replaces — which is exactly what happened on the first CI run of this plan.
 
 Run: `uv run pytest tests/test_intent_ambiguity.py -v`
 Expected: PASS, 15 tests. `naming_fraction` over 50 seeds is 1/7 ≈ 0.143, under the 0.35 ceiling.
@@ -1445,9 +1445,7 @@ def leaky_intent() -> IntentSpec:
         phrasings=["reset this branch, discard my work"],
         naming_markers=["discard"],
         variants=[
-            ResolutionVariant(
-                id="discard", decided_by=lambda state: True, rationale="fixture"
-            ),
+            ResolutionVariant(id="discard", decided_by=lambda state: True, rationale="fixture"),
             ResolutionVariant(
                 id="rebase_variant",
                 decided_by=lambda state: False,
@@ -1487,7 +1485,9 @@ def test_ambiguous_intents_do_not_leak_the_answer(state_grid) -> None:
     distribution must keep it near chance on the ambiguous subset.
     """
     for intent in ambiguous_intents():
-        pairs = labelled_pairs(intent, list(state_grid[intent.name].values()), TRAIN_SEEDS + EVAL_SEEDS)
+        pairs = labelled_pairs(
+            intent, list(state_grid[intent.name].values()), TRAIN_SEEDS + EVAL_SEEDS
+        )
         verdict = leakage_verdict(pairs, train_seeds=TRAIN_SEEDS, eval_seeds=EVAL_SEEDS)
         assert verdict.leaks is False, f"{intent.name}: {verdict.describe()}"
 ```
