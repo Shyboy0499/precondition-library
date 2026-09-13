@@ -515,7 +515,9 @@ GOLD FIRST      hand-written solutions must satisfy the fault checkers before
                 any agent runs. A broken checker produces plausible numbers
                 that mean nothing. INTENDED to be enforced by tests/ before
                 anything else; NOT yet implemented -- test_checkers_against_gold
-                is skipped until phase 1 and no gold solution exists yet.
+                is skipped until phase 1. Gold resolutions now exist for the two
+                ambiguous intents (bench/gold/), but no checker has run against
+                them.
 DETERMINISM     same seed -> byte-identical faulted environment; different
                 seeds -> genuinely different instances. Non-determinism would
                 appear as variance between arms.

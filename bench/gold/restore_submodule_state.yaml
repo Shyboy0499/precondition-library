@@ -1,0 +1,77 @@
+# Hand-written resolutions for the `restore_submodule_state` intent.
+# See the header of sync_fork_with_upstream.yaml for why these are hand-written.
+programs:
+  - id: submodule-init
+    intent: restore_submodule_state
+    variant: init
+    parameters: [work_dir, upstream_remote, upstream_branch, submodule_path]
+    preconditions:
+      - name: upstream_still_tracks_it
+        description: Upstream's tree still contains the submodule path.
+        probe: 'test -n "$(git ls-tree {upstream_remote}/{upstream_branch} -- {submodule_path})"'
+      - name: submodule_not_initialised
+        description: The submodule directory has never been initialised in this clone.
+        probe: 'test -z "$(git submodule status -- {submodule_path} | grep -v "^-")"'
+    body: |
+      git submodule update --init -- {submodule_path}
+    postconditions:
+      - name: submodule_initialised
+        description: No submodule is left uninitialised.
+        probe: 'test -z "$(git submodule status | grep "^-")"'
+    provenance:
+      compiled_from_task: hand-written gold resolution for benchmarking
+      model: human
+      compiler_version: human
+      episode_id: gold/restore_submodule_state/init
+    status: candidate
+
+  - id: submodule-repin
+    intent: restore_submodule_state
+    variant: repin
+    parameters: [work_dir, upstream_remote, upstream_branch, submodule_path]
+    preconditions:
+      - name: submodule_initialised
+        description: The submodule directory exists and has a checkout.
+        probe: 'test -n "$(git submodule status -- {submodule_path} | grep -v "^-")"'
+      - name: upstream_still_tracks_it
+        description: Upstream's tree still contains the submodule path.
+        probe: 'test -n "$(git ls-tree {upstream_remote}/{upstream_branch} -- {submodule_path})"'
+      - name: pin_drifted
+        description: The recorded submodule commit differs from the one upstream pins.
+        probe: 'test -n "$(git diff --name-only {upstream_remote}/{upstream_branch} -- {submodule_path})"'
+    body: |
+      git fetch {upstream_remote}
+      git checkout {upstream_remote}/{upstream_branch} -- {submodule_path}
+    postconditions:
+      - name: pinned_to_upstream
+        description: The recorded submodule commit is no longer drifted from upstream.
+        probe: 'test -z "$(git diff --name-only {upstream_remote}/{upstream_branch} -- {submodule_path})"'
+    provenance:
+      compiled_from_task: hand-written gold resolution for benchmarking
+      model: human
+      compiler_version: human
+      episode_id: gold/restore_submodule_state/repin
+    status: candidate
+
+  - id: submodule-remove
+    intent: restore_submodule_state
+    variant: remove
+    parameters: [work_dir, upstream_remote, upstream_branch, submodule_path]
+    preconditions:
+      - name: upstream_dropped_it
+        description: Upstream's tree no longer contains the submodule path.
+        probe: 'test -z "$(git ls-tree {upstream_remote}/{upstream_branch} -- {submodule_path})"'
+    body: |
+      git rm --cached -- {submodule_path}
+      git config --file .gitmodules --remove-section submodule.{submodule_path} || true
+      git add .gitmodules
+    postconditions:
+      - name: no_longer_declared
+        description: The submodule is no longer declared in the tree.
+        probe: 'test -z "$(git ls-files --stage -- {submodule_path})"'
+    provenance:
+      compiled_from_task: hand-written gold resolution for benchmarking
+      model: human
+      compiler_version: human
+      episode_id: gold/restore_submodule_state/remove
+    status: candidate
