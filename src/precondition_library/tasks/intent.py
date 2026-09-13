@@ -18,11 +18,12 @@ An `IntentSpec` separates four things that were previously one:
 
 The resolution is a pure function of state, but the wording is not: informed
 wording is allowed to carry a signal about the resolution, because that is what a
-real request does. The control in bench/textcontrol.py measures that signal in two
-regimes: *uninformed* requests (the shared distribution, sampled with no state)
-must not leak the resolution, and *informed* requests are reported as the boundary
-condition -- the regime where the wording nearly gives the answer away and no
-mechanism is needed -- without being gated.
+real request does. The control in bench/textcontrol.py separates two regimes:
+*uninformed* requests (the shared distribution, sampled with no state) cannot
+carry the resolution -- the sampler never consults state -- so the test there is a
+plumbing tripwire for state reaching the sampler; *informed* requests are measured
+as the boundary condition -- the regime where the wording nearly gives the answer
+away and no mechanism is needed -- and reported without being gated.
 """
 
 from __future__ import annotations

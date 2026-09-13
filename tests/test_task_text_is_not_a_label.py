@@ -3,10 +3,12 @@
 A control that has never been seen to fire is not a control, and an assertion that
 cannot fail is indistinguishable from one that passes. So this file has four parts:
 a positive control proving the detector fires on informed wording that fully
-determines the resolution, the real assertion that the registered intents'
-*uninformed* wording does not leak it, a reported -- not gated -- measurement of the
-informed boundary, and a structural pin that stops an undeclared state-to-wording
-channel from silently restoring the original flaw.
+determines the resolution, a reported -- not gated -- measurement of the informed
+boundary, a plumbing tripwire that fails if the uninformed sampler starts
+consulting state (its AUC of 0.500 is an identity of the construction, not
+evidence about the phrasing distribution), and a structural pin -- including an
+equivalence-class test -- that stops an undeclared state-to-wording channel from
+silently restoring the original flaw.
 """
 
 from __future__ import annotations
@@ -52,7 +54,8 @@ def test_classifier_learns_a_separable_problem() -> None:
     separable problem reaches a correct ranking well before every point crosses
     its decision boundary, and the control only ever consumes the score. This
     ranking threshold (>= 0.99) is a capability floor for the model, distinct from
-    `LEAKAGE_CEILING`, which gates a property of the *data*.
+    `LEAKAGE_CEILING`, which trips if the uninformed sampler starts consulting
+    state.
     """
     texts = ["alpha alpha alpha", "alpha alpha", "beta beta beta", "beta beta"]
     labels = ["alpha", "alpha", "beta", "beta"]
@@ -71,6 +74,14 @@ def test_regime_filter_rejects_an_empty_regime() -> None:
     reader would take for a clean measurement."""
     with pytest.raises(ValueError, match="no uninformed pairs"):
         leakage_verdict([], train_seeds=TRAIN_SEEDS, eval_seeds=EVAL_SEEDS, informed=False)
+
+
+def test_overlapping_train_and_eval_seeds_are_rejected(determining_intent, make_state) -> None:
+    """A split that shares seeds would evaluate on instances seen in training."""
+    states = [make_state(dirty_worktree=False), make_state(dirty_worktree=True)]
+    pairs = labelled_pairs(determining_intent, states, [0, 1, 2])
+    with pytest.raises(ValueError, match="disjoint or the evaluation is contaminated"):
+        leakage_verdict(pairs, train_seeds=[0, 1], eval_seeds=[1, 2], informed=True)
 
 
 @pytest.fixture
@@ -122,12 +133,17 @@ def test_positive_control_the_detector_fires_on_a_determining_intent(
     assert verdict.leaks is True
 
 
-def test_uninformed_wording_does_not_leak_the_resolution(state_grid) -> None:
-    """The real assertion, on the regime the primary claim is measured in.
+def test_uninformed_sampler_never_consults_state(state_grid) -> None:
+    """A plumbing tripwire on the regime the primary claim is measured in.
 
-    The shared phrasing distribution is sampled with no state, so the text cannot
-    carry the resolution. This is the regression tripwire: it fails if that
-    distribution ever starts leaking the answer -- the original flaw returning.
+    On uninformed requests the sampler never consults state, so every state
+    receives the same text for a given seed, every positive has a negative with an
+    identical score, and the AUC is 0.500 for any classifier and any phrasing
+    list -- including a deliberately leaky one. That is an identity of the
+    construction, not a measurement, so this test can fail for exactly one
+    reason: the sampler starting to consult state, the regression that would
+    restore the original flaw. It is not evidence about the phrasing
+    distribution and cannot certify one.
     """
     for intent in ambiguous_intents():
         pairs = labelled_pairs(
@@ -213,3 +229,94 @@ def test_state_influences_wording_only_through_the_declared_map(state_grid) -> N
                         f"{intent.name}: no informed wording declared for this state, "
                         f"so the text must come from the shared list: {text!r}"
                     )
+
+
+def test_same_declared_phrasings_imply_same_text_for_every_seed(make_state) -> None:
+    """Two states that declare the same phrasing list must sample identical text.
+
+    The membership assertions above cannot see two undeclared channels: a phrase
+    keyed on a fingerprint field that happens to be constant across the fixture
+    grid (for example `upstream_ahead`), and state used to choose the *index*
+    inside the declared informed list. Both keep every sampled text inside the
+    declared list, so both pass membership. This test closes them by pairing
+    states that differ on every fingerprint field the grid holds constant while
+    resolving to the same declared list, then requiring seed-for-seed identity
+    over a wide seed range. The pairs are constructed because the grid holds one
+    state per resolution and therefore contains no such pair.
+    """
+    pairs = {
+        "sync_fork_with_upstream": (
+            make_state(
+                dirty_worktree=True,
+                branch="feature",
+                upstream_ahead=7,
+                upstream_behind=3,
+                has_locked_branch=True,
+                has_submodule_reference=True,
+                submodule_initialised=True,
+                submodule_pin_matches_upstream=False,
+                upstream_still_references_submodule=False,
+                local_touched_files=["docs/a.md", "docs/b.md"],
+                upstream_touched_files=["src/app.py"],
+                remotes=["origin", "upstream", "fork"],
+            ),
+            make_state(
+                dirty_worktree=False,
+                branch="main",
+                upstream_ahead=1,
+                upstream_behind=5,
+                has_locked_branch=False,
+                has_submodule_reference=False,
+                submodule_initialised=False,
+                submodule_pin_matches_upstream=True,
+                upstream_still_references_submodule=True,
+                local_touched_files=["notes.txt"],
+                upstream_touched_files=["src/other.py", "src/app.py"],
+                remotes=["origin"],
+            ),
+        ),
+        "restore_submodule_state": (
+            make_state(
+                dirty_worktree=True,
+                branch="feature",
+                upstream_ahead=7,
+                upstream_behind=3,
+                has_locked_branch=True,
+                has_submodule_reference=True,
+                submodule_initialised=True,
+                submodule_pin_matches_upstream=False,
+                local_touched_files=["docs/a.md"],
+                upstream_touched_files=["src/app.py"],
+                remotes=["origin", "upstream", "fork"],
+            ),
+            make_state(
+                dirty_worktree=False,
+                branch="main",
+                upstream_ahead=1,
+                upstream_behind=5,
+                has_locked_branch=False,
+                has_submodule_reference=False,
+                submodule_initialised=True,
+                submodule_pin_matches_upstream=False,
+                local_touched_files=["notes.txt"],
+                upstream_touched_files=["src/other.py"],
+                remotes=["origin"],
+            ),
+        ),
+    }
+    for intent in ambiguous_intents():
+        left, right = pairs[intent.name]
+        left_list = intent.informed_phrasings(left)
+        assert left != right, f"{intent.name}: the paired states must differ on fingerprint fields"
+        assert left_list is not None, f"{intent.name}: the pair must exercise informed wording"
+        assert left_list == intent.informed_phrasings(right), (
+            f"{intent.name}: the pair must share one declared informed list"
+        )
+        for seed in range(200):
+            left_text = intent.task_text(seed, left)
+            right_text = intent.task_text(seed, right)
+            assert left_text == right_text, (
+                f"{intent.name}: state reached the wording outside the declared map; "
+                f"seed {seed} sampled {left_text!r} for one state and "
+                f"{right_text!r} for the other"
+            )
