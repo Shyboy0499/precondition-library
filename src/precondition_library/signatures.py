@@ -41,11 +41,14 @@ class StateFingerprint(BaseModel):
     upstream_touched_files: list[str] = []
     """Files upstream's new commits change: `git diff --name-only HEAD...upstream/main`."""
     submodule_initialised: bool = False
-    """Whether the submodule directory has been initialised in this clone."""
+    """Whether the submodule directory has been initialised in this clone:
+    `git submodule status` prefixes an uninitialised entry with `-`."""
     submodule_pin_matches_upstream: bool = True
-    """Whether the recorded submodule commit equals the one upstream pins."""
+    """Whether the recorded submodule commit equals the one upstream pins:
+    `git diff --name-only upstream/main -- <submodule_path>` is empty when it does."""
     upstream_still_references_submodule: bool = True
-    """Whether upstream's tree still contains the submodule path at all."""
+    """Whether upstream's tree still contains the submodule path at all:
+    `git ls-tree upstream/main -- <submodule_path>` is non-empty when it does."""
 
     @property
     def conflicting_files(self) -> set[str]:
