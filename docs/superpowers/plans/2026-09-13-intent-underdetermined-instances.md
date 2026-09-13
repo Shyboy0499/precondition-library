@@ -816,7 +816,9 @@ git commit -m "feat(tasks): give diverged three state-decided resolutions"
 Append to `tests/test_intent_ambiguity.py`:
 
 ```python
-from precondition_library.tasks.faults.submodule_moved import INTENT as SUBMODULE
+# Add this to the top import block of tests/test_intent_ambiguity.py, in sorted
+# order -- do NOT append it here, or ruff E402/I001 fails the file:
+# from precondition_library.tasks.faults.submodule_moved import INTENT as SUBMODULE
 
 
 @pytest.mark.parametrize(
