@@ -59,6 +59,8 @@ postconditions:
     probe: 'git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD'
   - name: no_residual_changes
     probe: 'test -z "$(git status --porcelain)"'
+
+status: candidate   # admission has not run; nothing is replayable yet
 ```
 
 A program is only replayable after **two-sided admission**: it must satisfy its

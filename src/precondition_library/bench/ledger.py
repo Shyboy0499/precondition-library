@@ -51,6 +51,15 @@ class EpisodeRecord(BaseModel):
     """Similarity score for arm 2; None for the other arms."""
     admitted: bool | None = None
     refusal_reason: str | None = None
+    timed_out: bool = False
+    """Set when a replay exceeded its timeout. Kept beside `outcome` rather than
+    folded into it, since a timeout is a failure mode of the runtime while
+    `outcome` describes how the episode ended."""
+
+    model: str
+    """Exact model identifier used for this episode. Provider-side model drift
+    mid-experiment silently invalidates a comparison, so it is recorded per
+    episode and a version change invalidates the affected run."""
 
 
 def append(path: Path, record: EpisodeRecord) -> None:
