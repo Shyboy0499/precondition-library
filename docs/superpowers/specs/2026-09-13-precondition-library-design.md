@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | 1 | 2026-09-13 | Initial design of record. |
 | 2 | 2026-09-13 | Reframed after a prior-art sweep and a hostile method review (see ADR-0001). Claim 1 dropped as a contribution; Claim 2 narrowed to its empirical form; Claim 3 added for the negative-sandbox admission criterion; the primary metric moved from episode-level to matched dispatch coverage. **Revised before any data was collected** — no episode has been run, so no analysis was chosen after seeing results. |
-| 3 | 2026-09-13 | The request text gains a declared informed/uninformed channel split, and the primary claim is scoped to the uninformed regime (AUC 0.500, measured by `bench/textcontrol.py`); the gold resolutions land. `sync_fork_with_upstream` and `restore_submodule_state` are converted to state-decided intents; three of the five faults remain unconverted and are excluded from any dispatch measurement (issue #25). **Logged before any episode data existed** — no episode has been run, so no analysis was chosen after seeing results; the only measurements so far are the text-control AUCs reported in §3. |
+| 3 | 2026-09-13 | The request text gains a declared informed/uninformed channel split, and the primary claim is scoped to the uninformed regime (where the construction fixes the AUC at 0.500); the gold resolutions land. `sync_fork_with_upstream` and `restore_submodule_state` are converted to state-decided intents; three of the five faults remain unconverted and are excluded from any dispatch measurement (issue #25). **Logged before any episode data existed** — no episode has been run, so no analysis was chosen after seeing results; the only measured figure so far is the informed text-control AUC reported in §3. |
 
 ---
 
@@ -79,8 +79,11 @@ measuring nothing.
   preconditions buy no dispatch accuracy over embeddings in this domain, and the
   negative-sandbox admission factor (Claim 3) becomes the contribution.
 - **The injected faults leak a marker.** If faults are recognisable from the task
-  text, semantic dispatch wins for the wrong reason. A text-only classifier's AUC
-  is the control that detects this (§10, issue #3).
+  text, semantic dispatch wins for the wrong reason. No cross-fault
+  recognisability check exists yet: the text control in `bench/textcontrol.py` is
+  a plumbing tripwire for state reaching the uninformed sampler, and its 0.500 is
+  an identity of that construction, not a measurement, so it cannot detect a
+  leaky phrasing distribution (§10; a genuine control is issue #27).
 - **Probes encode the answer.** If authoring the precondition vocabulary requires
   the knowledge being measured, the comparison is confounded by author effort
   rather than measured.
@@ -171,7 +174,11 @@ The request text is sampled deterministically from the paraphrase distribution
 (`sha256` over the seed, never `hash()`, which CPython salts per process). When the
 state is already known, `variant_phrasings` may supply *informed* wording that
 reveals the situation to a careful reader, as a real user's description often does;
-state may reach the request only through that declared map.
+state may reach the request only through that declared map. The fraction of
+sampled uninformed requests that name the fault is documented and asserted:
+`sync_fork_with_upstream` 0.000 over seeds 0–49 and `restore_submodule_state`
+0.060 over 0–49 and 0.125 over 0–199, both at ≤ 0.35
+(`tests/test_intent_ambiguity.py`).
 
 #### The boundary condition
 
@@ -183,30 +190,38 @@ only one of them:
 - **informed** — a resolution's `variant_phrasings` entry: wording that reveals
   the situation.
 
-How far the text alone gets a dispatcher is **measured** rather than assumed.
+How far the text alone gets a dispatcher is measured on the informed channel
+rather than assumed; on the uninformed channel it is fixed by construction.
 `bench/textcontrol.py` trains a bag-of-words logistic regression on the request
 text alone and reports AUC per intent and regime, over the state grid in
-`tests/conftest.py`, with train n=120 and eval n=120 on disjoint seed sets:
+`tests/conftest.py`, with train n=120 and eval n=120 on disjoint, enforced seed
+sets (overlap raises):
 
 | intent | uninformed AUC | informed AUC |
 | --- | --- | --- |
 | `sync_fork_with_upstream` | 0.500 | 0.962 |
 | `restore_submodule_state` | 0.500 | 0.945 |
 
-**On uninformed requests the text carries no signal at all (AUC 0.500, measured
-by `bench/textcontrol.py`, not assumed), so a dispatch comparison there measures
-state-reading. On informed requests the wording nearly determines the resolution
-(AUC ≈ 0.95, the same script), which is the boundary condition where the
-mechanism is not needed.** An earlier draft pooled the two regimes into one
-number (0.795 and 0.801, the pooled figures from the control's pre-split
+**On uninformed requests the text cannot carry the resolution (AUC 0.500), by
+construction and not by measurement: the sampler never consults state, so every
+state receives the same text for a given seed, every positive has a negative with
+an identical score, and the AUC is 0.500 for any classifier and any phrasing
+list — including a deliberately leaky one. The test on that regime is a plumbing
+tripwire: it fails if the sampler starts consulting state, the regression that
+would restore the original flaw, and it cannot certify the phrasing
+distribution. On informed requests the wording nearly determines the resolution
+(AUC ≈ 0.95, measured by `bench/textcontrol.py`), which is the boundary condition
+where the mechanism is not needed.** An earlier draft pooled the two regimes into
+one number (0.795–0.801, the pooled figures from the control's pre-split
 revision) that described neither — it averaged a regime in which the text is the
 answer in disguise with one in which it is noise — and that is why the split
 exists.
 
-The uninformed AUC is the one the experiment must keep under `LEAKAGE_CEILING`;
-the informed AUC is reported as the boundary condition and never gated. The
-per-intent AUCs must be reported together with the informed/uninformed mixture of
-the pairs, because that mixture is what makes the numbers interpretable.
+The uninformed regime is the one gated by `LEAKAGE_CEILING`, as a tripwire for
+state reaching the sampler rather than as a leak detector; the informed AUC is
+reported as the boundary condition and never gated. The per-intent AUCs must be
+reported together with the informed/uninformed mixture of the pairs, because that
+mixture is what makes the numbers interpretable.
 
 ### Out of scope for the family
 
@@ -583,17 +598,19 @@ DETERMINISM     same seed -> byte-identical faulted environment; different
                 seeds -> genuinely different instances. Non-determinism would
                 appear as variance between arms.
 TEXT CONTROL    a bag-of-words classifier trained on the request text alone
-                must not leak the resolution from *uninformed* wording, the
-                regime the primary claim is measured in; its AUC is reported
-                per regime. Measured by bench/textcontrol.py over the state
-                grid: uninformed 0.500 for both converted intents, informed
-                0.962 / 0.945 -- the boundary condition where the wording
-                nearly determines the resolution and the mechanism is not
-                needed. Pinned by a positive control that fires on an intent
-                whose informed wording fully determines the answer, so the
-                control cannot pass by being a no-op. Only registered intents
-                are measured; the three unconverted faults return a fixed
-                sentence and are excluded (issue #25).
+                reports the informed/uninformed split. The uninformed regime
+                cannot carry the resolution by construction (the sampler never
+                consults state, so the AUC is 0.500 for any classifier and any
+                phrasing list); LEAKAGE_CEILING gates it as a plumbing tripwire
+                for state reaching the sampler, not as a leak detector, so it
+                cannot certify the phrasing distribution. The informed regime
+                is a genuine measurement: 0.962 / 0.945 -- the boundary
+                condition where the wording nearly determines the resolution
+                and the mechanism is not needed. Pinned by a positive control
+                that fires on an intent whose informed wording fully determines
+                the answer, so the control cannot pass by being a no-op. Only
+                registered intents are measured; the three unconverted faults
+                return a fixed sentence and are excluded (issue #25).
 IMPORT GRAPH    replay cannot reach provider, directly or transitively.
                 IMPLEMENTED AND PASSING (tests/test_replay_isolated_from_provider.py)
 ZERO TOKEN      stronger than the import test: replay runs with a provider whose
@@ -664,7 +681,8 @@ claim.
    three occurrences is enough structure.
 3. **Fault leakage.** Injected faults may leave detectable artifacts (a
    suspiciously named branch, a telltale commit message) that make recognition
-   artificially easy. Phase 1 must include an inspection step for this.
+   artificially easy. Phase 1 must include an inspection step for this; no such
+   check is implemented yet (issue #27).
 4. **Five faults may be too few** for a mismatch comparison with usable
    intervals. The extension rule in §7 covers it, at the cost of episodes.
 5. **Model drift.** Provider-side model updates mid-experiment would confound

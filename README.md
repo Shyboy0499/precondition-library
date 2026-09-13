@@ -27,7 +27,7 @@ Stated first, because the prior art is real and the honest framing depends on it
 | That compiling a task into a persistent program and replaying it without an LLM is novel | Already published: PreAct, SkillDroid, and Auto each compile a trace and replay it cheaply or with no per-step LLM calls (see [Prior work](#prior-work)). |
 | That dispatching a cached plan by testing **executable preconditions** is a new mechanism | It is MACROPS, 1972: a cached generalized plan is dispatched by testing precondition *kernels* against live state, with an explicit replan fallback. |
 | That "the most similar case is not the most reusable" is a new insight | Smyth & Keane argued it in 1998, in a peer-reviewed journal, at length. |
-| That any number in this repository has been measured | No dispatch comparison and no episode has been run. The only measured numbers are the text-only control's AUCs below; there is no figure and no `.jsonl`. |
+| That any number in this repository has been measured | No dispatch comparison and no episode has been run. The only genuine measurement is the text-only control's informed AUC below; the uninformed 0.500 is an identity of the construction, not a measurement, and there is no figure and no `.jsonl`. |
 
 Amortization is still what makes the project *useful* — it is an engineering
 assumption here, not a finding. It is reported as a cost model, never as a
@@ -100,16 +100,23 @@ shared **uninformed** `phrasings` list — what someone says when they do not kn
 what is wrong, or when nothing is wrong — and an **informed** entry in a
 resolution's `variant_phrasings`, wording that reveals the situation. A
 bag-of-words classifier trained on the text alone (`bench/textcontrol.py`, over
-the test state grid, train n=120 / eval n=120 on disjoint seed sets) scores **AUC
-0.500 for uninformed requests** on both converted intents — no signal at all, so
-a dispatch comparison there measures state-reading — and **0.962 / 0.945 for
+the test state grid, train n=120 / eval n=120 on disjoint seed sets) reports **AUC
+0.500 for uninformed requests** on both converted intents and **0.962 / 0.945 for
 informed requests** (`diverged`'s and `submodule_moved`'s intents, in that
-order) — the boundary condition, where the wording nearly
+order). The uninformed figure is an identity, not a measurement: on that channel
+the sampler never consults state, so every state receives the same text for a
+given seed, every positive has a negative with an identical score, and the AUC is
+0.500 for *any* classifier and *any* phrasing list — including a deliberately
+leaky one. The test on that regime is a **plumbing tripwire**: it fails if the
+sampler starts consulting state, the regression that would restore the original
+flaw; it cannot certify the phrasing distribution. The informed figure is the
+genuine measurement — the boundary condition, where state-aware wording nearly
 determines the resolution and the mechanism is not needed. An earlier draft
-pooled the two regimes into one number (0.795 / 0.801, the control's pre-split
-figures) that described neither. The uninformed AUC is gated; the informed AUC is
-reported, never gated. Three of the five faults still return one fixed sentence
-and are excluded from dispatch measurement until converted (issue #25).
+pooled the two regimes into one number (0.795–0.801, the control's pre-split
+pooled figures) that described neither. The uninformed regime is gated; the
+informed AUC is reported, never gated. Three of the five faults still return one
+fixed sentence and are excluded from dispatch measurement until converted (issue
+#25).
 
 The end-to-end episode loop survives as a small demonstration, explicitly
 labelled underpowered. It is not the claim.
@@ -180,8 +187,11 @@ reports success while being wrong.
   preconditions buy no dispatch accuracy over embeddings in this domain, and the
   negative-sandbox admission factor becomes the whole contribution.
 - **The faults leak a marker.** If injected faults are recognisable from the task
-  text, semantic dispatch wins for the wrong reason. A text-only classifier's AUC
-  is the control that detects this.
+  text, semantic dispatch wins for the wrong reason. No cross-fault
+  recognisability check exists yet: the text control in `bench/textcontrol.py` is
+  a plumbing tripwire for state reaching the uninformed sampler, and its 0.500 is
+  an identity of that construction, so it cannot detect a leaky phrasing
+  distribution. A genuine wording-leak control is tracked in issue #27.
 - **Probes encode the answer.** If writing the precondition vocabulary requires
   the very knowledge being measured, the comparison is confounded by author
   effort rather than measured.
@@ -211,12 +221,13 @@ src/precondition_library/
 
 `library/` holds admitted programs and **is committed on purpose** — it is the
 artifact, and its git history records programs being demoted after they mis-fired.
-`bench/gold/` holds the hand-written gold resolutions. The gold check runs today for
-the two ambiguous intents: gold resolutions live in `sync_fork_with_upstream.yaml`
-and `restore_submodule_state.yaml`, and `tests/test_gold_programs.py` validates
-that they parse, are well-formed, cover every declared resolution, and have
-distinct bodies. It is still skipped for the faults whose injection needs a live
-sandbox (issue #4), because a checker cannot be validated without a state to check.
+`bench/gold/` holds the hand-written gold resolutions. What runs today for the two
+ambiguous intents is form validation only: `sync_fork_with_upstream.yaml` and
+`restore_submodule_state.yaml` must parse, be well-formed, cover every declared
+resolution, and have distinct bodies (`tests/test_gold_programs.py`). No probe has
+ever been executed against a sandbox — `tests/test_checkers_against_gold.py` is
+skipped for every fault until the checker execution phase lands (issue #4),
+because a checker cannot be validated without a state to check.
 
 One structural invariant is enforced by test rather than convention:
 `runtime/replay.py` cannot reach `provider`, directly or transitively. It is worth

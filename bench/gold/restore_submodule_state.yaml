@@ -38,14 +38,14 @@ programs:
         probe: 'test -n "$(git ls-tree {upstream_remote}/{upstream_branch} -- {submodule_path})"'
       - name: pin_drifted
         description: The recorded submodule commit differs from the one upstream pins.
-        probe: 'test -n "$(git diff --name-only {upstream_remote}/{upstream_branch} -- {submodule_path})"'
+        probe: 'test -n "$(git diff --name-only {upstream_remote}/{upstream_branch} HEAD -- {submodule_path})"'
     body: |
       git fetch {upstream_remote}
       git checkout {upstream_remote}/{upstream_branch} -- {submodule_path}
     postconditions:
       - name: pinned_to_upstream
         description: The recorded submodule commit is no longer drifted from upstream.
-        probe: 'test -z "$(git diff --name-only {upstream_remote}/{upstream_branch} -- {submodule_path})"'
+        probe: 'test -z "$(git diff --name-only {upstream_remote}/{upstream_branch} HEAD -- {submodule_path})"'
     provenance:
       compiled_from_task: hand-written gold resolution for benchmarking
       model: human
