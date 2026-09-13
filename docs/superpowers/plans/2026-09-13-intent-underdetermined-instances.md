@@ -357,7 +357,6 @@ import sys
 import pytest
 
 from precondition_library.tasks.intent import IntentSpec, ResolutionVariant, sample_index
-from precondition_library.tasks.registry import ambiguous_intents
 
 
 def test_sample_index_is_stable_and_in_range() -> None:
@@ -372,11 +371,15 @@ def test_sample_index_rejects_empty_range() -> None:
         sample_index(1, "salt", 0)
 
 
+@pytest.mark.skip(reason="the intent registry lands in Task 7; un-skipped there")
 def test_same_seed_same_text() -> None:
+    from precondition_library.tasks.registry import ambiguous_intents
+
     for intent in ambiguous_intents():
         assert intent.task_text(11) == intent.task_text(11)
 
 
+@pytest.mark.skip(reason="the intent registry lands in Task 7; un-skipped there")
 def test_text_does_not_depend_on_process_hash_seed() -> None:
     """CPython salts `hash()` for strings per process.
 
@@ -401,7 +404,7 @@ def test_text_does_not_depend_on_process_hash_seed() -> None:
     assert runs[0] == runs[1]
 
 
-def test_intent_rejects_duplicate_variant_ids(make_state) -> None:
+def test_intent_rejects_duplicate_variant_ids() -> None:
     variant = ResolutionVariant(id="only", decided_by=lambda state: True, rationale="test fixture")
     with pytest.raises(ValueError, match="duplicate variant ids"):
         IntentSpec(
@@ -573,10 +576,12 @@ class IntentSpec:
         return matches[0] if matches else None
 ```
 
-- [ ] **Step 4: Run test to verify it fails on the registry import only**
+- [ ] **Step 4: Run the tests and confirm the two deferrals are skips, not errors**
 
-Run: `uv run pytest tests/test_text_determinism.py -v -k "sample_index or intent_rejects"`
-Expected: PASS for those four. The two tests importing `ambiguous_intents` still fail — that is Task 7. If you are executing strictly in order, expect `ModuleNotFoundError: No module named 'precondition_library.tasks.registry'` and continue.
+Run: `uv run pytest tests/test_text_determinism.py -v`
+Expected: the four real tests PASS; `test_same_seed_same_text` and `test_text_does_not_depend_on_process_hash_seed` are reported SKIPPED with the reason `the intent registry lands in Task 7; un-skipped there`.
+
+The two registry-dependent tests are marked `@pytest.mark.skip`, not left failing, and neither imports `ambiguous_intents` at module level: `test_same_seed_same_text` imports it inside the function body, and `test_text_does_not_depend_on_process_hash_seed` reaches it only through the subprocess snippet it runs. A `ModuleNotFoundError` raised while importing the module is a *collection* error and fails the whole module, taking the four runnable tests down with it — so a module-level registry import would hide real results behind a Task 7 dependency. Skipping keeps the module importable and the four real tests honest. The repository's own convention (CONTRIBUTING.md rule 4) is that a skipped test names the phase that implements it, which the skip reason does.
 
 - [ ] **Step 5: Commit**
 
@@ -1125,6 +1130,8 @@ __all__ = [
     "ambiguous_intents",
 ]
 ```
+
+Then remove the two `@pytest.mark.skip` decorators added in Task 3 to `tests/test_text_determinism.py` (`test_same_seed_same_text` and `test_text_does_not_depend_on_process_hash_seed`). With `tasks/registry.py` in place `ambiguous_intents` imports, so both become real tests; the second is the point where the process-hash-seed determinism check actually runs, proving the sampler does not depend on `hash()`'s per-process salt.
 
 - [ ] **Step 4: Run the whole suite**
 
