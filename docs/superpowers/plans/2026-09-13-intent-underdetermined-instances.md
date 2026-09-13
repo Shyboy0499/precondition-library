@@ -2441,13 +2441,15 @@ git commit -m "test(tasks): un-skip task-text determinism and prove phrasings ar
 **Files:**
 - Modify: `docs/superpowers/specs/2026-09-13-precondition-library-design.md`
 - Modify: `CHANGELOG.md`
+- Modify: `README.md` (boundary-condition paragraph, and a status-table row that said no number had been measured)
+- Modify: this plan (kept in step with what landed; see "Additions after this plan")
 
 - [ ] **Step 1: Update the spec's task-family section**
 
-In `docs/superpowers/specs/2026-09-13-precondition-library-design.md`, find the `### The five faults` table in §3 and add immediately after it:
+In `docs/superpowers/specs/2026-09-13-precondition-library-design.md`, find the `### The five faults` table in §3 and add this section after the `lockfile_conflict` paragraph that follows it (before `### Out of scope for the family`):
 
 ```markdown
-### Intents and resolutions (§3, revised 2026-09-13)
+### Intents and resolutions (revised 2026-09-13)
 
 A fault's request text used to be one fixed sentence, which made the text a
 perfect class label and the primary claim untestable. The task family is now
@@ -2470,16 +2472,42 @@ The request text is sampled deterministically from the paraphrase distribution
 (`sha256` over the seed, never `hash()`, which CPython salts per process). When the
 state is already known, `variant_phrasings` may supply *informed* wording that
 reveals the situation to a careful reader, as a real user's description often does;
-state may reach the request only through that declared map. How far the text alone
-gets a text-only dispatcher is **measured** rather than assumed:
-`bench/textcontrol.py` trains a bag-of-words classifier on the text alone and
-reports its AUC per request regime, with a positive control proving the detector
-fires when informed wording fully determines the resolution. The primary claim is
-measured on the *uninformed* regime, where the text carries no signal, so its AUC
-must stay below `LEAKAGE_CEILING`; the informed regime is reported as the boundary
-condition and never gated. The per-intent AUCs must be reported together with the
-informed/uninformed mixture of the pairs, because that mixture is what makes the
-numbers interpretable.
+state may reach the request only through that declared map.
+
+#### The boundary condition
+
+The request text has two declared channels, and the primary claim is measured on
+only one of them:
+
+- **uninformed** — the shared `phrasings` list: what someone says when they do not
+  know what is wrong, or when nothing is wrong.
+- **informed** — a resolution's `variant_phrasings` entry: wording that reveals
+  the situation.
+
+How far the text alone gets a dispatcher is **measured** rather than assumed.
+`bench/textcontrol.py` trains a bag-of-words logistic regression on the request
+text alone and reports AUC per intent and regime, over the state grid in
+`tests/conftest.py`, with train n=120 and eval n=120 on disjoint seed sets:
+
+| intent | uninformed AUC | informed AUC |
+| --- | --- | --- |
+| `sync_fork_with_upstream` | 0.500 | 0.962 |
+| `restore_submodule_state` | 0.500 | 0.945 |
+
+**On uninformed requests the text carries no signal at all (AUC 0.500, measured
+by `bench/textcontrol.py`, not assumed), so a dispatch comparison there measures
+state-reading. On informed requests the wording nearly determines the resolution
+(AUC ≈ 0.95, the same script), which is the boundary condition where the
+mechanism is not needed.** An earlier draft pooled the two regimes into one
+number (0.795 and 0.801, the pooled figures from the control's pre-split
+revision) that described neither — it averaged a regime in which the text is the
+answer in disguise with one in which it is noise — and that is why the split
+exists.
+
+The uninformed AUC is the one the experiment must keep under `LEAKAGE_CEILING`;
+the informed AUC is reported as the boundary condition and never gated. The
+per-intent AUCs must be reported together with the informed/uninformed mixture of
+the pairs, because that mixture is what makes the numbers interpretable.
 ```
 
 - [ ] **Step 2: Update the spec's testing section**
@@ -2488,15 +2516,22 @@ In §10 (Testing strategy), add this line to the code block, after the `DETERMIN
 
 ```
 TEXT CONTROL    a bag-of-words classifier trained on the request text alone
-                must not leak the resolution from uninformed wording; its AUC is
-                reported per regime. Pinned by a positive control that fires on
-                an intent whose informed wording fully determines the answer, so
-                the control cannot pass by being a no-op.
+                must not leak the resolution from *uninformed* wording, the
+                regime the primary claim is measured in; its AUC is reported
+                per regime. Measured by bench/textcontrol.py over the state
+                grid: uninformed 0.500 for both converted intents, informed
+                0.962 / 0.945 -- the boundary condition where the wording
+                nearly determines the resolution and the mechanism is not
+                needed. Pinned by a positive control that fires on an intent
+                whose informed wording fully determines the answer, so the
+                control cannot pass by being a no-op. Only registered intents
+                are measured; the three unconverted faults return a fixed
+                sentence and are excluded (issue #25).
 ```
 
 - [ ] **Step 3: Update the changelog**
 
-Add to `CHANGELOG.md` under `## [Unreleased]`, replacing the `### Changed` stub:
+Add to `CHANGELOG.md` under `## [Unreleased]`, replacing the `### Changed` stub. The final entry records what was **not** done as well as what was: the three unconverted faults, and the regime split that replaced a pooled number.
 
 ```markdown
 ### Added
@@ -2510,36 +2545,63 @@ Add to `CHANGELOG.md` under `## [Unreleased]`, replacing the `### Changed` stub:
   a positive control that proves the detector fires (`bench/textcontrol.py`).
 - Hand-written gold resolutions for both ambiguous intents (`bench/gold/`).
 - `Program.variant`, so a wrong dispatch decision is definable at all.
+- Determinism tests over the task text, proving every declared phrasing is
+  reachable and the same seed yields the same wording
+  (`tests/test_faults_deterministic.py`).
 
 ### Changed
 
 - `diverged` and `submodule_moved` now have three state-decided resolutions each,
   replacing the single fixed request sentence that made the task text a class
   label and the primary claim untestable (issue #3).
+- The text-only control reports the **uninformed and informed request regimes
+  separately**, replacing a single pooled number measured under one ceiling. The
+  pooled figures (0.795 / 0.801, from the control's pre-split revision) averaged
+  a regime in which the text is the answer in disguise with one in which it is
+  noise, and described neither; the primary claim is now scoped to the
+  uninformed regime, whose AUC is the gated one.
+
+### Not done in this change
+
+- Three of the five faults — `dirty_tree`, `branch_renamed`, and
+  `lockfile_conflict` — still return a single fixed request sentence and
+  therefore still carry the original defect. They are deliberately unconverted,
+  must not be included in any dispatch measurement until they gain an
+  `IntentSpec`, and are tracked in issue #25.
 ```
 
 - [ ] **Step 4: Run the whole suite, lint, and types**
 
-Run:
+Run, exactly as CI does:
 ```bash
-uv run ruff format .
+uv run ruff format --check .
 uv run ruff check .
 uv run mypy src
-uv run pytest -q
+uv run pytest -o addopts="" -q
 ```
-Expected: format reports files unchanged after the first run; ruff `All checks passed!`; mypy `Success: no issues found`; pytest green with the newly-real tests included and only the sandbox-dependent ones skipped.
+Expected (measured on the branch before this commit): `50 files already formatted`; ruff `All checks passed!`; mypy `Success: no issues found in 29 source files`; pytest `66 passed, 30 skipped` — only the sandbox-dependent tests skip.
 
 - [ ] **Step 5: Commit and open the PR**
 
 ```bash
-git add docs/superpowers/specs/2026-09-13-precondition-library-design.md CHANGELOG.md
-git commit -m "docs: record intents and resolutions in the design of record"
-git push -u origin pr/NN-intent-underdetermined-instances
-gh pr create --base main --title "feat(tasks): make the task text stop being the ground-truth label" \
+git add README.md CHANGELOG.md \
+  docs/superpowers/specs/2026-09-13-precondition-library-design.md \
+  docs/superpowers/plans/2026-09-13-intent-underdetermined-instances.md
+git commit -m "docs: record intents, resolutions, and the measured boundary condition"
+git push -u origin pr/16-docs-and-changelog
+gh pr create --base main \
+  --title "docs: record intents, resolutions, and the measured boundary condition" \
   --body "Closes #3. <fill in the PR template>"
 ```
 
 `main` is protected: the PR must link issue #3, pass CI, and be rebase-merged. See `CONTRIBUTING.md`.
+
+**Additions after this plan was written** (decided during implementation, 2026-09-13):
+
+- The spec's revision history gains a **v3** row: the informed/uninformed channel split, the primary claim scoped to the uninformed regime, and the gold resolutions.
+- The spec's Open risks gains item 6: three of the five faults still return a single fixed sentence, are scoped out of this change, must not be measured, and are tracked in issue #25.
+- `README.md` gains the boundary-condition paragraph in "How the measurement works", and its "no number has been measured" row is corrected — the text control has produced numbers, even though no dispatch comparison has run.
+- The `[0.0.1]` changelog link is repointed from the deleted release object to `https://github.com/Shyboy0499/precondition-library/commits/v0.0.1`, which resolves for a tag. No release is created.
 
 ---
 

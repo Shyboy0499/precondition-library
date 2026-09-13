@@ -10,6 +10,7 @@
 | --- | --- | --- |
 | 1 | 2026-09-13 | Initial design of record. |
 | 2 | 2026-09-13 | Reframed after a prior-art sweep and a hostile method review (see ADR-0001). Claim 1 dropped as a contribution; Claim 2 narrowed to its empirical form; Claim 3 added for the negative-sandbox admission criterion; the primary metric moved from episode-level to matched dispatch coverage. **Revised before any data was collected** — no episode has been run, so no analysis was chosen after seeing results. |
+| 3 | 2026-09-13 | The request text gains a declared informed/uninformed channel split, and the primary claim is scoped to the uninformed regime (AUC 0.500, measured by `bench/textcontrol.py`); the gold resolutions land. `sync_fork_with_upstream` and `restore_submodule_state` are converted to state-decided intents; three of the five faults remain unconverted and are excluded from any dispatch measurement (issue #25). **Logged before any episode data existed** — no episode has been run, so no analysis was chosen after seeing results; the only measurements so far are the text-control AUCs reported in §3. |
 
 ---
 
@@ -146,6 +147,66 @@ not preferences:
 supplies as for its positive ones: it is the fault most likely to produce a
 program that reports success while being wrong, which is precisely the failure
 Claim 2 measures.
+
+### Intents and resolutions (revised 2026-09-13)
+
+A fault's request text used to be one fixed sentence, which made the text a
+perfect class label and the primary claim untestable. The task family is now
+described by **intents**, each carrying a paraphrase distribution and one or more
+**resolutions** decided only by observable state:
+
+| intent | resolutions | decided by |
+| --- | --- | --- |
+| `sync_fork_with_upstream` | discard / rebase / merge | whether local-only commits change files at all, and whether they touch files upstream also changed |
+| `restore_submodule_state` | init / repin / remove | whether the submodule is initialised, whether upstream still references it, whether the recorded pin matches |
+
+Only intents with two or more resolutions have an experimental surface, and
+`tasks/registry.py` is the single place that distinction lives, so an
+unambiguous intent cannot be counted into a dispatch rate as if it were evidence.
+A resolution is `None` for a *benign* state — nothing to do — and such pairs are
+labelled negatives, because a dispatcher that always fires can only be caught by
+states that require refusal.
+
+The request text is sampled deterministically from the paraphrase distribution
+(`sha256` over the seed, never `hash()`, which CPython salts per process). When the
+state is already known, `variant_phrasings` may supply *informed* wording that
+reveals the situation to a careful reader, as a real user's description often does;
+state may reach the request only through that declared map.
+
+#### The boundary condition
+
+The request text has two declared channels, and the primary claim is measured on
+only one of them:
+
+- **uninformed** — the shared `phrasings` list: what someone says when they do not
+  know what is wrong, or when nothing is wrong.
+- **informed** — a resolution's `variant_phrasings` entry: wording that reveals
+  the situation.
+
+How far the text alone gets a dispatcher is **measured** rather than assumed.
+`bench/textcontrol.py` trains a bag-of-words logistic regression on the request
+text alone and reports AUC per intent and regime, over the state grid in
+`tests/conftest.py`, with train n=120 and eval n=120 on disjoint seed sets:
+
+| intent | uninformed AUC | informed AUC |
+| --- | --- | --- |
+| `sync_fork_with_upstream` | 0.500 | 0.962 |
+| `restore_submodule_state` | 0.500 | 0.945 |
+
+**On uninformed requests the text carries no signal at all (AUC 0.500, measured
+by `bench/textcontrol.py`, not assumed), so a dispatch comparison there measures
+state-reading. On informed requests the wording nearly determines the resolution
+(AUC ≈ 0.95, the same script), which is the boundary condition where the
+mechanism is not needed.** An earlier draft pooled the two regimes into one
+number (0.795 and 0.801, the pooled figures from the control's pre-split
+revision) that described neither — it averaged a regime in which the text is the
+answer in disguise with one in which it is noise — and that is why the split
+exists.
+
+The uninformed AUC is the one the experiment must keep under `LEAKAGE_CEILING`;
+the informed AUC is reported as the boundary condition and never gated. The
+per-intent AUCs must be reported together with the informed/uninformed mixture of
+the pairs, because that mixture is what makes the numbers interpretable.
 
 ### Out of scope for the family
 
@@ -521,6 +582,18 @@ GOLD FIRST      hand-written solutions must satisfy the fault checkers before
 DETERMINISM     same seed -> byte-identical faulted environment; different
                 seeds -> genuinely different instances. Non-determinism would
                 appear as variance between arms.
+TEXT CONTROL    a bag-of-words classifier trained on the request text alone
+                must not leak the resolution from *uninformed* wording, the
+                regime the primary claim is measured in; its AUC is reported
+                per regime. Measured by bench/textcontrol.py over the state
+                grid: uninformed 0.500 for both converted intents, informed
+                0.962 / 0.945 -- the boundary condition where the wording
+                nearly determines the resolution and the mechanism is not
+                needed. Pinned by a positive control that fires on an intent
+                whose informed wording fully determines the answer, so the
+                control cannot pass by being a no-op. Only registered intents
+                are measured; the three unconverted faults return a fixed
+                sentence and are excluded (issue #25).
 IMPORT GRAPH    replay cannot reach provider, directly or transitively.
                 IMPLEMENTED AND PASSING (tests/test_replay_isolated_from_provider.py)
 ZERO TOKEN      stronger than the import test: replay runs with a provider whose
@@ -597,6 +670,12 @@ claim.
 5. **Model drift.** Provider-side model updates mid-experiment would confound
    everything. `model` is recorded per episode; a version change invalidates the
    affected run and requires re-running that arm.
+6. **Three of the five faults are not converted.** `dirty_tree`,
+   `branch_renamed`, and `lockfile_conflict` still return a single fixed request
+   sentence, so for them the text remains a perfect class label — the original
+   defect. They are scoped out of this change and **must not be included in any
+   dispatch measurement** until they gain an `IntentSpec` with two or more
+   state-decided resolutions. Tracked in issue #25.
 
 ---
 

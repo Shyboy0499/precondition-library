@@ -10,9 +10,40 @@ measured result; there are none yet. See
 
 ## [Unreleased]
 
+### Added
+
+- `IntentSpec` and `ResolutionVariant`: intents carry a paraphrase distribution
+  and two or more resolutions decided only by observable state
+  (`tasks/intent.py`, `tasks/registry.py`).
+- Labelled (state, resolution) pair generator with denominators
+  (`bench/pairs.py`) — the raw material the spec's primary metric needs.
+- A text-only control measuring how far the request text gets a dispatcher, with
+  a positive control that proves the detector fires (`bench/textcontrol.py`).
+- Hand-written gold resolutions for both ambiguous intents (`bench/gold/`).
+- `Program.variant`, so a wrong dispatch decision is definable at all.
+- Determinism tests over the task text, proving every declared phrasing is
+  reachable and the same seed yields the same wording
+  (`tests/test_faults_deterministic.py`).
+
 ### Changed
 
-- Nothing yet.
+- `diverged` and `submodule_moved` now have three state-decided resolutions each,
+  replacing the single fixed request sentence that made the task text a class
+  label and the primary claim untestable (issue #3).
+- The text-only control reports the **uninformed and informed request regimes
+  separately**, replacing a single pooled number measured under one ceiling. The
+  pooled figures (0.795 / 0.801, from the control's pre-split revision) averaged
+  a regime in which the text is the answer in disguise with one in which it is
+  noise, and described neither; the primary claim is now scoped to the
+  uninformed regime, whose AUC is the gated one.
+
+### Not done in this change
+
+- Three of the five faults — `dirty_tree`, `branch_renamed`, and
+  `lockfile_conflict` — still return a single fixed request sentence and
+  therefore still carry the original defect. They are deliberately unconverted,
+  must not be included in any dispatch measurement until they gain an
+  `IntentSpec`, and are tracked in issue #25.
 
 ## [0.0.1] — 2026-09-13
 
@@ -42,4 +73,4 @@ Design-phase release. No agent exists and no result is claimed.
   revision is logged in the spec's revision history.
 
 [Unreleased]: https://github.com/Shyboy0499/precondition-library/compare/v0.0.1...HEAD
-[0.0.1]: https://github.com/Shyboy0499/precondition-library/releases/tag/v0.0.1
+[0.0.1]: https://github.com/Shyboy0499/precondition-library/commits/v0.0.1
