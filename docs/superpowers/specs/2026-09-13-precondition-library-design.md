@@ -4,6 +4,13 @@
 **Status:** design approved, implementation not started
 **Author:** Shyboy0499
 
+**Revision history**
+
+| version | date | change |
+| --- | --- | --- |
+| 1 | 2026-09-13 | Initial design of record. |
+| 2 | 2026-09-13 | Reframed after a prior-art sweep and a hostile method review (see ADR-0001). Claim 1 dropped as a contribution; Claim 2 narrowed to its empirical form; Claim 3 added for the negative-sandbox admission criterion; the primary metric moved from episode-level to matched dispatch coverage. **Revised before any data was collected** — no episode has been run, so no analysis was chosen after seeing results. |
+
 ---
 
 ## 1. Summary
@@ -25,30 +32,62 @@ program still applies**:
 
 ### Claims
 
-**Claim 1 (secondary).** Tokens and LLM calls per episode fall across repeated
-occurrences for the compiled arms and stay flat for the ReAct baseline, at
-matched success rate — with cost per success reported alongside cost per episode
-(§7), since an arm that succeeds more often may legitimately spend more.
+**What this project does not claim.** Added 2026-09-13 after the prior-art sweep;
+ADR-0001 records the reasoning and the source-checked citations.
 
-**Claim 2 (primary).** At matched library size, precondition dispatch fires a
-program that then fails its postconditions — a *mismatch* — less often than
-semantic dispatch.
+- Not that compiling a task into a persistent program and replaying it cheaply is
+  novel — PreAct, SkillDroid, Auto, and LATM all do it.
+- Not that dispatching a cached plan by executable preconditions is a novel
+  mechanism — it is MACROPS, 1972, with an explicit replan fallback.
+- Not that "the most similar case is not the most reusable" is new — Smyth &
+  Keane, 1998.
 
-Claim 2 is primary deliberately. Claim 1 is close to obvious, and a project that
-leads with it invites the response "so, caching". Declaring the harder claim
-primary now means a null result cannot be quietly reframed as a win.
+**Claim 1 (context, not a contribution).** Tokens and LLM calls per episode fall
+across repeated occurrences for the compiled arms and stay flat for the ReAct
+baseline — with cost per success reported alongside cost per episode (§7), since
+an arm that succeeds more often may legitimately spend more. This is an
+engineering assumption and a cost model. It is established prior art and is never
+presented as a finding.
+
+**Claim 2 (primary, empirical form).** At **matched dispatch coverage**,
+executable-precondition dispatch is *expected* to mis-fire less often than
+embedding dispatch — a mis-fire being a program that runs, claims success, and did
+not — with mismatch logged independently of episode success. The mechanism is
+classical; what has not been measured is the comparison. Whether the expectation
+holds is the open question: §7 pre-registers the analysis, §13 lists the works
+that bracket it without answering it, and **no result exists yet**. This is the
+only *measurement* prior art does not settle.
+
+**Claim 3 (artifact-level).** A negative-sandbox admission criterion — admit a
+program only if it passes postconditions on a faulted instance **and** fails its
+preconditions on generated negative states — is a requirement that **no confirmed
+work publishes**; the closest published gate is exit-condition-based and applied
+as a cascade after semantic recall, which is a different test. Cheapness and
+enforceability are design intentions, not findings. Reported as a 2×2 factor
+against an otherwise identical positive-only gate.
+
+The claim structure changed because the original primary claim was untestable as
+designed: with one fixed task sentence per fault, the task text *was* the
+ground-truth label, so embedding dispatch could not mis-fire by construction.
+Analysing it would have produced a number that looked like a result while
+measuring nothing.
 
 ### What would falsify this
 
-- **Compilation only pays on the 5th recurrence or later.** Then the honest
-  conclusion is "not worth it for chores I run twice", and the crossover point
-  is the result.
-- **Semantic dispatch is already good enough.** Claim 2 dies; Claim 1 survives
-  as a much less interesting finding.
-- **Compiled programs rot as repositories drift.** Then the failure rate, not
-  the cost curve, becomes the finding.
-- **The injected faults leak a marker.** Arm 2 gets a free win and the
-  comparison says nothing about real repositories.
+- **No difference at any coverage.** Then the finding is that executable
+  preconditions buy no dispatch accuracy over embeddings in this domain, and the
+  negative-sandbox admission factor (Claim 3) becomes the contribution.
+- **The injected faults leak a marker.** If faults are recognisable from the task
+  text, semantic dispatch wins for the wrong reason. A text-only classifier's AUC
+  is the control that detects this (§10, issue #3).
+- **Probes encode the answer.** If authoring the precondition vocabulary requires
+  the knowledge being measured, the comparison is confounded by author effort
+  rather than measured.
+- **Compiled programs rot as repositories drift.** Then program mortality, not
+  dispatch accuracy, becomes the finding.
+- **Amortization never pays.** Compilation costs more than it saves at any
+  realistic recurrence count. This no longer threatens a claim — Claim 1 is not
+  claimed — it only makes the harness uneconomical.
 
 ---
 
@@ -66,7 +105,7 @@ primary now means a null result cannot be quietly reframed as a win.
 
 ### Non-goals
 
-- A product, a UI, or a DSH plugin. (A plugin wrapper is a *possible* phase 5,
+- A product, a UI, or a DSH plugin. (A plugin wrapper is a *possible* phase 6,
   deliberately out of scope — see §12.)
 - Beating a frontier model on general agentic tasks.
 - Claiming that compiled programs are safe to run against real repositories.
@@ -83,7 +122,8 @@ A fault is admissible only if it satisfies all three. These are load-bearing,
 not preferences:
 
 1. **It recurs.** Amortization needs a second occurrence; a one-off task can
-   never validate Claim 1.
+   never exercise the amortization cost model, so it cannot inform even the
+   secondary concern.
 2. **Correctness is checkable without a model.** If scoring an episode requires
    an LLM, scoring costs exactly what the project exists to avoid paying, and
    the cost comparison becomes circular.
@@ -167,7 +207,7 @@ failed.
 | `sandbox.py` | build/destroy disposable repo + bare upstream | git |
 | `tasks/faults/*` | seeded fault injection, task text, ground-truth checker | sandbox |
 | `library.py` | storage, two-sided admission, both dispatch strategies | program |
-| `agents/react.py` | arm 1: observe → act → observe | provider, sandbox |
+| `agents/react.py` | arm 1: the ReAct-style baseline (Yao et al., ICLR 2023) — observe → act → observe | provider, sandbox |
 | `agents/compile.py` | solved task → candidate program; admission gate | provider |
 | `agents/dispatch.py` | arms 2 and 3 — **the experiment** | library |
 | `runtime/guard.py` | screens model-authored bodies before execution | — |
@@ -252,7 +292,7 @@ through admission.
 ### Lifecycle
 
 ```
-candidate ──admission passes──▶ verified ──postconditions fail──▶ demoted
+candidate ──admission passes──▶ admitted ──postconditions fail──▶ demoted
     │                                                     │
     └──admission fails──▶ (not stored;            two mismatches
                            recorded as data)            ▼
@@ -320,49 +360,90 @@ One JSONL line per episode; every number reported is a grouping over this file.
 
 ### Design
 
+The primary measurement is a **dispatch-level benchmark**, not an episode run:
+
 ```
-5 faults × 4 occurrences × 3 arms = 60 episodes   (pilot)
+  labelled (repo-state, candidate-program) pairs, split by fault seed
+        ├─ admit set    build the precondition vocabulary
+        ├─ tune set     calibrate arm 2's representation and threshold
+        └─ eval set     the reported numbers
+        │
+  both dispatchers sweep their acceptance threshold
+        │
+  mismatch-vs-coverage curve, Wilson intervals, power statement
 ```
 
-Seeds are fixed and shared: **every arm faces byte-identical environments**, so
-episodes are paired by (fault, seed) and the comparison is within-episode rather
-than between-populations. Each arm builds its library from empty and runs
-occurrences in order, so an arm cannot benefit from a program compiled against a
-later state.
+Each pair is labelled by mechanically deriving the expected state from the
+fault-injection spec (§3), with ground truth kept in separate code from the
+admission postconditions (§6) and validated by two negative controls: a no-op
+agent must fail every fault, and a deliberately wrong program must fail too.
+
+A dispatch decision costs no LLM call — arm 3 evaluates predicates, arm 2 does one
+embedding lookup — so the pair count is chosen to make the comparison adequately
+powered rather than to fit a budget.
+
+**The episode loop is retained only as a demonstration, explicitly underpowered:**
+
+```
+5 faults × 4 occurrences × 3 arms = 60 episodes   (demo, UNDERPOWERED)
+```
+
+It is labelled underpowered wherever it appears and excluded from the primary
+claim. Its value is showing the harness works end to end, not producing a result.
+
+Seeds are split into disjoint admit / tune / eval sets and every arm is routed
+through the same (fault, seed) pairs, so the comparison is paired rather than
+between-populations. The unit of analysis is the fault seed, not the episode:
+occurrences 2-4 are **held-out variants** of a fault (different branch names,
+file sets, conflict positions, submodule states), or they are relabelled
+"replays" and excluded from independence claims.
 
 ### Figures
 
-**Figure 1 — cost vs repeat.** Mean tokens and LLM calls per episode against
-`occurrence_index`, one line per arm. ReAct should be flat; the compiled arms
-should fall. The crossover point is the honest headline.
+**Figure 1 — mismatch vs coverage.** The primary figure. Both dispatchers swept
+across acceptance thresholds; mismatch rate against coverage, Wilson intervals at
+each operating point, and the pre-registered coverage point marked.
 
-**Figure 2 — mismatch comparison.** Mismatch rate, arm 2 against arm 3, with
-Wilson intervals and explicit denominators.
+**Figure 2 — cost vs repeat (secondary).** Mean tokens and LLM calls per episode
+against `occurrence_index`, one line per arm, from the underpowered demo. Reported
+as a cost model, not as a contribution.
+
+**Figure 3 — the admission factor.** The 2×2 {dispatch: semantic|precondition} ×
+{admission: gated|ungated} comparison, which separates the negative-sandbox
+criterion (Claim 3) from predicate dispatch (Claim 2).
 
 ### Pre-registered analysis
 
-Written here, before any data exists, to prevent the analysis being chosen after
-seeing the results:
+**Revised 2026-09-13, before any data exists.** The original pre-registration
+named an episode-level paired mismatch difference as primary. A method review
+found that metric degenerate as designed (ADR-0001). The revision is recorded
+rather than silently applied: no episode has been run, so no analysis was chosen
+after seeing results.
 
-1. **Primary metric:** the paired difference in mismatch rate (arm 2 − arm 3),
-   over episodes where a program was dispatched, tested with McNemar's test on
-   paired (fault, seed) episodes.
-2. **Secondary metrics:** tokens and LLM calls per episode by occurrence index;
-   compile success rate; fallback rate; guard refusal rate.
-3. **Extension rule:** if the 95% interval on the primary difference spans zero,
-   extend to 8 occurrences (120 episodes total) rather than re-analysing the
-   pilot subset differently. If it still spans zero, the reported result is
-   "no difference detected at this N", with the interval shown.
-4. **Tuning discipline:** arm 2's similarity threshold is tuned on a held-out
-   seed set disjoint from the evaluation seeds, and the value used is written
-   into every ledger line. An untuned control arm would be a straw man; a
-   control arm tuned on its own evaluation set would be cheating. Both are
-   avoided, and the record shows which was done.
-5. **Failed episodes stay in the denominator**, with their partial token spend.
+1. **Primary metric:** the mismatch-versus-coverage curve, and the difference
+   between dispatchers **at matched coverage**. The directional claim is stated at
+   a pre-registered coverage point; the full curve is reported regardless.
+2. **Unit of analysis:** the fault seed/family, not the episode. Seeds split into
+   disjoint admit / tune / eval sets; episodes paired by (fault, seed).
+3. **Power statement:** required — the detectable effect size at the chosen pair
+   count, coverage points, and alpha.
+4. **Secondary metrics:** tokens and LLM calls per episode by occurrence index
+   (the cost model); compile success rate; fallback rate; guard refusal rate. The
+   episode loop is labelled underpowered and excluded from the primary claim.
+5. **Tuning discipline:** arm 2's representation and similarity threshold are
+   tuned on the tune set, disjoint from eval, and the value used is written into
+   every ledger line. An untuned control arm would be a straw man; a control arm
+   tuned on its own evaluation set would be cheating. The record shows which was
+   done.
+6. **Extension rule:** if the interval on the primary difference spans zero at the
+   pre-registered coverage point, extend the pair count rather than re-analysing
+   the existing set differently. If it still spans zero, the result is "no
+   difference detected at this N", with the interval shown.
+7. **Failed episodes stay in the denominator**, with their partial token spend.
    Dropping them would make amortization look better than it is.
-6. **Cost per success is reported alongside cost per episode**, because an arm
+8. **Cost per success is reported alongside cost per episode**, because an arm
    that succeeds more often may legitimately spend more per episode.
-7. **Invalid episodes are excluded from denominators but never hidden.** An
+9. **Invalid episodes are excluded from denominators but never hidden.** An
    episode that could not run (sandbox or infrastructure failure) is recorded as
    `invalid` and reported as a rate. **An invalid rate above 10% makes the run
    suspect**, and it is re-run rather than analysed — infrastructure flakiness
@@ -432,7 +513,9 @@ scope; the guard is a seatbelt, not a sandbox boundary.
 ```
 GOLD FIRST      hand-written solutions must satisfy the fault checkers before
                 any agent runs. A broken checker produces plausible numbers
-                that mean nothing. Enforced by tests/ before anything else.
+                that mean nothing. INTENDED to be enforced by tests/ before
+                anything else; NOT yet implemented -- test_checkers_against_gold
+                is skipped until phase 1 and no gold solution exists yet.
 DETERMINISM     same seed -> byte-identical faulted environment; different
                 seeds -> genuinely different instances. Non-determinism would
                 appear as variance between arms.
@@ -449,9 +532,11 @@ NO SILENT SKIP  a skipped test must carry the plan phase that implements it.
                 wrong reason.
 ```
 
-The zero-token test is the one that matters most: Claim 1 is a statement about
-cost, and the most likely way to make it silently false is an import nobody
-noticed. Both a static test and a runtime test guard it.
+The zero-token test is the one that matters most **for the cost model**: the
+replay invariant is what keeps the reported token totals honest, and the most
+likely way to make them silently false is an import nobody noticed. Both a static
+test and a runtime test guard it. It protects the cost model, not the primary
+claim.
 
 ---
 
@@ -460,11 +545,12 @@ noticed. Both a static test and a runtime test guard it.
 | phase | contents | exit criterion |
 | --- | --- | --- |
 | 0 | design, scaffold, invariants, CI | **done** — this document, committed skeleton |
-| 1 | sandbox, 5 fault injectors, gold solutions, ReAct baseline, ledger, provider | a fault can be injected, solved by ReAct, checked, and recorded; checkers validated against gold |
-| 2 | compile step, two-sided admission, both dispatch mechanisms | a program compiled from one episode fires correctly on a later episode of the same fault |
-| 3 | replay runtime, guard, demotion path, zero-token test | replay of an admitted program completes with a provider that raises on use |
-| 4 | 60-episode run across arms, ablation table, both figures | a table and a curve exist, with intervals and denominators |
-| 5 (optional) | DSH plugin wrapper | out of scope unless phases 1–4 land |
+| 1 | reframe after review; correct the experimental design (issues #3, #4, #9) | task text no longer labels the fault; arms share one frozen library and an identical admission gate; ground truth is decoupled from the artifact contract |
+| 2 | dispatch-level benchmark harness, calibration sweep, power statement (#5, #6) | labelled (repo-state, candidate-program) pairs exist; both dispatchers sweep a threshold; a power statement is written |
+| 3 | baselines that make the control arm credible (#7); safety hardening (#10) | the probe-classifier, intent-key, reflexion, and gold-script baselines run; the injection suite reports containment per defence tier |
+| 4 | run the benchmark; publish the mismatch-vs-coverage curves | Figure 1 exists with Wilson intervals at each coverage point |
+| 5 | episode loop as a demo, explicitly underpowered | the harness runs end to end; labelled underpowered wherever reported |
+| 6 (optional) | DSH plugin wrapper around the admitted library | out of scope unless phases 1–5 land |
 
 ---
 
@@ -472,17 +558,23 @@ noticed. Both a static test and a runtime test guard it.
 
 | decision | choice | rejected alternative and why |
 | --- | --- | --- |
-| axis of novelty | the agent's loop/architecture | embodiment (a daemon, a repo-resident agent) — appealing but the interesting question here is structural, and this is what makes a measurable claim possible |
-| headline claim | compile-once, replay-without-model | self-modifying agent (Darwin-Gödel-style) — generations are serial and each needs a full evaluation sweep; 2–3 weeks buys ~20 generations, not enough to see a signal over noise |
+| axis of contribution | the matched-coverage measurement (Claim 2), with the negative-sandbox admission criterion as a second candidate | **a novel architecture** — dropped (ADR-0001): compile-once replay is established prior art (PreAct, SkillDroid, Auto) and precondition dispatch is MACROPS, 1972 |
+| headline claim | none — the project reports a measurement, not a claimed architecture | **compile-once, replay-without-model** — dropped as prior art, ADR-0001 |
+| baseline | a ReAct-style observe/act/observe loop (Yao et al., ICLR 2023), given the same tools and sandbox | self-modifying agent — generations are serial and each needs a full evaluation sweep, so a short project sees too few generations to distinguish signal from noise |
 | | | swarm of tiny agents — cheap per run but high variance, and a positive result is hard to attribute to any mechanism |
 | | | memory-as-program — a real problem, but it needs long-horizon tasks that are themselves expensive to run |
 | comparison | three arms (react / semantic / precondition) | two arms (react vs precondition) — cheaper, but then Claim 2 has no control and a reviewer is right to say semantic dispatch was never given a fair shot |
-| dispatch mechanism | executable preconditions | embedding-only — no state awareness, so it mis-fires on structurally different environments that read alike |
+| dispatch mechanism | executable preconditions | embedding-only — no state awareness, and is *hypothesized* to mis-fire on structurally different environments that read alike; testing that hypothesis is what the benchmark is for |
 | | | one monolithic growing program with a dispatcher — the most striking demo, but it rots, and it cannot ablate *which* mechanism helped |
 | domain | branchy git maintenance chores | synthetic benchmark suite — cleanest ablation, but produces an agent nobody uses and leaves "does this matter" unanswered; chores were chosen because correctness is free to check and the recurrence is real |
 | stack | standalone Python engine, own the loop | DSH plugin (TypeScript) — cannot ablate a loop the host owns; measuring loop cost from inside a tool is not possible |
 | sandbox | disposable repos only | real forks — replayed programs execute unattended; real repositories are not an acceptable target for unreviewed generated code |
 | benchmark episodes | manufactured by seeded fault injection | waiting for real faults to recur — 60 recurrences will not occur in three weeks, so the experiment could not reach N |
+| **reframe after review (2026-09-13, ADR-0001)** | re-center on the open measurement: the dispatch comparison becomes the spine, the agent becomes its harness, Claim 1 is dropped as a contribution | **keep the agent central and merely rewrite the prose** — preserves the original vision, but the headline becomes "a modern instance of a classical mechanism" and invites "MACROPS for git chores"; the measurement is the only thing here that is actually open |
+| | | **abandon the project** — the narrow gap is real and unmeasured and the engineering is already scaffolded; abandonment would be a reaction to losing a claim, not to losing the question |
+| primary metric location | dispatch-level benchmark at matched coverage | episode-level paired mismatch difference — degenerate as designed: one fixed task sentence per fault made the task text the ground-truth label, so the control arm could not mis-fire by construction |
+| unit of analysis | the fault seed/family, with held-out variant occurrences | treating each episode as an independent sample — pseudo-replication that inflates N and leaks the admitted instance into evaluation |
+| citation policy | every citation checked against the source by the author before publication — a hygiene pass, not independent review | trusting a research agent's prior-art sweep — it produced five wrong attributions and one false negative claim about a repository in the author's own ecosystem |
 
 ### Open risks
 
@@ -508,16 +600,73 @@ noticed. Both a static test and a runtime test guard it.
 
 ## 13. Prior work and positioning
 
-A literature sweep on agents that accumulate and reuse skills, workflows, and
-plans — and on the older literature on planning, policy reuse, and case-based
-reasoning, where "is a stored plan still applicable?" is a long-standing
-question — is in flight. Its results determine the positioning section of the
-README and may require restating the claims.
+Filled in 2026-09-13. **Every citation below was checked against the source by the
+author** — title, authors, venue, and each attributed figure — after the sweep that
+produced them was found to contain five wrong attributions and one false negative
+claim about a repository in the author's own ecosystem. Nothing enters this
+section, or the README, unchecked. The full table, with per-work caveats, is in
+the README.
 
-**Until that section is written, this document makes no novelty claim.** The
-architecture and measurement design stand on their own as an experiment; whether
-the delta from existing work is publishable is a separate question that is
-answered in the README, not assumed here.
+**This is not independent review.** The check was performed by the same author, so
+treat it as a hygiene pass rather than external validation.
+
+### What prior art settles
+
+Compile-once replay is established, not novel. PreAct (arXiv:2606.17929) compiles
+a computer-use trace into a state machine with per-state verification predicates
+and parameter lifting, replaying 8.5-13× faster with no per-step LLM calls, and
+documents a `cov=100%/score=0` "lossy replay" failure. SkillDroid
+(arXiv:2604.14872) compiles GUI trajectories into parameterized templates and
+replays with zero LLM calls. Auto (arXiv:2607.04542) compiles
+witnessed-deterministic spans into signed artifacts gated on differential replay,
+reporting 2,775 vs 17,692 µ$ over 300 items and 48.9% silently wrong under a loose
+guard. LATM (arXiv:2305.17126, ICLR 2024) builds a reusable tool from
+demonstrations, then has a cheaper model invoke it — note that its replay phase
+still calls an LLM, so it evidences *cheaper* replay, not free replay.
+
+Executable-precondition dispatch is classical, not novel. MACROPS (Fikes, Hart &
+Nilsson, *Artificial Intelligence* 3(4):251-288, **1972**) dispatches a cached
+generalized plan by testing precondition kernels against live state, with an
+explicit replan fallback; 1971 is the separate STRIPS paper. Soar chunking (Laird,
+Rosenbloom & Newell, *Machine Learning* 1(1):11-46, 1986) caches compiled rules
+re-fired on matching conditions. Options (Sutton, Precup & Singh, *Artificial
+Intelligence* 112(1-2):181-211, 1999) give an option's initiation set the role a
+precondition plays for a policy — an analogy, not an identity, since an option
+also carries a termination condition that this project's preconditions lack.
+Adaptation-guided retrieval (Smyth & Keane, *Artificial Intelligence*
+102(2):249-293, 1998) argues it is often unwarranted to assume that the most
+similar case is also the most appropriate for reuse.
+
+### What brackets the open question without settling it
+
+A deployed deterministic executability gate (arXiv:2608.01050) removes 59.4% of
+matched skill-message pairs and 59.1% of skill-description tokens, with 90.5%
+context reduction, and its gate-removed counterfactual selected a skill blocked as
+non-executable in 7.8% of conversations. But it is a cascade *after* semantic
+recall — it can only prune, never rescue a recall miss — it covers ten skills in
+one domain family, and no head-to-head comparison is reported.
+
+A retrieval-risk benchmark (arXiv:2606.10388v2) measures top-K exposure of harmful
+sibling skills at HSR@3 0.346-0.372 for public retrievers versus 0.007 for a
+controlled resolver. That is retrieval *exposure*, not wrong-program *execution*,
+and again no precedence-versus-similarity dispatch comparison. These figures
+belong to v2 under its v2 benchmark name; the earlier title has different, much
+smaller figures.
+
+### The hypothesis that survives
+
+**The hypothesis:** at matched dispatch coverage, executable-precondition dispatch
+will mis-fire less often than embedding dispatch, where mismatch is scored as an
+outcome orthogonal to episode success. The mechanism is 1972; **that comparison
+has not been measured.** Running it is the intended contribution, and no result
+exists yet — this section describes a hypothesis and an intended output, not a
+finding.
+
+The negative-sandbox admission criterion (§6) is the secondary candidate: a
+requirement that no confirmed work publishes, with the closest published gate
+being exit-condition-based and applied as a cascade after semantic recall — a
+different test. Its cheapness and enforceability are design intentions, not
+findings.
 
 ---
 

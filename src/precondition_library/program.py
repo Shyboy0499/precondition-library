@@ -47,14 +47,17 @@ class ProgramStatus(StrEnum):
     """Lifecycle of a stored program.
 
     CANDIDATE    compiled, not yet admitted to the usable library
-    VERIFIED     passed admission: postconditions hold on a faulty sandbox and
-                 preconditions reject every negative sandbox
+    ADMITTED     passed the two-sided admission gate: postconditions hold on a
+                 faulty sandbox and preconditions reject every negative sandbox.
+                 Deliberately not called "verified" -- this project's own gate is
+                 not external validation, and the word would imply an assurance
+                 the gate cannot confer.
     DEMOTED      fired on a real episode and its postconditions failed
     QUARANTINED  withdrawn from dispatch; retained for analysis, never replayed
     """
 
     CANDIDATE = "candidate"
-    VERIFIED = "verified"
+    ADMITTED = "admitted"
     DEMOTED = "demoted"
     QUARANTINED = "quarantined"
 
