@@ -7,7 +7,10 @@ the design, not an implementation detail.
 
 from __future__ import annotations
 
+import pytest
+
 from precondition_library.signatures import StateFingerprint
+from precondition_library.tasks.faults.diverged import INTENT as DIVERGED
 
 
 def test_conflicting_files_is_the_intersection(make_state) -> None:
@@ -44,3 +47,31 @@ def test_defaults_keep_existing_construction_valid() -> None:
     assert state.submodule_initialised is False
     assert state.local_touched_files == []
     assert state.submodule_pin_matches_upstream is True
+
+
+@pytest.mark.parametrize(
+    ("state_name", "expected"),
+    [
+        ("benign_nothing_local", None),
+        ("empty_local_commits", "discard"),
+        ("disjoint_files", "rebase"),
+        ("overlapping_files", "merge"),
+    ],
+)
+def test_diverged_resolution_is_decided_by_state(state_grid, state_name, expected) -> None:
+    variant = DIVERGED.correct_variant(state_grid["sync_fork_with_upstream"][state_name])
+    assert (variant.id if variant else None) == expected
+
+
+def test_diverged_has_three_distinct_resolutions() -> None:
+    assert {v.id for v in DIVERGED.variants} == {"discard", "merge", "rebase"}
+    assert DIVERGED.is_ambiguous
+
+
+def test_diverged_phrasings_mostly_do_not_name_the_fault() -> None:
+    assert DIVERGED.naming_fraction(range(50)) <= 0.35
+
+
+def test_diverged_variants_each_explain_themselves() -> None:
+    for variant in DIVERGED.variants:
+        assert variant.rationale.strip(), f"{variant.id} needs a rationale"

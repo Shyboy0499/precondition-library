@@ -35,8 +35,15 @@ class FaultSpec:
         raise NotImplementedError("implemented per plan: phase 1")
 
     def task_text(self, seed: int) -> str:
-        """The request handed to the agent. Varies by seed so that repeats are
-        recognisably the same *kind* of task without being the same string."""
+        """The request handed to the agent, sampled from the intent's paraphrase
+        distribution.
+
+        Delegates to the intent so there is one source of truth per family. The
+        distribution must not name the fault in most samples: when the text
+        identifies the answer, the text *is* the label and a dispatch comparison
+        becomes vacuous. How far that holds is measured, not assumed -- see
+        bench/textcontrol.py.
+        """
         raise NotImplementedError("implemented per plan: phase 1")
 
     def check(self, sandbox) -> GroundTruth:

@@ -601,12 +601,23 @@ git commit -m "feat(tasks): add IntentSpec with deterministic paraphrase samplin
 
 - [ ] **Step 1: Write the failing test**
 
-Append to `tests/test_intent_ambiguity.py`:
+First extend the file's existing top import block with `pytest` and the
+`diverged` intent. Both imports belong at the top, not next to the new tests:
+ruff's `E402` (import not at top of file) and `I001` (unsorted imports) reject a
+mid-file import.
 
 ```python
+from __future__ import annotations
+
+import pytest
+
+from precondition_library.signatures import StateFingerprint
 from precondition_library.tasks.faults.diverged import INTENT as DIVERGED
+```
 
+Then append:
 
+```python
 @pytest.mark.parametrize(
     ("state_name", "expected"),
     [
@@ -783,7 +794,7 @@ Add `variant` to `Program` in `src/precondition_library/program.py`, immediately
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_intent_ambiguity.py -v`
-Expected: PASS, 12 tests (4 from Task 1, 8 from this task).
+Expected: PASS, 11 tests (4 from Task 1, 7 from this task).
 
 - [ ] **Step 5: Commit**
 
