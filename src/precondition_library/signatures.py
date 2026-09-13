@@ -17,7 +17,13 @@ from pydantic import BaseModel
 
 
 class StateFingerprint(BaseModel):
-    """Observable git-level facts about an environment, gathered without an LLM."""
+    """Observable git-level facts about an environment, gathered without an LLM.
+
+    Every field must be obtainable from git alone, because arm 3 decides by
+    running probes over exactly these values. A field that cannot be probed does
+    not belong here: it would make a resolution undecidable and quietly turn the
+    experiment into a comparison of two equally blind dispatchers.
+    """
 
     dirty_worktree: bool
     branch: str
@@ -27,10 +33,50 @@ class StateFingerprint(BaseModel):
     has_submodule_reference: bool
     remotes: list[str] = []
 
+    # Discriminators for the ambiguous intents (see tasks/intent.py).
+    local_only_commits: int = 0
+    """Commits present locally that upstream lacks: `git rev-list --count upstream/main..HEAD`."""
+    local_touched_files: list[str] = []
+    """Files the local-only commits change: `git diff --name-only upstream/main...HEAD`."""
+    upstream_touched_files: list[str] = []
+    """Files upstream's new commits change: `git diff --name-only HEAD...upstream/main`."""
+    submodule_initialised: bool = False
+    """Whether the submodule directory has been initialised in this clone."""
+    submodule_pin_matches_upstream: bool = True
+    """Whether the recorded submodule commit equals the one upstream pins."""
+    upstream_still_references_submodule: bool = True
+    """Whether upstream's tree still contains the submodule path at all."""
+
+    @property
+    def conflicting_files(self) -> set[str]:
+        """Files both sides touched.
+
+        The discriminator that decides merge versus rebase: if the two sides
+        changed the same file, replaying local commits on top of upstream would
+        discard a resolution someone already made.
+        """
+        return set(self.local_touched_files) & set(self.upstream_touched_files)
+
+    @property
+    def has_local_only_commits(self) -> bool:
+        """Whether the local branch is ahead of upstream at all.
+
+        A count rather than a flag because the zero case is the *benign* state:
+        nothing to resolve, so every program must refuse to fire. Negative
+        examples are half of what a dispatcher has to get right.
+        """
+        return self.local_only_commits > 0
+
     @classmethod
     def observe(cls, env) -> StateFingerprint:
-        """Run the probes. Must not mutate the environment."""
-        raise NotImplementedError("implemented per plan: phase 2")
+        """Run the probes. Must not mutate the environment.
+
+        Still unimplemented: the real probes belong with the live sandbox
+        (issues #4/#5). Until then, fingerprints are constructed directly, which
+        is sufficient for labelling dispatch decisions because the benchmark
+        consumes states, not repositories.
+        """
+        raise NotImplementedError("implemented per plan: phase 1 (issues #4/#5)")
 
 
 class TaskSignature(BaseModel):
