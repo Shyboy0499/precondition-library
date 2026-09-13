@@ -10,9 +10,11 @@ the two intents that own sampled wording are tested for real. The injected
 phase that will implement them named rather than implied.
 
 The three faults not yet converted to intents -- dirty_tree, branch_renamed and
-lockfile_conflict -- still return one fixed sentence and stub their injection.
-They are outside this file's subject until the issues that convert them land:
-no skip is added for them, because a skip that cannot run is noise.
+lockfile_conflict -- still return one fixed sentence, so they remain outside
+this file's subject until the issues that convert them land: no skip is added
+for them, because a skip that cannot run is noise. `dirty_tree`'s injection is
+real now (PR #25) and its own test file covers determinism; the remaining two
+still stub theirs.
 """
 
 from __future__ import annotations
