@@ -5,23 +5,31 @@ the text *is* the class label, so a dispatcher that reads only the text cannot
 mis-fire and the primary claim is untestable. 60 episodes would produce a number
 that looks like a result while measuring nothing.
 
-An `IntentSpec` separates three things that were previously one:
+An `IntentSpec` separates four things that were previously one:
 
   the request      a paraphrase distribution sampled by seed. A reported fraction
                    of samples do not name the fault at all.
   the state        a `StateFingerprint`, produced by the environment, not the request.
   the resolution   which of >=2 bodies is correct, decided ONLY by the state.
+  the wording      when the state is already known, `variant_phrasings` may supply
+                   *informed* wording that reveals the situation to a careful
+                   reader, as a real user's description often does. State may
+                   reach the request ONLY through this declared map.
 
-Because the resolution depends on state and not on wording, a text-only dispatcher
-has nothing to go on -- and any accuracy it appears to have can be *measured* as
-leakage (see bench/textcontrol.py) rather than assumed away.
+The resolution is a pure function of state, but the wording is not: informed
+wording is allowed to carry a signal about the resolution, because that is what a
+real request does. The control in bench/textcontrol.py measures that signal in two
+regimes: *uninformed* requests (the shared distribution, sampled with no state)
+must not leak the resolution, and *informed* requests are reported as the boundary
+condition -- the regime where the wording nearly gives the answer away and no
+mechanism is needed -- without being gated.
 """
 
 from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from ..signatures import StateFingerprint
 
@@ -85,6 +93,21 @@ class IntentSpec:
 
     variants: list[ResolutionVariant]
 
+    variant_phrasings: dict[str, list[str]] = field(default_factory=dict)
+    """Wording used when the situation is already known, keyed by resolution id.
+
+    The shared `phrasings` list is the *uninformed* request -- what someone says
+    when they do not know what is wrong, or when nothing is wrong. A variant's
+    list is the *informed* request: wording that reveals the situation to a
+    careful reader, as a real user's description often does ("my edits are in
+    files upstream left alone" versus "something is off with my fork").
+
+    State may influence the request ONLY through this declared map. That is what
+    `tests/test_task_text_is_not_a_label.py` pins, because an undeclared channel
+    from state to wording would quietly restore the original flaw: the text would
+    again be a label, and a dispatch comparison would again measure nothing.
+    """
+
     def __post_init__(self) -> None:
         if not self.phrasings:
             raise ValueError(f"{self.name}: needs at least one phrasing")
@@ -93,6 +116,12 @@ class IntentSpec:
         ids = [v.id for v in self.variants]
         if len(set(ids)) != len(ids):
             raise ValueError(f"{self.name}: duplicate variant ids {ids}")
+        unknown = sorted(set(self.variant_phrasings) - set(ids))
+        if unknown:
+            raise ValueError(f"{self.name}: variant_phrasings for undeclared variants {unknown}")
+        empty = sorted(key for key, values in self.variant_phrasings.items() if not values)
+        if empty:
+            raise ValueError(f"{self.name}: empty variant_phrasings for {empty}")
 
     @property
     def is_ambiguous(self) -> bool:
@@ -104,7 +133,41 @@ class IntentSpec:
         """
         return len(self.variants) > 1
 
-    def task_text(self, seed: int) -> str:
+    def informed_phrasings(self, state: StateFingerprint) -> list[str] | None:
+        """The variant-specific wording for this state, or None if there is none.
+
+        One place decides which channel a request came from, so the sampler and
+        the ledger that records which regime a pair belongs to cannot disagree.
+        """
+        resolved = self.correct_variant(state)
+        if resolved is None:
+            return None
+        return self.variant_phrasings.get(resolved.id) or None
+
+    def uses_informed_wording(self, state: StateFingerprint) -> bool:
+        return self.informed_phrasings(state) is not None
+
+    def task_text(self, seed: int, state: StateFingerprint | None = None) -> str:
+        """The request, sampled from a paraphrase distribution.
+
+        With no state, samples the uninformed distribution. With a state, uses
+        that state's resolution wording when one is declared, and otherwise falls
+        back to the uninformed distribution -- which is also what a benign state
+        gets, since there is nothing to describe.
+
+        The informed channel's salt deliberately does NOT include the variant id:
+        which wording a seed samples must not depend on which variant happens to
+        be correct, or the sampler would leak the label through the seed-to-text
+        mapping itself. Two variants declaring the same number of phrasings
+        therefore sample the same index, which is what makes a shared phrase
+        collide on purpose rather than by accident.
+        """
+        if state is not None:
+            informed = self.informed_phrasings(state)
+            if informed:
+                return informed[
+                    sample_index(seed, f"{self.name}:informed:{len(informed)}:text", len(informed))
+                ]
         return self.phrasings[sample_index(seed, f"{self.name}:text", len(self.phrasings))]
 
     def names_the_fault(self, text: str) -> bool:

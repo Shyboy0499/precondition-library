@@ -4,7 +4,7 @@
 
 **Goal:** Make the project's primary claim testable by removing the flaw that task text is a perfect class label — so that a text-only dispatcher has nothing to go on and a state-only dispatcher has something to prove.
 
-**Architecture:** An **intent** becomes a task family with one request distribution and ≥2 correct resolutions, where the correct one is decided *only* by observable state. A **labelled-pair generator** turns (state, intent) into per-decision ground truth, which is the raw material the spec's primary metric needs. A **text-only control classifier** measures whether the request text leaks the answer, and is itself validated by a positive control that must detect a deliberately leaky intent.
+**Architecture:** An **intent** becomes a task family with one request distribution and ≥2 correct resolutions, where the correct one is decided *only* by observable state. A **labelled-pair generator** turns (state, intent) into per-decision ground truth, which is the raw material the spec's primary metric needs. A **text-only control classifier** measures how far the request text alone gets a dispatcher, and is itself validated by a positive control that must fire on a fully determining intent.
 
 **Tech Stack:** Python 3.12, uv, pydantic v2, pytest, ruff (line-length 100), mypy. No new dependencies — the control classifier is implemented in pure Python, because a control that needs a new dependency to run is a control that gets skipped.
 
@@ -45,7 +45,7 @@ Live git sandboxes and `inject()` (#4/#5) · the compile and admission pipeline 
 | `src/precondition_library/tasks/faults/submodule_moved.py` | **Modify.** Add `INTENT` with three resolutions (init / repin / remove); delegate `task_text` to it. |
 | `src/precondition_library/tasks/registry.py` | **Create.** `INTENTS` and `ambiguous_intents()` — the only intents with an experimental surface. |
 | `src/precondition_library/bench/pairs.py` | **Create.** `LabelledPair`, `label`, `labelled_pairs`, `ambiguous_subset`, `decision_is_correct`, `denominator_report`. |
-| `src/precondition_library/bench/textcontrol.py` | **Create.** Bag-of-words logistic regression, rank-based AUC, leakage verdict. |
+| `src/precondition_library/bench/textcontrol.py` | **Create.** Bag-of-words logistic regression, rank-based AUC, full-determination verdict. |
 | `tests/conftest.py` | **Create.** State grids and a `make_state` helper shared across tests. |
 | `tests/test_intent_ambiguity.py` | **Create.** Variant count, partition of the state space, label invariance under wording. |
 | `tests/test_task_text_is_not_a_label.py` | **Create.** The control, plus the positive control that proves the control works. |
@@ -441,23 +441,31 @@ the text *is* the class label, so a dispatcher that reads only the text cannot
 mis-fire and the primary claim is untestable. 60 episodes would produce a number
 that looks like a result while measuring nothing.
 
-An `IntentSpec` separates three things that were previously one:
+An `IntentSpec` separates four things that were previously one:
 
   the request      a paraphrase distribution sampled by seed. A reported fraction
                    of samples do not name the fault at all.
   the state        a `StateFingerprint`, produced by the environment, not the request.
   the resolution   which of >=2 bodies is correct, decided ONLY by the state.
+  the wording      when the state is already known, `variant_phrasings` may supply
+                   *informed* wording that reveals the situation to a careful
+                   reader, as a real user's description often does. State may
+                   reach the request ONLY through this declared map.
 
-Because the resolution depends on state and not on wording, a text-only dispatcher
-has nothing to go on -- and any accuracy it appears to have can be *measured* as
-leakage (see bench/textcontrol.py) rather than assumed away.
+The resolution is a pure function of state, but the wording is not: informed
+wording is allowed to carry a *partial* signal about the resolution, because that
+is what a real request does. How far a text-only dispatcher can get on that signal
+is *measured* as its AUC over positive pairs (see bench/textcontrol.py). The
+defect the control detects is the text *fully determining* the resolution -- the
+original flaw returning -- not the mere presence of a partial signal, which is an
+intended, reported property of this domain.
 """
 
 from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from ..signatures import StateFingerprint
 
@@ -521,6 +529,21 @@ class IntentSpec:
 
     variants: list[ResolutionVariant]
 
+    variant_phrasings: dict[str, list[str]] = field(default_factory=dict)
+    """Wording used when the situation is already known, keyed by resolution id.
+
+    The shared `phrasings` list is the *uninformed* request -- what someone says
+    when they do not know what is wrong, or when nothing is wrong. A variant's
+    list is the *informed* request: wording that reveals the situation to a
+    careful reader, as a real user's description often does ("my edits are in
+    files upstream left alone" versus "something is off with my fork").
+
+    State may influence the request ONLY through this declared map. That is what
+    `tests/test_task_text_is_not_a_label.py` pins, because an undeclared channel
+    from state to wording would quietly restore the original flaw: the text would
+    again be a label, and a dispatch comparison would again measure nothing.
+    """
+
     def __post_init__(self) -> None:
         if not self.phrasings:
             raise ValueError(f"{self.name}: needs at least one phrasing")
@@ -529,6 +552,12 @@ class IntentSpec:
         ids = [v.id for v in self.variants]
         if len(set(ids)) != len(ids):
             raise ValueError(f"{self.name}: duplicate variant ids {ids}")
+        unknown = sorted(set(self.variant_phrasings) - set(ids))
+        if unknown:
+            raise ValueError(f"{self.name}: variant_phrasings for undeclared variants {unknown}")
+        empty = sorted(key for key, values in self.variant_phrasings.items() if not values)
+        if empty:
+            raise ValueError(f"{self.name}: empty variant_phrasings for {empty}")
 
     @property
     def is_ambiguous(self) -> bool:
@@ -540,7 +569,22 @@ class IntentSpec:
         """
         return len(self.variants) > 1
 
-    def task_text(self, seed: int) -> str:
+    def task_text(self, seed: int, state: StateFingerprint | None = None) -> str:
+        """The request, sampled from a paraphrase distribution.
+
+        With no state, samples the uninformed distribution. With a state, uses
+        that state's resolution wording when one is declared, and otherwise falls
+        back to the uninformed distribution -- which is also what a benign state
+        gets, since there is nothing to describe.
+        """
+        if state is not None:
+            resolved = self.correct_variant(state)
+            if resolved is not None:
+                informed = self.variant_phrasings.get(resolved.id)
+                if informed:
+                    return informed[
+                        sample_index(seed, f"{self.name}:{resolved.id}:text", len(informed))
+                    ]
         return self.phrasings[sample_index(seed, f"{self.name}:text", len(self.phrasings))]
 
     def names_the_fault(self, text: str) -> bool:
@@ -1322,7 +1366,7 @@ def label(intent: IntentSpec, seed: int, state: StateFingerprint) -> LabelledPai
         seed=seed,
         state=state,
         correct_variant=resolved.id if resolved is not None else None,
-        task_text=intent.task_text(seed),
+        task_text=intent.task_text(seed, state),
         ambiguous=intent.is_ambiguous,
     )
 
@@ -1334,9 +1378,11 @@ def labelled_pairs(
 ) -> list[LabelledPair]:
     """Cross the given states with the given seeds.
 
-    Every state is paired with every seed, because the label must be invariant
-    under the request's wording: if relabelling moved with the text, the label
-    would be a property of the phrasing and the exercise would be circular.
+    Every state is paired with every seed. The label is a function of state alone
+    -- `label` passes the state to the sampler so that wording and resolution are
+    recorded together, but wording is now *allowed* to carry signal about the
+    resolution: it is the label's invariance under state, not under wording, that
+    keeps the exercise from being circular.
     """
     pairs = [label(intent, seed, state) for state in states for seed in seeds]
     if not pairs:
@@ -1394,17 +1440,72 @@ git commit -m "feat(bench): add the labelled dispatch-pair generator"
 **Files:**
 - Create: `src/precondition_library/bench/textcontrol.py`
 - Test: `tests/test_task_text_is_not_a_label.py`
+- Modify: `src/precondition_library/tasks/intent.py` (one place decides the channel), `src/precondition_library/bench/pairs.py` (the regime on each pair, both regimes generated)
+
+> **Design change (authorised 2026-09-13; revised the same day after measuring).** The
+> original plan's "leakage control" could not work: its positive control was
+> unconstructible (every pair resolved to one variant, so `TextOnlyClassifier.fit`
+> raised `ValueError("need at least two classes")`), and its real assertion could
+> never fail (`task_text` took only a seed, could not see state, and every state was
+> crossed with every seed -- so the text was *mathematically incapable* of predicting
+> the resolution). A test that cannot fail is indistinguishable from a test that
+> passes.
+>
+> The first fix made wording genuinely depend on the situation (Task 3's
+> `variant_phrasings`) and then *measured* how far a text-only dispatcher gets on the
+> pooled pairs. That produced AUC 0.979 (`sync_fork_with_upstream`) and 0.967
+> (`restore_submodule_state`) against a single 0.99 ceiling, under an assertion
+> claiming the text "does not fully determine" the resolution -- which at 0.97 is very
+> nearly false, and which described neither of the two regimes the pairs came from.
+>
+> The second fix, the one this task now implements, splits the regimes:
+>
+> - **uninformed** -- the shared `phrasings` distribution, sampled with no state. The
+>   text cannot carry the resolution by construction, so a text-only dispatch
+>   comparison on this channel measures state-reading. This is where the primary
+>   claim is measured, and `LEAKAGE_CEILING = 0.65` is its tripwire.
+> - **informed** -- a variant's `variant_phrasings` entry, wording that reveals the
+>   situation. A high AUC is expected and is the boundary condition, not a defect:
+>   it is exactly where the mechanism is not needed at all. It is reported, never
+>   gated.
+>
+> Measured over the grid with disjoint train/eval seeds: uninformed AUC 0.500 for both
+> intents (no leak), informed AUC 0.962 (`sync_fork_with_upstream`) and 0.945
+> (`restore_submodule_state`). Pooling the two gives 0.801 and 0.795 -- a number that
+> describes neither regime, which is exactly why it is no longer the claim.
+>
+> Three supporting changes make the split honest rather than nominal:
+>
+> 1. `IntentSpec.informed_phrasings(state)` and `uses_informed_wording(state)` put the
+>    channel decision in one place, so the sampler and the pair's recorded regime
+>    cannot disagree.
+> 2. The informed channel's salt drops the variant id: it is now
+>    `f"{self.name}:informed:{len(informed)}:text"`, not `f"{self.name}:{resolved.id}:text"`.
+>    Which wording a seed samples must not depend on which variant happens to be
+>    correct, or the seed-to-text map leaks the label by itself. Two variants
+>    declaring the same number of phrasings now sample the same index, which makes a
+>    shared phrase collide on purpose rather than by accident. No recorded expectation
+>    depended on the old salt; the determinism tests still pass.
+> 3. `labelled_pairs` emits both regimes. A state whose resolution declares wording
+>    gets an informed pair *and* an uninformed one, because a user can send a vague
+>    request about a state that is not vague -- that is the primary regime, and it
+>    does not exist otherwise. Benign states get one pair, since both channels
+>    coincide there.
 
 - [ ] **Step 1: Write the failing test**
 
 Create `tests/test_task_text_is_not_a_label.py`:
 
 ```python
-"""The control that detects the defect this change exists to remove.
+"""The control that measures how far the request text alone gets a dispatcher.
 
-A control that has never been seen to fire is not a control. So this file has two
-halves: a positive control proving the detector fires on a leaky intent, and the
-real assertion that the registered ambiguous intents do not leak.
+A control that has never been seen to fire is not a control, and an assertion that
+cannot fail is indistinguishable from one that passes. So this file has four parts:
+a positive control proving the detector fires on informed wording that fully
+determines the resolution, the real assertion that the registered intents'
+*uninformed* wording does not leak it, a reported -- not gated -- measurement of the
+informed boundary, and a structural pin that stops an undeclared state-to-wording
+channel from silently restoring the original flaw.
 """
 
 from __future__ import annotations
@@ -1448,7 +1549,9 @@ def test_classifier_learns_a_separable_problem() -> None:
 
     Asserted as a ranking rather than an exact label flip: gradient descent on a
     separable problem reaches a correct ranking well before every point crosses
-    its decision boundary, and the control only ever consumes the score.
+    its decision boundary, and the control only ever consumes the score. This
+    ranking threshold (>= 0.99) is a capability floor for the model, distinct from
+    `LEAKAGE_CEILING`, which gates a property of the *data*.
     """
     texts = ["alpha alpha alpha", "alpha alpha", "beta beta beta", "beta beta"]
     labels = ["alpha", "alpha", "beta", "beta"]
@@ -1462,93 +1565,204 @@ def test_classifier_rejects_one_class() -> None:
         TextOnlyClassifier.fit(["a b", "c d"], ["same", "same"])
 
 
-@pytest.fixture
-def leaky_intent() -> IntentSpec:
-    """Mirrors the flaw being fixed: one fixed sentence per resolution.
+def test_regime_filter_rejects_an_empty_regime() -> None:
+    """A filter that matches nothing must raise, not hand back a verdict that a
+    reader would take for a clean measurement."""
+    with pytest.raises(ValueError, match="no uninformed pairs"):
+        leakage_verdict([], train_seeds=TRAIN_SEEDS, eval_seeds=EVAL_SEEDS, informed=False)
 
-    The two resolutions are phrased so the text *does* determine the answer --
-    which is exactly what the old `task_text()` did for every fault.
+
+@pytest.fixture
+def determining_intent() -> IntentSpec:
+    """Two resolutions, each correct for exactly one of two states.
+
+    Each resolution has a single informed phrasing, so informed wording fully
+    determines the answer -- the fixture is the positive control that proves the
+    detector fires on exactly the flaw the real assertion must not find in the
+    registered intents.
     """
     return IntentSpec(
-        name="leaky_fixture",
+        name="determining_fixture",
         fault="diverged",
-        phrasings=["reset this branch, discard my work"],
-        naming_markers=["discard"],
+        phrasings=["do the thing"],
+        naming_markers=[],
         variants=[
-            ResolutionVariant(id="discard", decided_by=lambda state: True, rationale="fixture"),
             ResolutionVariant(
-                id="rebase_variant",
-                decided_by=lambda state: False,
+                id="clean",
+                decided_by=lambda state: not state.dirty_worktree,
+                rationale="fixture",
+            ),
+            ResolutionVariant(
+                id="dirty",
+                decided_by=lambda state: state.dirty_worktree,
                 rationale="fixture",
             ),
         ],
+        variant_phrasings={
+            "clean": ["my working tree is clean"],
+            "dirty": ["my working tree has uncommitted changes"],
+        },
     )
 
 
-def test_positive_control_the_detector_fires_on_a_leaky_intent(leaky_intent) -> None:
-    """If this test ever passes silently as a no-op, the real assertion below is
-    worthless. The detector must be shown to fire on a known-bad input."""
-    from precondition_library.bench.pairs import label
-    from precondition_library.signatures import StateFingerprint
+def test_positive_control_the_detector_fires_on_a_determining_intent(
+    determining_intent, make_state
+) -> None:
+    """If this test ever passes as a no-op, the real assertion is worthless.
 
-    state = StateFingerprint(
-        dirty_worktree=False,
-        branch="main",
-        upstream_ahead=3,
-        upstream_behind=0,
-        has_locked_branch=False,
-        has_submodule_reference=False,
-        upstream_behind=1,
-        local_touched_files=["a.py"],
-    )
-    pairs = [label(leaky_intent, seed, state) for seed in TRAIN_SEEDS + EVAL_SEEDS]
-    verdict = leakage_verdict(pairs, train_seeds=TRAIN_SEEDS, eval_seeds=EVAL_SEEDS)
+    Asserted on the informed channel explicitly: the fixture declares one phrasing
+    per resolution there, so the text fully determines the answer and the control
+    must fire.
+    """
+    states = [make_state(dirty_worktree=False), make_state(dirty_worktree=True)]
+    pairs = labelled_pairs(determining_intent, states, TRAIN_SEEDS + EVAL_SEEDS)
+    verdict = leakage_verdict(pairs, train_seeds=TRAIN_SEEDS, eval_seeds=EVAL_SEEDS, informed=True)
     assert verdict.auc > LEAKAGE_CEILING
     assert verdict.leaks is True
 
 
-def test_ambiguous_intents_do_not_leak_the_answer(state_grid) -> None:
-    """The real assertion.
+def test_uninformed_wording_does_not_leak_the_resolution(state_grid) -> None:
+    """The real assertion, on the regime the primary claim is measured in.
 
-    Train on the request text of one seed set, evaluate on a disjoint one. A
-    single fixed sentence per resolution would drive this to 1.0; the paraphrase
-    distribution must keep it near chance on the ambiguous subset.
+    The shared phrasing distribution is sampled with no state, so the text cannot
+    carry the resolution. This is the regression tripwire: it fails if that
+    distribution ever starts leaking the answer -- the original flaw returning.
     """
     for intent in ambiguous_intents():
         pairs = labelled_pairs(
             intent, list(state_grid[intent.name].values()), TRAIN_SEEDS + EVAL_SEEDS
         )
-        verdict = leakage_verdict(pairs, train_seeds=TRAIN_SEEDS, eval_seeds=EVAL_SEEDS)
-        assert verdict.leaks is False, f"{intent.name}: {verdict.describe()}"
+        verdict = leakage_verdict(
+            pairs, train_seeds=TRAIN_SEEDS, eval_seeds=EVAL_SEEDS, informed=False
+        )
+        assert not verdict.leaks, f"{intent.name}: {verdict.describe()}"
+
+
+def test_informed_wording_is_the_boundary_condition_reported_not_gated(state_grid) -> None:
+    """Report the informed regime; do not gate on it.
+
+    Informed wording is expected to score high: it is the boundary condition, the
+    regime where the wording nearly gives the resolution away and the mechanism is
+    not needed at all. Gating it would punish the domain for being realistic. It
+    is still measured and carried in this assertion's message, so the number
+    cannot be quietly lost. Only the ordering -- informed above uninformed -- is
+    required, and both AUCs appear either way.
+    """
+    for intent in ambiguous_intents():
+        pairs = labelled_pairs(
+            intent, list(state_grid[intent.name].values()), TRAIN_SEEDS + EVAL_SEEDS
+        )
+        uninformed = leakage_verdict(
+            pairs, train_seeds=TRAIN_SEEDS, eval_seeds=EVAL_SEEDS, informed=False
+        )
+        informed = leakage_verdict(
+            pairs, train_seeds=TRAIN_SEEDS, eval_seeds=EVAL_SEEDS, informed=True
+        )
+        assert informed.auc > uninformed.auc, (
+            f"{intent.name}: informed wording should carry more signal than the "
+            f"uninformed distribution; uninformed: {uninformed.describe()}; "
+            f"informed: {informed.describe()}"
+        )
+
+
+def test_channel_decision_is_shared_by_sampler_and_ledger(state_grid) -> None:
+    """`uses_informed_wording` and the sampled text must agree.
+
+    The ledger files a pair under a regime using `uses_informed_wording`; if the
+    sampler disagreed, pairs would be recorded in the wrong regime and the split
+    would be fiction. Pinned rather than trusted.
+    """
+    for intent in ambiguous_intents():
+        for state in state_grid[intent.name].values():
+            informed = intent.informed_phrasings(state)
+            assert intent.uses_informed_wording(state) is (informed is not None)
+            for seed in range(30):
+                text = intent.task_text(seed, state)
+                if informed is None:
+                    assert text in intent.phrasings, (
+                        f"{intent.name}: no informed wording declared for this state, "
+                        f"so the text must come from the shared list: {text!r}"
+                    )
+                else:
+                    assert text in informed, (
+                        f"{intent.name}: informed wording is declared for this state, "
+                        f"so the text must come from that list: {text!r}"
+                    )
+
+
+def test_state_influences_wording_only_through_the_declared_map(state_grid) -> None:
+    """State may reach the request only through variant_phrasings.
+
+    If the sampler ever consulted state outside that declared map, an undeclared
+    channel would exist, the text could become a label again, and a dispatch
+    comparison would measure nothing -- silently.
+    """
+    for intent in ambiguous_intents():
+        for state in state_grid[intent.name].values():
+            informed = intent.informed_phrasings(state)
+            for seed in range(30):
+                text = intent.task_text(seed, state)
+                if informed:
+                    assert text in informed, (
+                        f"{intent.name}: text fell outside the declared informed "
+                        f"list for this state: {text!r}"
+                    )
+                else:
+                    assert text in intent.phrasings, (
+                        f"{intent.name}: no informed wording declared for this state, "
+                        f"so the text must come from the shared list: {text!r}"
+                    )
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_task_text_is_not_a_label.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'precondition_library.bench.textcontrol'`.
+Expected: FAIL -- `ModuleNotFoundError: No module named 'precondition_library.bench.textcontrol'`.
 
 - [ ] **Step 3: Write minimal implementation**
 
 Create `src/precondition_library/bench/textcontrol.py`:
 
 ```python
-"""A control that detects the defect this whole change exists to remove.
+"""A measurement of how far the request text alone gets a dispatcher.
 
-If a dispatcher needs only the request text to choose the right resolution, then
-the text is a class label and any dispatch comparison is vacuous. That failure is
-easy to miss by inspection, so it is measured: a deliberately simple
-bag-of-words classifier is trained on the text alone and its AUC is reported.
+The original flaw was a single fixed sentence per fault: the text *was* the class
+label, so a dispatcher that read only the text could not mis-fire and the primary
+claim was untestable. Tasks 1-8 removed the channel from state to wording entirely,
+which made the text *mathematically incapable* of predicting the resolution -- and
+so made a "does the text leak the answer?" control unable to fail, which is
+indistinguishable from a control that passes.
 
-Simple is the right choice. The question is whether the text *can* be sufficient,
-not whether a sophisticated model could exploit it -- if even a linear model over
-word counts separates the classes, the flaw is proven, and a stronger model would
-only widen the separation. If the simple model cannot separate them, that is weak
-evidence the text is uninformative at this sample size, and `describe()` says so
-rather than claiming more.
+The fix is to make wording genuinely depend on the situation (an intent's
+`variant_phrasings`, sampled through `IntentSpec.task_text(seed, state)`) and then
+*measure* how much a text-only dispatcher gets. A request can arrive through two
+declared channels, and they answer different questions:
 
-`tests/test_task_text_is_not_a_label.py` pins both directions: a positive control
-that the detector fires on a known-leaky intent, and the real assertion that the
-registered intents do not leak.
+  uninformed  the shared `phrasings` distribution, sampled with no state, so the
+              text cannot carry the resolution. This is the regime the primary
+              claim is measured in, and `LEAKAGE_CEILING` is its tripwire: an AUC
+              above it means the shared distribution has started leaking the
+              answer.
+  informed    a variant's `variant_phrasings` entry, wording that reveals the
+              situation. A high AUC is expected here and is not a defect: it is
+              the boundary condition, where the wording nearly gives the answer
+              away and the mechanism is not needed at all.
+
+Pooling the two produces a number that describes neither: it averages a regime in
+which the text is the answer in disguise with one in which it is noise. An earlier
+revision of this module did exactly that, with a single 0.99 ceiling. The control
+now reports the regimes separately.
+
+The classifier is deliberately simple: a bag-of-words logistic regression over word
+counts. The question is whether the text *can* be sufficient, not whether a
+sophisticated model could exploit it -- if even a linear model separates the classes,
+the flaw is proven, and a stronger model would only widen the separation.
+
+`tests/test_task_text_is_not_a_label.py` pins three things: a positive control that
+the detector fires on informed wording that fully determines the answer, the real
+assertion that the registered intents' *uninformed* wording does not leak it, and a
+reported -- not gated -- measurement of the informed boundary. The measured AUC per
+intent is the deliverable, not the pass/fail.
 """
 
 from __future__ import annotations
@@ -1560,8 +1774,13 @@ from dataclasses import dataclass
 from .pairs import LabelledPair
 
 LEAKAGE_CEILING = 0.65
-"""AUC above which the control reports leakage. Declared here, not chosen after
-seeing a number: a threshold picked post hoc is not a control."""
+"""AUC above which uninformed wording is judged to be leaking the resolution.
+
+Applies to the unaffected channel only. The informed channel is expected to
+score high and is reported without a gate: it is the boundary condition, not a
+defect. An earlier revision of this module applied a single 0.99 ceiling to both
+channels pooled, which produced a number that described neither regime.
+"""
 
 
 def _tokens(text: str) -> list[str]:
@@ -1682,6 +1901,8 @@ class LeakageVerdict:
     classes: list[str]
     n_train: int
     n_eval: int
+    regime: str
+    """Which channel this verdict covered: 'uninformed', 'informed', or 'pooled'."""
 
     @property
     def leaks(self) -> bool:
@@ -1689,13 +1910,9 @@ class LeakageVerdict:
 
     def describe(self) -> str:
         return (
-            f"text-only AUC {self.auc:.3f} over {len(self.classes)} classes "
+            f"{self.regime} text-only AUC {self.auc:.3f} over {len(self.classes)} classes "
             f"(train n={self.n_train}, eval n={self.n_eval}, ceiling {self.ceiling}); "
-            + (
-                "LEAKAGE -- the request text predicts the answer"
-                if self.leaks
-                else "no leakage detected at this sample size"
-            )
+            + ("wording leaks the resolution" if self.leaks else "no leak at this sample size")
         )
 
 
@@ -1704,21 +1921,35 @@ def leakage_verdict(
     *,
     train_seeds: Sequence[int],
     eval_seeds: Sequence[int],
+    informed: bool | None = None,
     ceiling: float = LEAKAGE_CEILING,
 ) -> LeakageVerdict:
     """Train on the text from one seed set, evaluate on a disjoint one.
 
+    `informed` selects the regime: None pools every pair, False measures only the
+    unaffected, uninformed channel, and True only the informed boundary. A
+    filter that leaves nothing to score raises rather than returning a verdict
+    over an empty set, because a verdict with no data behind it would read as a
+    clean bill of health.
+
     Only positive pairs are used: a negative pair's "answer" is "fire nothing",
     which is not a resolution a text classifier could be said to get right or
     wrong, and including it would inflate or deflate AUC for reasons unrelated to
-    leakage.
+    what is being measured.
 
     One-vs-rest AUC is averaged over the eval classes. The label set is tiny and
-    the control's only job is to detect a text that gives the answer away.
+    the control's only job is to detect text that gives the resolution away.
     """
+    if informed is None:
+        regime = "pooled"
+    else:
+        regime = "informed" if informed else "uninformed"
+
     train_set = set(train_seeds)
     eval_set = set(eval_seeds)
-    materialised = list(pairs)
+    materialised = [p for p in pairs if informed is None or p.informed is informed]
+    if not materialised:
+        raise ValueError(f"no {regime} pairs to measure; the regime filter left nothing")
     train = [p for p in materialised if p.seed in train_set and not p.is_negative]
     evaluation = [p for p in materialised if p.seed in eval_set and not p.is_negative]
     if not train or not evaluation:
@@ -1746,22 +1977,33 @@ def leakage_verdict(
         classes=classes,
         n_train=len(train),
         n_eval=len(evaluation),
+        regime=regime,
     )
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_task_text_is_not_a_label.py -v`
-Expected: PASS, 8 tests. The positive control fires (`leaks is True`) and both ambiguous intents show `leaks is False`.
+Expected: PASS, 12 tests. The positive control fires on the informed channel
+(`leaks is True`); both intents' uninformed AUC is 0.500, below the 0.65 tripwire; the
+informed boundary is measured at 0.962 and 0.945 and carried in the boundary test's
+assertion message without being gated; the channel-agreement check and the structural
+pin hold.
 
-If `test_ambiguous_intents_do_not_leak_the_answer` fails, the correct response is to **widen the paraphrase distribution**, not to raise `LEAKAGE_CEILING`. A failing control here means the intent still leaks, which is precisely the defect being fixed.
+If `test_uninformed_wording_does_not_leak_the_resolution` fails, the shared phrasing
+distribution has started leaking the resolution and must be fixed -- NOT the ceiling
+raised, and NOT the regime filter widened. The threshold was declared before any
+measurement.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/precondition_library/bench/textcontrol.py tests/test_task_text_is_not_a_label.py
-git commit -m "test(bench): add the text-only leakage control with a positive control"
+git add src/precondition_library/tasks/intent.py src/precondition_library/bench/pairs.py \
+  src/precondition_library/bench/textcontrol.py tests/test_task_text_is_not_a_label.py \
+  tests/test_pairs.py
+git commit -m "test(bench): report the text-only control per request regime"
 ```
+
 
 ---
 
@@ -2173,11 +2415,19 @@ labelled negatives, because a dispatcher that always fires can only be caught by
 states that require refusal.
 
 The request text is sampled deterministically from the paraphrase distribution
-(`sha256` over the seed, never `hash()`, which CPython salts per process). Whether
-the text still leaks the answer is **measured** rather than assumed:
+(`sha256` over the seed, never `hash()`, which CPython salts per process). When the
+state is already known, `variant_phrasings` may supply *informed* wording that
+reveals the situation to a careful reader, as a real user's description often does;
+state may reach the request only through that declared map. How far the text alone
+gets a text-only dispatcher is **measured** rather than assumed:
 `bench/textcontrol.py` trains a bag-of-words classifier on the text alone and
-reports its AUC, with a positive control proving the detector fires on a leaky
-intent.
+reports its AUC per request regime, with a positive control proving the detector
+fires when informed wording fully determines the resolution. The primary claim is
+measured on the *uninformed* regime, where the text carries no signal, so its AUC
+must stay below `LEAKAGE_CEILING`; the informed regime is reported as the boundary
+condition and never gated. The per-intent AUCs must be reported together with the
+informed/uninformed mixture of the pairs, because that mixture is what makes the
+numbers interpretable.
 ```
 
 - [ ] **Step 2: Update the spec's testing section**
@@ -2185,10 +2435,11 @@ intent.
 In §10 (Testing strategy), add this line to the code block, after the `DETERMINISM` entry:
 
 ```
-TEXT LEAKAGE    a bag-of-words classifier trained on the request text alone
-                must not predict the resolution. Pinned by a positive control
-                that fires on a deliberately leaky intent, so the control
-                cannot pass by being a no-op.
+TEXT CONTROL    a bag-of-words classifier trained on the request text alone
+                must not leak the resolution from uninformed wording; its AUC is
+                reported per regime. Pinned by a positive control that fires on
+                an intent whose informed wording fully determines the answer, so
+                the control cannot pass by being a no-op.
 ```
 
 - [ ] **Step 3: Update the changelog**
@@ -2203,8 +2454,8 @@ Add to `CHANGELOG.md` under `## [Unreleased]`, replacing the `### Changed` stub:
   (`tasks/intent.py`, `tasks/registry.py`).
 - Labelled (state, resolution) pair generator with denominators
   (`bench/pairs.py`) — the raw material the spec's primary metric needs.
-- A text-only leakage control with a positive control that proves the detector
-  fires (`bench/textcontrol.py`).
+- A text-only control measuring how far the request text gets a dispatcher, with
+  a positive control that proves the detector fires (`bench/textcontrol.py`).
 - Hand-written gold resolutions for both ambiguous intents (`bench/gold/`).
 - `Program.variant`, so a wrong dispatch decision is definable at all.
 
@@ -2242,7 +2493,7 @@ gh pr create --base main --title "feat(tasks): make the task text stop being the
 
 ## Self-review
 
-**Spec coverage.** §3's task family gains variants and a rationale for each (Tasks 4–5) plus the spec text (Task 12). §7's primary metric needs per-decision labels at matched coverage — the label seam is Task 8 and the denominators it must report are Task 8's `denominator_report`. §10's testing strategy gains the leakage control (Tasks 9, 12). Issue #3's five acceptance criteria map to: ≥2 candidates per ambiguous intent (Task 10), paraphrase distribution with a documented non-naming fraction (Tasks 4–5, `naming_fraction`), text-only AUC control with a recorded seed protocol (Task 9, `TRAIN_SEEDS`/`EVAL_SEEDS` are disjoint constants), mismatch on the ambiguous subset with a denominator (Task 8), and determinism of both text and the state-determined resolution (Tasks 6, 11).
+**Spec coverage.** §3's task family gains variants and a rationale for each (Tasks 4–5) plus the spec text (Task 12). §7's primary metric needs per-decision labels at matched coverage — the label seam is Task 8 and the denominators it must report are Task 8's `denominator_report`. §10's testing strategy gains the text-only control (Tasks 9, 12). Issue #3's five acceptance criteria map to: ≥2 candidates per ambiguous intent (Task 10), paraphrase distribution with a documented non-naming fraction (Tasks 4–5, `naming_fraction`), text-only AUC control with a recorded seed protocol (Task 9, `TRAIN_SEEDS`/`EVAL_SEEDS` are disjoint constants), mismatch on the ambiguous subset with a denominator (Task 8), and determinism of both text and the state-determined resolution (Tasks 6, 11).
 
 **Deliberately not covered**, and stated as such in the plan header: live git injection (#4), compile-and-admission (#4), threshold sweeps and coverage curves (#5), baselines (#7), ledger (#8), safety (#10).
 

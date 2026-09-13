@@ -39,22 +39,44 @@ class LabelledPair(BaseModel):
     task_text: str
     ambiguous: bool
     """True when the intent has two or more resolutions, so the text alone cannot decide."""
+    informed: bool
+    """Whether the request used wording that reveals the situation.
+
+    Recorded per pair because the two regimes answer different questions: on
+    uninformed requests the text carries no signal, so a dispatch comparison
+    measures state-reading; on informed requests the wording nearly gives the
+    resolution away, which is the boundary condition where the mechanism is not
+    needed at all. Pooling them produces a number that means neither.
+    """
 
     @property
     def is_negative(self) -> bool:
         return self.correct_variant is None
 
 
-def label(intent: IntentSpec, seed: int, state: StateFingerprint) -> LabelledPair:
-    """Label one (intent, state) instance. Pure: no environment, no model."""
+def label(
+    intent: IntentSpec,
+    seed: int,
+    state: StateFingerprint,
+    *,
+    uninformed: bool = False,
+) -> LabelledPair:
+    """Label one (intent, state) instance. Pure: no environment, no model.
+
+    `uninformed=True` samples the shared distribution instead of the state's
+    declared wording: the request someone sends when they do not know what is
+    wrong. The label is a function of state alone either way, which is what makes
+    the regime a factor that can be varied without moving the answer.
+    """
     resolved = intent.correct_variant(state)
     return LabelledPair(
         intent=intent.name,
         seed=seed,
         state=state,
         correct_variant=resolved.id if resolved is not None else None,
-        task_text=intent.task_text(seed),
+        task_text=intent.task_text(seed) if uninformed else intent.task_text(seed, state),
         ambiguous=intent.is_ambiguous,
+        informed=False if uninformed else intent.uses_informed_wording(state),
     )
 
 
@@ -63,13 +85,27 @@ def labelled_pairs(
     states: Sequence[StateFingerprint],
     seeds: Sequence[int],
 ) -> list[LabelledPair]:
-    """Cross the given states with the given seeds.
+    """Cross the given states with the given seeds, in both request regimes.
 
-    Every state is paired with every seed, because the label must be invariant
-    under the request's wording: if relabelling moved with the text, the label
-    would be a property of the phrasing and the exercise would be circular.
+    Every state is paired with every seed once in the channel it declares, plus a
+    second, uninformed pair whenever the declared channel is informed: a user can
+    send a vague request about a state that is not vague, and that is the regime
+    the primary claim is measured in. States whose declared channel already is
+    the shared distribution (benign states) get one pair, since the channels
+    coincide there.
+
+    The label is a function of state alone -- `label` passes the state to the
+    sampler so that wording and resolution are recorded together, but wording is
+    *allowed* to carry signal about the resolution: it is the label's invariance
+    under state, not under wording, that keeps the exercise from being circular.
     """
     pairs = [label(intent, seed, state) for state in states for seed in seeds]
+    pairs.extend(
+        label(intent, seed, state, uninformed=True)
+        for state in states
+        for seed in seeds
+        if intent.uses_informed_wording(state)
+    )
     if not pairs:
         raise ValueError("produced no pairs; check states and seeds are non-empty")
     return pairs
