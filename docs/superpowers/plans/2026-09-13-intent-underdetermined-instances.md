@@ -2141,6 +2141,9 @@ programs:
       - name: local_commits_change_files
         description: The local-only commits do change files.
         probe: 'test -n "$(git diff --name-only {upstream_remote}/{upstream_branch}...HEAD)"'
+      - name: local_and_upstream_files_disjoint
+        description: No file was changed by both sides, so replaying local commits cannot conflict.
+        probe: 'test -z "$(comm -12 <(git diff --name-only {upstream_remote}/{upstream_branch}...HEAD | sort) <(git diff --name-only HEAD...{upstream_remote}/{upstream_branch} | sort))"'
     body: |
       git fetch {upstream_remote}
       git rebase {upstream_remote}/{upstream_branch}
@@ -2196,11 +2199,11 @@ programs:
   - id: submodule-init
     intent: restore_submodule_state
     variant: init
-    parameters: [work_dir, submodule_path]
+    parameters: [work_dir, upstream_remote, upstream_branch, submodule_path]
     preconditions:
-      - name: submodule_declared
-        description: The repository declares the submodule.
-        probe: 'test -f .gitmodules && git config --file .gitmodules --get-regexp path >/dev/null'
+      - name: upstream_still_tracks_it
+        description: Upstream's tree still contains the submodule path.
+        probe: 'test -n "$(git ls-tree {upstream_remote}/{upstream_branch} -- {submodule_path})"'
       - name: submodule_not_initialised
         description: The submodule directory has never been initialised in this clone.
         probe: 'test -z "$(git submodule status -- {submodule_path} | grep -v "^-")"'
@@ -2220,7 +2223,7 @@ programs:
   - id: submodule-repin
     intent: restore_submodule_state
     variant: repin
-    parameters: [work_dir, submodule_path]
+    parameters: [work_dir, upstream_remote, upstream_branch, submodule_path]
     preconditions:
       - name: submodule_initialised
         description: The submodule directory exists and has a checkout.
@@ -2228,6 +2231,9 @@ programs:
       - name: upstream_still_tracks_it
         description: Upstream's tree still contains the submodule path.
         probe: 'test -n "$(git ls-tree {upstream_remote}/{upstream_branch} -- {submodule_path})"'
+      - name: pin_drifted
+        description: The recorded submodule commit differs from the one upstream pins.
+        probe: 'test -n "$(git diff --name-only {upstream_remote}/{upstream_branch} -- {submodule_path})"'
     body: |
       git fetch {upstream_remote}
       git checkout {upstream_remote}/{upstream_branch} -- {submodule_path}
@@ -2245,7 +2251,7 @@ programs:
   - id: submodule-remove
     intent: restore_submodule_state
     variant: remove
-    parameters: [work_dir, submodule_path]
+    parameters: [work_dir, upstream_remote, upstream_branch, submodule_path]
     preconditions:
       - name: upstream_dropped_it
         description: Upstream's tree no longer contains the submodule path.
@@ -2271,10 +2277,10 @@ programs:
 Run: `uv run pytest tests/test_gold_programs.py -v`
 Expected: PASS, 10 tests (5 parametrised tests × 2 intents).
 
-**Also in this step:** `bench/gold/README.md` says the gold check "is skipped until phase 1" and that the directory contains only a README. This task makes both statements false. Replace that paragraph with:
+**Also in this step:** two docs still describe the gold check as absent, and both sentences become false the moment the test above runs: `README.md` says `bench/gold/` "currently contains only a README", and `bench/gold/README.md` presents `tests/test_checkers_against_gold.py` as "the enforcement; it runs in CI" even though that file is skipped. Replace the paragraph in each with the text below; the spec's §10 status block also says "no gold solution exists yet" and now records that the resolutions exist but no checker has run against them.
 
 ```markdown
-The check runs today for the two ambiguous intents: gold resolutions live in
+The gold check runs today for the two ambiguous intents: gold resolutions live in
 `sync_fork_with_upstream.yaml` and `restore_submodule_state.yaml`, and
 `tests/test_gold_programs.py` validates that they parse, are well-formed, cover
 every declared resolution, and have distinct bodies. It is still skipped for the
@@ -2287,8 +2293,31 @@ Leaving a stale "not implemented yet" note in place after implementing it is the
 - [ ] **Step 5: Commit**
 
 ```bash
-git add bench/gold/sync_fork_with_upstream.yaml bench/gold/restore_submodule_state.yaml tests/test_gold_programs.py
-git commit -m "test(bench): add hand-written gold resolutions for both ambiguous intents"
+git add bench/gold/sync_fork_with_upstream.yaml bench/gold/restore_submodule_state.yaml tests/test_gold_programs.py README.md bench/gold/README.md docs/superpowers/specs/2026-09-13-precondition-library-design.md
+git commit -F - <<'MSG'
+test(bench): add hand-written gold resolutions for both ambiguous intents
+
+Each ambiguous intent has one hand-written candidate per declared resolution.
+The compile step that would generate them does not exist yet (issue #4), and
+gold-first requires hand-written solutions before any agent result is believed.
+tests/test_gold_programs.py checks they parse as Programs, cover every declared
+variant, remain status=candidate (admission has not run for any of them), and
+have distinct bodies.
+
+Preconditions were checked against each intent's decided_by rule; three gaps in
+the draft were closed. The rebase candidate now also requires that no file was
+changed by both sides, without which it accepted the merge state too. The
+submodule init candidate requires that upstream still tracks the path, without
+which it accepted the upstream-dropped state. The repin candidate requires that
+the pin actually drifted, without which it fired on the benign state. The
+submodule candidates also declare the upstream_remote and upstream_branch
+parameters their probes reference.
+
+README.md, bench/gold/README.md and the spec's testing-strategy block no longer
+say the gold check is skipped or that no gold solution exists: form validation
+runs today, checker execution stays skipped until the phase that provides a live
+sandbox. Nothing here executes the gold programs; they are data.
+MSG
 ```
 
 ---

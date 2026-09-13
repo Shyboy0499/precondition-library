@@ -195,9 +195,12 @@ src/precondition_library/
 
 `library/` holds admitted programs and **is committed on purpose** — it is the
 artifact, and its git history records programs being demoted after they mis-fired.
-`bench/gold/` is where the hand-written solutions will live; it currently contains
-only a README, and the gold check is skipped until phase 1
-(`tests/test_checkers_against_gold.py`).
+`bench/gold/` holds the hand-written gold resolutions. The gold check runs today for
+the two ambiguous intents: gold resolutions live in `sync_fork_with_upstream.yaml`
+and `restore_submodule_state.yaml`, and `tests/test_gold_programs.py` validates
+that they parse, are well-formed, cover every declared resolution, and have
+distinct bodies. It is still skipped for the faults whose injection needs a live
+sandbox (issue #4), because a checker cannot be validated without a state to check.
 
 One structural invariant is enforced by test rather than convention:
 `runtime/replay.py` cannot reach `provider`, directly or transitively. It is worth

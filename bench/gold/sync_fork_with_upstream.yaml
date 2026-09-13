@@ -1,0 +1,94 @@
+# Hand-written resolutions for the `sync_fork_with_upstream` intent.
+#
+# These exist because issue #3 requires at least two candidates under one intent,
+# and the compile step that would generate them is issue #4. They are gold, not
+# generated: the spec's gold-first rule requires hand-written solutions that must
+# satisfy the checkers before any agent result is believed.
+#
+# Preconditions are probes, so they must agree with the intent's decision rule
+# (decided_by in tasks/faults/diverged.py). They are written independently --
+# agreeing by construction would defeat the point of having a check.
+programs:
+  - id: sync-fork-empty-local-commits
+    intent: sync_fork_with_upstream
+    variant: discard
+    parameters: [work_dir, upstream_remote, upstream_branch]
+    preconditions:
+      - name: has_local_only_commits
+        description: The local branch is ahead of upstream.
+        probe: 'test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0'
+      - name: local_commits_change_nothing
+        description: The local-only commits touch no files, so they carry no work.
+        probe: 'test -z "$(git diff --name-only {upstream_remote}/{upstream_branch}...HEAD)"'
+    body: |
+      git fetch {upstream_remote}
+      git reset --hard {upstream_remote}/{upstream_branch}
+    postconditions:
+      - name: matches_upstream
+        description: The local branch is exactly upstream's commit.
+        probe: 'test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"'
+    provenance:
+      compiled_from_task: hand-written gold resolution for benchmarking
+      model: human
+      compiler_version: human
+      episode_id: gold/sync_fork_with_upstream/discard
+    status: candidate
+
+  - id: sync-fork-disjoint-rebase
+    intent: sync_fork_with_upstream
+    variant: rebase
+    parameters: [work_dir, upstream_remote, upstream_branch]
+    preconditions:
+      - name: has_local_only_commits
+        description: The local branch is ahead of upstream.
+        probe: 'test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0'
+      - name: local_commits_change_files
+        description: The local-only commits do change files.
+        probe: 'test -n "$(git diff --name-only {upstream_remote}/{upstream_branch}...HEAD)"'
+      - name: local_and_upstream_files_disjoint
+        description: No file was changed by both sides, so replaying local commits cannot conflict.
+        probe: 'test -z "$(comm -12 <(git diff --name-only {upstream_remote}/{upstream_branch}...HEAD | sort) <(git diff --name-only HEAD...{upstream_remote}/{upstream_branch} | sort))"'
+    body: |
+      git fetch {upstream_remote}
+      git rebase {upstream_remote}/{upstream_branch}
+    postconditions:
+      - name: upstream_contained
+        description: Upstream's tip is now an ancestor of the local branch.
+        probe: 'git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD'
+      - name: no_residual_changes
+        description: The worktree is clean afterwards.
+        probe: 'test -z "$(git status --porcelain)"'
+    provenance:
+      compiled_from_task: hand-written gold resolution for benchmarking
+      model: human
+      compiler_version: human
+      episode_id: gold/sync_fork_with_upstream/rebase
+    status: candidate
+
+  - id: sync-fork-overlapping-merge
+    intent: sync_fork_with_upstream
+    variant: merge
+    parameters: [work_dir, upstream_remote, upstream_branch]
+    preconditions:
+      - name: has_local_only_commits
+        description: The local branch is ahead of upstream.
+        probe: 'test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0'
+      - name: upstream_touched_a_local_file
+        description: At least one file both sides changed, so rewriting local history would risk losing a resolution.
+        probe: 'test -n "$(comm -12 <(git diff --name-only {upstream_remote}/{upstream_branch}...HEAD | sort) <(git diff --name-only HEAD...{upstream_remote}/{upstream_branch} | sort))"'
+    body: |
+      git fetch {upstream_remote}
+      git merge --no-edit {upstream_remote}/{upstream_branch}
+    postconditions:
+      - name: upstream_contained
+        description: Upstream's tip is reachable from the local branch.
+        probe: 'git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD'
+      - name: local_commits_survived
+        description: The pre-merge local tip is still reachable, so no work was discarded.
+        probe: 'git rev-parse --verify HEAD~1 >/dev/null 2>&1'
+    provenance:
+      compiled_from_task: hand-written gold resolution for benchmarking
+      model: human
+      compiler_version: human
+      episode_id: gold/sync_fork_with_upstream/merge
+    status: candidate
