@@ -74,6 +74,14 @@ class Program(BaseModel):
     body: str
     """Program source. Executed by runtime.replay; never executed by the compile step."""
     postconditions: list[Predicate]
+    variant: str | None = None
+    """Which resolution of its intent's ambiguity this program implements.
+
+    Required for intents with two or more resolutions: a dispatch error can only
+    be defined relative to the state's correct variant, so a program that does
+    not declare its variant cannot be scored. None is legitimate for intents that
+    have only one resolution.
+    """
     provenance: Provenance
     status: ProgramStatus = ProgramStatus.CANDIDATE
 
