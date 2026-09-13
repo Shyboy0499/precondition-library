@@ -68,6 +68,20 @@ INTENT = IntentSpec(
     ],
     naming_markers=["submodule"],
     variants=VARIANTS,
+    # Repin and remove share a symptom phrase ("disagrees with upstream") that is
+    # true of both -- a drifted pin and a dropped reference both look that way.
+    # The shared phrase keeps the text a *partial* signal (see bench/textcontrol.py).
+    variant_phrasings={
+        "init": ["the nested checkout was never initialised here"],
+        "repin": [
+            "the nested checkout records a commit upstream no longer pins",
+            "the nested checkout disagrees with upstream",
+        ],
+        "remove": [
+            "upstream dropped the nested repo entirely",
+            "the nested checkout disagrees with upstream",
+        ],
+    },
 )
 
 

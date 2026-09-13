@@ -80,5 +80,7 @@ def test_denominators_add_up(state_grid) -> None:
 
 def test_every_ambiguous_intent_contributes_pairs(state_grid) -> None:
     for intent in ambiguous_intents():
-        pairs = labelled_pairs(intent, list(state_grid[intent.name].values()), SEEDS)
-        assert len(pairs) == len(state_grid[intent.name]) * len(SEEDS)
+        states = list(state_grid[intent.name].values())
+        pairs = labelled_pairs(intent, states, SEEDS)
+        informed_states = sum(intent.uses_informed_wording(state) for state in states)
+        assert len(pairs) == (len(states) + informed_states) * len(SEEDS)

@@ -81,6 +81,21 @@ INTENT = IntentSpec(
     ],
     naming_markers=["diverged", "divergence"],
     variants=VARIANTS,
+    # Rebase and merge share a symptom phrase ("both changed files") that is true
+    # of both situations. That shared phrase is what keeps the text a *partial*
+    # signal -- a text-only dispatcher cannot tell the two apart from it -- rather
+    # than fully determining the resolution (see bench/textcontrol.py).
+    variant_phrasings={
+        "discard": ["my local commits change no files"],
+        "rebase": [
+            "my edits are in files upstream left alone",
+            "my branch and upstream both changed files",
+        ],
+        "merge": [
+            "both sides touched the same files",
+            "my branch and upstream both changed files",
+        ],
+    },
 )
 
 
