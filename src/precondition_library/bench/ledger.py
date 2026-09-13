@@ -46,6 +46,24 @@ class EpisodeRecord(BaseModel):
     wall_clock_s: float
 
     outcome: EpisodeOutcome
+    """How the arm's mechanism completed. See `EpisodeOutcome`: this is not
+    whether the episode was correct, which is derived from the facts below."""
+
+    correct_variant: str | None
+    """Ground truth: the resolution this state requires, or None if it is benign.
+    Defined by the intent's decision rules, in separate code from the programs'
+    probe strings, so a wrong precondition cannot make its own program look right.
+
+    Required, with no default, because None is a meaningful answer ("this state
+    needs nothing done"). A defaulted field could be forgotten and silently read
+    as a benign state, which would turn a missing fact into a wrong one."""
+    fired_variant: str | None = None
+    """The resolution the program that actually ran implements; None if none fired."""
+    ground_truth_ok: bool | None
+    """Whether the environment reached the expected state, checked by git alone.
+    None means it was not checked, which happens only for INVALID episodes.
+    Also required: "not checked" must be passed deliberately, never inherited."""
+
     program_id: str | None = None
     dispatch_score: float | None = None
     """Similarity score for arm 2; None for the other arms."""
@@ -60,6 +78,22 @@ class EpisodeRecord(BaseModel):
     """Exact model identifier used for this episode. Provider-side model drift
     mid-experiment silently invalidates a comparison, so it is recorded per
     episode and a version change invalidates the affected run."""
+
+    @property
+    def misfired(self) -> bool:
+        """A program fired that was not the ground-truth resolution.
+
+        Deliberately independent of final state, and of `outcome`: a wrong fire
+        often ends in a successful episode because the arm falls back to the agent.
+        That quadrant -- misfired and successful -- is the one the primary metric
+        exists to count, and a single `outcome` value could not express it.
+        """
+        return self.fired_variant is not None and self.fired_variant != self.correct_variant
+
+    @property
+    def succeeded(self) -> bool:
+        """Whether the episode reached the expected state. Separate from `misfired`."""
+        return self.ground_truth_ok is True
 
 
 def append(path: Path, record: EpisodeRecord) -> None:
