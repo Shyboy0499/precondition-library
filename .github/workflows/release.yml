@@ -1,0 +1,51 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require green CI on the tagged commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A tag is a claim that this commit is good. Refuse to publish one whose
+          # checks did not all succeed, rather than trusting that someone waited.
+          total=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs" \
+            --jq '.check_runs | length')
+          failed=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs" \
+            --jq '[.check_runs[] | select(.conclusion != "success")] | length')
+          echo "checks on ${{ github.sha }}: $total total, $failed not successful"
+          if [ "$failed" != "0" ]; then
+            echo "::error::Refusing to release: $failed check(s) did not succeed."
+            exit 1
+          fi
+
+      - name: Verify the tag is contained in main
+        run: |
+          # A release should not be cut from a commit that never landed on main.
+          git fetch --quiet origin main
+          if git merge-base --is-ancestor "${{ github.sha }}" FETCH_HEAD; then
+            echo "tag is contained in main"
+          else
+            echo "::error::Tag ${{ github.ref_name }} is not an ancestor of main."
+            exit 1
+          fi
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ github.ref_name }}" \
+            --generate-notes \
+            --verify-tag

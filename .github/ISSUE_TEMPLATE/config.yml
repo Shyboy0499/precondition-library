@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: The design of record
+    url: https://github.com/Shyboy0499/precondition-library/blob/main/docs/superpowers/specs/2026-09-13-precondition-library-design.md
+    about: Read the spec before proposing a design change — including its claims and what would falsify them.
+  - name: Past decisions and reversals
+    url: https://github.com/Shyboy0499/precondition-library/tree/main/docs/decisions
+    about: Why the project looks the way it does, including the claims that were dropped.
+  - name: A citation is wrong?
+    url: https://github.com/Shyboy0499/precondition-library/issues/new?template=defect.yml
+    about: Open a defect. Finding an error in the prior-art table is the most valuable contribution anyone can make here.
