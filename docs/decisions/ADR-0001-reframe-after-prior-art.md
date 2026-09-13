@@ -138,8 +138,8 @@ explains why the repository looks the way it does.
   comparison is confounded by author effort rather than measured, and the design
   must change again.
 - **The fault domain proves too easy.** If injected faults leak detectable
-  markers, semantic dispatch wins for the wrong reason. Issue #3's text-only
-  control measures the informed boundary; it is not a cross-fault leak detector,
-  and the uninformed 0.500 is an identity of the construction, not a measurement
-  that could detect a leaky phrasing distribution. A genuine wording-leak control
-  is not yet implemented (issue #27).
+  markers, semantic dispatch wins for the wrong reason. The wording half is now
+  gated — a phrasing naming a resolution is rejected outright — but the
+  *paraphrase* half is not, because the uninformed AUC is 0.500 by construction and
+  cannot see the words. Detecting a revealing paraphrase without a literal tell
+  remains a review obligation.

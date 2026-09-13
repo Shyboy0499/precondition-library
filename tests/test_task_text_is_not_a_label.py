@@ -13,6 +13,8 @@ silently restoring the original flaw.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from precondition_library.bench.pairs import labelled_pairs
@@ -320,3 +322,23 @@ def test_same_declared_phrasings_imply_same_text_for_every_seed(make_state) -> N
                 f"seed {seed} sampled {left_text!r} for one state and "
                 f"{right_text!r} for the other"
             )
+
+
+def test_no_phrasing_names_a_resolution(state_grid) -> None:
+    """The check the AUC cannot make: a phrasing must not state the answer.
+
+    Neither regime is gated on the words themselves. The uninformed AUC is fixed at
+    0.500 by state-independent sampling whatever the phrasings say, and the informed
+    regime is reported rather than gated -- so a shared phrasing reading "use
+    rebase" would hand the resolution to a text-only dispatcher while every other
+    gate stayed green. Matching variant ids as whole words catches the literal case;
+    it cannot catch a paraphrase that reveals the answer without naming it, which is
+    what the reported informed AUC measures.
+    """
+    for intent in ambiguous_intents():
+        ids = [variant.id for variant in intent.variants]
+        lists = {"shared": intent.phrasings, **intent.variant_phrasings}
+        for name, texts in lists.items():
+            for text in texts:
+                named = sorted(i for i in ids if re.search(rf"\b{re.escape(i)}\b", text, re.I))
+                assert not named, f"{intent.name} [{name}] names {named}: {text!r}"

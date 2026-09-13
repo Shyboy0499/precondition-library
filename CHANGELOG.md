@@ -12,6 +12,13 @@ measured result; there are none yet. See
 
 ### Added
 
+- `test_no_phrasing_names_a_resolution`: a phrasing may not name a resolution, in
+  either wording channel. The AUC controls structurally cannot check this — the
+  uninformed one is fixed at 0.500 whatever the words say — so a shared phrasing
+  reading "use rebase" would have handed the answer to a text-only dispatcher with
+  every gate green. Verified by writing exactly that phrasing and watching the
+  check fail. A *paraphrase* that reveals the answer without naming it stays a
+  review obligation: no gate can see it, and the spec says so.
 - `EpisodeRecord` now stores correctness as facts — `correct_variant`,
   `fired_variant`, `ground_truth_ok` — with `misfired` and `succeeded` derived from
   them, so the quadrant that matters is expressible: a wrong fire in an episode that
