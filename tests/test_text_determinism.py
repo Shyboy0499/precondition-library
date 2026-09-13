@@ -26,7 +26,6 @@ def test_sample_index_rejects_empty_range() -> None:
         sample_index(1, "salt", 0)
 
 
-@pytest.mark.skip(reason="the intent registry lands in Task 7; un-skipped there")
 def test_same_seed_same_text() -> None:
     from precondition_library.tasks.registry import ambiguous_intents
 
@@ -34,7 +33,6 @@ def test_same_seed_same_text() -> None:
         assert intent.task_text(11) == intent.task_text(11)
 
 
-@pytest.mark.skip(reason="the intent registry lands in Task 7; un-skipped there")
 def test_text_does_not_depend_on_process_hash_seed() -> None:
     """CPython salts `hash()` for strings per process.
 
