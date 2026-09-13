@@ -1,0 +1,59 @@
+name: Link check
+
+# This repository's README is mostly citations, so link rot is a correctness
+# problem rather than a cosmetic one. Deliberately NOT triggered on pull
+# requests: an external site being down should never block a merge. It runs
+# weekly and on demand, and opens an issue when something breaks.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check links in the documentation
+        id: lychee
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --no-progress
+            --max-retries 2
+            --accept 200,206,429
+            README.md
+            CHANGELOG.md
+            CONTRIBUTING.md
+            docs/**/*.md
+          fail: true
+
+      - name: Open an issue if links are broken
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          existing=$(gh issue list \
+            --label docs \
+            --state open \
+            --search "Broken links in:title" \
+            --json number --jq 'length')
+          if [ "$existing" != "0" ]; then
+            echo "An open broken-links issue already exists; not opening another."
+            exit 0
+          fi
+          gh issue create \
+            --title "Broken links in the documentation" \
+            --label docs \
+            --body "$(printf '%s\n' \
+              "The weekly link check failed. This matters here because the README's citations are load-bearing: a dead link means a claim can no longer be checked by a reader." \
+              "" \
+              "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+              "" \
+              "Fix the link, or if the work has genuinely disappeared, correct the citation and say so in the README rather than removing it silently.")"

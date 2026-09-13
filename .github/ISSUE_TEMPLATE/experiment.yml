@@ -1,0 +1,61 @@
+name: Experiment
+description: Propose a measurement, or report one you ran
+title: "[experiment] "
+labels: ["experiment"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This repository's value is its measurements, so an experiment proposal is
+        judged by whether it could come back negative and still be worth reading.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: The question
+      description: One sentence, phrased as a question. If it cannot be answered "no", it is not a measurement.
+    validations:
+      required: true
+
+  - type: textarea
+    id: metric
+    attributes:
+      label: Metric and unit of analysis
+      description: What is measured, over what unit — dispatch decisions, fault seeds, or episodes? If episodes, justify why they are independent.
+    validations:
+      required: true
+
+  - type: textarea
+    id: baseline
+    attributes:
+      label: Baseline
+      description: |
+        What the result is compared against. The baseline must be the strongest
+        reasonable version of the alternative, not a deliberately weak one.
+    validations:
+      required: true
+
+  - type: textarea
+    id: power
+    attributes:
+      label: Sample size and power
+      description: How many units, and what effect size is detectable at that count and alpha? "As many as I can afford" is not an answer.
+    validations:
+      required: true
+
+  - type: textarea
+    id: falsify
+    attributes:
+      label: What result would falsify the hypothesis
+      description: State the outcome that would make you abandon the claim.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: integrity
+    attributes:
+      label: Integrity
+      options:
+        - label: Tuning parameters are fitted on a set disjoint from the evaluation set
+        - label: Failed runs stay in the denominator, with their cost
+        - label: Any revision to a pre-registered analysis will be logged, not silently applied

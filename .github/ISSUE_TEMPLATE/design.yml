@@ -1,0 +1,55 @@
+name: Design change
+description: Propose a change to the experimental design, the claims, or the architecture
+title: "[design] "
+labels: ["design"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before opening this: the design of record is
+        [`docs/superpowers/specs/2026-09-13-precondition-library-design.md`](https://github.com/Shyboy0499/precondition-library/blob/main/docs/superpowers/specs/2026-09-13-precondition-library-design.md),
+        and past reversals are in [`docs/decisions/`](https://github.com/Shyboy0499/precondition-library/tree/main/docs/decisions).
+        If your proposal contradicts either, say so explicitly and explain why.
+
+  - type: textarea
+    id: change
+    attributes:
+      label: What should change
+      description: The specific change, stated so a reader can tell what would be different afterwards.
+    validations:
+      required: true
+
+  - type: textarea
+    id: current
+    attributes:
+      label: What the current design says, and why that is wrong
+      description: Quote the spec section or decision record you are contradicting.
+    validations:
+      required: true
+
+  - type: textarea
+    id: claims
+    attributes:
+      label: Effect on the claims
+      description: |
+        Which claim does this affect — the matched-coverage dispatch comparison, the
+        negative-sandbox admission factor, or the cost model? Does it make a claim
+        testable that was not, or untestable that was?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: At least one, with the reason it was rejected. This is what makes a decision record useful later.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: adr
+    attributes:
+      label: Decision record
+      options:
+        - label: This warrants an ADR in `docs/decisions/` (required if it reverses an earlier decision)
+        - label: This is a clarification that does not change what the experiment measures

@@ -1,0 +1,55 @@
+name: Defect
+description: Something is broken, or something stated in the docs is wrong
+title: "[defect] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A documentation error counts as a defect here, and is the highest-value
+        kind. A citation that is wrong, a figure attributed to the wrong paper, or
+        a claim stated more strongly than the evidence supports all qualify.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of defect
+      options:
+        - A citation is wrong, misattributed, or does not say what is claimed
+        - Code does not do what the docs say
+        - The docs claim something that was never measured
+        - Internal inconsistency between documents
+        - Something else
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens
+      description: Quote the text or show the output. Include the file and, where possible, a line reference.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should happen instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: For code defects, the exact commands. For citation defects, the source that contradicts the claim.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: integrity
+    attributes:
+      label: Impact
+      options:
+        - label: This affects the integrity of a measurement or a claim (say how above)
+        - label: This is cosmetic
