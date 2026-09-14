@@ -70,11 +70,7 @@ mechanical fact about this repository are pinned here.
 from __future__ import annotations
 
 import ast
-from collections.abc import Callable
-from dataclasses import dataclass
 from pathlib import Path
-
-from precondition_library.tasks.registry import EXCLUDED_FROM_BENCHMARK
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -347,7 +343,16 @@ git commit -m "test(docs): declare every skip and require its reason to name an 
 
 - [ ] **Step 1: Write the failing test**
 
-Append:
+First extend the file's import block — `Callable`, `dataclass` and `EXCLUDED_FROM_BENCHMARK` are needed here and only here, so Task 1 deliberately left them out:
+
+```python
+from collections.abc import Callable
+from dataclasses import dataclass
+
+from precondition_library.tasks.registry import EXCLUDED_FROM_BENCHMARK
+```
+
+Then append:
 
 ```python
 @dataclass(frozen=True)
