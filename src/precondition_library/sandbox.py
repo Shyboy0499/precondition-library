@@ -136,6 +136,26 @@ def _seed_base(work: Path) -> None:
     run_git(("push", "-q", "-u", "upstream", "main"), cwd=work)
 
 
+def create_submodule_origin(root: Path, name: str) -> Path:
+    """Create an empty local repository for a submodule fault to point at.
+
+    A submodule needs a third repository behind its URL. A local path is a valid
+    submodule URL, so one can be built here with no network and still
+    deterministically: the origin is created under the same pinned environment as
+    the rest of the sandbox (`run_git`), so its commit SHAs reproduce, and it
+    lives inside the sandbox root so `Sandbox.destroy` removes it with everything
+    else. The caller writes and commits the content it wants; `git submodule add`
+    needs the origin to have at least one commit before it can clone it.
+    """
+    origin = root / name
+    origin.mkdir(parents=True)
+    run_git(("-c", "init.defaultBranch=main", "init", "-q", str(origin)), cwd=root)
+    # Identity is per-repo, never global.
+    run_git(("config", "user.name", _GIT_NAME), cwd=origin)
+    run_git(("config", "user.email", _GIT_EMAIL), cwd=origin)
+    return origin
+
+
 def create(seed: int, faults: list[str]) -> Sandbox:
     """Build a sandbox with the named faults injected, deterministically.
 
