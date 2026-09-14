@@ -220,8 +220,9 @@ src/precondition_library/
 └── bench/           ledger, episode runner, dispatch benchmark, report
 ```
 
-`library/` holds admitted programs and **is committed on purpose** — it is the
-artifact, and its git history records programs being demoted after they mis-fired.
+`library/` holds every compiled program, admitted or not, and **is committed on
+purpose** — it is the artifact, and its git history records programs being
+demoted after they mis-fired.
 `bench/gold/` holds the hand-written gold resolutions. What runs today for the two
 ambiguous intents is form validation only: `sync_fork_with_upstream.yaml` and
 `restore_submodule_state.yaml` must parse, be well-formed, cover every declared
