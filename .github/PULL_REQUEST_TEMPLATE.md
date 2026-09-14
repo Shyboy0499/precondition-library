@@ -41,5 +41,6 @@ already ran.*
 
 ## Notes for the reviewer
 
-*What you are least sure about, and which decision you would most like challenged. If you are
-reviewing your own PR, this section is where you say what a hostile reviewer should attack.*
+*The author fills this in; the owner reviews. Name the **weakest** claim, not the strongest — what
+you are least sure about, what you did not verify, and which decision you would most like
+challenged. A PR whose claims are not tied to a check is a defect in the PR.*
