@@ -29,13 +29,13 @@ MUST_ALLOW = [
 ]
 
 
-@pytest.mark.skip(reason="guard is a stub; implemented per plan, phase 3")
 @pytest.mark.parametrize("body", MUST_REFUSE)
 def test_refuses(body: str) -> None:
-    assert screen(body, env_root="/tmp/sandbox").verdict is Verdict.REFUSE
+    decision = screen(body, env_root="/tmp/sandbox")
+    assert decision.verdict is Verdict.REFUSE
+    assert decision.reason, "a refusal must name the effect it refused"
 
 
-@pytest.mark.skip(reason="guard is a stub; implemented per plan, phase 3")
 @pytest.mark.parametrize("body", MUST_ALLOW)
 def test_allows(body: str) -> None:
     assert screen(body, env_root="/tmp/sandbox").verdict is Verdict.ALLOW
