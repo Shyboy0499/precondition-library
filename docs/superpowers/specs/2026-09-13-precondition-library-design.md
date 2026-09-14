@@ -11,6 +11,7 @@
 | 1 | 2026-09-13 | Initial design of record. |
 | 2 | 2026-09-13 | Reframed after a prior-art sweep and a hostile method review (see ADR-0001). Claim 1 dropped as a contribution; Claim 2 narrowed to its empirical form; Claim 3 added for the negative-sandbox admission criterion; the primary metric moved from episode-level to matched dispatch coverage. **Revised before any data was collected** — no episode has been run, so no analysis was chosen after seeing results. |
 | 3 | 2026-09-13 | The request text gains a declared informed/uninformed channel split, and the primary claim is scoped to the uninformed regime (where the construction fixes the AUC at 0.500); the gold resolutions land. `sync_fork_with_upstream` and `restore_submodule_state` are converted to state-decided intents; three of the five faults remain unconverted and are excluded from any dispatch measurement (issue #25). **Logged before any episode data existed** — no episode has been run, so no analysis was chosen after seeing results; the only measured figure so far is the informed text-control AUC reported in §3. |
+| 4 | 2026-09-14 | **Lifecycle correction, not a claim change.** A program that fails admission is stored as a `candidate` and its rejection reason recorded, not discarded; the §5 lifecycle diagram and the §8 degradation table said "not stored". Corrected to match `library.py` (which writes the candidate before the gate runs) and `library/README.md`; rejection is data the mismatch analysis needs. No measurement or claim is affected, and no number in this document changes as a result. |
 
 ---
 
@@ -382,14 +383,19 @@ through admission.
 
 ```
 candidate ──admission passes──▶ admitted ──postconditions fail──▶ demoted
-    │                                                     │
-    └──admission fails──▶ (not stored;            two mismatches
-                           recorded as data)            ▼
-                                                  quarantined
+(stored, status=candidate)                              │
+    │                                            two mismatches
+    └──admission fails──▶ stays stored                  ▼
+                          (status=candidate;        quarantined
+                           rejection recorded)
 ```
 
 Nothing is deleted. A program that mis-fired is the evidence for Claim 2's
-numerator, and removing it would erase the result.
+numerator, and removing it would erase the result. A candidate is written to the
+library **before** the gate runs, so a program that fails admission keeps its
+`status=candidate` and stays as a rejected record rather than being removed. That
+rejection is itself evidence — the mismatch analysis needs it — and the episode
+keeps its token cost.
 
 ---
 
@@ -558,7 +564,7 @@ to an arm and recorded with a reason.
 | --- | --- | --- |
 | replay misses postconditions | demote program; fall back to ReAct **for this episode only**; fallback tokens attributed to the arm | `misfired` (derived), with `outcome` showing how the episode then ended |
 | same program mismatches twice | withdraw from dispatch; retain for analysis | `quarantined` |
-| compile fails admission | not stored; episode keeps its token cost | `candidate`, `admitted=false` |
+| compile fails admission | stored as a `candidate` and its rejection reason recorded, not discarded; episode keeps its token cost | `candidate`, `admitted=false` |
 | guard refuses the body | no execution; fall back to ReAct | `refusal` + `refusal_reason` |
 | replay exceeds timeout | process killed, sandbox destroyed | `fail`, `timed_out` |
 | no program applies | solve with LLM, compile, admit | `fallback` (expected, not a failure) |
