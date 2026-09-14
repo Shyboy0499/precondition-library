@@ -171,6 +171,18 @@ A resolution is `None` for a *benign* state — nothing to do — and such pairs
 labelled negatives, because a dispatcher that always fires can only be caught by
 states that require refusal.
 
+**A resolution is defined by the task family, not inferred from the outcome.**
+That matters for one state, and knowing it prevents a misreading of the misfire
+rate: on `overlapping_files` the intent requires `merge`, but a `rebase` there also
+preserves the work and reaches a synced tree, so the outcome checker cannot tell
+them apart — only `discard` is rejected, because only `discard` loses work. The
+requirement is the policy itself: shared history is not rewritten when both sides
+touched the same file. A dispatcher firing `rebase` on that state is therefore a
+misfire **against the label**, and it is scored independently of the episode's
+success, which is why the record stores the two as separate facts (§7). Read the
+misfire rate as disagreement with the required resolution, not as a count of
+destroyed work.
+
 The request text is sampled deterministically from the paraphrase distribution
 (`sha256` over the seed, never `hash()`, which CPython salts per process). When the
 state is already known, `variant_phrasings` may supply *informed* wording that
