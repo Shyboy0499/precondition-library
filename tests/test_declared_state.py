@@ -19,7 +19,11 @@ mechanical fact about this repository are pinned here.
 from __future__ import annotations
 
 import ast
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
+
+from precondition_library.tasks.registry import EXCLUDED_FROM_BENCHMARK
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -193,3 +197,69 @@ DECLARED_SKIPS: dict[str, str] = {
     "test_checkers_against_gold.py::test_checker_accepts_gold_solution": "#9",
     "test_checkers_against_gold.py::test_checker_rejects_untouched_sandbox": "#9",
 }
+
+
+@dataclass(frozen=True)
+class Claim:
+    """A quoted sentence in a document, and the fact that must hold while it is there."""
+
+    document: str
+    """Path relative to the repository root."""
+    quote: str
+    """Verbatim. The row is dead weight if the sentence is gone, so its absence fails."""
+    holds: Callable[[], bool]
+    update: str
+    """What to do when the fact stops holding: which sentence to rewrite, and how."""
+
+
+def _gold_checkers_are_skipped() -> bool:
+    return any(node_id.startswith("test_checkers_against_gold.py::") for node_id in skips())
+
+
+CLAIMS: list[Claim] = [
+    Claim(
+        document="bench/gold/README.md",
+        quote="No probe has ever been executed against a sandbox",
+        holds=_gold_checkers_are_skipped,
+        update=(
+            "The gold checkers now run. Rewrite the sentence in bench/gold/README.md "
+            "that says no probe has been executed, and the matching line in README.md."
+        ),
+    ),
+    Claim(
+        document="docs/superpowers/specs/2026-09-13-precondition-library-design.md",
+        quote="but no checker has run against",
+        holds=_gold_checkers_are_skipped,
+        update="A checker has run. Correct the testing block in §10, which still says none has.",
+    ),
+    Claim(
+        document="src/precondition_library/runtime/guard.py",
+        quote="Nothing consumes this yet.",
+        holds=lambda: "precondition_library.runtime.guard.prepare_dry_run" in stubs(),
+        update=(
+            "prepare_dry_run has a caller. Delete that sentence from its docstring: it "
+            "exists to tell a reader the function is unreachable, and it no longer is."
+        ),
+    ),
+    Claim(
+        document="src/precondition_library/tasks/registry.py",
+        quote="Faults that must never be measured",
+        holds=lambda: len(EXCLUDED_FROM_BENCHMARK) == 3,
+        update=(
+            "The excluded set changed size. Check every document that says three faults "
+            "are excluded -- the spec's open risk 6 and the testing block in §10 -- and "
+            "correct the count."
+        ),
+    ),
+]
+
+
+def test_claims_are_still_true() -> None:
+    """Each pinned sentence is present, and the fact behind it still holds."""
+    for claim in CLAIMS:
+        text = (ROOT / claim.document).read_text(encoding="utf-8")
+        assert claim.quote in text, (
+            f"{claim.document}: the pinned sentence is gone -- {claim.quote!r}. Either "
+            f"restore it or delete this row; a row pinning nothing is worse than no row."
+        )
+        assert claim.holds(), f"{claim.document}: stale claim -- {claim.update}"
