@@ -16,9 +16,14 @@ library/
 
 Two rules keep this directory trustworthy:
 
-1. **A program here has passed admission.** Postconditions held on a freshly
-   faulted sandbox, and its preconditions rejected every negative sandbox. A
-   program that has not passed both lives in `bench/` scratch space, not here.
+1. **Only an `admitted` program may be dispatched.** A program here has not
+   necessarily passed admission: it is stored as a `candidate` — compiled, never
+   replayed — and becomes `admitted` only after both sides of the gate pass:
+   postconditions held on a freshly faulted sandbox, and its preconditions
+   rejected every negative sandbox. A program that fails admission keeps its
+   status and stays here rather than moving to a scratch directory; a rejected
+   program is data the mismatch analysis needs. `bench/` is working scratch
+   space, not where rejected programs go.
 2. **Nothing is deleted.** A program that mis-fired is marked `demoted` or
    `quarantined` and stays. Removing it would erase the mismatch evidence that
    the primary claim depends on.
