@@ -44,3 +44,11 @@ python_version = "3.12"
 warn_unused_ignores = true
 warn_redundant_casts = true
 no_implicit_optional = true
+
+# PyYAML is a runtime dependency but ships no type information and no py.typed
+# marker. `types-PyYAML` would silence this, but adding a package to make a type
+# checker quiet is a dependency the experiment does not need; scoping the
+# ignorable import to `yaml` keeps the stub gap visible and out of the way.
+[[tool.mypy.overrides]]
+module = ["yaml"]
+ignore_missing_imports = true

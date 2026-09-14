@@ -12,6 +12,29 @@ measured result; there are none yet. See
 
 ### Added
 
+- The compile step (`agents/compile.py`): a solved task plus its transcript and
+  state observations become a candidate `Program`. It reads and never executes
+  what it generates — a test proves a body that writes a marker file leaves no
+  marker until a replay runs it — and a malformed reply is a `CompileResult`
+  carrying the reply's token usage, not an exception that would lose the
+  episode's cost. Preconditions must be specific, and an empty precondition list
+  is recorded as a defect.
+- The two-sided admission gate (`agents/compile.py`): the body must satisfy the
+  program's postconditions on freshly faulted sandboxes, **and** the
+  preconditions must reject each of the other faults' states. An all-accepting
+  precondition set is rejected by the negative side, which is the gate's reason
+  to exist; a rejection returns `(False, reason)` rather than being dropped.
+- Library storage (`library.py`): `library/<program-id>/program.yaml` plus a
+  `history.jsonl` of status changes, with `add` accepting only candidates,
+  `set_status` refusing unknown ids and unlisted transitions (so `quarantined`
+  is terminal), and nothing ever deleted. `library_hash()` is a stable digest
+  over every stored program's content, sorted by id, which issue #4 requires in
+  every ledger row so a comparison can be shown to have run against one frozen
+  library.
+- `tests/test_compile_and_admission.py`: the whole pipeline offline against real
+  fault-injected sandboxes, including the gate's two rejection modes and its
+  determinism.
+
 - `test_no_phrasing_names_a_resolution`: a phrasing may not name a resolution, in
   either wording channel. The AUC controls structurally cannot check this — the
   uninformed one is fixed at 0.500 whatever the words say — so a shared phrasing
@@ -63,6 +86,10 @@ measured result; there are none yet. See
 
 ### Not done in this change
 
+- `Library.match_semantic` and `Library.match_preconditions` are still stubs that
+  raise. They are the ablation's two arms, and the design requires them to differ
+  in exactly one function, decided in the next task; implementing them here would
+  have pre-empted that decision.
 - Three of the five faults — `dirty_tree`, `branch_renamed`, and
   `lockfile_conflict` — still return a single fixed request sentence and
   therefore still carry the original defect. They are deliberately unconverted,
