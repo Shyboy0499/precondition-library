@@ -8,9 +8,36 @@ has to be catchable, and it can only be caught by states that require refusal.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
+from precondition_library.provider import Completion
 from precondition_library.signatures import StateFingerprint
+
+
+class FakeProvider:
+    """Scripted `Provider` for tests: a queue of completions and a call log.
+
+    Satisfies the Protocol structurally -- no network, no key. `react.py` and
+    `compile.py` are both tested against it, so it lives here rather than in one
+    test file. Deliberately small: anything clever would need its own tests.
+    """
+
+    def __init__(self, *completions: Completion, raises: Exception | None = None) -> None:
+        self._queued = list(completions)
+        self.raises = raises
+        self.calls: list[dict[str, Any]] = []
+
+    def complete(
+        self, *, system: str, messages: list[dict], tools: list[dict] | None = None
+    ) -> Completion:
+        self.calls.append({"system": system, "messages": messages, "tools": tools})
+        if self.raises is not None:
+            raise self.raises
+        if not self._queued:
+            raise AssertionError("FakeProvider: complete() called with an empty queue")
+        return self._queued.pop(0)
 
 
 # `upstream_ahead` is how many commits upstream has that HEAD lacks; `upstream_behind`
