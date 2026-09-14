@@ -12,9 +12,10 @@ phase that will implement them named rather than implied.
 The three faults not yet converted to intents -- dirty_tree, branch_renamed and
 lockfile_conflict -- still return one fixed sentence, so they remain outside
 this file's subject until the issues that convert them land: no skip is added
-for them, because a skip that cannot run is noise. `dirty_tree`'s injection is
-real now (PR #25) and its own test file covers determinism; the remaining two
-still stub theirs.
+for them, because a skip that cannot run is noise. All three now inject a real
+state and each has its own sandbox test file covering determinism; none has an
+`IntentSpec` yet, so they stay excluded from any dispatch measurement (issue
+#25).
 """
 
 from __future__ import annotations
