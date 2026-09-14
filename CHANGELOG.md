@@ -12,6 +12,12 @@ measured result; there are none yet. See
 
 ### Added
 
+- `tests/test_declared_state.py`: every stub and every skipped test is declared and
+  asserted against the code, so implementing one fails CI until the declaration and
+  the prose that restated it are updated. Four status claims are pinned to the facts
+  behind them, each failing with the document to update. It deliberately does not
+  attempt to detect a document contradicting another document — that stays a review
+  obligation, and the file says so.
 - The compile step (`agents/compile.py`): a solved task plus its transcript and
   state observations become a candidate `Program`. It reads and never executes
   what it generates — a test proves a body that writes a marker file leaves no

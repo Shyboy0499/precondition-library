@@ -651,9 +651,18 @@ ZERO TOKEN      stronger than the import test: replay runs with a provider whose
 GUARD TABLE     bodies that must be refused, one line each to extend.
 LEDGER INTEGRITY  every episode writes exactly one record; denominators must be
                 reconstructable from the ledger alone.
-NO SILENT SKIP  a skipped test must carry the plan phase that implements it.
-                A test suite that quietly skips is a suite that passes for the
-                wrong reason.
+NO SILENT SKIP  a skipped test must carry the issue that implements it. A test
+                suite that quietly skips is a suite that passes for the wrong
+                reason.
+DECLARED STATE  every stub and every skipped test is declared in
+                tests/test_declared_state.py and the declaration is asserted
+                against the code, so implementing a stub or un-skipping a test
+                fails CI until the declaration -- and the prose that restated it --
+                moves too. A small claims table pins the status sentences that
+                reduce to a mechanical fact, each failing with the document to
+                update. It cannot detect a document contradicting another document,
+                or one whose meaning contradicts the code; that stays a review
+                obligation (CONTRIBUTING rule 5).
 ```
 
 The zero-token test is the one that matters most **for the cost model**: the
