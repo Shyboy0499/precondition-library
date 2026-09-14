@@ -154,7 +154,12 @@ def _stub_delta() -> str:
     lines += [f"  + {name}" for name in sorted(set(actual) - set(declared))] or ["  (none)"]
     lines += ["declarations that are no longer stubs:"]
     lines += [f"  - {name}" for name in sorted(set(declared) - set(actual))] or ["  (none)"]
-    lines += ["", "Paste the '+' names into DECLARED_STUBS, each mapped to the issue that", "will implement it, and delete the '-' names after updating whatever prose", "described them as pending."]
+    lines += [
+        "",
+        "Paste the '+' names into DECLARED_STUBS, each mapped to the issue that",
+        "will implement it, and delete the '-' names after updating whatever prose",
+        "described them as pending.",
+    ]
     return "\n".join(lines)
 
 
