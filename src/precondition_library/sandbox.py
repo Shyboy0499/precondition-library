@@ -70,12 +70,19 @@ def run_git(
     cwd: Path,
     check: bool = True,
     stdin: str | None = None,
+    timeout: float | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run git with the sandbox environment; raise on failure unless `check=False`.
 
     Returns the completed process so callers can read stdout or inspect a
     non-zero exit for a probe whose failure is information (an ancestor test,
     for example) rather than an error.
+
+    `timeout` bounds the call in seconds. On expiry `subprocess.TimeoutExpired`
+    propagates rather than being converted to a failed exit: a caller must decide
+    whether a killed command is an error (a probe) or information for whoever
+    issued it (the ReAct tool, which reports it back to the model). `None` keeps
+    the previous unbounded behaviour.
     """
     result = subprocess.run(
         ["git", *args],
@@ -84,6 +91,7 @@ def run_git(
         capture_output=True,
         text=True,
         input=stdin,
+        timeout=timeout,
     )
     if check and result.returncode != 0:
         raise RuntimeError(f"git {' '.join(args)} failed in {cwd}: {result.stderr.strip()}")
