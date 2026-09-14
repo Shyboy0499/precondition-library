@@ -68,7 +68,26 @@ If something is not implemented, the documentation must not imply it is. A skipp
 test must name the phase that implements it. "Enforced by tests" is false if the
 test is skipped — and that exact sentence was a defect here once.
 
-### 5. Python in markdown is formatted by CI
+### 5. Status lives in one place
+
+A document must not restate whether something is implemented. It either links to the
+declared inventory in `tests/test_declared_state.py` — which CI checks against the
+code — or states the claim in that file's claims table, where the fact behind it is
+asserted.
+
+**Why:** prose describing the code drifts the moment the code moves, and nothing
+fails. Four instances were found by hand: a README rule contradicting its own status
+table, the spec saying a rejected program is not stored while `library.py` stores
+it, the README claiming the gold check runs while its test is skipped, and a
+docstring describing injectors as stubs after they existed.
+
+**What that inventory cannot do, and this rule therefore cannot replace:** find a
+document that contradicts another document, or one whose meaning contradicts the
+code. Those are semantic and remain a review obligation. Pin only claims that reduce
+to a mechanical fact; do not add a row that restates a sentence without checking
+anything behind it.
+
+### 6. Python in markdown is formatted by CI
 
 `ruff format --check` runs over the Python code inside fenced blocks in committed
 markdown, so a snippet in a plan or a spec has to be ruff-clean like any other
@@ -83,7 +102,7 @@ This bit the first version of the issue #3 plan: CI failed on a docs-only PR
 because a snippet was four characters over the line limit. That is the system
 working — but knowing the rule saves a red build.
 
-### 6. Design reversals get a decision record
+### 7. Design reversals get a decision record
 
 Anything that reverses or narrows an earlier decision gets an ADR in
 `docs/decisions/`, using `TEMPLATE.md`. The ADR records the alternatives that were
@@ -91,7 +110,7 @@ rejected and what would reverse *this* decision — the second part is what make
 a record rather than a rationalisation. See
 [ADR-0001](docs/decisions/ADR-0001-reframe-after-prior-art.md).
 
-### 7. Measurements follow the pre-registration
+### 8. Measurements follow the pre-registration
 
 Tuning happens on a set disjoint from the evaluation set. Failed runs stay in the
 denominator with their cost. Any revision to a pre-registered analysis is logged
