@@ -31,6 +31,14 @@ maintainer too, deliberately.
 history in two years without the PR open: what changed, and why the alternative
 was rejected.
 
+**AI-written commits carry the trailer.** Work authored by Claude ends with
+`Co-Authored-By: Claude <noreply@anthropic.com>`. Git otherwise records every commit
+as the repository owner's, which is not what happened — most of this repository was
+written by an agent. The trailer keeps the provenance truthful.
+
+It is attribution, **not** review. A co-authored commit has still had one party
+involved, and should not be read as a second pair of eyes.
+
 ## The rules that are specific to this repository
 
 ### 1. A claim may not be stated as a finding
@@ -131,10 +139,23 @@ afterwards.
 
 ## Reviewing
 
-A self-reviewed pull request is **not** a review. If you want genuine review,
-raise the required-approval count in the repository settings and add a reviewer —
-until then, the process buys scoped diffs, CI gating, and a decision record, and
-it should not be described as more than that.
+An agent writes most of this repository, so **it must not merge its own work.** The
+loop is: the author opens a PR with the self-review checklist filled in, and the
+repository owner reviews and merges. A self-reviewed PR is not a review, and
+`Co-Authored-By` is attribution rather than a second pair of eyes.
+
+The author's job is to make the review cheap:
+
+- say which decision is most contestable, rather than which parts are done;
+- name what was **not** verified, and what was assumed;
+- put the evidence in the PR body — the command run and its real output — instead of
+  asserting that something works.
+
+A PR that cannot be reviewed by reading it, because a claim is not tied to a check,
+is a defect in the PR rather than in the reviewer.
+
+Adding a second human reviewer is still the better version of this, and remains a
+settings change plus a name.
 
 ## Reporting a citation error
 
