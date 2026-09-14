@@ -30,7 +30,8 @@ URL = "https://api.deepseek.com/chat/completions"
 
 def _ok_body(
     *,
-    content: str = "done",
+    content: str | None = "done",
+    tool_calls: list | None = None,
     prompt_tokens: int = 11,
     completion_tokens: int = 7,
     cached: int | None = 3,
@@ -39,11 +40,10 @@ def _ok_body(
     usage: dict = {"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens}
     if cached is not None:
         usage["prompt_cache_hit_tokens"] = cached
-    return {
-        "model": model,
-        "choices": [{"message": {"role": "assistant", "content": content}}],
-        "usage": usage,
-    }
+    message: dict = {"role": "assistant", "content": content}
+    if tool_calls is not None:
+        message["tool_calls"] = tool_calls
+    return {"model": model, "choices": [{"message": message}], "usage": usage}
 
 
 def _provider(transport: httpx.BaseTransport, *, model: str = "deepseek-chat") -> DeepSeekProvider:
@@ -109,6 +109,26 @@ def test_response_parses_into_real_usage() -> None:
     assert completion.usage.total == 154
     assert completion.llm_calls == 1
     assert completion.model == "deepseek-chat"
+    assert completion.tool_calls == []
+
+
+def test_tool_calls_without_content_parse_and_surface_unreshaped() -> None:
+    """The API sends `content: null` when the model calls a tool. That is a valid
+    completion, not malformed, and the caller needs the calls in the API's own
+    shape -- `arguments` stays the JSON string the API wrote."""
+    calls = [
+        {
+            "id": "call_1",
+            "type": "function",
+            "function": {"name": "run_git", "arguments": '{"command": "git status --porcelain"}'},
+        }
+    ]
+    transport, _ = _capturing(_ok_body(content=None, tool_calls=calls))
+    completion = _provider(transport).complete(system="s", messages=[])
+
+    assert completion.text == ""
+    assert completion.tool_calls == calls
+    assert completion.usage == TokenUsage(tokens_in=11, tokens_out=7, cached_tokens_in=3)
 
 
 def test_absent_cache_field_defaults_to_zero() -> None:
@@ -153,7 +173,11 @@ def test_non_2xx_without_json_still_reports_status() -> None:
         pytest.param({"usage": {"prompt_tokens": 1, "completion_tokens": 2}}, id="missing-choices"),
         pytest.param({"usage": {}, "choices": []}, id="empty-choices"),
         pytest.param(
-            {"usage": {"prompt_tokens": 1}, "choices": [{"message": {}}]}, id="no-content"
+            {
+                "usage": {"prompt_tokens": 1, "completion_tokens": 2},
+                "choices": [{"message": {"role": "assistant", "content": None}}],
+            },
+            id="no-content-and-no-tool-calls",
         ),
     ],
 )

@@ -49,6 +49,17 @@ measured result; there are none yet. See
   a regime in which the text is the answer in disguise with one in which it is
   noise, and described neither; the primary claim is now scoped to the
   uninformed regime, whose AUC is the gated one.
+- Arm 1 (`agents/react.py`) now maps a model-declared finish to
+  `EpisodeOutcome.SUCCESS` instead of `FALLBACK`. `EpisodeOutcome` records how
+  the arm's mechanism completed, not whether the environment is correct, and
+  `FALLBACK` means "no stored program applies, so the agent takes over" — the
+  compiled arms' outcome. Arm 1 *is* that agent, so the label never described
+  it. Correctness stays in `ground_truth_ok`; this changes what an already
+  recorded arm-1 `success`/`fallback` row means, not the episodes themselves.
+- Arm 1 drives the model's structured tool calls: `Completion` now carries
+  `tool_calls` (`provider.py`) and the baseline answers each call with a native
+  `role: "tool"` message keyed by `tool_call_id`, instead of parsing JSON out of
+  free text. One protocol path, the API's own.
 
 ### Not done in this change
 

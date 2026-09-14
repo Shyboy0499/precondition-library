@@ -43,33 +43,20 @@ would otherwise reach git as literal arguments and produce a confusing error."""
 _REPO_RETARGETING = ("-C", "--git-dir", "--work-tree")
 """git options that point the command at a repository other than `env.work`."""
 
-_FINISH_WORDS = {"done", "finish", "finished", "submit", "complete", "completed"}
-
 SYSTEM_PROMPT = """\
 You are a git maintenance agent working in a single disposable repository. You
 complete the user's request by running git commands and reading their output.
 
 You have exactly one tool, `run_git`, which runs one git command in the
 repository's working directory. There is no file-reader, no shell, and no other
-tool.
-
-Reply with one JSON object per turn, optionally after a sentence of reasoning:
-- To run a command:
-  {"tool": "run_git", "arguments": {"command": "git status --porcelain"}}
-  The command must start with `git`. Shell operators (&&, |, ;, redirects) and
-  options that retarget the repository are refused; issue one command per turn.
-- To declare the task finished:
-  {"done": true}
+tool. Call it with one command per turn. The command must start with `git`;
+shell operators (&&, |, ;, redirects) and options that retarget the repository
+are refused.
 
 After each command you receive its exit code, stdout and stderr. Read failures
 and correct them. Preserve anything the user told you must survive, and do not
-declare the task finished until you believe the request is satisfied."""
-
-_NO_ACTION_NUDGE = (
-    "No action was recognised. Reply with one JSON object: either "
-    '{"tool": "run_git", "arguments": {"command": "<git command>"}} to act, '
-    'or {"done": true} to finish.'
-)
+stop until you believe the request is satisfied. When you are finished, reply
+with your final answer and no tool call."""
 
 
 def solve(
@@ -92,21 +79,25 @@ def solve(
     loop until the environment passes. Stopping on the model's own declaration
     keeps the mechanism identical to a hand-run ReAct agent, and keeps the
     measurement attributable to the agent rather than to the oracle. Do not
-    replace `_parse_action`-driven termination with `fault.check(env).ok`; the
-    caller grades the result with that checker after this function returns.
+    replace the model-declaration-driven termination with `fault.check(env).ok`;
+    the caller grades the result with that checker after this function returns.
 
-    Outcome mapping. Arm 1 is the fallback path itself -- there is no stored
-    program and no dispatch -- so `EpisodeOutcome.SUCCESS`, which would assert
-    the episode was correct, is never returned here. A model that declares
-    itself finished completes its attempt and yields `FALLBACK` (spec §8: "no
-    program applies" is expected, not a failure); exhausting the step budget or
-    a provider error yields `FAIL`, with the reason left in the transcript.
-    Correctness is separate and is the caller's `ground_truth_ok`.
+    Outcome mapping. `SUCCESS` means the model declared the task finished; it is
+    **not** an assertion that the environment is correct. `solve` does not grade
+    its own work and must not: the caller runs the fault's checker over the
+    returned environment and records `ground_truth_ok`. An episode with
+    `outcome=SUCCESS` and `ground_truth_ok=False` is therefore legal and
+    expected -- it is the "wrong program fired and the episode still succeeded"
+    quadrant the ledger exists to express. Exhausting the step budget or a
+    provider error yields `FAIL`, with the reason left in the transcript.
+    `FALLBACK` is the compiled arms' outcome, meaning "no stored program applies,
+    so the agent takes over" (spec §8); arm 1 *is* that agent, so it never
+    returns it.
 
     The transcript is a first-class output, not a debugging aid: the compile
     step reads it to author a program, so it records the system prompt, the task
-    text, every model turn (with the parsed tool call when there is one), and
-    every tool result, in order.
+    text, every model turn (with the tool calls it returned, in the API's own
+    shape), and every tool result, in order.
     """
     task_text = signature.intent
     transcript: list[dict] = [
@@ -126,42 +117,35 @@ def solve(
             )
             return EpisodeOutcome.FAIL, transcript
 
-        text = completion.text
-        action = _parse_action(text)
+        if not completion.tool_calls:
+            # No call is the model's declaration that it is finished. It says
+            # nothing about correctness; the caller grades that separately.
+            transcript.append({"role": "assistant", "content": completion.text, "done": True})
+            return EpisodeOutcome.SUCCESS, transcript
 
-        if action is None:
-            transcript.append({"role": "assistant", "content": text})
-            transcript.append({"role": "user", "content": _NO_ACTION_NUDGE})
-            continue
-
-        kind, value = action
-        if kind == "finish":
-            transcript.append({"role": "assistant", "content": text, "done": True})
-            return EpisodeOutcome.FALLBACK, transcript
-
-        if kind == "unknown":
-            result, ok = _refused(f"unknown tool {value!r}; only 'run_git' exists"), False
-            transcript.append(
-                {
-                    "role": "assistant",
-                    "content": text,
-                    "tool_call": {"name": value, "arguments": {}},
-                }
-            )
-            transcript.append({"role": "tool", "name": value, "content": result, "ok": ok})
-            continue
-
-        result, ok = _run_tool(value, env)
         transcript.append(
             {
                 "role": "assistant",
-                "content": text,
-                "tool_call": {"name": "run_git", "arguments": {"command": value}},
+                "content": completion.text,
+                "tool_calls": completion.tool_calls,
             }
         )
-        transcript.append(
-            {"role": "tool", "name": "run_git", "command": value, "content": result, "ok": ok}
-        )
+        for call in completion.tool_calls:
+            name, command = _parse_tool_call(call)
+            if name == "run_git":
+                result, ok = _run_tool(command, env)
+            else:
+                result, ok = _refused(f"unknown tool {name!r}; only 'run_git' exists"), False
+            transcript.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": call.get("id"),
+                    "name": name,
+                    "command": command,
+                    "content": result,
+                    "ok": ok,
+                }
+            )
 
     transcript.append(
         {
@@ -178,10 +162,9 @@ def available_tools() -> list[dict]:
     """The one tool every arm gets, in the OpenAI/DeepSeek function-calling shape.
 
     Identical across arms so the tool surface cannot explain a difference
-    between them. The schema is sent to the provider; the loop reads back the
-    text protocol the system prompt pins, because `Completion` carries text only
-    (`provider.py` sends `tools` but does not surface a structured `tool_calls`
-    field).
+    between them. The schema is sent to the provider and the loop reads back the
+    structured `tool_calls` the provider surfaces on `Completion`; there is no
+    text protocol to fall back to, because one path is the API's own.
 
     What contains the tool's risk
     -----------------------------
@@ -278,8 +261,11 @@ def _api_messages(transcript: list[dict]) -> list[dict]:
     """Map the transcript onto the message roles the provider protocol accepts.
 
     The system prompt is passed separately and errors are terminal, so both are
-    dropped here; a tool result becomes a `user` message because the text
-    protocol has no `tool_call_id` to answer (the provider does not surface one).
+    dropped here. An assistant turn keeps its `tool_calls` exactly as the API
+    returned them, and each result is answered with the `role: "tool"` message
+    the function-calling protocol requires, keyed by `tool_call_id`. Sending a
+    result as a `user` message -- what a text protocol would do -- leaves the
+    assistant turn's call unanswered, which the API rejects.
     """
     messages: list[dict] = []
     for entry in transcript:
@@ -287,103 +273,45 @@ def _api_messages(transcript: list[dict]) -> list[dict]:
         if role in ("system", "error"):
             continue
         if role == "tool":
-            command = entry.get("command")
-            label = f"tool result for git command {command!r}" if command else "tool result"
-            messages.append({"role": "user", "content": f"{label}:\n{entry['content']}"})
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": entry.get("tool_call_id"),
+                    "content": entry["content"],
+                }
+            )
+        elif role == "assistant" and entry.get("tool_calls"):
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": entry["content"],
+                    "tool_calls": entry["tool_calls"],
+                }
+            )
         else:
             messages.append({"role": role, "content": entry["content"]})
     return messages
 
 
-def _parse_action(text: str) -> tuple[str, str] | None:
-    """Read the model's turn as ("finish", ""), ("tool", command), ("unknown", name).
+def _parse_tool_call(call: dict) -> tuple[str, str]:
+    """The (name, command) of one API tool call, never raising.
 
-    Returns None when no JSON object is present or the object carries no action,
-    which the loop answers with a nudge rather than a crash. The protocol is
-    text-based because `Completion` carries only text; `available_tools` and the
-    system prompt define the encoding.
+    `arguments` arrives as a JSON string in the API's shape and is decoded here.
+    A call whose `function` is malformed, whose name is not `run_git`, or whose
+    arguments do not decode to a `command` string yields a value the loop can
+    refuse as a tool result, so one bad call does not end the episode.
     """
-    obj = _extract_json_object(text)
-    if obj is None:
-        return None
-    if any(obj.get(key) is True for key in ("done", "finished", "finish")):
-        return "finish", ""
-    action = obj.get("action")
-    if isinstance(action, str) and action.lower() in _FINISH_WORDS:
-        return "finish", ""
-    name = obj.get("tool") or obj.get("name")
-    if name is None and isinstance(action, str):
-        name = action
-    arguments = obj.get("arguments")
-    if arguments is None:
-        arguments = obj.get("args")
-    if isinstance(arguments, str):
+    function = call.get("function")
+    if not isinstance(function, dict):
+        return "", ""
+    name = function.get("name")
+    command = ""
+    raw = function.get("arguments")
+    if isinstance(raw, str) and raw:
         try:
-            arguments = json.loads(arguments)
+            arguments = json.loads(raw)
         except ValueError:
-            arguments = {"command": arguments}
-    command = arguments.get("command") if isinstance(arguments, dict) else None
-    if not isinstance(command, str):
-        command = obj.get("command") if isinstance(obj.get("command"), str) else None
-    if name is not None and name not in ("run_git", "run"):
-        return "unknown", str(name)
-    if command is None:
-        return None
-    return "tool", command
-
-
-def _extract_json_object(text: str) -> dict | None:
-    """The first JSON object in `text`, tolerating prose and code fences.
-
-    Models wrap their action in explanation or a ```json fence; a baseline that
-    could not read that would be crippled by formatting rather than reasoning.
-    Scanning for a balanced object means one stray brace in prose does not
-    discard an otherwise valid action.
-    """
-    direct = _try_load(text.strip())
-    if direct is not None:
-        return direct
-    for start, character in enumerate(text):
-        if character != "{":
-            continue
-        end = _matching_brace(text, start)
-        if end is None:
-            continue
-        parsed = _try_load(text[start : end + 1])
-        if parsed is not None:
-            return parsed
-    return None
-
-
-def _matching_brace(text: str, start: int) -> int | None:
-    """Index of the `}` closing the `{` at `start`, ignoring braces in strings."""
-    depth = 0
-    in_string = False
-    escaped = False
-    for index in range(start, len(text)):
-        character = text[index]
-        if in_string:
-            if escaped:
-                escaped = False
-            elif character == "\\":
-                escaped = True
-            elif character == '"':
-                in_string = False
-            continue
-        if character == '"':
-            in_string = True
-        elif character == "{":
-            depth += 1
-        elif character == "}":
-            depth -= 1
-            if depth == 0:
-                return index
-    return None
-
-
-def _try_load(text: str) -> dict | None:
-    try:
-        value = json.loads(text)
-    except ValueError:
-        return None
-    return value if isinstance(value, dict) else None
+            arguments = None
+        if isinstance(arguments, dict) and isinstance(arguments.get("command"), str):
+            command = arguments["command"]
+    return name if isinstance(name, str) else "", command
