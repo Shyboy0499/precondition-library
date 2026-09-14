@@ -22,6 +22,10 @@ class FakeProvider:
     Satisfies the Protocol structurally -- no network, no key. `react.py` and
     `compile.py` are both tested against it, so it lives here rather than in one
     test file. Deliberately small: anything clever would need its own tests.
+
+    A queued `Completion` may carry `tool_calls` instead of (or as well as) text,
+    and the fake returns it unchanged, so a scripted turn can drive the
+    structured function-calling path exactly as a live response would.
     """
 
     def __init__(self, *completions: Completion, raises: Exception | None = None) -> None:

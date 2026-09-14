@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 DEFAULT_MODEL = "deepseek-chat"
 """The model the spec uses (design doc §5 provenance, §7 ledger `model`)."""
@@ -35,7 +35,15 @@ class TokenUsage(BaseModel):
 
 
 class Completion(BaseModel):
-    text: str
+    text: str = ""
+    """The assistant's prose. Legitimately empty when the model answers with a
+    tool call rather than text, so it is not a field a caller may assume is set."""
+
+    tool_calls: list[dict] = Field(default_factory=list)
+    """The API's own `tool_calls` list, passed through unreshaped. Empty when the
+    model answered with prose. A function call's `arguments` stays a JSON string,
+    exactly as the API wrote it, so a caller that needs the command decodes it."""
+
     usage: TokenUsage
     model: str
     llm_calls: int = 1
@@ -134,18 +142,37 @@ class DeepSeekProvider:
         raise rather than fall back to zeros. A silently-zeroed usage would
         enter the ledger as "this episode was free", which corrupts the one
         measurement this project exists to report.
+
+        `content` and `tool_calls` are the exception to that strictness. A model
+        answering with a tool call sends `"content": null` and a populated
+        `tool_calls`, so the contract is that a message carries one or the other,
+        not that it carries text. `tool_calls` is passed through exactly as the
+        API wrote it -- including the JSON-string `arguments` -- because the
+        caller, not this client, knows how to read it.
         """
         try:
             body = response.json()
-            content = body["choices"][0]["message"]["content"]
+            message = body["choices"][0]["message"]
             usage = body["usage"]
             tokens_in = usage["prompt_tokens"]
             tokens_out = usage["completion_tokens"]
         except (KeyError, IndexError, TypeError, ValueError) as exc:
             raise ProviderError(f"malformed DeepSeek completion response: {exc!r}") from exc
 
+        if not isinstance(message, dict):
+            raise ProviderError(f"malformed DeepSeek completion response: message={message!r}")
+        text = message.get("content")
+        tool_calls = message.get("tool_calls") or []
+        if not isinstance(tool_calls, list) or (text is not None and not isinstance(text, str)):
+            raise ProviderError(f"malformed DeepSeek completion response: {message!r}")
+        if not text and not tool_calls:
+            raise ProviderError(
+                "malformed DeepSeek completion response: message has neither content nor tool_calls"
+            )
+
         return Completion(
-            text=content,
+            text=text or "",
+            tool_calls=tool_calls,
             usage=TokenUsage(
                 tokens_in=tokens_in,
                 tokens_out=tokens_out,

@@ -3,19 +3,23 @@
 Everything here is offline. The model is `FakeProvider`, which returns queued
 completions and records every call; the environment is a real `dirty_tree`
 sandbox with the pinned git environment; the verdict comes from the fault's own
-checker and is never consulted by `solve`.
+checker and is never consulted by `solve`. Each scripted turn drives the
+structured tool-call path -- a `Completion` carrying API-shaped `tool_calls`,
+not JSON parsed out of text.
 
 The two negative controls are the point. A baseline that cannot solve the fault
 would make the arm comparison empty, so one test scripts the commands that
 genuinely resolve it and requires the checker to pass. A baseline that stopped
 on the ground-truth checker would be reporting the oracle's verdict rather than
 the agent's, so another test scripts a model that inspects the tree, declares
-itself finished, and fixes nothing, and requires `solve` to both stop on that
-declaration and return a non-SUCCESS outcome while the checker still says no.
+itself finished, and fixes nothing, and requires `solve` to stop on that
+declaration with `SUCCESS` while the checker still says not-ok -- the
+successful-but-uncorrect quadrant, asserted in both halves.
 """
 
 from __future__ import annotations
 
+import itertools
 import json
 
 import pytest
@@ -34,19 +38,34 @@ from precondition_library.tasks.faults.dirty_tree import SPEC
 SEEDS = [0, 3]
 MODIFIED_ONLY = 0
 
+_CALL_IDS = itertools.count(1)
 
-def _completion(action: dict) -> Completion:
+
+def _tool_call(command: str) -> dict:
+    """One API-shaped tool call, as it arrives on `Completion.tool_calls`."""
+    return {
+        "id": f"call_{next(_CALL_IDS)}",
+        "type": "function",
+        "function": {"name": "run_git", "arguments": json.dumps({"command": command})},
+    }
+
+
+def _completion(*, text: str = "", tool_calls: list[dict] | None = None) -> Completion:
     return Completion(
-        text=json.dumps(action), usage=TokenUsage(tokens_in=10, tokens_out=5), model="fake"
+        text=text,
+        tool_calls=tool_calls or [],
+        usage=TokenUsage(tokens_in=10, tokens_out=5),
+        model="fake",
     )
 
 
 def _tool(command: str) -> Completion:
-    return _completion({"tool": "run_git", "arguments": {"command": command}})
+    return _completion(tool_calls=[_tool_call(command)])
 
 
-def _finish() -> Completion:
-    return _completion({"done": True})
+def _finish(text: str = "done") -> Completion:
+    """A turn with no tool call: the model's declaration that it is finished."""
+    return _completion(text=text)
 
 
 def _signature(box: Sandbox, seed: int = MODIFIED_ONLY) -> TaskSignature:
@@ -74,7 +93,8 @@ def make_sandbox():
 
 
 def test_loop_runs_a_tool_and_finishes(make_sandbox) -> None:
-    """One command, then a declaration: the transcript records both, in order."""
+    """One command, then a declaration: the transcript records both, in order,
+    with the call kept in the API's own shape."""
     box = make_sandbox()
     fake = FakeProvider(_tool("git status --porcelain"), _finish())
     _, transcript = solve(_signature(box), box, fake)
@@ -88,9 +108,10 @@ def test_loop_runs_a_tool_and_finishes(make_sandbox) -> None:
     ]
     assert transcript[0]["content"] == SYSTEM_PROMPT
     assert transcript[1]["content"] == SPEC.task_text(MODIFIED_ONLY)
-    call = transcript[2]["tool_call"]
-    assert call["name"] == "run_git"
-    assert call["arguments"]["command"] == "git status --porcelain"
+    call = transcript[2]["tool_calls"][0]
+    assert call["function"]["name"] == "run_git"
+    assert json.loads(call["function"]["arguments"])["command"] == "git status --porcelain"
+    assert transcript[3]["tool_call_id"] == call["id"]
     assert transcript[3]["command"] == "git status --porcelain"
     assert transcript[3]["ok"] is True
     assert transcript[3]["content"].startswith("exit code: 0")
@@ -100,20 +121,37 @@ def test_loop_runs_a_tool_and_finishes(make_sandbox) -> None:
     assert fake.calls[0]["tools"] == available_tools()
 
 
+def test_tool_results_are_answered_as_tool_messages(make_sandbox) -> None:
+    """The next request must answer the call in the native shape: the assistant
+    turn carries its `tool_calls` and the result is a `role: "tool"` message
+    keyed by `tool_call_id`. A text-protocol `user` message would leave the call
+    unanswered, which the API rejects."""
+    box = make_sandbox()
+    fake = FakeProvider(_tool("git status --porcelain"), _finish())
+    solve(_signature(box), box, fake)
+
+    sent = fake.calls[1]["messages"]
+    assert [message["role"] for message in sent] == ["user", "assistant", "tool"]
+    assert sent[1]["tool_calls"][0]["function"]["name"] == "run_git"
+    assert sent[2]["tool_call_id"] == sent[1]["tool_calls"][0]["id"]
+
+
 def test_a_claim_of_finish_is_not_a_pass(make_sandbox) -> None:
     """The stopping-rule control: declaring done ends the loop, it does not grade it.
 
     The scripted model looks at the tree and declares itself finished while the
     fault is untouched. `solve` must stop on the declaration (last turn is
-    `done`, and no checker was consulted -- none is imported here) and return a
-    non-SUCCESS outcome; the independent checker must still say not-ok. A solve
-    that stopped on the checker would be reporting the oracle.
+    `done`, and no checker was consulted -- none is imported here) and report
+    `SUCCESS`, because its mechanism completed as designed. The independent
+    checker must still say not-ok. Asserting both halves together is the point:
+    that is exactly the successful-but-uncorrect row the ledger exists to
+    express. A solve that stopped on the checker would be reporting the oracle.
     """
     box = make_sandbox()
     fake = FakeProvider(_tool("git status --porcelain"), _finish())
     outcome, transcript = solve(_signature(box), box, fake)
 
-    assert outcome is not EpisodeOutcome.SUCCESS
+    assert outcome is EpisodeOutcome.SUCCESS
     assert transcript[-1]["done"] is True
     assert len(fake.calls) == 2
     result = SPEC.check(box)
@@ -137,8 +175,9 @@ def test_scripted_commands_genuinely_resolve_the_fault(seed: int, make_sandbox) 
         _tool("git stash pop"),
         _finish(),
     )
-    _, transcript = solve(_signature(box, seed), box, fake)
+    outcome, transcript = solve(_signature(box, seed), box, fake)
 
+    assert outcome is EpisodeOutcome.SUCCESS
     assert len(fake.calls) == 5
     tool_entries = [entry for entry in transcript if entry["role"] == "tool"]
     assert len(tool_entries) == 4
