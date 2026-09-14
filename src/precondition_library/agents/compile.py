@@ -29,12 +29,8 @@ from pydantic import BaseModel, Field, ValidationError
 from .. import __version__
 from ..program import Program, ProgramStatus, Provenance
 from ..provider import Provider, TokenUsage
-from ..runtime.probes import evaluate_predicate
-
-# `_bindings` is the runtime's fixed sandbox vocabulary, and admission must bind
-# probes exactly as a replay does -- a second copy here would eventually
-# disagree with `runtime.replay` about what "the probe held" means.
-from ..runtime.replay import _bindings, replay
+from ..runtime.probes import evaluate_preconditions
+from ..runtime.replay import replay
 from ..sandbox import create
 from ..tasks.faults import FAULTS
 from ..tasks.spec import FaultSpec
@@ -226,14 +222,12 @@ def admit(program: Program, fault: FaultSpec | str, *, seeds: list[int]) -> tupl
 def _preconditions_hold(program: Program, env) -> bool:
     """Whether every precondition accepts `env`. Runs probes only, no model.
 
-    This is the same `evaluate_predicate` a replay uses for postconditions, so
-    admission and the dispatch arms cannot disagree about what "the probe held"
-    means.
+    Delegates to `runtime.probes.evaluate_preconditions`, which is also what arm
+    3's matcher calls, so admission and dispatch cannot disagree about what "the
+    preconditions held" means. Only the boolean is used here; the `detail` and
+    per-predicate results belong to a dispatch rejection.
     """
-    parameters = _bindings(env)
-    return all(
-        evaluate_predicate(predicate, env, parameters).ok for predicate in program.preconditions
-    )
+    return evaluate_preconditions(program, env).ok
 
 
 def _parse_document(text: str) -> dict[str, Any] | None:

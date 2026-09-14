@@ -123,9 +123,7 @@ DECLARED_STUBS: dict[str, str] = {
     "precondition_library.bench.report.write_report": "#5",
     "precondition_library.bench.run.run_benchmark": "#5",
     "precondition_library.bench.run.run_episode": "#5",
-    "precondition_library.library.Library.match_preconditions": "#5",
     "precondition_library.library.Library.match_semantic": "#5",
-    "precondition_library.program.Program.applicable": "#5",
     # The admission path (issue #4) is the first caller that needs a dry run.
     "precondition_library.runtime.guard.prepare_dry_run": "#4",
     # Not pending work: the base contract. Every fault overrides these, so the

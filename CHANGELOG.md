@@ -12,6 +12,15 @@ measured result; there are none yet. See
 
 ### Added
 
+- Arm 3's dispatch (`library.py`, `runtime/probes.py`): `Library.match_preconditions`
+  returns the `admitted` programs whose executable preconditions all accept the
+  environment, most-specific first by precondition count, and `[]` when nothing
+  matches, which is the fallback path rather than an error. Evaluation lives in
+  `runtime.probes.evaluate_preconditions`, shared with admission so the gate and
+  the matcher cannot disagree about what "the preconditions held" means, and the
+  sandbox parameter binding moved there from `replay` for the same reason.
+  `Program.applicable` was deleted rather than implemented: `program.py` declares
+  itself data-only, and running a probe is I/O.
 - `tests/test_declared_state.py`: every stub and every skipped test is declared and
   asserted against the code, so implementing one fails CI until the declaration and
   the prose that restated it are updated. Four status claims are pinned to the facts

@@ -85,10 +85,6 @@ class Program(BaseModel):
     provenance: Provenance
     status: ProgramStatus = ProgramStatus.CANDIDATE
 
-    def applicable(self, env) -> bool:
-        """True when every precondition holds. Runs probes only, no LLM."""
-        raise NotImplementedError("implemented per plan: phases 2-3")
-
 
 class PredicateResult(BaseModel):
     """One predicate's verdict, kept individually so a failure is diagnosable."""
