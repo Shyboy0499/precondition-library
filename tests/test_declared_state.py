@@ -133,3 +133,63 @@ DECLARED_STUBS: dict[str, str] = {
     "precondition_library.tasks.spec.FaultSpec.inject": "abstract placeholder",
     "precondition_library.tasks.spec.FaultSpec.task_text": "abstract placeholder",
 }
+
+
+def _is_skip_decorator(decorator: ast.expr) -> bool:
+    """True for a `pytest.mark.skip(...)` decorator, in either call or bare form."""
+    call = decorator if isinstance(decorator, ast.Call) else None
+    target: ast.expr = call.func if call is not None else decorator
+    return (
+        isinstance(target, ast.Attribute)
+        and target.attr == "skip"
+        and isinstance(target.value, ast.Attribute)
+        and target.value.attr == "mark"
+    )
+
+
+def _skip_reason(decorator: ast.expr) -> str:
+    if not isinstance(decorator, ast.Call):
+        return ""
+    for keyword in decorator.keywords:
+        if keyword.arg == "reason" and isinstance(keyword.value, ast.Constant):
+            return str(keyword.value.value)
+    return ""
+
+
+def skips() -> dict[str, str]:
+    """{file::function: reason} for every test carrying a skip decorator.
+
+    Decorators only. `pytest.skip()` called inside a body is invisible here, which
+    is a real gap -- which is why the declared set is asserted rather than a count.
+    """
+    found: dict[str, str] = {}
+    for path in sorted(TESTS.rglob("test_*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            for decorator in node.decorator_list:
+                if _is_skip_decorator(decorator):
+                    found[f"{path.name}::{node.name}"] = _skip_reason(decorator)
+    return found
+
+
+def test_every_skip_is_declared_and_actionable() -> None:
+    """Each skip is declared, and each reason says what will remove it.
+
+    A skip is a claim that something cannot run yet. A claim with no issue behind it
+    is a claim nobody has agreed to discharge.
+    """
+    actual = skips()
+    assert set(actual) == set(DECLARED_SKIPS), (
+        f"\nactual:   {sorted(actual)}\ndeclared: {sorted(DECLARED_SKIPS)}"
+    )
+    for node_id, reason in actual.items():
+        assert "#" in reason, f"{node_id}: reason must name the issue that removes it"
+
+
+DECLARED_SKIPS: dict[str, str] = {
+    # Two functions, each parametrised over every fault: ten skips in the report.
+    "test_checkers_against_gold.py::test_checker_accepts_gold_solution": "#9",
+    "test_checkers_against_gold.py::test_checker_rejects_untouched_sandbox": "#9",
+}
