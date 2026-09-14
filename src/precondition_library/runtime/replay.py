@@ -25,7 +25,7 @@ from pydantic import BaseModel
 from ..program import GroundTruthResult, Program
 from ..sandbox import Sandbox, git_env
 from .guard import Verdict, screen
-from .probes import SHELL, evaluate_predicate, substitute
+from .probes import SHELL, bindings, evaluate_predicate, substitute
 
 
 class ReplayResult(BaseModel):
@@ -54,27 +54,9 @@ def _text(value: str | bytes | None) -> str:
     return value
 
 
-def _bindings(env: Sandbox) -> dict[str, str]:
-    """Values the sandbox supplies for the parameter names gold programs declare.
-
-    `sandbox.create` clones its only remote as `upstream` and seeds the branch
-    `main`, and the working clone is `env.work`. A program that declares a
-    parameter this mapping cannot bind is not replayable: the placeholder would
-    survive into the command text, and `substitute` raises rather than running a
-    different question. The binding is the sandbox's fixed vocabulary, not a
-    general mechanism; a fault that renamed the branch would need it derived
-    from the sandbox, which this runtime does not yet do.
-    """
-    return {
-        "work_dir": str(env.work),
-        "upstream_remote": "upstream",
-        "upstream_branch": "main",
-    }
-
-
 def check_postconditions(program: Program, env: Sandbox) -> GroundTruthResult:
     """Run the program's own postconditions. No model."""
-    parameters = _bindings(env)
+    parameters = bindings(env)
     predicates = [
         evaluate_predicate(predicate, env, parameters) for predicate in program.postconditions
     ]
@@ -108,7 +90,7 @@ def replay(program: Program, env: Sandbox, *, timeout_s: float = 60.0) -> Replay
             reason=f"guard {decision.reason}",
         )
 
-    body = substitute(program.body, _bindings(env))
+    body = substitute(program.body, bindings(env))
     run_env = git_env()
     # Structural mitigation from the safety spec: `~` resolves inside the
     # sandbox, so a credential read through `~` lands on nothing. The guard

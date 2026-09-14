@@ -5,10 +5,11 @@ Storage is implemented here: `library/<program-id>/program.yaml` plus a
 digest `library_hash()` belongs beside it because issue #4 requires every ledger
 row to record which frozen library its episode ran against.
 
-The two dispatch strategies are **not** implemented here yet:
-`match_semantic` and `match_preconditions` are the ablation's two arms, and the
-design requires them to differ in exactly one function, decided in the next task.
-They remain stubs that raise.
+Of the ablation's two dispatch strategies, `match_preconditions` (arm 3) is
+implemented here; `match_semantic` (arm 2) remains a stub that raises, because
+its representation and similarity threshold are a separate task. They are two
+functions at one seam -- both take a `TaskSignature` and return programs -- so
+the arms differ in which function is called and nothing else.
 
 Admission is implemented in `agents.compile`, not here. This module's docstring
 once implied otherwise; the safety gate reads a program's probes, runs it in a
@@ -25,6 +26,9 @@ from pathlib import Path
 import yaml
 
 from .program import Program, ProgramStatus
+from .runtime.probes import evaluate_preconditions
+from .sandbox import Sandbox
+from .signatures import TaskSignature
 
 
 class _ProgramDumper(yaml.SafeDumper):
@@ -170,17 +174,41 @@ class Library:
     def match_semantic(self, signature, *, limit: int = 3) -> list[Program]:
         """Arm 2. Rank by embedding similarity of intent; no state awareness.
 
-        Stub: the ablation decides this function and `match_preconditions` in the
-        next task, and they must differ in exactly one function.
+        Stub: arm 2's representation and similarity threshold are a separate
+        task, deliberately not implemented beside `match_preconditions`, so the
+        two matchers stay independently reviewable.
         """
         raise NotImplementedError("implemented per plan: phase 2")
 
-    def match_preconditions(self, signature, env) -> list[Program]:
-        """Arm 3. Return only programs whose preconditions accept `env`.
+    def match_preconditions(self, signature: TaskSignature, env: Sandbox) -> list[Program]:
+        """Arm 3. Programs whose executable preconditions all accept `env`.
 
-        Stub: see `match_semantic`.
+        Eligibility is `admitted` and nothing else. `library/README.md` rule 1
+        makes dispatching a `candidate`, `demoted` or `quarantined` program a
+        violation of a safety property this repository states, so a matcher that
+        returned those as "candidates for later filtering" would depend on every
+        caller remembering the rule. `[]` is the fallback path -- the caller
+        records it as `EpisodeOutcome.FALLBACK`, not an error.
+
+        Ordered most-specific-first by precondition count, with the id as a
+        tie-break so equally specific programs come back in a stable order. A
+        program with more preconditions has accepted a narrower state, so a
+        general program cannot shadow a targeted one; ordering by the library's
+        directory order would let it.
+
+        `signature` is deliberately not consulted. Arm 3's identity is that the
+        *environment* decides, not the request text: ranking by the intent would
+        make it arm 2 under another name, and the ablation would compare two
+        matchers that read the same signal. The parameter is kept because both
+        arms are called at the same seam.
         """
-        raise NotImplementedError("implemented per plan: phase 2")
+        accepted = [
+            program
+            for program in self.load_all()
+            if program.status is ProgramStatus.ADMITTED and evaluate_preconditions(program, env).ok
+        ]
+        accepted.sort(key=lambda program: (-len(program.preconditions), program.id))
+        return accepted
 
     def _load(self, program_id: str) -> Program:
         path = self.root / program_id / "program.yaml"

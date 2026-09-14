@@ -2,10 +2,15 @@
 
 A `Predicate` is a shell probe plus a name and an expectation. This module is the
 single place that turns one into a `PredicateResult`: `replay` uses it for
-postconditions today, and the dispatch arms will use it for preconditions later.
-It lives on its own rather than inside `replay` because admission and dispatch
-must agree exactly on what "the probe held" means, and two copies would
-eventually disagree.
+postconditions, and admission and arm 3's dispatch use it for preconditions. It
+lives on its own rather than inside `replay` because admission and dispatch must
+agree exactly on what "the probe held" means, and two copies would eventually
+disagree.
+
+`bindings` also lives here despite once living in `replay`: a body and a probe are
+substituted from the same fixed sandbox vocabulary, and a replay that bound
+`{upstream}` differently from dispatch would make the ablation measure the
+disagreement between two definitions rather than the two matchers.
 
 Substitution is deliberately minimal -- `{name}` is replaced with the bound
 value and nothing else about the string is interpreted, because a probe is a
@@ -24,7 +29,7 @@ from __future__ import annotations
 import re
 import subprocess
 
-from ..program import Predicate, PredicateResult
+from ..program import GroundTruthResult, Predicate, PredicateResult, Program
 from ..sandbox import Sandbox, git_env
 
 # A `{name}` placeholder, but not `${name}`: the latter is a shell variable
@@ -104,3 +109,58 @@ def evaluate_predicate(
     elif not ok:
         observed += f"; stdout={_excerpt(completed.stdout)!r} stderr={_excerpt(completed.stderr)!r}"
     return PredicateResult(name=predicate.name, ok=ok, observed=observed)
+
+
+def bindings(env: Sandbox) -> dict[str, str]:
+    """Values the sandbox supplies for the parameter names gold programs declare.
+
+    `sandbox.create` clones its only remote as `upstream` and seeds the branch
+    `main`, and the working clone is `env.work`. A program that declares a
+    parameter this mapping cannot bind is not replayable: the placeholder would
+    survive into the command text, and `substitute` raises rather than running a
+    different question. The binding is the sandbox's fixed vocabulary, not a
+    general mechanism; a fault that renamed the branch would need it derived
+    from the sandbox, which this runtime does not yet do.
+
+    Public and shared because a probe and a body are substituted from this one
+    mapping. A second copy in a caller is how replay and dispatch would come to
+    disagree about what `{upstream_branch}` means, which would show up in the
+    ablation as a difference between the arms.
+    """
+    return {
+        "work_dir": str(env.work),
+        "upstream_remote": "upstream",
+        "upstream_branch": "main",
+    }
+
+
+def evaluate_preconditions(
+    program: Program,
+    env: Sandbox,
+    *,
+    timeout_s: float = 30.0,
+) -> GroundTruthResult:
+    """Run every precondition of `program` against `env`. No model.
+
+    This is arm 3's whole question and admission's negative side, asked through
+    one function so the two cannot disagree about what "the preconditions held"
+    means. Each `PredicateResult` is kept, so a rejection names the precondition
+    that failed and what it observed instead of collapsing to a bool a mismatch
+    policy cannot diagnose.
+
+    Every predicate runs even after one has failed. Short-circuiting would save
+    a subprocess that is already this cheap, and in exchange the `detail` would
+    depend on the order the preconditions happen to be stored in.
+    """
+    parameters = bindings(env)
+    predicates = [
+        evaluate_predicate(predicate, env, parameters, timeout_s=timeout_s)
+        for predicate in program.preconditions
+    ]
+    failed = [result for result in predicates if not result.ok]
+    detail = (
+        "; ".join(f"{result.name}: {result.observed}" for result in failed)
+        if failed
+        else f"all {len(predicates)} precondition(s) held"
+    )
+    return GroundTruthResult(ok=not failed, detail=detail, predicates=predicates)
