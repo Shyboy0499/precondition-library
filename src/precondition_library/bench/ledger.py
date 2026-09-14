@@ -12,10 +12,11 @@ Nothing in this module computes results; that is `bench.report`'s job.
 
 from __future__ import annotations
 
+import json
 from enum import StrEnum
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from ..program import EpisodeOutcome
 
@@ -96,12 +97,58 @@ class EpisodeRecord(BaseModel):
         return self.ground_truth_ok is True
 
 
+class LedgerCorruptError(ValueError):
+    """A ledger line could not be parsed back into an episode.
+
+    Dedicated so a caller can tell a corrupt ledger from a missing file: a
+    missing ledger raises `FileNotFoundError`, this raises for a ledger that
+    exists but has a line that is not a record. It is never raised for a *skip*;
+    the alternative -- dropping the line and returning the rest -- would remove
+    an episode from every denominator silently, which is the accounting this
+    module exists to keep intact.
+    """
+
+
 def append(path: Path, record: EpisodeRecord) -> None:
     """Append one episode. Must be crash-safe: a killed run should still leave
-    every completed episode on disk, since episodes are expensive to reproduce."""
-    raise NotImplementedError("implemented per plan: phase 1")
+    every completed episode on disk, since episodes are expensive to reproduce.
+
+    Serialisation is pydantic's own (`model_dump_json`), so enums and `None`
+    round-trip and the line stays flat and greppable. The line is written and
+    flushed to the operating system before this returns: a write still sitting
+    in Python's buffer when the process dies would lose an episode that was
+    reported as recorded, which is the one failure this file cannot absorb.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(record.model_dump_json())
+        handle.write("\n")
+        handle.flush()
 
 
 def read(path: Path) -> list[EpisodeRecord]:
-    """Read the ledger back. Malformed trailing lines are reported, not skipped."""
-    raise NotImplementedError("implemented per plan: phase 1")
+    """Read the ledger back. Malformed trailing lines are reported, not skipped.
+
+    A missing file is left to raise `FileNotFoundError`. Any line that is not a
+    record raises `LedgerCorruptError`, naming the line number and its content:
+    the realistic cause is a crash mid-write, which tears only the last line and
+    leaves every complete record above it intact. The list is returned whole or
+    not at all -- a partial list would silently shrink the denominators.
+    """
+    lines = path.read_text(encoding="utf-8").split("\n")
+    if lines and lines[-1] == "":
+        # The file ends with a newline, so the final split element is the
+        # empty string after it, not a line.
+        lines.pop()
+    records: list[EpisodeRecord] = []
+    for number, line in enumerate(lines, start=1):
+        try:
+            records.append(EpisodeRecord.model_validate_json(line))
+        except (ValidationError, json.JSONDecodeError) as error:
+            raise LedgerCorruptError(
+                f"{path}: line {number} is not a valid episode record, so the ledger "
+                f"is torn at that point. This is what a crash mid-write leaves behind: "
+                f"the {number - 1} complete record(s) above it are intact and readable. "
+                f"Line content: {line!r}"
+            ) from error
+    return records

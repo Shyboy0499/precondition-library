@@ -117,8 +117,6 @@ DECLARED_STUBS: dict[str, str] = {
     # The dispatch arms and the benchmark harness that runs them: issue #5.
     "precondition_library.agents.dispatch.dispatch_preconditions": "#5",
     "precondition_library.agents.dispatch.dispatch_semantic": "#5",
-    "precondition_library.bench.ledger.append": "#5",
-    "precondition_library.bench.ledger.read": "#5",
     "precondition_library.bench.report.ablation_table": "#5",
     "precondition_library.bench.report.cost_curve": "#5",
     "precondition_library.bench.report.mismatch_comparison": "#5",
