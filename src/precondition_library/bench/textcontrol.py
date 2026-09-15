@@ -48,6 +48,7 @@ import math
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
+from ..similarity import tokenize
 from .pairs import LabelledPair
 
 LEAKAGE_CEILING = 0.65
@@ -68,13 +69,9 @@ described neither regime.
 """
 
 
-def _tokens(text: str) -> list[str]:
-    return [token for token in "".join(c.lower() if c.isalnum() else " " for c in text).split()]
-
-
 def _counts(text: str) -> dict[str, int]:
     counts: dict[str, int] = {}
-    for token in _tokens(text):
+    for token in tokenize(text):
         counts[token] = counts.get(token, 0) + 1
     return counts
 
@@ -115,7 +112,7 @@ class TextOnlyClassifier:
         if len(classes) < 2:
             raise ValueError("need at least two classes to train a classifier")
         index = {label: position for position, label in enumerate(classes)}
-        vocabulary = sorted({token for text in texts for token in _tokens(text)})
+        vocabulary = sorted({token for text in texts for token in tokenize(text)})
         weights = {token: [0.0] * len(classes) for token in vocabulary}
         bias = [0.0] * len(classes)
 

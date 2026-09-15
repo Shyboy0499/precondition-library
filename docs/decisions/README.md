@@ -9,6 +9,7 @@ commit message is not a record.
 | ADR | status | decision |
 | --- | --- | --- |
 | [ADR-0001](ADR-0001-reframe-after-prior-art.md) | accepted | Re-center the project on the open measurement. Claim 1 dropped as prior art; Claim 2 narrowed to its empirical form; the primary metric moved to matched dispatch coverage. |
+| [ADR-0002](ADR-0002-similarity-dispatch-is-lexical.md) | accepted | Run arm 2 as deterministic lexical text similarity behind a `Similarity` seam, with an embedding model as the intended replacement. The claim compares preconditions against *text* similarity, not embeddings. |
 
 ## When to write one
 
