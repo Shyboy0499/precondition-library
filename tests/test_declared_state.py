@@ -114,9 +114,9 @@ def test_every_stub_is_declared() -> None:
 
 
 DECLARED_STUBS: dict[str, str] = {
-    # The dispatch arms and the benchmark harness that runs them: issue #5.
-    "precondition_library.agents.dispatch.dispatch_preconditions": "#5",
-    "precondition_library.agents.dispatch.dispatch_semantic": "#5",
+    # The benchmark harness that runs the arms: issue #5. The arms themselves
+    # left this list together, when both dispatch functions were implemented as
+    # single calls into their matchers (`agents/dispatch.py`).
     "precondition_library.bench.report.ablation_table": "#5",
     "precondition_library.bench.report.cost_curve": "#5",
     "precondition_library.bench.report.mismatch_comparison": "#5",
