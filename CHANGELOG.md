@@ -12,6 +12,13 @@ measured result; there are none yet. See
 
 ### Added
 
+- The two dispatch arms (`agents/dispatch.py`): `dispatch_semantic` (arm 2) and
+  `dispatch_preconditions` (arm 3) each call one matcher and return a shared
+  `Dispatch` record — the chosen program or `None`, the score when the mechanism
+  has one, and a reason. Deliberately trivial, because the arms must differ in
+  exactly one function: every arm-specific decision stays in `library.py` behind
+  the matcher, and a re-rank, a second filter or a score adjustment written here
+  would be logic only one arm gets, which §4 of the spec calls a failed design.
 - Arm 3's dispatch (`library.py`, `runtime/probes.py`): `Library.match_preconditions`
   returns the `admitted` programs whose executable preconditions all accept the
   environment, most-specific first by precondition count, and `[]` when nothing
