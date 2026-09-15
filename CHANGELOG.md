@@ -12,6 +12,19 @@ measured result; there are none yet. See
 
 ### Added
 
+- The episode runner (`bench/run.py`): `run_episode` takes one fault and seed end
+  to end — build a sandbox, inject, observe, let the arm act, grade with the
+  fault's own checker, and return one ledger row — and `run_benchmark` runs the
+  repeat structure, each arm from an empty library, occurrence by occurrence, so
+  the library accumulates the way it would in use. The three arms differ in one
+  place: arm 1 solves with the agent, arms 2 and 3 dispatch to a stored program
+  and fall back to solving, at full price, when none applies. An arm's token
+  spend is summed through a provider wrapper for the episode that incurred it,
+  compile included, so a replay records zero LLM calls — the cost model's
+  load-bearing invariant, asserted at the integration level with a provider that
+  records every call. `run_benchmark` refuses a fault in
+  `EXCLUDED_FROM_BENCHMARK` rather than skipping it, because a skipped fault
+  would shrink a denominator silently.
 - The two dispatch arms (`agents/dispatch.py`): `dispatch_semantic` (arm 2) and
   `dispatch_preconditions` (arm 3) each call one matcher and return a shared
   `Dispatch` record — the chosen program or `None`, the score when the mechanism
