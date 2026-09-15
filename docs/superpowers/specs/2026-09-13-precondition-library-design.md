@@ -12,6 +12,7 @@
 | 2 | 2026-09-13 | Reframed after a prior-art sweep and a hostile method review (see ADR-0001). Claim 1 dropped as a contribution; Claim 2 narrowed to its empirical form; Claim 3 added for the negative-sandbox admission criterion; the primary metric moved from episode-level to matched dispatch coverage. **Revised before any data was collected** — no episode has been run, so no analysis was chosen after seeing results. |
 | 3 | 2026-09-13 | The request text gains a declared informed/uninformed channel split, and the primary claim is scoped to the uninformed regime (where the construction fixes the AUC at 0.500); the gold resolutions land. `sync_fork_with_upstream` and `restore_submodule_state` are converted to state-decided intents; three of the five faults remain unconverted and are excluded from any dispatch measurement (issue #25). **Logged before any episode data existed** — no episode has been run, so no analysis was chosen after seeing results; the only measured figure so far is the informed text-control AUC reported in §3. |
 | 4 | 2026-09-14 | **Lifecycle correction, not a claim change.** A program that fails admission is stored as a `candidate` and its rejection reason recorded, not discarded; the §5 lifecycle diagram and the §8 degradation table said "not stored". Corrected to match `library.py` (which writes the candidate before the gate runs) and `library/README.md`; rejection is data the mismatch analysis needs. No measurement or claim is affected, and no number in this document changes as a result. |
+| 5 | 2026-09-15 | **Arm 2's mechanism is narrowed (ADR-0002).** The arm compares text by a deterministic lexical overlap behind a `Similarity` seam, not by an embedding; an embedding model is the intended replacement behind the same Protocol. Claim 2's wording follows — the comparison is against *text* similarity — and arm 2 is given the full representation (the intent plus the `StateFingerprint` rendered as text), per issue #4, so the ablation does not confound dispatch with representation. **Logged before any episode data existed** — no episode has been run, so no analysis was chosen after seeing results, and no number in this document changes. |
 
 ---
 
@@ -53,8 +54,8 @@ presented as a finding.
 
 **Claim 2 (primary, empirical form).** At **matched dispatch coverage**,
 executable-precondition dispatch is *expected* to mis-fire less often than
-embedding dispatch — a mis-fire being a program that runs, claims success, and did
-not — with mismatch logged independently of episode success. The mechanism is
+text-similarity dispatch — a mis-fire being a program that runs, claims success,
+and did not — with mismatch logged independently of episode success. The mechanism is
 classical; what has not been measured is the comparison. Whether the expectation
 holds is the open question: §7 pre-registers the analysis, §13 lists the works
 that bracket it without answering it, and **no result exists yet**. This is the
@@ -70,17 +71,17 @@ against an otherwise identical positive-only gate.
 
 The claim structure changed because the original primary claim was untestable as
 designed: with one fixed task sentence per fault, the task text *was* the
-ground-truth label, so embedding dispatch could not mis-fire by construction.
+ground-truth label, so similarity dispatch could not mis-fire by construction.
 Analysing it would have produced a number that looked like a result while
 measuring nothing.
 
 ### What would falsify this
 
 - **No difference at any coverage.** Then the finding is that executable
-  preconditions buy no dispatch accuracy over embeddings in this domain, and the
-  negative-sandbox admission factor (Claim 3) becomes the contribution.
+  preconditions buy no dispatch accuracy over text similarity in this domain, and
+  the negative-sandbox admission factor (Claim 3) becomes the contribution.
 - **The injected faults leak a marker.** If faults are recognisable from the task
-  text, semantic dispatch wins for the wrong reason. A phrasing that names a
+  text, similarity dispatch wins for the wrong reason. A phrasing that names a
   resolution is rejected directly (`test_no_phrasing_names_a_resolution` matches
   whole-word variant ids in both wording channels), which is the case the AUC gates
   cannot see: the uninformed AUC is fixed at 0.500 by construction whatever the
@@ -101,7 +102,7 @@ measuring nothing.
 
 ### Goals
 
-1. A falsifiable, measurable comparison between semantic and
+1. A falsifiable, measurable comparison between similarity and
    precondition-gated dispatch, with a baseline an unsympathetic reviewer
    accepts.
 2. A working agent that solves branchy git maintenance chores.
@@ -368,7 +369,7 @@ status: candidate            # not yet admitted; see the caveat below
 Preconditions are **shell probes**, not prose and not Python callables. Probes
 survive serialization into the committed library, are reviewable in a diff, and
 can be executed by the runtime without importing program code. A reviewer can
-verify a dispatch decision by hand, which would not be true of an embedding
+verify a dispatch decision by hand, which would not be true of a similarity
 score.
 
 Parameters keep one program applicable to many repositories: the library stores
@@ -482,9 +483,10 @@ fault-injection spec (§3), with ground truth kept in separate code from the
 admission postconditions (§6) and validated by two negative controls: a no-op
 agent must fail every fault, and a deliberately wrong program must fail too.
 
-A dispatch decision costs no LLM call — arm 3 evaluates predicates, arm 2 does one
-embedding lookup — so the pair count is chosen to make the comparison adequately
-powered rather than to fit a budget.
+A dispatch decision costs no LLM call — arm 3 evaluates predicates, arm 2 scores
+text similarity, lexical today and an embedding model behind the same seam
+tomorrow — so the pair count is chosen to make the comparison adequately powered
+rather than to fit a budget.
 
 **The episode loop is retained only as a demonstration, explicitly underpowered:**
 
@@ -697,7 +699,7 @@ claim.
 | | | swarm of tiny agents — cheap per run but high variance, and a positive result is hard to attribute to any mechanism |
 | | | memory-as-program — a real problem, but it needs long-horizon tasks that are themselves expensive to run |
 | comparison | three arms (react / semantic / precondition) | two arms (react vs precondition) — cheaper, but then Claim 2 has no control and a reviewer is right to say semantic dispatch was never given a fair shot |
-| dispatch mechanism | executable preconditions | embedding-only — no state awareness, and is *hypothesized* to mis-fire on structurally different environments that read alike; testing that hypothesis is what the benchmark is for |
+| dispatch mechanism | executable preconditions | text-similarity-only, lexical today with an embedding model behind the same seam as the intended replacement — it sees the state as words but cannot evaluate it, and is *hypothesized* to mis-fire on structurally different environments that read alike; testing that hypothesis is what the benchmark is for |
 | | | one monolithic growing program with a dispatcher — the most striking demo, but it rots, and it cannot ablate *which* mechanism helped |
 | domain | branchy git maintenance chores | synthetic benchmark suite — cleanest ablation, but produces an agent nobody uses and leaves "does this matter" unanswered; chores were chosen because correctness is free to check and the recurrence is real |
 | stack | standalone Python engine, own the loop | DSH plugin (TypeScript) — cannot ablate a loop the host owns; measuring loop cost from inside a tool is not possible |
@@ -711,11 +713,15 @@ claim.
 
 ### Open risks
 
-1. **Arm 2 may saturate.** A strong embedding model may make semantic dispatch
-   nearly as good as preconditions on five well-separated faults. If so, Claim 2
-   dies — and the design should add faults that are *phrased alike but
-   structurally different*, which is where embeddings should fail and probes
-   should not. Watch for this in phase 2, before the full run.
+1. **Arm 2 may saturate, or may be too weak to rank at all.** The arm scores
+   lexical overlap today, so its ceiling is surface form; whether that ceiling is
+   too low to rank the library is for the tune set to show, and a control arm
+   that scores almost nothing would flatter preconditions. A real embedding model
+   behind the same seam is the intended replacement, and a strong one may make
+   similarity dispatch nearly as good as preconditions on five well-separated
+   faults. If so, Claim 2 dies — and the design should add faults that are
+   *phrased alike but structurally different*, which is where embeddings should
+   fail and probes should not. Watch for this in phase 2, before the full run.
 2. **Compile cost may dominate.** If compiling costs as much as several ReAct
    episodes, amortization needs many recurrences. The crossover point is the
    honest result — but it should be checked early, since it determines whether
@@ -800,8 +806,8 @@ smaller figures.
 ### The hypothesis that survives
 
 **The hypothesis:** at matched dispatch coverage, executable-precondition dispatch
-will mis-fire less often than embedding dispatch, where mismatch is scored as an
-outcome orthogonal to episode success. The mechanism is 1972; **that comparison
+will mis-fire less often than text-similarity dispatch, where mismatch is scored as
+an outcome orthogonal to episode success. The mechanism is 1972; **that comparison
 has not been measured.** Running it is the intended contribution, and no result
 exists yet — this section describes a hypothesis and an intended output, not a
 finding.

@@ -13,11 +13,16 @@ from ..program import Program
 
 
 def dispatch_semantic(signature, lib: Library) -> Program | None:
-    """Arm 2: nearest program by intent embedding, above a similarity floor.
+    """Arm 2: the nearest program by text similarity, above a similarity floor.
 
-    The threshold is a tunable, and tuning it is a fair thing to do before
-    comparing arms — an untuned control arm would be a straw man. The chosen
-    threshold must be recorded in the ledger so the comparison stays auditable.
+    "Text similarity" is the mechanism the arm is run with (lexical today, an
+    embedding model behind the same seam as the intended replacement), and the
+    text compared is the intent plus the fingerprint rendered as words, not the
+    intent alone. The threshold is a tunable, and tuning it is a fair thing to do
+    before comparing arms — an untuned control arm would be a straw man. The
+    chosen threshold must be recorded in the ledger so the comparison stays
+    auditable. `Library.match_semantic` returns each program with its score, so
+    this function records a number it did not recompute.
     """
     raise NotImplementedError("implemented per plan: phase 2")
 

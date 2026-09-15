@@ -39,8 +39,8 @@ The mechanism is old. **The measurement is not.** No confirmed work runs this
 head-to-head:
 
 > **At matched dispatch coverage, does executable-precondition dispatch mis-fire
-> less often than embedding dispatch — where a mis-fire is a program that fires,
-> claims it succeeded, and did not?**
+> less often than text-similarity dispatch — where a mis-fire is a program that
+> fires, claims it succeeded, and did not?**
 
 Two published results bracket the question without answering it — one deployed
 gate and one benchmark:
@@ -72,7 +72,8 @@ The measurement moves to **dispatch level**:
   labelled (repo-state, candidate-program) pairs
         │
         ├─ arm 3 needs no LLM:    pure predicate evaluation
-        └─ arm 2 needs one embedding lookup
+        └─ arm 2 scores text similarity (lexical today; an embedding model
+                behind the same seam is the intended replacement)
         │
   both dispatchers sweep their acceptance threshold
         │
@@ -156,7 +157,7 @@ status: candidate   # admission has not run; nothing is replayable yet
 Probes are shell commands rather than Python callables for three reasons: they
 serialize into the committed library, they are reviewable in a diff, and the
 runtime can execute them without importing program code. A reviewer can verify a
-dispatch decision by hand — that would not be true of an embedding score.
+dispatch decision by hand — that would not be true of a similarity score.
 
 The YAML above is a shape, not a solution. The body in particular is not claimed
 correct: `git stash pop` after a rebase can conflict, and a real program would
@@ -184,10 +185,10 @@ reports success while being wrong.
 ## What would falsify this
 
 - **No difference at any coverage.** Then the honest finding is that executable
-  preconditions buy no dispatch accuracy over embeddings in this domain, and the
-  negative-sandbox admission factor becomes the whole contribution.
+  preconditions buy no dispatch accuracy over text similarity in this domain, and
+  the negative-sandbox admission factor becomes the whole contribution.
 - **The faults leak a marker.** If injected faults are recognisable from the task
-  text, semantic dispatch wins for the wrong reason. A phrasing that *names* a
+  text, similarity dispatch wins for the wrong reason. A phrasing that *names* a
   resolution is caught directly: `test_no_phrasing_names_a_resolution` rejects any
   whole-word variant id in either wording channel, which is precisely what the AUC
   gates cannot see — the uninformed one is fixed at 0.500 by construction, whatever
@@ -196,8 +197,8 @@ reports success while being wrong.
 - **Probes encode the answer.** If writing the precondition vocabulary requires
   the very knowledge being measured, the comparison is confounded by author
   effort rather than measured.
-- **Semantic dispatch is already good enough.** Falsifies the claim, and leaves
-  the benchmark as a null result with intervals attached — which is still a
+- **Text-similarity dispatch is already good enough.** Falsifies the claim, and
+  leaves the benchmark as a null result with intervals attached — which is still a
   publishable-shaped outcome, and the reason this design is cheap to falsify.
 
 ## Layout

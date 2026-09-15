@@ -1,15 +1,17 @@
 """The program library: storage on disk, and the two dispatch strategies.
 
-Storage is implemented here: `library/<program-id>/program.yaml` plus a
-`history.jsonl` of status changes, as `library/README.md` specifies. The
-digest `library_hash()` belongs beside it because issue #4 requires every ledger
-row to record which frozen library its episode ran against.
+Storage is `library/<program-id>/program.yaml` plus a `history.jsonl` of status
+changes, as `library/README.md` specifies. The digest `library_hash()` belongs
+beside it because issue #4 requires every ledger row to record which frozen
+library its episode ran against.
 
-Of the ablation's two dispatch strategies, `match_preconditions` (arm 3) is
-implemented here; `match_semantic` (arm 2) remains a stub that raises, because
-its representation and similarity threshold are a separate task. They are two
-functions at one seam -- both take a `TaskSignature` and return programs -- so
-the arms differ in which function is called and nothing else.
+The ablation's two dispatch strategies meet here, as two functions at one seam.
+`match_semantic` (arm 2) ranks admitted programs by how similar their text is to
+the request; `match_preconditions` (arm 3) returns the admitted programs whose
+executable preconditions accept the environment. The arms differ in which
+function is called and nothing else, so which *similarity function* arm 2 uses is
+chosen when a `Library` is constructed rather than inside either arm: lexical
+today, an embedding model behind the same `Similarity` Protocol tomorrow.
 
 Admission is implemented in `agents.compile`, not here. This module's docstring
 once implied otherwise; the safety gate reads a program's probes, runs it in a
@@ -21,6 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
@@ -29,6 +32,7 @@ from .program import Program, ProgramStatus
 from .runtime.probes import evaluate_preconditions
 from .sandbox import Sandbox
 from .signatures import TaskSignature
+from .similarity import Similarity, lexical_similarity
 
 
 class _ProgramDumper(yaml.SafeDumper):
@@ -75,11 +79,77 @@ def _canonical(program: Program) -> str:
     return json.dumps(program.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
 
 
+DEFAULT_SIMILARITY_THRESHOLD = 0.1
+"""Arm 2's default similarity floor.
+
+A parameter with a default rather than a value baked into the matcher, because
+the pre-registration requires arm 2's threshold to be tuned on the held-out tune
+seed set and the chosen value recorded per episode (`dispatch_score`). This
+default is a placeholder for a caller that has not tuned: a non-zero floor so an
+untuned arm cannot dispatch on a zero-overlap score. It is not a measured
+optimum and carries no result; the comparison runs on the tune-set value.
+"""
+
+
+@dataclass(frozen=True)
+class ScoredProgram:
+    """A dispatched program and the similarity that selected it.
+
+    The ledger has a `dispatch_score` field for arm 2, and returning the score
+    beside the program is what lets the episode runner record it without
+    re-running the ranking: a second scoring pass could disagree with the one
+    that actually chose the program, and the recorded number would then describe
+    a decision that was not made. Arm 3 returns bare programs because the spec
+    defines `dispatch_score` as `None` for every arm but this one.
+    """
+
+    program: Program
+    score: float
+
+
+def _program_text(program: Program) -> str:
+    """The text arm 2 compares a request against: a program's stated purpose.
+
+    Its `intent` and the descriptions of its pre- and postconditions -- the
+    English the library presents. The executable strings (`probe`, `body`) are
+    excluded because they are shell syntax, not meaning, and including them would
+    make part of the score a comparison of implementation style. `variant` is
+    excluded because it is the resolution's *label*: letting a program be found
+    by the name of the answer would put on the program side the very leak
+    `test_no_phrasing_names_a_resolution` forbids on the request side.
+    """
+    descriptions = [
+        predicate.description for predicate in [*program.preconditions, *program.postconditions]
+    ]
+    return " ".join([program.intent, *descriptions])
+
+
+def _query_text(signature: TaskSignature) -> str:
+    """The request arm 2 matches with: the intent plus the state as text.
+
+    Issue #4 requires arm 2 to receive the state, not just the request, so a
+    comparison against arm 3 measures the dispatch mechanism rather than a
+    difference in what each arm was shown. The fingerprint contributes only its
+    rendered words (`StateFingerprint.as_text`); arm 2 still cannot evaluate
+    them, which is the blindness the primary metric exists to see.
+    """
+    return f"{signature.intent}\n{signature.fingerprint.as_text()}"
+
+
 class Library:
     """Programs on disk under `library/`, committed as a research artifact."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, *, similarity: Similarity = lexical_similarity) -> None:
+        """Open the library at `root`, with arm 2's similarity function injected.
+
+        The injectable default is the seam the design requires: replacing lexical
+        overlap with an embedding model is `Library(root, similarity=embed)`, and
+        neither `match_semantic` nor the dispatcher that calls it changes. The
+        parameter is keyword-only so the seam cannot be set by accident through
+        the positional `root`.
+        """
         self.root = root
+        self.similarity = similarity
 
     def load_all(self) -> list[Program]:
         """Every stored program, sorted by id so the order is not filesystem luck."""
@@ -171,14 +241,49 @@ class Library:
             digest.update(b"\0")
         return digest.hexdigest()
 
-    def match_semantic(self, signature, *, limit: int = 3) -> list[Program]:
-        """Arm 2. Rank by embedding similarity of intent; no state awareness.
+    def match_semantic(
+        self,
+        signature: TaskSignature,
+        *,
+        limit: int = 3,
+        threshold: float = DEFAULT_SIMILARITY_THRESHOLD,
+    ) -> list[ScoredProgram]:
+        """Arm 2. Admitted programs ranked by text similarity to the request.
 
-        Stub: arm 2's representation and similarity threshold are a separate
-        task, deliberately not implemented beside `match_preconditions`, so the
-        two matchers stay independently reviewable.
+        The query is the signature's intent plus its fingerprint rendered as text
+        (`_query_text`), so both arms receive the same representation. The score
+        is whatever `self.similarity` computes -- lexical overlap by default, an
+        embedding model behind the same Protocol later -- and this method names
+        no mechanism of its own, so swapping the seam does not touch the arm.
+
+        Eligibility is `admitted` and nothing else, for the same reason
+        `match_preconditions` enforces it: `library/README.md` rule 1 makes
+        dispatching a `candidate`, `demoted` or `quarantined` program a violation
+        of a safety property this repository states, and arm 2 must not be the arm
+        that quietly breaks it.
+
+        `threshold` is an **inclusive** floor, so a threshold of 0.0 admits a
+        zero-overlap program and the caller can sweep down to "no floor".
+        `limit` caps the result. Ties break by program id, so the order does not
+        depend on storage order. `[]` is the fallback path -- the caller records
+        it as `EpisodeOutcome.FALLBACK`, not an error.
+
+        Arm 2's blindness lives here, not in its input: it sees the state only as
+        words, so it cannot check whether a program's preconditions hold. A
+        program whose probes would reject this environment is still returned when
+        its text is close enough, and that mis-fire is exactly the phenomenon the
+        primary metric counts. A test that made this matcher state-aware would be
+        testing a different experiment.
         """
-        raise NotImplementedError("implemented per plan: phase 2")
+        query = _query_text(signature)
+        scored = [
+            ScoredProgram(program=program, score=self.similarity(query, _program_text(program)))
+            for program in self.load_all()
+            if program.status is ProgramStatus.ADMITTED
+        ]
+        above = [item for item in scored if item.score >= threshold]
+        above.sort(key=lambda item: (-item.score, item.program.id))
+        return above[:limit]
 
     def match_preconditions(self, signature: TaskSignature, env: Sandbox) -> list[Program]:
         """Arm 3. Programs whose executable preconditions all accept `env`.

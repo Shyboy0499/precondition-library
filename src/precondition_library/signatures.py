@@ -2,12 +2,17 @@
 
 Two competing dispatch mechanisms consume these:
 
-  arm 2 (semantic)      compares `TaskSignature.intent` embeddings
+  arm 2 (similarity)    compares the intent and the fingerprint rendered as
+                        text (`StateFingerprint.as_text()`), scoring surface
+                        overlap only -- it cannot evaluate the fingerprint
   arm 3 (preconditions) runs `StateFingerprint` probes and lets each stored
                         Program decide applicability for itself
 
-The fingerprint is what stops arm 3 from being a rerun of arm 2: it describes
-the *environment*, not the request. Two tasks phrased identically against
+Arm 2 is given the state as text, not denied it: issue #4 requires both arms to
+receive the same full representation so the comparison measures the dispatch
+mechanism rather than a difference in what each arm was shown. The fingerprint is
+what stops arm 3 from being a rerun of arm 2: it describes the *environment*, not
+the request, and arm 3 can act on it. Two tasks phrased identically against
 structurally different repos must not resolve to the same program.
 """
 
@@ -18,6 +23,24 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from .sandbox import Sandbox, run_git
+
+
+def _render(value: object) -> str:
+    """One fingerprint field as text, spelled the same way every time.
+
+    Only the values the fingerprint already stores are rendered: booleans as
+    `true`/`false`, lists comma-separated in their stored order, and empty
+    values as `(none)` so a line is never blank. `str()` is the fallback rather
+    than a format string because a field added to the model must render without
+    this helper knowing about it.
+    """
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, list):
+        return ", ".join(str(item) for item in value) if value else "(none)"
+    if value == "":
+        return "(none)"
+    return str(value)
 
 
 def _has_locked_branch(work: Path, branch: str) -> bool:
@@ -161,6 +184,26 @@ class StateFingerprint(BaseModel):
             submodule_initialised=submodule_initialised,
             submodule_pin_matches_upstream=pin_matches,
             upstream_still_references_submodule=upstream_references,
+        )
+
+    def as_text(self) -> str:
+        """The fingerprint as stable, readable text -- arm 2's whole view of state.
+
+        This is part of arm 2's definition, not a formatting convenience: the arm
+        sees the environment only as these words. Field order is the declaration
+        order above, every time, so two renders of one state are byte-identical
+        and a lexical score cannot depend on iteration order; field names are
+        included because they are the words that carry the meaning ("dirty",
+        "upstream", "submodule").
+
+        Nothing outside the fingerprint is read. No probe is run and no git
+        command is issued, and no derived probe result is added: arm 2's real
+        blindness is that it cannot *evaluate* this text, so handing it a probe's
+        verdict would give it arm 3's mechanism and reduce the ablation to one
+        signal compared with itself.
+        """
+        return "\n".join(
+            f"{name}: {_render(getattr(self, name))}" for name in type(self).model_fields
         )
 
 
