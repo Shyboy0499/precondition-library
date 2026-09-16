@@ -136,7 +136,7 @@ def evaluate_predicate(
             cwd=env.work,
             capture_output=True,
             text=True,
-            env=git_env(),
+            env=git_env(home=env.root),
             timeout=timeout_s,
         )
     except subprocess.TimeoutExpired:

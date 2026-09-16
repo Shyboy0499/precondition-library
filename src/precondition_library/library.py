@@ -69,6 +69,18 @@ _TRANSITIONS: dict[ProgramStatus, frozenset[ProgramStatus]] = {
     ProgramStatus.QUARANTINED: frozenset(),
 }
 
+MISMATCHES_BEFORE_QUARANTINE = 2
+"""How many wrong fires withdraw a program from dispatch (spec §8).
+
+A single mismatch on a state whose postconditions fail already demotes the
+program, which withdraws it because both matchers return only `admitted`
+programs. This threshold covers the other, quieter failure: a program that fires
+the wrong resolution *and still satisfies its postconditions* -- `rebase` on a
+state that requires `merge` reaches a synced tree -- so it is never demoted and
+would otherwise mis-fire forever. The count is recorded in the program's
+`history.jsonl`, so the withdrawal names both episodes that caused it.
+"""
+
 
 def _canonical(program: Program) -> str:
     """One program's content as a stable string.
@@ -261,6 +273,51 @@ class Library:
             program_id, from_status=program.status, to_status=status, episode_id=episode_id
         )
 
+    def record_mismatch(self, program_id: str, *, episode_id: str | None = None) -> ProgramStatus:
+        """Count one wrong fire against a stored program; withdraw it at the cap.
+
+        Spec §8 says a program that mismatches twice is withdrawn from dispatch
+        and retained for analysis. The event is appended to the program's
+        `history.jsonl` -- the record the library already keeps, so the count is
+        durable and both causing episodes are named -- and once it reaches
+        `MISMATCHES_BEFORE_QUARANTINE` the program is moved to `quarantined`.
+        That transition is in `_TRANSITIONS` from `admitted` and `demoted`; a
+        program already quarantined is terminal and is left alone.
+
+        A program that returns a non-quarantined status has only been counted,
+        not withdrawn. The runner is the only caller: the ledger's `misfired` is
+        derived after the arm stops, so this cannot be decided inside dispatch.
+        """
+        program = self._load(program_id)
+        count = self.mismatch_count(program_id) + 1
+        self._append_mismatch_event(program_id, episode_id=episode_id, count=count)
+        if count >= MISMATCHES_BEFORE_QUARANTINE and (
+            ProgramStatus.QUARANTINED in _TRANSITIONS[program.status]
+        ):
+            self.set_status(program_id, ProgramStatus.QUARANTINED, episode_id=episode_id)
+            return ProgramStatus.QUARANTINED
+        return program.status
+
+    def mismatch_count(self, program_id: str) -> int:
+        """How many wrong fires `history.jsonl` records for `program_id`.
+
+        Read from the log rather than held in memory, so the count survives a
+        process boundary and a reader can reconstruct why a program was
+        withdrawn. A missing history file is zero, not an error: a program that
+        has never fired has no mismatches.
+        """
+        history = self.root / program_id / "history.jsonl"
+        if not history.is_file():
+            return 0
+        count = 0
+        for line in history.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            entry = json.loads(line)
+            if entry.get("event") == "mismatch":
+                count += 1
+        return count
+
     def library_hash(self) -> str:
         """A stable sha256 over every stored program's content.
 
@@ -438,5 +495,25 @@ class Library:
             # emitting the key unconditionally would change the shape of every
             # existing entry for no reader's benefit.
             entry["reason"] = reason
+        with (self.root / program_id / "history.jsonl").open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(entry, sort_keys=True) + "\n")
+
+    def _append_mismatch_event(
+        self, program_id: str, *, episode_id: str | None, count: int
+    ) -> None:
+        """Record one wrong fire in the program's history, without a status move.
+
+        A separate entry shape from `_append_history` because it is not a
+        transition: the program stays `admitted` until the cap is reached, and
+        writing a `from == to` status change would make a non-event look like a
+        lifecycle step. `event: mismatch` is what `mismatch_count` counts, so the
+        two cannot drift.
+        """
+        entry = {
+            "program_id": program_id,
+            "event": "mismatch",
+            "episode_id": episode_id,
+            "count": count,
+        }
         with (self.root / program_id / "history.jsonl").open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(entry, sort_keys=True) + "\n")

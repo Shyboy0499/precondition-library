@@ -91,11 +91,11 @@ def replay(program: Program, env: Sandbox, *, timeout_s: float = 60.0) -> Replay
         )
 
     body = substitute(program.body, bindings(env))
-    run_env = git_env()
-    # Structural mitigation from the safety spec: `~` resolves inside the
-    # sandbox, so a credential read through `~` lands on nothing. The guard
-    # still screens explicit paths; this only makes one class of miss harmless.
-    run_env["HOME"] = str(env.root)
+    # `git_env` inherits only the allowlisted variables (spec §9: the environment
+    # is scrubbed) and redirects `HOME` into the sandbox, so `~` resolves onto
+    # nothing a credential read could use. The guard still screens explicit
+    # paths; this only makes one class of miss harmless.
+    run_env = git_env(home=env.root)
 
     timed_out = False
     try:

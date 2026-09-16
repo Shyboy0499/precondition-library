@@ -53,7 +53,9 @@ class ProgramStatus(StrEnum):
                  not external validation, and the word would imply an assurance
                  the gate cannot confer.
     DEMOTED      fired on a real episode and its postconditions failed
-    QUARANTINED  withdrawn from dispatch; retained for analysis, never replayed
+    QUARANTINED  withdrawn from dispatch; retained for analysis, never replayed.
+                 Reached by a load-time variant violation, or by two recorded
+                 mismatches (spec §8)
     """
 
     CANDIDATE = "candidate"

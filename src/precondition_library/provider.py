@@ -56,8 +56,15 @@ class ProviderError(RuntimeError):
     Deliberately not retried here. Spec §8 gives retry policy to the caller
     ("no silent retries, no invisible costs"): a client that backs off on its
     own hides the spend of the failed attempts, and the ledger cannot record
-    what it cannot see.
+    what it cannot see. The caller is handed the facts it needs to decide:
+    `status_code` is the HTTP status when the failure was a response, and None
+    for a malformed body or a transport error, so a retry policy can be written
+    without parsing the message text.
     """
+
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class Provider(Protocol):
@@ -122,7 +129,8 @@ class DeepSeekProvider:
         if not response.is_success:
             raise ProviderError(
                 f"DeepSeek request failed with HTTP {response.status_code}: "
-                f"{self._error_message(response)}"
+                f"{self._error_message(response)}",
+                status_code=response.status_code,
             )
         return self._parse(response)
 

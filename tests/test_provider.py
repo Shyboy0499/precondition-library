@@ -156,6 +156,7 @@ def test_non_2xx_raises_with_status_and_api_message() -> None:
     message = str(excinfo.value)
     assert "429" in message
     assert "Rate limit exceeded" in message
+    assert excinfo.value.status_code == 429, "the caller's retry policy needs the status"
 
 
 def test_non_2xx_without_json_still_reports_status() -> None:
