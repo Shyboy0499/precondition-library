@@ -13,6 +13,7 @@
 | 3 | 2026-09-13 | The request text gains a declared informed/uninformed channel split, and the primary claim is scoped to the uninformed regime (where the construction fixes the AUC at 0.500); the gold resolutions land. `sync_fork_with_upstream` and `restore_submodule_state` are converted to state-decided intents; three of the five faults remain unconverted and are excluded from any dispatch measurement (issue #25). **Logged before any episode data existed** — no episode has been run, so no analysis was chosen after seeing results; the only measured figure so far is the informed text-control AUC reported in §3. |
 | 4 | 2026-09-14 | **Lifecycle correction, not a claim change.** A program that fails admission is stored as a `candidate` and its rejection reason recorded, not discarded; the §5 lifecycle diagram and the §8 degradation table said "not stored". Corrected to match `library.py` (which writes the candidate before the gate runs) and `library/README.md`; rejection is data the mismatch analysis needs. No measurement or claim is affected, and no number in this document changes as a result. |
 | 5 | 2026-09-15 | **Arm 2's mechanism is narrowed (ADR-0002).** The arm compares text by a deterministic lexical overlap behind a `Similarity` seam, not by an embedding; an embedding model is the intended replacement behind the same Protocol. Claim 2's wording follows — the comparison is against *text* similarity — and arm 2 is given the full representation (the intent plus the `StateFingerprint` rendered as text), per issue #4, so the ablation does not confound dispatch with representation. **Logged before any episode data existed** — no episode has been run, so no analysis was chosen after seeing results, and no number in this document changes. |
+| 6 | 2026-09-16 | **The seed split is made concrete, and the eval set is stated to be underpowered.** Items 2 and 5 required disjoint admit/tune/eval seeds but no seeds were defined anywhere; §7 now names them and fixes them in `bench/splits.py`. The eval set (40 seeds, 80 decisions) cannot support the primary matched-coverage comparison at a usable interval, so that claim requires the item 6 extension rather than being read off the first run. **Logged before any episode data existed** — no episode has been run, so no analysis was chosen after seeing results, and no number in this document changes. |
 
 ---
 
@@ -554,6 +555,58 @@ after seeing results.
    `invalid` and reported as a rate. **An invalid rate above 10% makes the run
    suspect**, and it is re-run rather than analysed — infrastructure flakiness
    that removes episodes non-randomly is indistinguishable from a real effect.
+
+#### The seed plan and the run invocation
+
+The split is fixed in `bench/splits.py` before any data exists, because a split
+chosen after seeing scores is not a split, and the ledger records `seed` on every
+row, so a reader must be able to tell which set an episode came from.
+
+```text
+smoke  0,1,2,4     4 seeds   shake out the pipeline; admit the programs (the admit set)
+tune   1000-1015   16 seeds  calibrate arm 2's similarity threshold (item 5)
+eval   2000-2039   40 seeds  the reported numbers
+```
+
+Only the two fault families with an ambiguous intent are measurable
+(`registry.ambiguous_intents()`); the other three are excluded from any dispatch
+measurement (issue #25). Each seed injects one state per measurable family, so a
+set of N seeds is N independent instances per family.
+
+**The eval set is too small to support the primary comparison as
+pre-registered.** Eighty decisions cannot put a usable Wilson interval around a
+mismatch difference at any but a very large effect size, so the interval from
+this set is expected to span zero and settle nothing. The primary claim therefore
+requires extending the pair count under the extension rule (item 6), and item 3's
+power statement cannot be made from this set alone. Forty seeds buy a first
+estimate and a check that the curve behaves as expected, not the result. The
+counts are what a run can pay for, not what the analysis wants.
+
+A run is invoked like this. The ledger goes outside the repository; the API key
+comes from the caller's environment and is never read by this repository
+(`provider.py` reads no environment variables and no files):
+
+```python
+import os
+from pathlib import Path
+
+from precondition_library.bench import run
+from precondition_library.bench.ledger import Arm
+from precondition_library.bench.splits import TUNE_SEEDS
+from precondition_library.provider import DeepSeekProvider
+from precondition_library.tasks.registry import ambiguous_intents
+
+provider = DeepSeekProvider(api_key=os.environ["DEEPSEEK_API_KEY"])
+run.run_benchmark(
+    arms=list(Arm),
+    faults=[intent.fault for intent in ambiguous_intents()],
+    occurrences=len(TUNE_SEEDS),
+    seeds=list(TUNE_SEEDS),
+    out=Path("/tmp/precondition-ledger.jsonl"),
+    model="deepseek-chat",
+    provider=provider,
+)
+```
 
 ---
 
