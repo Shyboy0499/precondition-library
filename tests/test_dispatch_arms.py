@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import get_type_hints
 
 import pytest
+from conftest import store_programs
 
 from precondition_library.agents.dispatch import (
     Dispatch,
@@ -26,7 +27,7 @@ from precondition_library.agents.dispatch import (
 from precondition_library.library import Library, ScoredProgram
 from precondition_library.program import Predicate, Program, ProgramStatus, Provenance
 from precondition_library.runtime.probes import evaluate_preconditions
-from precondition_library.sandbox import Sandbox, create
+from precondition_library.sandbox import Sandbox
 from precondition_library.signatures import StateFingerprint, TaskSignature
 
 INTENT = "reconcile local commits with upstream"
@@ -44,21 +45,6 @@ def _repository_is_untouched(repository_unchanged):
     work and still catches a leak.
     """
     yield
-
-
-@pytest.fixture
-def make_sandbox():
-    """Build faulted sandboxes and destroy them however the test ends."""
-    live: list[Sandbox] = []
-
-    def build(seed: int, faults: list[str]) -> Sandbox:
-        box = create(seed, faults)
-        live.append(box)
-        return box
-
-    yield build
-    for box in live:
-        box.destroy()
 
 
 def _fingerprint() -> StateFingerprint:
@@ -120,20 +106,6 @@ def _program(
     )
 
 
-def _store(tmp_path: Path, programs: list[Program]) -> Library:
-    """A library holding `programs` at the statuses they declare.
-
-    `Library.add` takes only a candidate, so each program is added as one and
-    then moved through the real transition table.
-    """
-    library = Library(tmp_path)
-    for program in programs:
-        library.add(program.model_copy(update={"status": ProgramStatus.CANDIDATE}))
-        if program.status is not ProgramStatus.CANDIDATE:
-            library.set_status(program.id, program.status)
-    return library
-
-
 def _discriminating(tmp_path: Path) -> Library:
     """Two admitted programs the two arms rank in opposite orders.
 
@@ -154,7 +126,7 @@ def _discriminating(tmp_path: Path) -> Library:
         descriptions=["the submodule is initialised", "the submodule pin matches upstream"],
         probes=[("has_checkout", "test -d .git"), ("has_head", "test -f .git/HEAD")],
     )
-    return _store(tmp_path, [general, specific])
+    return store_programs(tmp_path, [general, specific])
 
 
 class _CannedLibrary:
@@ -233,7 +205,7 @@ def test_both_arms_return_the_same_record_shape(make_sandbox, tmp_path) -> None:
         descriptions=["frosting and sprinkles"],
         probes=[("absent", "test -f definitely-not-here")],
     )
-    library = _store(tmp_path, [never])
+    library = store_programs(tmp_path, [never])
 
     semantic = dispatch_semantic(_signature(intent="xyzzy plugh"), library)
     preconditions = dispatch_preconditions(_signature(intent="xyzzy plugh"), library, box)
@@ -287,7 +259,7 @@ def test_no_admitted_program_reports_nothing_applies(make_sandbox, tmp_path) -> 
         probes=holds,
         status=ProgramStatus.QUARANTINED,
     )
-    library = _store(tmp_path, [candidate, quarantined])
+    library = store_programs(tmp_path, [candidate, quarantined])
 
     # Not vacuous: both are stored and either would apply if it were admitted.
     assert len(library.load_all()) == 2
@@ -316,7 +288,7 @@ def test_below_the_floor_or_rejected_reports_nothing_applies(make_sandbox, tmp_p
         descriptions=["frosting and sprinkles"],
         probes=[("absent", "test -f definitely-not-here")],
     )
-    library = _store(tmp_path, [unrelated])
+    library = store_programs(tmp_path, [unrelated])
     signature = _signature(intent="xyzzy plugh")
 
     # Not vacuous: each matcher really is empty, for the reason this test names.

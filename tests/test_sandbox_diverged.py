@@ -16,51 +16,23 @@ the user's work.
 from __future__ import annotations
 
 import subprocess
-from pathlib import Path
 
 import pytest
-import yaml
+from conftest import GOLD_CASES, gold_program
 
-from precondition_library.sandbox import Sandbox, create, git_env, run_git
+from precondition_library.sandbox import Sandbox, git_env, run_git
 from precondition_library.signatures import StateFingerprint
 from precondition_library.tasks.faults.diverged import INTENT, SPEC, STATE_VARIANT
 
-GOLD = Path(__file__).resolve().parents[1] / "bench" / "gold" / "sync_fork_with_upstream.yaml"
-
-# (seed, expected resolution). The seed is chosen because
-# `sample_index(seed, "diverged:inject", 3)` selects that injected state; the
-# resolution is the one `conftest.py`'s grid declares for the real-world
-# equivalent, so a mismatch here is a live repo disagreeing with the grid.
-CASES: dict[str, tuple[int, str]] = {
-    "empty_local_commits": (1, "discard"),
-    "disjoint_files": (2, "rebase"),
-    "overlapping_files": (0, "merge"),
-}
+# The seed in `GOLD_CASES` is chosen because `sample_index(seed,
+# "diverged:inject", 3)` selects that injected state; the resolution is the one
+# `conftest.py`'s grid declares for the real-world equivalent, so a mismatch here
+# is a live repo disagreeing with the grid.
+CASES = GOLD_CASES
 
 # The discard body is right for the empty state and wrong for the other two:
 # there it is the `reset --hard` that looks like success and loses work.
 DESTROYS_LOCAL_WORK = ["disjoint_files", "overlapping_files"]
-
-
-@pytest.fixture
-def make_sandbox():
-    """Build injected sandboxes and destroy them however the test ends."""
-    live: list[Sandbox] = []
-
-    def build(seed: int) -> Sandbox:
-        box = create(seed, ["diverged"])
-        live.append(box)
-        return box
-
-    yield build
-    for box in live:
-        box.destroy()
-
-
-def _program_body(variant: str) -> str:
-    document = yaml.safe_load(GOLD.read_text(encoding="utf-8"))
-    program = next(entry for entry in document["programs"] if entry["variant"] == variant)
-    return program["body"]
 
 
 def _run_body(variant: str, box: Sandbox) -> None:
@@ -69,7 +41,7 @@ def _run_body(variant: str, box: Sandbox) -> None:
     A full templating engine is not needed: the bodies reference exactly the
     three declared parameters, so `str.format` is the whole substitution.
     """
-    body = _program_body(variant).format(
+    body = gold_program(variant).body.format(
         work_dir=str(box.work), upstream_remote="upstream", upstream_branch="main"
     )
     result = subprocess.run(
@@ -91,7 +63,7 @@ def _commit_shas(box: Sandbox) -> tuple[str, str, str, str]:
 def test_observed_fingerprint_matches_the_grid(state: str, make_sandbox, state_grid) -> None:
     """Live git must fingerprint as the declarative grid says it should."""
     seed, expected_variant = CASES[state]
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["diverged"])
     fingerprint = StateFingerprint.observe(box)
     declared = state_grid["sync_fork_with_upstream"][state]
 
@@ -111,7 +83,7 @@ def test_observed_fingerprint_matches_the_grid(state: str, make_sandbox, state_g
 @pytest.mark.parametrize("state", list(CASES))
 def test_matching_gold_body_passes_check(state: str, make_sandbox) -> None:
     seed, variant = CASES[state]
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["diverged"])
     _run_body(variant, box)
     result = SPEC.check(box)
     assert result.ok, result.detail
@@ -121,7 +93,7 @@ def test_matching_gold_body_passes_check(state: str, make_sandbox) -> None:
 def test_check_rejects_untouched_sandbox(state: str, make_sandbox) -> None:
     """The injected fault must be the only reason the checker can pass."""
     seed, _ = CASES[state]
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["diverged"])
     result = SPEC.check(box)
     assert not result.ok
     assert result.detail
@@ -131,7 +103,7 @@ def test_check_rejects_untouched_sandbox(state: str, make_sandbox) -> None:
 def test_wrong_program_fails_check(state: str, make_sandbox) -> None:
     """`reset --hard` succeeds on these states and destroys work; check must say so."""
     seed, _ = CASES[state]
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["diverged"])
     _run_body("discard", box)
     result = SPEC.check(box)
     assert not result.ok, f"{state}: reset --hard was accepted"
@@ -141,15 +113,15 @@ def test_wrong_program_fails_check(state: str, make_sandbox) -> None:
 @pytest.mark.parametrize("seed", [0, 1, 2])
 def test_same_seed_reproduces_commit_shas(seed: int, make_sandbox) -> None:
     """Same seed, same content: every commit SHA must match."""
-    first = make_sandbox(seed)
+    first = make_sandbox(seed, ["diverged"])
     shas_first = _commit_shas(first)
     first.destroy()
-    second = make_sandbox(seed)
+    second = make_sandbox(seed, ["diverged"])
     assert _commit_shas(second) == shas_first
 
 
 def test_observe_does_not_mutate(make_sandbox) -> None:
-    box = make_sandbox(2)
+    box = make_sandbox(2, ["diverged"])
     before = StateFingerprint.observe(box)
     after = StateFingerprint.observe(box)
     assert before == after
@@ -157,7 +129,7 @@ def test_observe_does_not_mutate(make_sandbox) -> None:
 
 
 def test_destroy_is_idempotent(make_sandbox) -> None:
-    box = make_sandbox(1)
+    box = make_sandbox(1, ["diverged"])
     root = box.root
     assert root.exists()
     box.destroy()

@@ -12,30 +12,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from conftest import make_record as _record
 from pydantic import ValidationError
 
-from precondition_library.bench.ledger import Arm, EpisodeRecord, append, read
+from precondition_library.bench.ledger import EpisodeRecord, append, read
 from precondition_library.program import EpisodeOutcome
-
-
-def _record(**overrides) -> EpisodeRecord:
-    base = {
-        "arm": Arm.PRECONDITION,
-        "task_id": "sync_fork_with_upstream/seed-1",
-        "fault_type": "diverged",
-        "occurrence_index": 1,
-        "seed": 1,
-        "tokens_in": 0,
-        "tokens_out": 0,
-        "llm_calls": 0,
-        "wall_clock_s": 0.0,
-        "outcome": EpisodeOutcome.FALLBACK,
-        "model": "test",
-        "correct_variant": "merge",
-        "ground_truth_ok": True,
-    }
-    base.update(overrides)
-    return EpisodeRecord(**base)
 
 
 def test_the_quadrant_the_metric_exists_for() -> None:

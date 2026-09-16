@@ -28,7 +28,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ...sandbox import Sandbox, create_submodule_origin, run_git
+from ...sandbox import (
+    Sandbox,
+    create_submodule_origin,
+    git_out,
+    require_uninjected,
+    run_git,
+    store_blob,
+)
 from ...signatures import StateFingerprint
 from ..intent import IntentSpec, ResolutionVariant, sample_index
 from ..spec import FaultSpec, GroundTruth
@@ -68,24 +75,9 @@ def state_for_seed(seed: int) -> str:
     return INJECTED_STATES[sample_index(seed, _STATE_SALT, len(INJECTED_STATES))]
 
 
-def _git_out(*args: str, cwd: Path) -> str:
-    return run_git(args, cwd=cwd).stdout.strip()
-
-
-def _store_blob(work: Path, ref: str, content: str) -> None:
-    """Write `content` as a blob and point `ref` at it.
-
-    A ref rather than a side file keeps the recorded state inside git, where the
-    checker reads it with `git cat-file` and a branch rewrite cannot silently
-    drop it.
-    """
-    sha = run_git(("hash-object", "-w", "--stdin"), cwd=work, stdin=content).stdout.strip()
-    run_git(("update-ref", ref, sha), cwd=work)
-
-
 def _pin(repo: Path, rev: str, path: str) -> str:
     """The gitlink SHA `rev` records for `path`, or "" when it records none."""
-    line = _git_out("ls-tree", rev, "--", path, cwd=repo)
+    line = git_out("ls-tree", rev, "--", path, cwd=repo)
     return line.split()[2] if line else ""
 
 
@@ -199,8 +191,7 @@ class SubmoduleMovedFault(FaultSpec):
         URL is a fixed function of the seed's sandbox root.
         """
         work = sandbox.work
-        if run_git(("rev-parse", "--verify", _STATE_REF), cwd=work, check=False).returncode == 0:
-            raise RuntimeError(f"{work} already has a submodule_moved fault injected")
+        require_uninjected(sandbox, fault="submodule_moved", ref=_STATE_REF)
 
         state = state_for_seed(seed)
 
@@ -218,14 +209,14 @@ class SubmoduleMovedFault(FaultSpec):
             cwd=work,
         )
         run_git(("commit", "-q", "-m", "chore: add nested library"), cwd=work)
-        pinned = _git_out("rev-parse", "HEAD", cwd=work)
+        pinned = git_out("rev-parse", "HEAD", cwd=work)
         run_git(("push", "-q", "upstream", "main"), cwd=work)
 
         # The origin moves on: a second commit for a pin to drift to.
         (origin / "lib.py").write_text("VERSION = 2\n", encoding="utf-8")
         run_git(("add", "-A"), cwd=origin)
         run_git(("commit", "-q", "-m", "feat: library grows"), cwd=origin)
-        grown = _git_out("rev-parse", "HEAD", cwd=origin)
+        grown = git_out("rev-parse", "HEAD", cwd=origin)
 
         if state == "init":
             run_git(("submodule", "deinit", "-f", "--", SUBMODULE_PATH), cwd=work)
@@ -238,8 +229,8 @@ class SubmoduleMovedFault(FaultSpec):
             run_git(("reset", "--hard", pinned), cwd=work)
             self._sync_checkout(work)
 
-        _store_blob(work, _STATE_REF, state)
-        _store_blob(work, _PATH_REF, SUBMODULE_PATH)
+        store_blob(work, _STATE_REF, state)
+        store_blob(work, _PATH_REF, SUBMODULE_PATH)
 
         # Leave the remote-tracking ref current so observe() can read it without
         # fetching (observe must not mutate the environment).
@@ -294,8 +285,8 @@ class SubmoduleMovedFault(FaultSpec):
         succeed" check would not.
         """
         work = sandbox.work
-        state = _git_out("cat-file", "-p", _STATE_REF, cwd=work)
-        path = _git_out("cat-file", "-p", _PATH_REF, cwd=work)
+        state = git_out("cat-file", "-p", _STATE_REF, cwd=work)
+        path = git_out("cat-file", "-p", _PATH_REF, cwd=work)
 
         if state == "init":
             if not _is_initialised(work, path):

@@ -8,37 +8,28 @@ mean nothing.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
-import yaml
+from conftest import gold_programs
 
-from precondition_library.program import Program, ProgramStatus
+from precondition_library.program import ProgramStatus
 from precondition_library.tasks.registry import ambiguous_intents
-
-GOLD = Path(__file__).resolve().parents[1] / "bench" / "gold"
-
-
-def load(intent_name: str) -> list[Program]:
-    document = yaml.safe_load((GOLD / f"{intent_name}.yaml").read_text(encoding="utf-8"))
-    return [Program.model_validate(entry) for entry in document["programs"]]
 
 
 @pytest.mark.parametrize("intent", [i.name for i in ambiguous_intents()])
 def test_every_ambiguous_intent_has_gold_programs(intent: str) -> None:
-    programs = load(intent)
+    programs = gold_programs(intent)
     assert len(programs) >= 2, "an ambiguous intent needs at least two candidates"
 
 
 @pytest.mark.parametrize("intent", [i.name for i in ambiguous_intents()])
 def test_gold_covers_every_declared_resolution(intent: str) -> None:
     declared = {v.id for spec in ambiguous_intents() if spec.name == intent for v in spec.variants}
-    assert {program.variant for program in load(intent)} == declared
+    assert {program.variant for program in gold_programs(intent)} == declared
 
 
 @pytest.mark.parametrize("intent", [i.name for i in ambiguous_intents()])
 def test_gold_programs_are_well_formed(intent: str) -> None:
-    for program in load(intent):
+    for program in gold_programs(intent):
         assert program.intent == intent
         assert program.status is ProgramStatus.CANDIDATE, "hand-written != admitted"
         assert program.preconditions, f"{program.id}: needs preconditions"
@@ -52,12 +43,12 @@ def test_gold_programs_are_well_formed(intent: str) -> None:
 @pytest.mark.parametrize("intent", [i.name for i in ambiguous_intents()])
 def test_gold_bodies_are_distinct(intent: str) -> None:
     """Two candidates that do the same thing are not two resolutions."""
-    bodies = {p.body.strip() for p in load(intent)}
-    assert len(bodies) == len(load(intent))
+    bodies = {p.body.strip() for p in gold_programs(intent)}
+    assert len(bodies) == len(gold_programs(intent))
 
 
 @pytest.mark.parametrize("intent", [i.name for i in ambiguous_intents()])
 def test_gold_provenance_says_hand_written(intent: str) -> None:
-    for program in load(intent):
+    for program in gold_programs(intent):
         assert "hand-written" in program.provenance.compiled_from_task
         assert program.provenance.compiler_version == "human"

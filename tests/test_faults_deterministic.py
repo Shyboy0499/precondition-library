@@ -27,7 +27,7 @@ from pathlib import Path
 
 import pytest
 
-from precondition_library.sandbox import Sandbox, create, run_git
+from precondition_library.sandbox import Sandbox, run_git
 from precondition_library.signatures import StateFingerprint
 from precondition_library.tasks import ALL_FAULTS
 from precondition_library.tasks.faults import FAULTS, lockfile_conflict
@@ -176,21 +176,6 @@ def test_occurrences_are_not_clones(intent: str) -> None:
         f"{intent}: {len(texts)} distinct texts over 200 seeds for "
         f"{len(spec.phrasings)} phrasings -- some phrasings are unreachable"
     )
-
-
-@pytest.fixture
-def make_sandbox():
-    """Build real injected sandboxes and destroy them however the test ends."""
-    live: list[Sandbox] = []
-
-    def build(seed: int, faults: list[str]) -> Sandbox:
-        box = create(seed, faults)
-        live.append(box)
-        return box
-
-    yield build
-    for box in live:
-        box.destroy()
 
 
 @pytest.mark.parametrize("fault_type", ALL_FAULTS)

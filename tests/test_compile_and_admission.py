@@ -33,7 +33,7 @@ from precondition_library.program import Predicate, Program, ProgramStatus, Prov
 from precondition_library.provider import Completion, TokenUsage
 from precondition_library.runtime.probes import evaluate_preconditions
 from precondition_library.runtime.replay import replay
-from precondition_library.sandbox import Sandbox, create
+from precondition_library.sandbox import Sandbox
 from precondition_library.signatures import StateFingerprint, TaskSignature
 from precondition_library.tasks.faults import FAULTS
 
@@ -121,21 +121,6 @@ def _signature(box: Sandbox) -> TaskSignature:
     )
 
 
-@pytest.fixture
-def make_sandbox():
-    """Build injected sandboxes and destroy them however the test ends."""
-    live: list[Sandbox] = []
-
-    def build(seed: int = DISCARD_SEED) -> Sandbox:
-        box = create(seed, ["diverged"])
-        live.append(box)
-        return box
-
-    yield build
-    for box in live:
-        box.destroy()
-
-
 @pytest.fixture(scope="module", autouse=True)
 def committed_library_untouched():
     """Fail if a test writes into the committed library instead of a temp dir."""
@@ -150,7 +135,7 @@ def committed_library_untouched():
 
 def test_compiled_program_is_admitted_and_stored(make_sandbox, tmp_path) -> None:
     """The whole pipeline: compile from a scripted reply, gate it, store it."""
-    box = make_sandbox()
+    box = make_sandbox(DISCARD_SEED, ["diverged"])
     signature = _signature(box)
     transcript = [
         {"role": "user", "content": signature.intent},
@@ -202,7 +187,7 @@ def test_all_accepting_preconditions_are_rejected() -> None:
     assert "unrelated" in reason, reason
 
 
-def test_body_that_does_not_work_is_rejected(make_sandbox) -> None:
+def test_body_that_does_not_work_is_rejected() -> None:
     """A body that exits zero while changing nothing fails on the positive side."""
     program = _program(body="true\n")
 
@@ -236,7 +221,7 @@ def test_admission_is_deterministic() -> None:
 
 def test_empty_preconditions_are_recorded_and_then_rejected(make_sandbox) -> None:
     """Compile records an empty precondition list as a defect; the gate then refuses it."""
-    box = make_sandbox()
+    box = make_sandbox(DISCARD_SEED, ["diverged"])
     fake = FakeProvider(_completion(_reply_text(preconditions=[])))
 
     result = compile_program(_signature(box), box, [], fake)
@@ -282,7 +267,7 @@ def test_admit_still_accepts_a_declared_variant() -> None:
 
 def test_the_prompt_names_the_ids_the_intent_will_accept(make_sandbox) -> None:
     """The model is told what `variant` it must emit before it can get it wrong."""
-    box = make_sandbox()
+    box = make_sandbox(DISCARD_SEED, ["diverged"])
     fake = FakeProvider(_completion(_reply_text()))
 
     compile_program(
@@ -307,7 +292,7 @@ def test_repository_content_travels_in_a_framed_untrusted_block(make_sandbox) ->
     payload must sit inside the delimiters, and the system prompt must name them
     and say the block is data to compile, never instructions to follow.
     """
-    box = make_sandbox()
+    box = make_sandbox(DISCARD_SEED, ["diverged"])
     fake = FakeProvider(_completion(_reply_text()))
     transcript = [
         {
@@ -365,7 +350,7 @@ def test_an_undeclared_variant_is_quarantined_on_load_and_never_dispatched(
     program's own preconditions hold on this sandbox and the similarity floor is
     zero, so only its status keeps it out of both arms' results.
     """
-    box = make_sandbox()
+    box = make_sandbox(DISCARD_SEED, ["diverged"])
     offending = _program(id="written-past-admit", variant=variant, status=ProgramStatus.ADMITTED)
     sound = _program(id="still-admitted", variant="discard", status=ProgramStatus.ADMITTED)
     _write_directly(tmp_path, offending)
@@ -427,7 +412,7 @@ def test_a_sound_variant_loads_without_a_quarantine(tmp_path: Path) -> None:
 )
 def test_malformed_reply_is_a_recorded_failure(make_sandbox, reply: str) -> None:
     """The caller gets a value carrying the cost, never an unhandled exception."""
-    box = make_sandbox()
+    box = make_sandbox(DISCARD_SEED, ["diverged"])
     fake = FakeProvider(_completion(reply))
 
     result = compile_program(_signature(box), box, [], fake)
@@ -444,7 +429,7 @@ def test_malformed_reply_is_a_recorded_failure(make_sandbox, reply: str) -> None
 
 def test_compile_never_executes_the_body(make_sandbox) -> None:
     """The only output of compile is data; the marker appears when replay runs it."""
-    box = make_sandbox()
+    box = make_sandbox(DISCARD_SEED, ["diverged"])
     marker = box.work / "compile-marker.txt"
     fake = FakeProvider(
         _completion(

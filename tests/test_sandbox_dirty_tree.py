@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import pytest
 
-from precondition_library.sandbox import Sandbox, create, run_git
+from precondition_library.sandbox import Sandbox, run_git
 from precondition_library.signatures import StateFingerprint
 from precondition_library.tasks.faults.dirty_tree import SPEC, injects_untracked
 
@@ -25,21 +25,6 @@ from precondition_library.tasks.faults.dirty_tree import SPEC, injects_untracked
 MODIFIED_ONLY = 0
 WITH_UNTRACKED = 3
 SEEDS = [MODIFIED_ONLY, WITH_UNTRACKED]
-
-
-@pytest.fixture
-def make_sandbox():
-    """Build injected sandboxes and destroy them however the test ends."""
-    live: list[Sandbox] = []
-
-    def build(seed: int) -> Sandbox:
-        box = create(seed, ["dirty_tree"])
-        live.append(box)
-        return box
-
-    yield build
-    for box in live:
-        box.destroy()
 
 
 def _sync_looks_fine(box: Sandbox) -> bool:
@@ -94,7 +79,7 @@ def _shas(box: Sandbox) -> tuple[str, str, str, str]:
 @pytest.mark.parametrize("seed", SEEDS)
 def test_injected_fault_fails_check(seed: int, make_sandbox) -> None:
     """A fresh injection that checked as ok would make the checker vacuous."""
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["dirty_tree"])
     result = SPEC.check(box)
     assert not result.ok
     assert result.detail
@@ -103,7 +88,7 @@ def test_injected_fault_fails_check(seed: int, make_sandbox) -> None:
 @pytest.mark.parametrize("seed", SEEDS)
 def test_observe_matches_injection(seed: int, make_sandbox) -> None:
     """The fingerprint must see dirty work and upstream ahead, nothing else."""
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["dirty_tree"])
     fingerprint = StateFingerprint.observe(box)
 
     assert fingerprint.dirty_worktree is True
@@ -133,7 +118,7 @@ def test_wrong_resolution_fails_check(seed, resolve, detail_fragment, make_sandb
     action is not a failed sync, it is a successful one that deleted the reason
     for the task.
     """
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["dirty_tree"])
     resolve(box)
     assert _sync_looks_fine(box), "the wrong resolution was supposed to sync successfully"
 
@@ -145,7 +130,7 @@ def test_wrong_resolution_fails_check(seed, resolve, detail_fragment, make_sandb
 @pytest.mark.parametrize("seed", SEEDS)
 def test_correct_resolution_passes_check(seed: int, make_sandbox) -> None:
     """Stash, sync, restore: not a gold program, just the honest minimum."""
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["dirty_tree"])
     _stash_sync_restore(box)
     assert _sync_looks_fine(box)
     result = SPEC.check(box)
@@ -155,7 +140,7 @@ def test_correct_resolution_passes_check(seed: int, make_sandbox) -> None:
 @pytest.mark.parametrize("seed", SEEDS)
 def test_stashing_without_restoring_fails_check(seed: int, make_sandbox) -> None:
     """Work parked in a stash is not work in the tree, so the sync alone is not enough."""
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["dirty_tree"])
     run_git(("stash", "push", "-u", "-m", "pl-sync"), cwd=box.work)
     run_git(("fetch", "-q", "upstream"), cwd=box.work)
     run_git(("rebase", "upstream/main"), cwd=box.work)
@@ -167,16 +152,16 @@ def test_stashing_without_restoring_fails_check(seed: int, make_sandbox) -> None
 @pytest.mark.parametrize("seed", SEEDS)
 def test_same_seed_reproduces_commit_shas(seed: int, make_sandbox) -> None:
     """Same seed, same content: every recorded SHA must match."""
-    first = make_sandbox(seed)
+    first = make_sandbox(seed, ["dirty_tree"])
     shas_first = _shas(first)
     first.destroy()
-    second = make_sandbox(seed)
+    second = make_sandbox(seed, ["dirty_tree"])
     assert _shas(second) == shas_first
 
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_observe_does_not_mutate(seed: int, make_sandbox) -> None:
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["dirty_tree"])
     before = StateFingerprint.observe(box)
     after = StateFingerprint.observe(box)
     assert before == after
@@ -184,7 +169,7 @@ def test_observe_does_not_mutate(seed: int, make_sandbox) -> None:
 
 
 def test_destroy_is_idempotent(make_sandbox) -> None:
-    box = make_sandbox(MODIFIED_ONLY)
+    box = make_sandbox(MODIFIED_ONLY, ["dirty_tree"])
     root = box.root
     assert root.exists()
     box.destroy()

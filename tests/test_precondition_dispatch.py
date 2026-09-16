@@ -14,13 +14,9 @@ test if anything in this file dirties the repository.
 
 from __future__ import annotations
 
-import subprocess
-from pathlib import Path
-
 import pytest
-import yaml
+from conftest import gold_program, store_programs
 
-from precondition_library.library import Library
 from precondition_library.program import (
     Predicate,
     Program,
@@ -28,14 +24,10 @@ from precondition_library.program import (
     Provenance,
 )
 from precondition_library.runtime.probes import evaluate_preconditions
-from precondition_library.sandbox import Sandbox, create
+from precondition_library.sandbox import Sandbox
 from precondition_library.signatures import StateFingerprint, TaskSignature
 from precondition_library.tasks.faults.diverged import INTENT as DIVERGED_INTENT
 from precondition_library.tasks.faults.submodule_moved import state_for_seed
-
-ROOT = Path(__file__).resolve().parents[1]
-GOLD = ROOT / "bench" / "gold" / "sync_fork_with_upstream.yaml"
-SUBMODULE_GOLD = ROOT / "bench" / "gold" / "restore_submodule_state.yaml"
 
 # `conftest.py`'s grid declares seed 2 as the disjoint state, whose resolution is
 # `rebase`. Reusing it here means the positive fixture is the real-world
@@ -43,57 +35,15 @@ SUBMODULE_GOLD = ROOT / "bench" / "gold" / "restore_submodule_state.yaml"
 DIVERGED_SEED = 2
 
 
-def _git_status() -> str:
-    return subprocess.run(
-        ["git", "status", "--porcelain"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
-
-
 @pytest.fixture(autouse=True)
-def _repository_is_untouched():
+def _repository_is_untouched(repository_unchanged):
     """Every library write in this file must go to `tmp_path`, not the repo.
 
-    Compares against the status before the test rather than requiring a clean
-    tree: the branch carrying this file is itself uncommitted while it is
-    reviewed, and a real write by the test would show up as a delta.
+    The comparison is the shared `repository_unchanged` fixture: it asserts the
+    working tree is unchanged since import rather than empty, so it passes for a
+    contributor with uncommitted work and still catches a real write.
     """
-    before = _git_status()
     yield
-    after = _git_status()
-    assert after == before, f"this test changed the repository:\nbefore:\n{before}\nafter:\n{after}"
-
-
-@pytest.fixture
-def make_sandbox():
-    """Build faulted sandboxes and destroy them however the test ends."""
-    live: list[Sandbox] = []
-
-    def build(seed: int, faults: list[str]) -> Sandbox:
-        box = create(seed, faults)
-        live.append(box)
-        return box
-
-    yield build
-    for box in live:
-        box.destroy()
-
-
-def _gold_program(variant: str) -> Program:
-    """One committed gold resolution, as a `Program`."""
-    document = yaml.safe_load(GOLD.read_text(encoding="utf-8"))
-    entry = next(item for item in document["programs"] if item["variant"] == variant)
-    return Program.model_validate(entry)
-
-
-def _submodule_gold_program(variant: str) -> Program:
-    """One committed `restore_submodule_state` resolution, where `submodule_path` is needed."""
-    document = yaml.safe_load(SUBMODULE_GOLD.read_text(encoding="utf-8"))
-    entry = next(item for item in document["programs"] if item["variant"] == variant)
-    return Program.model_validate(entry)
 
 
 def _seed_for_state(state: str) -> int:
@@ -135,21 +85,6 @@ def _program(
     )
 
 
-def _store(tmp_path: Path, programs: list[Program]) -> Library:
-    """A library holding `programs` at the statuses they declare.
-
-    `Library.add` takes only a candidate, so each program is added as one and
-    then moved through the real transition table. Quarantining a candidate is a
-    legal transition; a demoted fixture is not needed here.
-    """
-    library = Library(tmp_path)
-    for program in programs:
-        library.add(program.model_copy(update={"status": ProgramStatus.CANDIDATE}))
-        if program.status is not ProgramStatus.CANDIDATE:
-            library.set_status(program.id, program.status)
-    return library
-
-
 def _signature(box: Sandbox, seed: int) -> TaskSignature:
     """A real signature. Arm 3 does not read it; the seam requires one."""
     return TaskSignature(
@@ -162,8 +97,8 @@ def _signature(box: Sandbox, seed: int) -> TaskSignature:
 def test_matching_gold_program_dispatches(make_sandbox, tmp_path) -> None:
     """The state its resolution fits accepts the program's preconditions."""
     box = make_sandbox(DIVERGED_SEED, ["diverged"])
-    rebase = _gold_program("rebase").model_copy(update={"status": ProgramStatus.ADMITTED})
-    library = _store(tmp_path, [rebase])
+    rebase = gold_program("rebase").model_copy(update={"status": ProgramStatus.ADMITTED})
+    library = store_programs(tmp_path, [rebase])
 
     result = evaluate_preconditions(rebase, box)
     assert result.ok, result.detail
@@ -182,8 +117,8 @@ def test_unrelated_state_is_rejected(make_sandbox, tmp_path) -> None:
     layer rather than only inside the gate: a matcher that returned everything
     would make the positive test above meaningless.
     """
-    rebase = _gold_program("rebase").model_copy(update={"status": ProgramStatus.ADMITTED})
-    library = _store(tmp_path, [rebase])
+    rebase = gold_program("rebase").model_copy(update={"status": ProgramStatus.ADMITTED})
+    library = store_programs(tmp_path, [rebase])
 
     matching = make_sandbox(DIVERGED_SEED, ["diverged"])
     matched = library.match_preconditions(_signature(matching, DIVERGED_SEED), matching)
@@ -212,7 +147,7 @@ def test_specificity_orders_most_specific_first(make_sandbox, tmp_path) -> None:
             _predicate("has_app", "test -f app.py"),
         ],
     )
-    library = _store(tmp_path, [general, specific])
+    library = store_programs(tmp_path, [general, specific])
 
     matched = library.match_preconditions(_signature(box, 11), box)
     assert [program.id for program in matched] == ["b-specific", "a-general"]
@@ -225,7 +160,7 @@ def test_non_admitted_programs_are_never_returned(make_sandbox, tmp_path) -> Non
     admitted = _program("a-admitted", holds)
     candidate = _program("b-candidate", holds, status=ProgramStatus.CANDIDATE)
     quarantined = _program("c-quarantined", holds, status=ProgramStatus.QUARANTINED)
-    library = _store(tmp_path, [admitted, candidate, quarantined])
+    library = store_programs(tmp_path, [admitted, candidate, quarantined])
 
     # Not vacuous: all three are stored and all three would match on probes alone.
     assert len(library.load_all()) == 3
@@ -237,7 +172,7 @@ def test_nothing_matching_returns_an_empty_list(make_sandbox, tmp_path) -> None:
     """The fallback path is `[]`, not an exception."""
     box = make_sandbox(13, [])
     only = _program("a-absent", [_predicate("absent", "test -f definitely-not-here")])
-    library = _store(tmp_path, [only])
+    library = store_programs(tmp_path, [only])
 
     assert evaluate_preconditions(only, box).ok is False
     assert library.match_preconditions(_signature(box, 13), box) == []
@@ -254,7 +189,7 @@ def test_submodule_program_preconditions_evaluate_on_a_submodule_sandbox(make_sa
     the observable surface arm 3's half of the comparison depends on.
     """
     box = make_sandbox(_seed_for_state("init"), ["submodule_moved"])
-    program = _submodule_gold_program("init")
+    program = gold_program("init", "restore_submodule_state")
 
     result = evaluate_preconditions(program, box)
 
@@ -273,7 +208,7 @@ def test_submodule_program_preconditions_fail_without_a_submodule(make_sandbox) 
     different path (`test_substitute_raises_on_an_unknown_placeholder`).
     """
     box = make_sandbox(0, [])
-    program = _submodule_gold_program("init")
+    program = gold_program("init", "restore_submodule_state")
 
     result = evaluate_preconditions(program, box)
 

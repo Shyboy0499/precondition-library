@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ...sandbox import Sandbox, run_git
+from ...sandbox import Sandbox, git_out, record_base, run_git, tip_contained
 from ..intent import sample_index
 from ..spec import FaultSpec, GroundTruth
 
@@ -43,10 +43,6 @@ def renamed_branch_for_seed(seed: int) -> str:
     with the injected environment.
     """
     return NEW_BRANCH_NAMES[sample_index(seed, _NAME_SALT, len(NEW_BRANCH_NAMES))]
-
-
-def _git_out(*args: str, cwd: Path) -> str:
-    return run_git(args, cwd=cwd).stdout.strip()
 
 
 def _config(work: Path, key: str) -> str | None:
@@ -76,18 +72,9 @@ class BranchRenamedFault(FaultSpec):
         the sandbox's fixed identities and dates fix the SHAs that already exist.
         """
         work = sandbox.work
-        if (
-            run_git(
-                ("rev-parse", "--verify", "refs/sandbox/base"), cwd=work, check=False
-            ).returncode
-            == 0
-        ):
-            raise RuntimeError(f"{work} already has a branch_renamed fault injected")
+        record_base(sandbox, fault="branch_renamed")
 
-        base = _git_out("rev-parse", "HEAD", cwd=work)
-        run_git(("update-ref", "refs/sandbox/base", base), cwd=work)
-
-        old_name = _git_out("rev-parse", "--abbrev-ref", "HEAD", cwd=work)
+        old_name = git_out("rev-parse", "--abbrev-ref", "HEAD", cwd=work)
         new_name = renamed_branch_for_seed(seed)
         if new_name == old_name:
             raise ValueError(f"{new_name!r} is not a rename of {old_name!r}")
@@ -121,7 +108,7 @@ class BranchRenamedFault(FaultSpec):
         branch that does not exist. Rejecting that is the point of this clause.
         """
         work = sandbox.work
-        branch = _git_out("rev-parse", "--abbrev-ref", "HEAD", cwd=work)
+        branch = git_out("rev-parse", "--abbrev-ref", "HEAD", cwd=work)
         remote = _config(work, f"branch.{branch}.remote")
         merge_ref = _config(work, f"branch.{branch}.merge")
         if not remote or not merge_ref:
@@ -145,14 +132,8 @@ class BranchRenamedFault(FaultSpec):
                 ),
             )
 
-        upstream_tip = _git_out("rev-parse", merge_ref, cwd=sandbox.upstream)
-        contained = (
-            run_git(
-                ("merge-base", "--is-ancestor", upstream_tip, "HEAD"), cwd=work, check=False
-            ).returncode
-            == 0
-        )
-        if not contained:
+        upstream_tip = git_out("rev-parse", merge_ref, cwd=sandbox.upstream)
+        if not tip_contained(work, upstream_tip):
             return GroundTruth(
                 ok=False,
                 detail=(

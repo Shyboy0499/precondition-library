@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import pytest
 
-from precondition_library.sandbox import Sandbox, create, run_git
+from precondition_library.sandbox import Sandbox, run_git
 from precondition_library.signatures import StateFingerprint
 from precondition_library.tasks.faults.branch_renamed import (
     SPEC,
@@ -30,21 +30,6 @@ from precondition_library.tasks.faults.branch_renamed import (
 # checker that hard-coded one name could not pass both.
 SEEDS = [0, 3]
 OLD_BRANCH = "main"
-
-
-@pytest.fixture
-def make_sandbox():
-    """Build injected sandboxes and destroy them however the test ends."""
-    live: list[Sandbox] = []
-
-    def build(seed: int) -> Sandbox:
-        box = create(seed, ["branch_renamed"])
-        live.append(box)
-        return box
-
-    yield build
-    for box in live:
-        box.destroy()
 
 
 def _upstream_branches(box: Sandbox) -> set[str]:
@@ -115,7 +100,7 @@ def _shas(box: Sandbox, seed: int) -> tuple[str, str, str]:
 @pytest.mark.parametrize("seed", SEEDS)
 def test_injected_fault_fails_check(seed: int, make_sandbox) -> None:
     """A fresh injection that checked as ok would make the checker vacuous."""
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["branch_renamed"])
     assert _tracking(box) == ("upstream", f"refs/heads/{OLD_BRANCH}")
 
     result = SPEC.check(box)
@@ -133,7 +118,7 @@ def test_observe_matches_injection(seed: int, make_sandbox) -> None:
     count probes report 0/0 here -- they are reading the stale ref, not the
     renamed branch. The branch name is the field that says the wiring is stale.
     """
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["branch_renamed"])
     fingerprint = StateFingerprint.observe(box)
 
     assert fingerprint.branch == OLD_BRANCH
@@ -163,7 +148,7 @@ def test_wrong_resolution_fails_check(
     branch it names is absent upstream. That is why `check` verifies existence
     against the upstream repo rather than the clone's cache.
     """
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["branch_renamed"])
     resolve(box)
     assert _upstream_ref_resolves(box) is looks_wired
 
@@ -175,7 +160,7 @@ def test_wrong_resolution_fails_check(
 @pytest.mark.parametrize("seed", SEEDS)
 def test_correct_resolution_passes_check(seed: int, make_sandbox) -> None:
     """Fetch, then re-point at whatever upstream actually uses now."""
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["branch_renamed"])
     expected_name = renamed_branch_for_seed(seed)
     _follow_rename(box, seed)
     assert _tracking(box) == ("upstream", f"refs/heads/{expected_name}")
@@ -188,17 +173,17 @@ def test_correct_resolution_passes_check(seed: int, make_sandbox) -> None:
 @pytest.mark.parametrize("seed", SEEDS)
 def test_same_seed_reproduces_state(seed: int, make_sandbox) -> None:
     """Same seed, same rename and same SHAs; renaming a ref creates no commit."""
-    first = make_sandbox(seed)
+    first = make_sandbox(seed, ["branch_renamed"])
     shas_first = _shas(first, seed)
     first.destroy()
-    second = make_sandbox(seed)
+    second = make_sandbox(seed, ["branch_renamed"])
     assert _shas(second, seed) == shas_first
     assert renamed_branch_for_seed(seed) in _upstream_branches(second)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_observe_does_not_mutate(seed: int, make_sandbox) -> None:
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["branch_renamed"])
     before = StateFingerprint.observe(box)
     after = StateFingerprint.observe(box)
     assert before == after
@@ -206,7 +191,7 @@ def test_observe_does_not_mutate(seed: int, make_sandbox) -> None:
 
 
 def test_destroy_is_idempotent(make_sandbox) -> None:
-    box = make_sandbox(SEEDS[0])
+    box = make_sandbox(SEEDS[0], ["branch_renamed"])
     root = box.root
     assert root.exists()
     box.destroy()

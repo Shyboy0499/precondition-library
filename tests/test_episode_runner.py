@@ -26,12 +26,11 @@ from __future__ import annotations
 
 import itertools
 import json
-import subprocess
 from pathlib import Path
 
 import pytest
 import yaml
-from conftest import FakeProvider
+from conftest import GIT_STATUS_AT_IMPORT, FakeProvider, git_status_porcelain
 
 from precondition_library.bench.ledger import Arm, EpisodeRecord, read
 from precondition_library.bench.run import run_benchmark, run_episode
@@ -69,17 +68,6 @@ _CALL_IDS = itertools.count(1)
 _DISCARD_BODY = (
     "git fetch {upstream_remote}\ngit reset --hard {upstream_remote}/{upstream_branch}\n"
 )
-
-
-def _git_status() -> str:
-    result = subprocess.run(
-        ["git", "status", "--porcelain"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return result.stdout
 
 
 # --- scripted provider turns -------------------------------------------------
@@ -198,11 +186,19 @@ def _library_with_admitted(root: Path, program: Program) -> Library:
 
 @pytest.fixture(scope="module", autouse=True)
 def _repository_is_untouched():
-    """Fail if any test writes into the repository instead of `tmp_path`."""
-    before = _git_status()
+    """Fail if any test writes into the repository instead of `tmp_path`.
+
+    The working-tree comparison is `conftest.git_status_porcelain` against its
+    import-time snapshot -- "unchanged", not "empty" -- so it still passes for a
+    contributor whose branch has uncommitted work. The committed-library and
+    `.sandboxes` assertions are this module's own, because the runner is the one
+    thing here that could write either.
+    """
     before_ids = [program.id for program in Library(COMMITTED_LIBRARY).load_all()]
     yield
-    assert _git_status() == before, "the runner changed the repository's working tree"
+    assert git_status_porcelain() == GIT_STATUS_AT_IMPORT, (
+        "the runner changed the repository's working tree"
+    )
     assert [program.id for program in Library(COMMITTED_LIBRARY).load_all()] == before_ids, (
         "a test stored a program in the committed library/"
     )
@@ -841,7 +837,7 @@ def test_demotion_needs_a_postcondition_miss_not_a_timeout(tmp_path, monkeypatch
 
 def test_a_benchmark_writes_only_under_the_output_directory(tmp_path: Path) -> None:
     """The repository's working tree, committed library and bench/ stay clean."""
-    before_tree = _git_status()
+    before_tree = git_status_porcelain()
     before_ids = [program.id for program in Library(COMMITTED_LIBRARY).load_all()]
     before_bench = sorted(path.name for path in (ROOT / "bench").iterdir())
 
@@ -855,7 +851,7 @@ def test_a_benchmark_writes_only_under_the_output_directory(tmp_path: Path) -> N
         provider=FakeProvider(*_resolves_discard()),
     )
 
-    assert _git_status() == before_tree
+    assert git_status_porcelain() == before_tree
     assert [program.id for program in Library(COMMITTED_LIBRARY).load_all()] == before_ids
     assert sorted(path.name for path in (ROOT / "bench").iterdir()) == before_bench
     assert (tmp_path / "ledger.jsonl").is_file(), "the ledger belongs under the output"
