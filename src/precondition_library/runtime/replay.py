@@ -25,7 +25,7 @@ from pydantic import BaseModel
 from ..program import GroundTruthResult, Program
 from ..sandbox import Sandbox, git_env
 from .guard import Verdict, screen
-from .probes import SHELL, bindings, evaluate_predicate, substitute
+from .probes import SHELL, bindings, evaluate_predicates, substitute
 
 
 class ReplayResult(BaseModel):
@@ -55,18 +55,14 @@ def _text(value: str | bytes | None) -> str:
 
 
 def check_postconditions(program: Program, env: Sandbox) -> GroundTruthResult:
-    """Run the program's own postconditions. No model."""
-    parameters = bindings(env)
-    predicates = [
-        evaluate_predicate(predicate, env, parameters) for predicate in program.postconditions
-    ]
-    failed = [result for result in predicates if not result.ok]
-    detail = (
-        "; ".join(f"{result.name}: {result.observed}" for result in failed)
-        if failed
-        else f"all {len(predicates)} postcondition(s) held"
-    )
-    return GroundTruthResult(ok=not failed, detail=detail, predicates=predicates)
+    """Run the program's own postconditions. No model.
+
+    Shares `evaluate_predicates` with `evaluate_preconditions` so a postcondition
+    and a precondition are judged by the same rule. The 30s per-probe timeout is
+    the helper's default: unlike the body's `timeout_s`, postconditions are not
+    rebound here, which is the current behaviour rather than a decision.
+    """
+    return evaluate_predicates(program.postconditions, env, kind="postcondition")
 
 
 def replay(program: Program, env: Sandbox, *, timeout_s: float = 60.0) -> ReplayResult:

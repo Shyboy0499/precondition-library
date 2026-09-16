@@ -11,31 +11,19 @@ merely been *left alone*, otherwise every arm scores 100%.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
-import yaml
+from conftest import gold_programs
 
 from precondition_library.program import Program
 from precondition_library.runtime.probes import evaluate_preconditions
 from precondition_library.runtime.replay import replay
-from precondition_library.sandbox import Sandbox, create
 from precondition_library.tasks import ALL_FAULTS
 from precondition_library.tasks.faults.submodule_moved import SPEC as SUBMODULE_MOVED
 from precondition_library.tasks.faults.submodule_moved import state_for_seed
 
-ROOT = Path(__file__).resolve().parents[1]
-SUBMODULE_GOLD = ROOT / "bench" / "gold" / "restore_submodule_state.yaml"
-
-
-def _load_gold(path: Path) -> list[Program]:
-    document = yaml.safe_load(path.read_text(encoding="utf-8"))
-    return [Program.model_validate(entry) for entry in document["programs"]]
-
-
 # Loaded at import so the parametrisation below follows the committed file: a
 # fourth resolution added to the yaml is exercised without editing this test.
-SUBMODULE_PROGRAMS = _load_gold(SUBMODULE_GOLD)
+SUBMODULE_PROGRAMS = gold_programs("restore_submodule_state")
 
 
 def _seed_for_variant(variant: str | None) -> int:
@@ -44,21 +32,6 @@ def _seed_for_variant(variant: str | None) -> int:
         if state_for_seed(seed) == variant:
             return seed
     raise AssertionError(f"no seed in 0..63 injects {variant!r}")
-
-
-@pytest.fixture
-def make_sandbox():
-    """Build injected submodule sandboxes and destroy them however the test ends."""
-    live: list[Sandbox] = []
-
-    def build(seed: int) -> Sandbox:
-        box = create(seed, ["submodule_moved"])
-        live.append(box)
-        return box
-
-    yield build
-    for box in live:
-        box.destroy()
 
 
 @pytest.mark.parametrize("program", SUBMODULE_PROGRAMS, ids=lambda program: program.variant)
@@ -74,7 +47,7 @@ def test_submodule_gold_body_satisfies_its_checker(program: Program, make_sandbo
     Parametrised over the committed gold file, not over the three ids, so a fourth
     resolution cannot be added without a body that runs here.
     """
-    box = make_sandbox(_seed_for_variant(program.variant))
+    box = make_sandbox(_seed_for_variant(program.variant), ["submodule_moved"])
 
     preconditions = evaluate_preconditions(program, box)
     assert preconditions.ok, (

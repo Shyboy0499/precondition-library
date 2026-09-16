@@ -23,9 +23,7 @@ measurement (issue #25).
 
 from __future__ import annotations
 
-from pathlib import Path
-
-from ...sandbox import Sandbox, run_git
+from ...sandbox import Sandbox, git_out, record_base, run_git, store_blob, tip_contained
 from ..intent import sample_index
 from ..spec import FaultSpec, GroundTruth
 
@@ -66,21 +64,6 @@ def injects_untracked(seed: int) -> bool:
     return state_for_seed(seed) == "modified_with_untracked"
 
 
-def _git_out(*args: str, cwd: Path) -> str:
-    return run_git(args, cwd=cwd).stdout.strip()
-
-
-def _store_blob(work: Path, ref: str, content: str) -> None:
-    """Write `content` as a blob and point `ref` at it.
-
-    A ref rather than a side file keeps the recorded state inside git, where the
-    checker can read it with `git cat-file` and a branch rewrite cannot silently
-    drop it.
-    """
-    sha = run_git(("hash-object", "-w", "--stdin"), cwd=work, stdin=content).stdout.strip()
-    run_git(("update-ref", ref, sha), cwd=work)
-
-
 class DirtyTreeFault(FaultSpec):
     name = "dirty_tree"
     description = "Uncommitted local changes present while upstream has new commits"
@@ -99,16 +82,7 @@ class DirtyTreeFault(FaultSpec):
         commit SHAs.
         """
         work = sandbox.work
-        if (
-            run_git(
-                ("rev-parse", "--verify", "refs/sandbox/base"), cwd=work, check=False
-            ).returncode
-            == 0
-        ):
-            raise RuntimeError(f"{work} already has a dirty_tree fault injected")
-
-        base = _git_out("rev-parse", "HEAD", cwd=work)
-        run_git(("update-ref", "refs/sandbox/base", base), cwd=work)
+        base = record_base(sandbox, fault="dirty_tree")
 
         # Upstream's unique commit, published to the bare repo.
         app = work / _UPSTREAM_FILE
@@ -124,12 +98,12 @@ class DirtyTreeFault(FaultSpec):
         # file in the half of the seed space that includes one.
         with (work / _TRACKED_FILE).open("a", encoding="utf-8") as handle:
             handle.write(_LOCAL_WORK)
-        _store_blob(work, _PATCH_REF, run_git(("diff",), cwd=work).stdout)
+        store_blob(work, _PATCH_REF, run_git(("diff",), cwd=work).stdout)
         if injects_untracked(seed):
             untracked = work / _UNTRACKED_PATH
             untracked.parent.mkdir(parents=True, exist_ok=True)
             untracked.write_text(_UNTRACKED_TEXT, encoding="utf-8")
-            _store_blob(work, _UNTRACKED_REF, _UNTRACKED_TEXT)
+            store_blob(work, _UNTRACKED_REF, _UNTRACKED_TEXT)
 
         # Leave the remote-tracking ref current so observe() can read it without
         # fetching (observe must not mutate the environment).
@@ -160,14 +134,8 @@ class DirtyTreeFault(FaultSpec):
         because the tree no longer contains it.
         """
         work = sandbox.work
-        upstream_tip = _git_out("rev-parse", "refs/heads/main", cwd=sandbox.upstream)
-        contained = (
-            run_git(
-                ("merge-base", "--is-ancestor", upstream_tip, "HEAD"), cwd=work, check=False
-            ).returncode
-            == 0
-        )
-        if not contained:
+        upstream_tip = git_out("rev-parse", "refs/heads/main", cwd=sandbox.upstream)
+        if not tip_contained(work, upstream_tip):
             return GroundTruth(
                 ok=False,
                 detail=f"upstream tip {upstream_tip[:12]} is not contained in the local branch",

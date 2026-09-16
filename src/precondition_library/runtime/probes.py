@@ -192,6 +192,40 @@ def bindings(env: Sandbox) -> dict[str, str]:
     return values
 
 
+def evaluate_predicates(
+    predicates: list[Predicate],
+    env: Sandbox,
+    *,
+    kind: str,
+    timeout_s: float = 30.0,
+) -> GroundTruthResult:
+    """Run every predicate of one `kind` against `env` and aggregate the verdict.
+
+    Preconditions and postconditions ask the same question of the same
+    `evaluate_predicate`, so they share one loop: a second copy is where the two
+    would eventually disagree about what "held" means, and the postcondition
+    result is the demotion evidence, so its `.ok` must mean the same thing as a
+    precondition's. `kind` ("precondition" or "postcondition") only labels the
+    all-held detail.
+
+    Every predicate runs even after one has failed. Short-circuiting would save a
+    subprocess that is already this cheap, and in exchange the `detail` would
+    depend on the order the predicates happen to be stored in.
+    """
+    parameters = bindings(env)
+    results = [
+        evaluate_predicate(predicate, env, parameters, timeout_s=timeout_s)
+        for predicate in predicates
+    ]
+    failed = [result for result in results if not result.ok]
+    detail = (
+        "; ".join(f"{result.name}: {result.observed}" for result in failed)
+        if failed
+        else f"all {len(results)} {kind}(s) held"
+    )
+    return GroundTruthResult(ok=not failed, detail=detail, predicates=results)
+
+
 def evaluate_preconditions(
     program: Program,
     env: Sandbox,
@@ -205,20 +239,5 @@ def evaluate_preconditions(
     means. Each `PredicateResult` is kept, so a rejection names the precondition
     that failed and what it observed instead of collapsing to a bool a mismatch
     policy cannot diagnose.
-
-    Every predicate runs even after one has failed. Short-circuiting would save
-    a subprocess that is already this cheap, and in exchange the `detail` would
-    depend on the order the preconditions happen to be stored in.
     """
-    parameters = bindings(env)
-    predicates = [
-        evaluate_predicate(predicate, env, parameters, timeout_s=timeout_s)
-        for predicate in program.preconditions
-    ]
-    failed = [result for result in predicates if not result.ok]
-    detail = (
-        "; ".join(f"{result.name}: {result.observed}" for result in failed)
-        if failed
-        else f"all {len(predicates)} precondition(s) held"
-    )
-    return GroundTruthResult(ok=not failed, detail=detail, predicates=predicates)
+    return evaluate_predicates(program.preconditions, env, kind="precondition", timeout_s=timeout_s)

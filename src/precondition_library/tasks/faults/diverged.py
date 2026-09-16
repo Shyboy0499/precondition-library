@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ...sandbox import Sandbox, run_git
+from ...sandbox import Sandbox, git_out, record_base, run_git, tip_contained
 from ...signatures import StateFingerprint
 from ..intent import IntentSpec, ResolutionVariant, sample_index
 from ..spec import FaultSpec, GroundTruth
@@ -48,10 +48,6 @@ _LOCAL_NOTE = "\nLocal note.\n"
 def state_for_seed(seed: int) -> str:
     """Which of the three live states this seed injects. Deterministic."""
     return INJECTED_STATES[sample_index(seed, _INJECTION_SALT, len(INJECTED_STATES))]
-
-
-def _git_out(*args: str, cwd: Path) -> str:
-    return run_git(args, cwd=cwd).stdout.strip()
 
 
 def _commit(work: Path, message: str, *, allow_empty: bool = False) -> None:
@@ -154,18 +150,9 @@ class DivergedFault(FaultSpec):
         which is what makes the local branch ahead of upstream rather than an
         ancestor of it.
         """
-        if (
-            run_git(
-                ("rev-parse", "--verify", "refs/sandbox/base"), cwd=sandbox.work, check=False
-            ).returncode
-            == 0
-        ):
-            raise RuntimeError(f"{sandbox.work} already has a diverged fault injected")
-
         state = state_for_seed(seed)
         work = sandbox.work
-        base = _git_out("rev-parse", "HEAD", cwd=work)
-        run_git(("update-ref", "refs/sandbox/base", base), cwd=work)
+        base = record_base(sandbox, fault="diverged")
 
         # Upstream's unique commits, published to the bare repo.
         app = work / "app.py"
@@ -189,7 +176,7 @@ class DivergedFault(FaultSpec):
             run_git(("add", "-A"), cwd=work)
             _commit(work, "feat: local farewell")
 
-        local_tip = _git_out("rev-parse", "HEAD", cwd=work)
+        local_tip = git_out("rev-parse", "HEAD", cwd=work)
         run_git(("update-ref", "refs/sandbox/local-tip", local_tip), cwd=work)
         # Leave the remote-tracking ref current so observe() can read it without
         # fetching (observe must not mutate the environment).
@@ -214,21 +201,15 @@ class DivergedFault(FaultSpec):
         user's work, and this checker must call that not-ok.
         """
         work = sandbox.work
-        upstream_tip = _git_out("rev-parse", "refs/heads/main", cwd=sandbox.upstream)
-        contained = (
-            run_git(
-                ("merge-base", "--is-ancestor", upstream_tip, "HEAD"), cwd=work, check=False
-            ).returncode
-            == 0
-        )
-        if not contained:
+        upstream_tip = git_out("rev-parse", "refs/heads/main", cwd=sandbox.upstream)
+        if not tip_contained(work, upstream_tip):
             return GroundTruth(
                 ok=False,
                 detail=f"upstream tip {upstream_tip[:12]} is not contained in the local branch",
             )
 
-        base = _git_out("rev-parse", "refs/sandbox/base", cwd=work)
-        local_tip = _git_out("rev-parse", "refs/sandbox/local-tip", cwd=work)
+        base = git_out("rev-parse", "refs/sandbox/base", cwd=work)
+        local_tip = git_out("rev-parse", "refs/sandbox/local-tip", cwd=work)
         local_patch = run_git(("diff", base, local_tip), cwd=work).stdout
         if local_patch.strip():
             reverts = run_git(

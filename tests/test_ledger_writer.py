@@ -12,16 +12,15 @@ These tests use `tmp_path`, never the repository's `bench/` directory.
 
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+from conftest import GIT_STATUS_AT_IMPORT, git_status_porcelain
+from conftest import make_record as _record
 
 from precondition_library.bench.ledger import (
-    Arm,
-    EpisodeRecord,
     LedgerCorruptError,
     append,
     read,
@@ -29,44 +28,6 @@ from precondition_library.bench.ledger import (
 from precondition_library.program import EpisodeOutcome
 
 ROOT = Path(__file__).resolve().parents[1]
-
-
-def _git_status() -> str:
-    result = subprocess.run(
-        ["git", "status", "--porcelain"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-        env={**os.environ},
-    )
-    return result.stdout
-
-
-# Snapshot before any test runs. Comparing against it proves the suite changed
-# nothing in the repository, while still passing for a contributor who is
-# running the suite on a branch with uncommitted work of their own.
-_GIT_STATUS_AT_IMPORT = _git_status()
-
-
-def _record(**overrides) -> EpisodeRecord:
-    base = {
-        "arm": Arm.PRECONDITION,
-        "task_id": "sync_fork_with_upstream/seed-1",
-        "fault_type": "diverged",
-        "occurrence_index": 1,
-        "seed": 1,
-        "tokens_in": 0,
-        "tokens_out": 0,
-        "llm_calls": 0,
-        "wall_clock_s": 0.0,
-        "outcome": EpisodeOutcome.FALLBACK,
-        "model": "test",
-        "correct_variant": "merge",
-        "ground_truth_ok": True,
-    }
-    base.update(overrides)
-    return EpisodeRecord(**base)
 
 
 def test_round_trip_preserves_every_field(tmp_path: Path) -> None:
@@ -244,4 +205,4 @@ def test_writing_the_ledger_does_not_dirty_the_repository() -> None:
     suite on a working branch has uncommitted changes by definition, and that
     says nothing about whether these tests leaked a file.
     """
-    assert _git_status() == _GIT_STATUS_AT_IMPORT
+    assert git_status_porcelain() == GIT_STATUS_AT_IMPORT

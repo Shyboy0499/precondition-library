@@ -36,9 +36,7 @@ measurement (issue #25).
 
 from __future__ import annotations
 
-from pathlib import Path
-
-from ...sandbox import Sandbox, run_git
+from ...sandbox import Sandbox, git_out, record_base, run_git, store_blob, tip_contained
 from ..intent import sample_index
 from ..spec import FaultSpec, GroundTruth
 
@@ -148,21 +146,6 @@ def _edited_lock_text(seed: int, side: str) -> str:
     )
 
 
-def _git_out(*args: str, cwd: Path) -> str:
-    return run_git(args, cwd=cwd).stdout.strip()
-
-
-def _store_blob(work: Path, ref: str, content: str) -> None:
-    """Write `content` as a blob and point `ref` at it.
-
-    A ref rather than a side file keeps the recorded ground truth inside git,
-    where the checker reads it with `git cat-file` and a branch rewrite cannot
-    silently drop it.
-    """
-    sha = run_git(("hash-object", "-w", "--stdin"), cwd=work, stdin=content).stdout.strip()
-    run_git(("update-ref", ref, sha), cwd=work)
-
-
 class LockfileConflictFault(FaultSpec):
     name = "lockfile_conflict"
     description = "Upstream moved dependencies, conflicting inside a lock-shaped dependency file"
@@ -180,29 +163,20 @@ class LockfileConflictFault(FaultSpec):
         the versions, and the sandbox's fixed identities and dates fix the SHAs.
         """
         work = sandbox.work
-        if (
-            run_git(
-                ("rev-parse", "--verify", "refs/sandbox/base"), cwd=work, check=False
-            ).returncode
-            == 0
-        ):
-            raise RuntimeError(f"{work} already has a lockfile_conflict fault injected")
-
-        base = _git_out("rev-parse", "HEAD", cwd=work)
-        run_git(("update-ref", "refs/sandbox/base", base), cwd=work)
+        record_base(sandbox, fault="lockfile_conflict")
 
         # The shared ancestor: both sides edit this version of the file.
         (work / LOCK_PATH).write_text(_base_lock_text(seed), encoding="utf-8")
         run_git(("add", "-A"), cwd=work)
         run_git(("commit", "-q", "-m", "chore: add generated dependency lock"), cwd=work)
-        common = _git_out("rev-parse", "HEAD", cwd=work)
+        common = git_out("rev-parse", "HEAD", cwd=work)
         run_git(("push", "-q", "upstream", "main"), cwd=work)
 
         # The local-only edit.
         (work / LOCK_PATH).write_text(_edited_lock_text(seed, "local"), encoding="utf-8")
         run_git(("add", "-A"), cwd=work)
         run_git(("commit", "-q", "-m", "feat: add local dependency"), cwd=work)
-        local_tip = _git_out("rev-parse", "HEAD", cwd=work)
+        local_tip = git_out("rev-parse", "HEAD", cwd=work)
         run_git(("update-ref", _LOCAL_TIP_REF, local_tip), cwd=work)
 
         # Upstream's edit, built from the same ancestor and published.
@@ -214,8 +188,8 @@ class LockfileConflictFault(FaultSpec):
 
         # Back to the local branch, and record the ground truth the checker uses.
         run_git(("reset", "--hard", _LOCAL_TIP_REF), cwd=work)
-        _store_blob(work, _LOCAL_DEPENDENCY_REF, local_dependency_for_seed(seed))
-        _store_blob(work, _UPSTREAM_DEPENDENCY_REF, upstream_dependency_for_seed(seed))
+        store_blob(work, _LOCAL_DEPENDENCY_REF, local_dependency_for_seed(seed))
+        store_blob(work, _UPSTREAM_DEPENDENCY_REF, upstream_dependency_for_seed(seed))
 
         # Leave the remote-tracking ref current so observe() can read it without
         # fetching (observe must not mutate the environment).
@@ -240,14 +214,8 @@ class LockfileConflictFault(FaultSpec):
         it silently drops a dependency; a real regeneration would keep both.
         """
         work = sandbox.work
-        upstream_tip = _git_out("rev-parse", "refs/heads/main", cwd=sandbox.upstream)
-        contained = (
-            run_git(
-                ("merge-base", "--is-ancestor", upstream_tip, "HEAD"), cwd=work, check=False
-            ).returncode
-            == 0
-        )
-        if not contained:
+        upstream_tip = git_out("rev-parse", "refs/heads/main", cwd=sandbox.upstream)
+        if not tip_contained(work, upstream_tip):
             return GroundTruth(
                 ok=False,
                 detail=f"upstream tip {upstream_tip[:12]} is not contained in the local branch",
@@ -268,8 +236,8 @@ class LockfileConflictFault(FaultSpec):
             return GroundTruth(ok=False, detail=f"{LOCK_PATH} is missing after the sync")
         text = lock.read_text(encoding="utf-8")
 
-        local_entry = _git_out("cat-file", "-p", _LOCAL_DEPENDENCY_REF, cwd=work)
-        upstream_entry = _git_out("cat-file", "-p", _UPSTREAM_DEPENDENCY_REF, cwd=work)
+        local_entry = git_out("cat-file", "-p", _LOCAL_DEPENDENCY_REF, cwd=work)
+        upstream_entry = git_out("cat-file", "-p", _UPSTREAM_DEPENDENCY_REF, cwd=work)
         if local_entry not in text:
             return GroundTruth(
                 ok=False,

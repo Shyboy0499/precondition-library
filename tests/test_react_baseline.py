@@ -28,7 +28,7 @@ from conftest import FakeProvider
 from precondition_library.agents.react import SYSTEM_PROMPT, available_tools, solve
 from precondition_library.program import EpisodeOutcome
 from precondition_library.provider import Completion, ProviderError, TokenUsage
-from precondition_library.sandbox import Sandbox, create
+from precondition_library.sandbox import Sandbox
 from precondition_library.signatures import StateFingerprint, TaskSignature
 from precondition_library.tasks.faults.dirty_tree import SPEC
 
@@ -77,25 +77,10 @@ def _signature(box: Sandbox, seed: int = MODIFIED_ONLY) -> TaskSignature:
     )
 
 
-@pytest.fixture
-def make_sandbox():
-    """Build injected sandboxes and destroy them however the test ends."""
-    live: list[Sandbox] = []
-
-    def build(seed: int = MODIFIED_ONLY) -> Sandbox:
-        box = create(seed, ["dirty_tree"])
-        live.append(box)
-        return box
-
-    yield build
-    for box in live:
-        box.destroy()
-
-
 def test_loop_runs_a_tool_and_finishes(make_sandbox) -> None:
     """One command, then a declaration: the transcript records both, in order,
     with the call kept in the API's own shape."""
-    box = make_sandbox()
+    box = make_sandbox(MODIFIED_ONLY, ["dirty_tree"])
     fake = FakeProvider(_tool("git status --porcelain"), _finish())
     _, transcript = solve(_signature(box), box, fake)
 
@@ -126,7 +111,7 @@ def test_tool_results_are_answered_as_tool_messages(make_sandbox) -> None:
     turn carries its `tool_calls` and the result is a `role: "tool"` message
     keyed by `tool_call_id`. A text-protocol `user` message would leave the call
     unanswered, which the API rejects."""
-    box = make_sandbox()
+    box = make_sandbox(MODIFIED_ONLY, ["dirty_tree"])
     fake = FakeProvider(_tool("git status --porcelain"), _finish())
     solve(_signature(box), box, fake)
 
@@ -147,7 +132,7 @@ def test_a_claim_of_finish_is_not_a_pass(make_sandbox) -> None:
     that is exactly the successful-but-uncorrect row the ledger exists to
     express. A solve that stopped on the checker would be reporting the oracle.
     """
-    box = make_sandbox()
+    box = make_sandbox(MODIFIED_ONLY, ["dirty_tree"])
     fake = FakeProvider(_tool("git status --porcelain"), _finish())
     outcome, transcript = solve(_signature(box), box, fake)
 
@@ -167,7 +152,7 @@ def test_scripted_commands_genuinely_resolve_the_fault(seed: int, make_sandbox) 
     would call it: set the work aside, sync, put it back. The fault's own
     checker -- not `solve` -- is what confirms it.
     """
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["dirty_tree"])
     fake = FakeProvider(
         _tool("git stash push -u -m pl-react"),
         _tool("git fetch -q upstream"),
@@ -188,7 +173,7 @@ def test_scripted_commands_genuinely_resolve_the_fault(seed: int, make_sandbox) 
 
 def test_a_non_git_command_is_refused_as_a_tool_result(make_sandbox) -> None:
     """A refusal is information for the model, not a crash for the episode."""
-    box = make_sandbox()
+    box = make_sandbox(MODIFIED_ONLY, ["dirty_tree"])
     fake = FakeProvider(_tool("rm -rf /tmp/x"), _finish())
     _, transcript = solve(_signature(box), box, fake)
 
@@ -201,7 +186,7 @@ def test_a_non_git_command_is_refused_as_a_tool_result(make_sandbox) -> None:
 
 def test_max_steps_bounds_the_loop(make_sandbox) -> None:
     """A model that never finishes is cut off, and the transcript shows where."""
-    box = make_sandbox()
+    box = make_sandbox(MODIFIED_ONLY, ["dirty_tree"])
     fake = FakeProvider(*[_tool("git status --porcelain") for _ in range(3)])
     outcome, transcript = solve(_signature(box), box, fake, max_steps=3)
 
@@ -215,7 +200,7 @@ def test_max_steps_bounds_the_loop(make_sandbox) -> None:
 
 def test_provider_error_is_recorded_not_swallowed(make_sandbox) -> None:
     """Spec §8: a provider error is a FAIL that still carries its reason."""
-    box = make_sandbox()
+    box = make_sandbox(MODIFIED_ONLY, ["dirty_tree"])
     fake = FakeProvider(raises=ProviderError("simulated outage"))
     outcome, transcript = solve(_signature(box), box, fake)
 

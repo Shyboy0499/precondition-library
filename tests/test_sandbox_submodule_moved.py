@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import pytest
 
-from precondition_library.sandbox import Sandbox, create, run_git
+from precondition_library.sandbox import Sandbox, run_git
 from precondition_library.signatures import StateFingerprint
 from precondition_library.tasks.faults.submodule_moved import (
     ORIGIN_DIRNAME,
@@ -40,21 +40,6 @@ SEED_BY_STATE = {"init": 4, "repin": 1, "remove": 0}
 STATE_CASES = list(SEED_BY_STATE.items())
 
 _FILE_PROTOCOL = ("-c", "protocol.file.allow=always")
-
-
-@pytest.fixture
-def make_sandbox():
-    """Build injected sandboxes and destroy them however the test ends."""
-    live: list[Sandbox] = []
-
-    def build(seed: int) -> Sandbox:
-        box = create(seed, ["submodule_moved"])
-        live.append(box)
-        return box
-
-    yield build
-    for box in live:
-        box.destroy()
 
 
 def _out(*args: str, cwd) -> str:
@@ -148,7 +133,7 @@ def test_seed_mapping_is_pinned() -> None:
 @pytest.mark.parametrize(("state", "seed"), STATE_CASES)
 def test_injected_fault_fails_check(state: str, seed: int, make_sandbox) -> None:
     """A fresh injection that checked as ok would make the checker vacuous."""
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["submodule_moved"])
     result = SPEC.check(box)
     assert not result.ok
     assert result.detail
@@ -157,7 +142,7 @@ def test_injected_fault_fails_check(state: str, seed: int, make_sandbox) -> None
 @pytest.mark.parametrize(("state", "seed"), STATE_CASES)
 def test_injection_shape(state: str, seed: int, make_sandbox) -> None:
     """Each seed injects the state it claims, and leaves a clean worktree."""
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["submodule_moved"])
     assert state_for_seed(seed) == state
 
     if state == "init":
@@ -178,7 +163,7 @@ def test_injection_shape(state: str, seed: int, make_sandbox) -> None:
 @pytest.mark.parametrize(("state", "seed"), STATE_CASES)
 def test_observe_matches_injection(state: str, seed: int, make_sandbox) -> None:
     """The three discriminators observe() declares carry the injected state."""
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["submodule_moved"])
     fingerprint = StateFingerprint.observe(box)
 
     assert fingerprint.has_submodule_reference is True
@@ -202,7 +187,7 @@ def test_repin_on_remove_is_rejected(make_sandbox) -> None:
     the command worked would accept it. It leaves a reference upstream removed,
     so the outcome is wrong.
     """
-    box = make_sandbox(SEED_BY_STATE["remove"])
+    box = make_sandbox(SEED_BY_STATE["remove"], ["submodule_moved"])
     grown = _origin_grown_commit(box)
 
     _repin_wrong_on_remove(box)
@@ -219,7 +204,7 @@ def test_repin_on_remove_is_rejected(make_sandbox) -> None:
 @pytest.mark.parametrize(("state", "seed"), STATE_CASES)
 def test_correct_resolution_passes_check(state: str, seed: int, make_sandbox) -> None:
     """Run the state's honest minimum; check must accept it."""
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["submodule_moved"])
     if state == "init":
         _init_submodule(box)
         assert _initialised(box)
@@ -239,16 +224,16 @@ def test_correct_resolution_passes_check(state: str, seed: int, make_sandbox) ->
 @pytest.mark.parametrize(("state", "seed"), STATE_CASES)
 def test_same_seed_reproduces_commit_shas(state: str, seed: int, make_sandbox) -> None:
     """Same seed, same content: every recorded SHA must match."""
-    first = make_sandbox(seed)
+    first = make_sandbox(seed, ["submodule_moved"])
     shas_first = _shas(first)
     first.destroy()
-    second = make_sandbox(seed)
+    second = make_sandbox(seed, ["submodule_moved"])
     assert _shas(second) == shas_first
 
 
 @pytest.mark.parametrize(("state", "seed"), STATE_CASES)
 def test_observe_does_not_mutate(state: str, seed: int, make_sandbox) -> None:
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["submodule_moved"])
     before = StateFingerprint.observe(box)
     after = StateFingerprint.observe(box)
     assert before == after
@@ -256,7 +241,7 @@ def test_observe_does_not_mutate(state: str, seed: int, make_sandbox) -> None:
 
 
 def test_destroy_is_idempotent(make_sandbox) -> None:
-    box = make_sandbox(SEED_BY_STATE["remove"])
+    box = make_sandbox(SEED_BY_STATE["remove"], ["submodule_moved"])
     root = box.root
     assert root.exists()
     box.destroy()

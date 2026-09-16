@@ -17,11 +17,10 @@ Three properties carry the file, each from a defect the design guards against:
 
 from __future__ import annotations
 
-import os
-import subprocess
 from pathlib import Path
 
 import pytest
+from conftest import GIT_STATUS_AT_IMPORT, git_status_porcelain, make_record
 
 from precondition_library.bench.ledger import Arm, EpisodeRecord, append
 from precondition_library.bench.report import (
@@ -40,41 +39,20 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _record(**overrides) -> EpisodeRecord:
-    base = {
-        "arm": Arm.SEMANTIC,
-        "task_id": "sync_fork_with_upstream",
-        "fault_type": "diverged",
-        "occurrence_index": 1,
-        "seed": 1,
-        "tokens_in": 0,
-        "tokens_out": 0,
-        "llm_calls": 0,
-        "wall_clock_s": 0.0,
-        "outcome": EpisodeOutcome.SUCCESS,
-        "model": "test",
-        "correct_variant": "merge",
-        "ground_truth_ok": True,
-    }
-    base.update(overrides)
-    return EpisodeRecord(**base)
+    """This module's baseline: arm 2, a successful episode.
+
+    A caller's own `arm`/`outcome` still win, because the baseline is set with
+    `setdefault` rather than passed alongside them.
+    """
+    overrides.setdefault("arm", Arm.SEMANTIC)
+    overrides.setdefault("outcome", EpisodeOutcome.SUCCESS)
+    return make_record(**overrides)
 
 
 def _write(path: Path, records: list[EpisodeRecord]) -> Path:
     for record in records:
         append(path, record)
     return path
-
-
-def _git_status() -> str:
-    result = subprocess.run(
-        ["git", "status", "--porcelain"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-        env={**os.environ},
-    )
-    return result.stdout
 
 
 def _bench_entries() -> set[str]:
@@ -88,7 +66,6 @@ def _bench_entries() -> set[str]:
 # Snapshot before any test runs, as `test_ledger_writer.py` does. Comparing
 # against this proves the suite wrote nothing while still passing on a branch
 # with uncommitted work of the contributor's own.
-_GIT_STATUS_AT_IMPORT = _git_status()
 _BENCH_AT_IMPORT = _bench_entries()
 
 
@@ -509,5 +486,5 @@ def test_the_report_does_not_dirty_the_repository(tmp_path: Path) -> None:
         _write(tmp_path / "ledger.jsonl", [_record(seed=1)]),
         tmp_path / "out",
     )
-    assert _git_status() == _GIT_STATUS_AT_IMPORT
+    assert git_status_porcelain() == GIT_STATUS_AT_IMPORT
     assert _bench_entries() == _BENCH_AT_IMPORT

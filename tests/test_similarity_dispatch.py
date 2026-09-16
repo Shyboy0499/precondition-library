@@ -9,64 +9,30 @@ and builds its library under `tmp_path` rather than touching the committed one.
 
 from __future__ import annotations
 
-import subprocess
-from pathlib import Path
-
 import pytest
+from conftest import store_programs
 
 from precondition_library.library import (
     DEFAULT_SIMILARITY_THRESHOLD,
-    Library,
     ScoredProgram,
 )
 from precondition_library.program import Predicate, Program, ProgramStatus, Provenance
 from precondition_library.runtime.probes import evaluate_preconditions
-from precondition_library.sandbox import Sandbox, create
 from precondition_library.signatures import StateFingerprint, TaskSignature
 from precondition_library.similarity import lexical_similarity
-
-ROOT = Path(__file__).resolve().parents[1]
 
 INTENT = "reconcile local commits with upstream"
 
 
-def _git_status() -> str:
-    return subprocess.run(
-        ["git", "status", "--porcelain"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
-
-
 @pytest.fixture(autouse=True)
-def _repository_is_untouched():
+def _repository_is_untouched(repository_unchanged):
     """Every library write in this file must go to `tmp_path`, not the repo.
 
-    Compares against the status before the test rather than requiring a clean
-    tree: the branch carrying this file is uncommitted while it is reviewed, and
-    a real write by the test would show up as a delta.
+    The comparison is the shared `repository_unchanged` fixture: it asserts the
+    working tree is unchanged since import rather than empty, so it passes for a
+    contributor with uncommitted work and still catches a real write.
     """
-    before = _git_status()
     yield
-    after = _git_status()
-    assert after == before, f"this test changed the repository:\nbefore:\n{before}\nafter:\n{after}"
-
-
-@pytest.fixture
-def make_sandbox():
-    """Build throwaway sandboxes and destroy them however the test ends."""
-    live: list[Sandbox] = []
-
-    def build(seed: int, faults: list[str]) -> Sandbox:
-        box = create(seed, faults)
-        live.append(box)
-        return box
-
-    yield build
-    for box in live:
-        box.destroy()
 
 
 def _fingerprint() -> StateFingerprint:
@@ -115,26 +81,6 @@ def _program(
     )
 
 
-def _store(
-    tmp_path: Path,
-    programs: list[Program],
-    *,
-    threshold: float = DEFAULT_SIMILARITY_THRESHOLD,
-) -> Library:
-    """A library holding `programs` at the statuses they declare.
-
-    `Library.add` takes only a candidate, so each program is added as one and
-    then moved through the real transition table. `threshold` is arm 2's floor,
-    configured at construction because that is where the harness sets it.
-    """
-    library = Library(tmp_path, threshold=threshold)
-    for program in programs:
-        library.add(program.model_copy(update={"status": ProgramStatus.CANDIDATE}))
-        if program.status is not ProgramStatus.CANDIDATE:
-            library.set_status(program.id, program.status)
-    return library
-
-
 def _query_text(signature: TaskSignature) -> str:
     """The request arm 2 matches with, per issue #4: intent plus state as text."""
     return f"{signature.intent}\n{signature.fingerprint.as_text()}"
@@ -164,7 +110,7 @@ def test_ranking_orders_by_textual_distance(tmp_path) -> None:
     # The floor is set to 0.0 so the zero-overlap program still appears and its
     # place in the order is what is checked; the default floor is exercised in
     # `test_threshold_is_a_floor`.
-    library = _store(tmp_path, [near, mid, far], threshold=0.0)
+    library = store_programs(tmp_path, [near, mid, far], threshold=0.0)
 
     matched = library.match_semantic(_signature())
 
@@ -186,8 +132,8 @@ def test_threshold_is_a_floor(tmp_path) -> None:
     `match_semantic` through the library rather than a per-call default.
     """
     unrelated = _program("a-unrelated", "frosting and sprinkles", intent="decorate a cake")
-    default_floor = _store(tmp_path / "default", [unrelated])
-    lowered = _store(tmp_path / "lowered", [unrelated], threshold=0.0)
+    default_floor = store_programs(tmp_path / "default", [unrelated])
+    lowered = store_programs(tmp_path / "lowered", [unrelated], threshold=0.0)
     signature = _signature(intent="xyzzy plugh")
 
     assert DEFAULT_SIMILARITY_THRESHOLD > 0, "the default must be a real floor"
@@ -211,7 +157,7 @@ def test_only_admitted_programs_are_dispatchable(tmp_path) -> None:
         "the dirty worktree has local commits ahead of upstream",
         status=ProgramStatus.QUARANTINED,
     )
-    library = _store(tmp_path, [admitted, candidate, quarantined])
+    library = store_programs(tmp_path, [admitted, candidate, quarantined])
 
     # Not vacuous: all three are stored, and both excluded ones would score
     # higher than the admitted program on the arm's own text.
@@ -233,7 +179,7 @@ def test_dispatch_is_deterministic(tmp_path) -> None:
     near = _program("a-near", "the dirty worktree has local commits ahead of upstream")
     mid = _program("b-mid", "the submodule is initialised")
     far = _program("c-far", "frosting and sprinkles", intent="decorate a cake")
-    library = _store(tmp_path, [near, mid, far])
+    library = store_programs(tmp_path, [near, mid, far])
 
     first = library.match_semantic(_signature())
     second = library.match_semantic(_signature())
@@ -264,7 +210,7 @@ def test_similarity_returns_a_program_its_preconditions_reject(make_sandbox, tmp
             probe="test -f definitely-not-here",
         ),
     )
-    library = _store(tmp_path, [rejecting])
+    library = store_programs(tmp_path, [rejecting])
 
     verdict = evaluate_preconditions(rejecting, box)
     assert verdict.ok is False, "fixture is not a mis-fire unless the probes reject the env"

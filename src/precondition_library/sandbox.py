@@ -121,6 +121,22 @@ def run_git(
     return result
 
 
+def git_out(*args: str, cwd: Path) -> str:
+    """Run git under the pinned environment and return its stripped stdout."""
+    return run_git(args, cwd=cwd).stdout.strip()
+
+
+def store_blob(work: Path, ref: str, content: str) -> None:
+    """Write `content` as a blob and point `ref` at it.
+
+    A ref rather than a side file keeps the recorded ground truth inside git,
+    where a checker reads it with `git cat-file` and a branch rewrite cannot
+    silently drop it.
+    """
+    sha = run_git(("hash-object", "-w", "--stdin"), cwd=work, stdin=content).stdout.strip()
+    run_git(("update-ref", ref, sha), cwd=work)
+
+
 @dataclass(frozen=True)
 class Sandbox:
     """A disposable environment and the handles needed to inspect it."""
@@ -141,6 +157,53 @@ class Sandbox:
                 _SANDBOX_DIR.rmdir()
             except OSError:
                 pass
+
+
+BASE_REF = "refs/sandbox/base"
+"""Where a fault records the tip it injected on top of.
+
+Ground truth lives under `refs/sandbox/` so a branch rewrite cannot drop it. A
+fault's own state ref (such as `submodule_moved`'s) is a different name, so this
+is only the shared "the sandbox was pristine at this commit" record.
+"""
+
+
+def require_uninjected(sandbox: Sandbox, *, fault: str, ref: str = BASE_REF) -> None:
+    """Raise if this sandbox already has `fault` injected.
+
+    Injecting a fault twice would build a state that is neither fault, so it is an
+    error rather than a no-op. `ref` is the ref the fault records when it runs; a
+    sandbox already holding it has been injected.
+    """
+    work = sandbox.work
+    if run_git(("rev-parse", "--verify", ref), cwd=work, check=False).returncode == 0:
+        raise RuntimeError(f"{work} already has a {fault} fault injected")
+
+
+def record_base(sandbox: Sandbox, *, fault: str) -> str:
+    """Guard against double injection, record the pre-injection tip, return it.
+
+    The guard and the record belong together: an injector that recorded a base
+    without checking would leave the first injection's ref behind and a second
+    call's `HEAD` would be the already-injected state, not the base.
+    """
+    require_uninjected(sandbox, fault=fault)
+    work = sandbox.work
+    base = git_out("rev-parse", "HEAD", cwd=work)
+    run_git(("update-ref", BASE_REF, base), cwd=work)
+    return base
+
+
+def tip_contained(work: Path, tip: str) -> bool:
+    """Whether `tip` is an ancestor of (or equal to) `HEAD` in `work`.
+
+    Several checkers grade the same first clause -- upstream's tip is contained in
+    the local branch -- before their fault-specific clauses. This is only that
+    test; each caller keeps its own failure `detail`, which names what the tip was.
+    """
+    return (
+        run_git(("merge-base", "--is-ancestor", tip, "HEAD"), cwd=work, check=False).returncode == 0
+    )
 
 
 _BASE_FILES = {

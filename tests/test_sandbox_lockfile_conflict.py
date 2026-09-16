@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import pytest
 
-from precondition_library.sandbox import Sandbox, create, run_git
+from precondition_library.sandbox import Sandbox, run_git
 from precondition_library.signatures import StateFingerprint
 from precondition_library.tasks.faults.lockfile_conflict import (
     LOCK_PATH,
@@ -39,21 +39,6 @@ from precondition_library.tasks.faults.lockfile_conflict import (
 SEEDS = [0, 3]
 
 _MARKER = "<<<<<<<"
-
-
-@pytest.fixture
-def make_sandbox():
-    """Build injected sandboxes and destroy them however the test ends."""
-    live: list[Sandbox] = []
-
-    def build(seed: int) -> Sandbox:
-        box = create(seed, ["lockfile_conflict"])
-        live.append(box)
-        return box
-
-    yield build
-    for box in live:
-        box.destroy()
 
 
 def _upstream_contained(box: Sandbox) -> bool:
@@ -115,7 +100,7 @@ def test_injected_fault_fails_check(seed: int, make_sandbox) -> None:
     The injected state is divergence with overlapping edits, not markers: the
     conflict is produced by the sync, so the file is clean until someone tries.
     """
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["lockfile_conflict"])
     assert _MARKER not in _lock_text(box)
 
     result = SPEC.check(box)
@@ -126,7 +111,7 @@ def test_injected_fault_fails_check(seed: int, make_sandbox) -> None:
 @pytest.mark.parametrize("seed", SEEDS)
 def test_observe_matches_injection(seed: int, make_sandbox) -> None:
     """The fingerprint sees one commit each way, both touching the same file."""
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["lockfile_conflict"])
     fingerprint = StateFingerprint.observe(box)
 
     assert fingerprint.dirty_worktree is False
@@ -156,7 +141,7 @@ def test_marker_deleting_resolution_fails_check(
     The explicit `_upstream_contained` assertion is the point: this is not a
     failed sync, it is a successful-looking one that lost data.
     """
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["lockfile_conflict"])
     _start_conflicted_merge(box)
     kept = (
         local_dependency_for_seed(seed) if keep == "local" else upstream_dependency_for_seed(seed)
@@ -175,7 +160,7 @@ def test_marker_deleting_resolution_fails_check(
 @pytest.mark.parametrize("seed", SEEDS)
 def test_marker_leaving_attempt_fails_check(seed: int, make_sandbox) -> None:
     """A merge committed with the markers still in the file is rejected."""
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["lockfile_conflict"])
     _start_conflicted_merge(box)
     _commit_resolution(box, "merge: markers left in place")
 
@@ -190,7 +175,7 @@ def test_marker_leaving_attempt_fails_check(seed: int, make_sandbox) -> None:
 @pytest.mark.parametrize("seed", SEEDS)
 def test_correct_resolution_passes_check(seed: int, make_sandbox) -> None:
     """Combine both sides' entries, no markers, upstream contained."""
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["lockfile_conflict"])
     _start_conflicted_merge(box)
     _write_lock(
         box,
@@ -206,16 +191,16 @@ def test_correct_resolution_passes_check(seed: int, make_sandbox) -> None:
 @pytest.mark.parametrize("seed", SEEDS)
 def test_same_seed_reproduces_commit_shas(seed: int, make_sandbox) -> None:
     """Same seed, same content: every recorded SHA must match."""
-    first = make_sandbox(seed)
+    first = make_sandbox(seed, ["lockfile_conflict"])
     shas_first = _shas(first)
     first.destroy()
-    second = make_sandbox(seed)
+    second = make_sandbox(seed, ["lockfile_conflict"])
     assert _shas(second) == shas_first
 
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_observe_does_not_mutate(seed: int, make_sandbox) -> None:
-    box = make_sandbox(seed)
+    box = make_sandbox(seed, ["lockfile_conflict"])
     before = StateFingerprint.observe(box)
     after = StateFingerprint.observe(box)
     assert before == after
@@ -223,7 +208,7 @@ def test_observe_does_not_mutate(seed: int, make_sandbox) -> None:
 
 
 def test_destroy_is_idempotent(make_sandbox) -> None:
-    box = make_sandbox(SEEDS[0])
+    box = make_sandbox(SEEDS[0], ["lockfile_conflict"])
     root = box.root
     assert root.exists()
     box.destroy()
