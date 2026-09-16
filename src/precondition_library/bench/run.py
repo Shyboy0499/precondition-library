@@ -35,7 +35,7 @@ from ..agents.react import solve
 from ..library import Library
 from ..program import EpisodeOutcome, ProgramStatus
 from ..provider import Completion, Provider
-from ..runtime.replay import replay
+from ..runtime.replay import ReplayResult, replay
 from ..sandbox import Sandbox, create
 from ..signatures import StateFingerprint, TaskSignature
 from ..tasks.faults import FAULTS
@@ -190,6 +190,9 @@ def run_episode(
     fault = FAULTS[fault_type]
     started = time.monotonic()
     accounting = _AccountingProvider(provider)
+    # Read the digest before the arm runs: it describes the library the episode
+    # dispatched against, and the compile below may add to it afterwards.
+    library_hash = library.library_hash()
     box: Sandbox | None = None
     try:
         try:
@@ -197,7 +200,17 @@ def run_episode(
             state = StateFingerprint.observe(box)
         except Exception as exc:
             return _invalid_record(
-                arm, intent.name, fault_type, seed, occurrence, model, started, str(exc)
+                arm,
+                intent.name,
+                fault_type,
+                seed,
+                occurrence,
+                model,
+                started,
+                str(exc),
+                accounting=accounting,
+                library_hash=library_hash,
+                threshold=library.threshold,
             )
 
         request = fault.task_text(seed)
@@ -209,7 +222,17 @@ def run_episode(
             ground_truth_ok = fault.check(box).ok
         except Exception as exc:
             return _invalid_record(
-                arm, intent.name, fault_type, seed, occurrence, model, started, str(exc)
+                arm,
+                intent.name,
+                fault_type,
+                seed,
+                occurrence,
+                model,
+                started,
+                str(exc),
+                accounting=accounting,
+                library_hash=library_hash,
+                threshold=library.threshold,
             )
 
         # Grading is done with this sandbox, so it is safe to release it now.
@@ -238,6 +261,8 @@ def run_episode(
             ground_truth_ok=ground_truth_ok,
             program_id=result.program_id,
             dispatch_score=result.dispatch_score,
+            similarity_threshold=library.threshold,
+            library_hash=library_hash,
             admitted=result.admitted,
             refusal_reason=result.refusal_reason,
             timed_out=result.timed_out,
@@ -293,10 +318,11 @@ def _run_arm(
         )
 
     fired_variant = None if replayed.refused else fired.variant
-    if not replayed.refused:
+    if _is_genuine_miss(replayed):
         # §8: a fire whose postconditions failed is demoted, and the fallback is
-        # charged to this episode. A guard refusal executed nothing, so there is
-        # no evidence the program is wrong and it is left as it was.
+        # charged to this episode. Anything else -- a guard refusal, a timeout --
+        # is a runtime outcome rather than evidence the program is wrong, so the
+        # program is left as it was.
         library.set_status(
             fired.id, ProgramStatus.DEMOTED, episode_id=_episode_id(fault_type, seed, occurrence)
         )
@@ -322,6 +348,27 @@ def _run_arm(
         True,
         None,
         replayed.timed_out,
+    )
+
+
+def _is_genuine_miss(replayed: ReplayResult) -> bool:
+    """Whether a failed replay is evidence the program is wrong (spec §8).
+
+    Demotion is terminal (`library._TRANSITIONS`), so it must rest on the
+    program's own contract, not on the runtime's mood. Only a body that ran to
+    completion and left its postconditions unsatisfied is evidence; a guard
+    refusal executed nothing, and a timeout was killed before it finished. The
+    body exiting non-zero is not in this test on purpose: the postconditions are
+    the program's own statement of done, and spec §8 demotes on a postcondition
+    miss, not on an exit code. A transient timeout demoting a correct program
+    would remove it permanently and shrink coverage -- the variable the
+    comparison is matched on.
+    """
+    return (
+        not replayed.refused
+        and not replayed.timed_out
+        and replayed.postconditions is not None
+        and not replayed.postconditions.ok
     )
 
 
@@ -355,8 +402,15 @@ def _learn_from_solution(
         return
 
     episode_id = _episode_id(fault_type, seed, occurrence)
+    intent = _intent_for(fault_type)
     try:
-        compiled = compile_program(signature, box, result.transcript, accounting)
+        compiled = compile_program(
+            signature,
+            box,
+            result.transcript,
+            accounting,
+            variant_ids=[variant.id for variant in intent.variants],
+        )
     except Exception as exc:
         _record_compile_failure(result, f"compile raised {type(exc).__name__}: {exc}")
         return
@@ -459,13 +513,21 @@ def _invalid_record(
     model: str,
     started: float,
     reason: str,
+    *,
+    accounting: _AccountingProvider,
+    library_hash: str,
+    threshold: float,
 ) -> EpisodeRecord:
     """The row for an episode that could not run.
 
     `ground_truth_ok` stays `None` — "not checked" is passed deliberately, since
-    the episode never reached a state the checker could grade — and the row
-    carries no tokens because none were spent. It is recorded so it appears in
-    the denominator's own invalid rate rather than vanishing (spec §7, item 9).
+    the episode never reached a state the checker could grade. The row carries
+    whatever `accounting` has already seen, because an episode can become invalid
+    *after* the arm ran: a `fault.check` failure happens with the solve already
+    paid for, and hardcoding zero there would drop real spend from the ledger
+    (spec §7, item 9: invalid episodes are "excluded from denominators but never
+    hidden"). It is recorded so it appears in the denominator's own invalid rate
+    rather than vanishing.
     """
     return EpisodeRecord(
         arm=arm,
@@ -473,13 +535,16 @@ def _invalid_record(
         fault_type=fault_type,
         occurrence_index=occurrence,
         seed=seed,
-        tokens_in=0,
-        tokens_out=0,
-        llm_calls=0,
+        tokens_in=accounting.tokens_in,
+        tokens_out=accounting.tokens_out,
+        cached_tokens_in=accounting.cached_tokens_in,
+        llm_calls=accounting.llm_calls,
         wall_clock_s=time.monotonic() - started,
         outcome=EpisodeOutcome.INVALID,
         correct_variant=None,
         ground_truth_ok=None,
+        similarity_threshold=threshold,
+        library_hash=library_hash,
         refusal_reason=reason,
         model=model,
     )

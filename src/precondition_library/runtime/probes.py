@@ -19,6 +19,16 @@ with no binding raises rather than becoming an empty string: an empty value
 turns the probe into a different question (often one that silently holds), and a
 wrong answer that looks right is the failure this project exists to measure.
 
+The raise is split in two, because two different defects look alike from here.
+A name outside `VOCABULARY` is a defect *in the program* -- a typo'd parameter
+would otherwise never bind and the program would silently never fire -- so it
+raises and admission records the rejection. A declared name that this environment
+cannot bind (a program needing `submodule_path` on a repository with no
+submodule) is not a crash: it is a precondition that does not hold, so
+`evaluate_predicate` returns a failed `PredicateResult` naming why and dispatch
+moves on. Collapsing the two would either abort a dispatch on an ordinary
+non-match or let a typo'd program ship.
+
 Probes run under `bash -c`, not `/bin/sh`. The gold probes use process
 substitution (`comm -12 <(...)`), which is a bash extension and not POSIX; a
 POSIX-only runner would make a correct probe report a false negative on Linux.
@@ -30,7 +40,29 @@ import re
 import subprocess
 
 from ..program import GroundTruthResult, Predicate, PredicateResult, Program
-from ..sandbox import Sandbox, git_env
+from ..sandbox import Sandbox, git_env, submodule_path
+
+VOCABULARY: frozenset[str] = frozenset(
+    {"work_dir", "upstream_remote", "upstream_branch", "submodule_path"}
+)
+"""Every parameter name the runtime can bind, whether or not this environment can.
+
+The set is fixed rather than derived from `bindings(env)` on purpose: a name
+*outside* it is a compile defect and must raise, while a name inside it whose
+value this particular sandbox cannot supply is an inapplicable precondition. The
+two cases are indistinguishable from the bindings dict alone.
+"""
+
+
+class UnboundParameterError(KeyError):
+    """A declared parameter that this environment cannot supply a value for.
+
+    Subclasses `KeyError` because it is still a missing lookup: existing callers
+    that treat an unbound placeholder in a *body* as a compile defect keep doing
+    so. Preconditions are the case that must not raise, and
+    `evaluate_predicate` catches this class before it escapes.
+    """
+
 
 # A `{name}` placeholder, but not `${name}`: the latter is a shell variable
 # expansion and belongs to the shell, not to us. Minimal on purpose -- this is
@@ -46,19 +78,26 @@ _MAX_EXCERPT = 160
 def substitute(text: str, parameters: dict[str, str]) -> str:
     """Replace `{name}` placeholders in `text` from `parameters`.
 
-    Raises `KeyError` when a placeholder has no bound value, rather than
-    substituting an empty string.
+    A name outside `VOCABULARY` raises `KeyError` -- an unknown placeholder is a
+    defect in the program, and running the probe with the literal braces would
+    ask a different (often falsely-holding) question. A declared name that this
+    environment cannot bind raises `UnboundParameterError`, which callers that
+    evaluate preconditions turn into a failed result rather than a crash.
     """
 
     def replace(match: re.Match[str]) -> str:
         name = match.group(1)
-        try:
+        if name in parameters:
             return parameters[name]
-        except KeyError:
-            raise KeyError(
-                f"no value bound for placeholder {name!r}; substituting an empty "
-                f"string would ask a different question"
-            ) from None
+        if name in VOCABULARY:
+            raise UnboundParameterError(
+                f"the environment cannot bind {name!r}; a precondition that needs it "
+                f"does not hold here, while an unknown name would be a program defect"
+            )
+        raise KeyError(
+            f"no value bound for placeholder {name!r}; substituting an empty "
+            f"string would ask a different question"
+        )
 
     return _PLACEHOLDER.sub(replace, text)
 
@@ -81,8 +120,16 @@ def evaluate_predicate(
     says whether the pattern matched and shows what stdout the match saw, and on
     a bare failure it carries a short stdout/stderr excerpt. It stays short
     because it lands in a record next to the ledger.
+
+    A predicate naming a declared parameter this environment cannot bind is
+    reported as a failed result, not raised: the precondition simply does not
+    hold on this sandbox, which is the ordinary non-match dispatch and admission's
+    negative side must see. A name outside the vocabulary still raises.
     """
-    probe = substitute(predicate.probe, parameters)
+    try:
+        probe = substitute(predicate.probe, parameters)
+    except UnboundParameterError as exc:
+        return PredicateResult(name=predicate.name, ok=False, observed=f"not applicable: {exc}")
     try:
         completed = subprocess.run(
             [*SHELL, probe],
@@ -112,26 +159,34 @@ def evaluate_predicate(
 
 
 def bindings(env: Sandbox) -> dict[str, str]:
-    """Values the sandbox supplies for the parameter names gold programs declare.
+    """Values the sandbox supplies for the declared parameter names.
 
     `sandbox.create` clones its only remote as `upstream` and seeds the branch
-    `main`, and the working clone is `env.work`. A program that declares a
-    parameter this mapping cannot bind is not replayable: the placeholder would
-    survive into the command text, and `substitute` raises rather than running a
-    different question. The binding is the sandbox's fixed vocabulary, not a
-    general mechanism; a fault that renamed the branch would need it derived
-    from the sandbox, which this runtime does not yet do.
+    `main`, and the working clone is `env.work`. `submodule_path` is read from
+    the sandbox's own `.gitmodules`; it is present only when the repository
+    declares a submodule, and deliberately absent (not empty) otherwise. An
+    absent declared name is what `substitute` reports as `UnboundParameterError`, so
+    a program that needs a submodule is inapplicable rather than broken on a
+    repository that has none.
+
+    The binding is the sandbox's fixed vocabulary, not a general mechanism; a
+    fault that renamed the branch would need it derived from the sandbox, which
+    this runtime does not yet do.
 
     Public and shared because a probe and a body are substituted from this one
     mapping. A second copy in a caller is how replay and dispatch would come to
     disagree about what `{upstream_branch}` means, which would show up in the
     ablation as a difference between the arms.
     """
-    return {
+    values = {
         "work_dir": str(env.work),
         "upstream_remote": "upstream",
         "upstream_branch": "main",
     }
+    path = submodule_path(env.work)
+    if path is not None:
+        values["submodule_path"] = path
+    return values
 
 
 def evaluate_preconditions(

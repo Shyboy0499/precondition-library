@@ -22,7 +22,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from .sandbox import Sandbox, run_git
+from .sandbox import Sandbox, run_git, submodule_path
 
 
 def _render(value: object) -> str:
@@ -58,19 +58,6 @@ def _has_locked_branch(work: Path, branch: str) -> bool:
     if not lock.is_absolute():
         lock = work / lock
     return lock.exists()
-
-
-def _submodule_path(work: Path) -> str | None:
-    """The submodule's path from `.gitmodules`, or None when there is none."""
-    result = run_git(
-        ("config", "--file", ".gitmodules", "--get-regexp", r"^submodule\..*\.path$"),
-        cwd=work,
-        check=False,
-    )
-    if result.returncode != 0 or not result.stdout.strip():
-        return None
-    # One submodule is all the grid models; take the first declared path.
-    return result.stdout.split()[-1]
 
 
 class StateFingerprint(BaseModel):
@@ -151,23 +138,23 @@ class StateFingerprint(BaseModel):
         local_touched = out("diff", "--name-only", "upstream/main...HEAD").split()
         upstream_touched = out("diff", "--name-only", "HEAD...upstream/main").split()
 
-        submodule_path = _submodule_path(work)
-        if submodule_path is None:
+        path = submodule_path(work)
+        if path is None:
             submodule_initialised = False
             pin_matches = True
             upstream_references = True
         else:
-            status = out("submodule", "status", "--", submodule_path)
+            status = out("submodule", "status", "--", path)
             submodule_initialised = bool(status) and not status.startswith("-")
             pin_matches = (
                 run_git(
-                    ("diff", "--name-only", "upstream/main", "HEAD", "--", submodule_path),
+                    ("diff", "--name-only", "upstream/main", "HEAD", "--", path),
                     cwd=work,
                     check=False,
                 ).stdout.strip()
                 == ""
             )
-            upstream_references = bool(out("ls-tree", "upstream/main", "--", submodule_path))
+            upstream_references = bool(out("ls-tree", "upstream/main", "--", path))
 
         return cls(
             dirty_worktree=bool(out("status", "--porcelain")),

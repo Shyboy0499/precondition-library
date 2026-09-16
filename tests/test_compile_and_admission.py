@@ -245,6 +245,53 @@ def test_empty_preconditions_are_recorded_and_then_rejected(make_sandbox) -> Non
     assert "negative side" in reason, reason
 
 
+# --- the ambiguous intent requires a declared variant -----------------------
+
+
+@pytest.mark.parametrize("variant", [None, "not-a-declared-resolution"])
+def test_admit_rejects_a_program_without_a_declared_variant(variant) -> None:
+    """An ambiguous intent admits only programs whose `variant` is a declared id.
+
+    The ledger's `misfired` is `fired_variant is not None and fired_variant !=
+    correct_variant`, so a program firing with `variant: null` would record
+    `fired_variant=None` -- documented as "none fired" -- and count as no miss.
+    A mislabelled program would be scored against the wrong resolution. Both are
+    rejected here, before any sandbox runs.
+    """
+    program = _program(variant=variant)
+
+    admitted, reason = admit(program, FAULTS["diverged"], seeds=[DISCARD_SEED])
+
+    assert not admitted
+    assert "declares" in reason, reason
+    assert "discard" in reason, "the reason must name the ids that were allowed"
+
+
+def test_admit_still_accepts_a_declared_variant() -> None:
+    """The check rejects the undeclarable, not the ambiguous intent itself."""
+    admitted, reason = admit(_program(variant="discard"), FAULTS["diverged"], seeds=[DISCARD_SEED])
+
+    assert admitted, reason
+
+
+def test_the_prompt_names_the_ids_the_intent_will_accept(make_sandbox) -> None:
+    """The model is told what `variant` it must emit before it can get it wrong."""
+    box = make_sandbox()
+    fake = FakeProvider(_completion(_reply_text()))
+
+    compile_program(
+        _signature(box),
+        box,
+        [],
+        fake,
+        variant_ids=["discard", "merge", "rebase"],
+    )
+
+    system = fake.calls[0]["system"]
+    assert "discard, merge, rebase" in system
+    assert "__VARIANT_RULE__" not in system, "the placeholder must be replaced"
+
+
 # --- malformed replies are data --------------------------------------------
 
 

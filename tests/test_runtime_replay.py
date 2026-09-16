@@ -235,9 +235,28 @@ def test_substitute_replaces_named_placeholders_only() -> None:
     )
 
 
-def test_substitute_raises_on_an_unbound_placeholder() -> None:
+def test_substitute_raises_on_an_unknown_placeholder() -> None:
+    """A name outside the vocabulary is a program defect and must not be silent."""
     with pytest.raises(KeyError):
+        substitute("git checkout {not_a_parameter}", {"work_dir": "/tmp/sandbox"})
+
+
+def test_substitute_distinguishes_declared_from_unknown_names() -> None:
+    """A declared name with no value here raises `UnboundParameterError`, not a typo error.
+
+    `evaluate_predicate` catches this class and reports a failed predicate, so the
+    distinction is what lets a submodule program be inapplicable rather than a
+    crash on a repository with no submodule. An unknown name still raises plainly.
+    """
+    from precondition_library.runtime.probes import UnboundParameterError
+
+    with pytest.raises(UnboundParameterError):
         substitute("git checkout {submodule_path}", {"work_dir": "/tmp/sandbox"})
+
+    assert not issubclass(UnboundParameterError, type(None))
+    assert issubclass(UnboundParameterError, KeyError), (
+        "body callers still treat it as a lookup miss"
+    )
 
 
 # --- the fixture is a real cleanup ------------------------------------------

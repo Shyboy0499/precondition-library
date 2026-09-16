@@ -31,9 +31,11 @@ from precondition_library.runtime.probes import evaluate_preconditions
 from precondition_library.sandbox import Sandbox, create
 from precondition_library.signatures import StateFingerprint, TaskSignature
 from precondition_library.tasks.faults.diverged import INTENT as DIVERGED_INTENT
+from precondition_library.tasks.faults.submodule_moved import state_for_seed
 
 ROOT = Path(__file__).resolve().parents[1]
 GOLD = ROOT / "bench" / "gold" / "sync_fork_with_upstream.yaml"
+SUBMODULE_GOLD = ROOT / "bench" / "gold" / "restore_submodule_state.yaml"
 
 # `conftest.py`'s grid declares seed 2 as the disjoint state, whose resolution is
 # `rebase`. Reusing it here means the positive fixture is the real-world
@@ -85,6 +87,21 @@ def _gold_program(variant: str) -> Program:
     document = yaml.safe_load(GOLD.read_text(encoding="utf-8"))
     entry = next(item for item in document["programs"] if item["variant"] == variant)
     return Program.model_validate(entry)
+
+
+def _submodule_gold_program(variant: str) -> Program:
+    """One committed `restore_submodule_state` resolution, where `submodule_path` is needed."""
+    document = yaml.safe_load(SUBMODULE_GOLD.read_text(encoding="utf-8"))
+    entry = next(item for item in document["programs"] if item["variant"] == variant)
+    return Program.model_validate(entry)
+
+
+def _seed_for_state(state: str) -> int:
+    """A seed whose `submodule_moved` injection is `state`."""
+    for seed in range(64):
+        if state_for_seed(seed) == state:
+            return seed
+    raise AssertionError(f"no seed in 0..63 injects {state!r}")
 
 
 def _predicate(name: str, probe: str) -> Predicate:
@@ -220,3 +237,42 @@ def test_nothing_matching_returns_an_empty_list(make_sandbox, tmp_path) -> None:
 
     assert evaluate_preconditions(only, box).ok is False
     assert library.match_preconditions(_signature(box, 13), box) == []
+
+
+# --- a program needing `submodule_path` -------------------------------------
+
+
+def test_submodule_program_preconditions_evaluate_on_a_submodule_sandbox(make_sandbox) -> None:
+    """A gold `restore_submodule_state` program's probes run and hold, not raise.
+
+    Before `submodule_path` was bound, every one of these programs raised on an
+    unbound placeholder -- so this is the regression that pins the binding, and
+    the observable surface arm 3's half of the comparison depends on.
+    """
+    box = make_sandbox(_seed_for_state("init"), ["submodule_moved"])
+    program = _submodule_gold_program("init")
+
+    result = evaluate_preconditions(program, box)
+
+    assert result.ok, result.detail
+    assert [item.name for item in result.predicates] == [
+        predicate.name for predicate in program.preconditions
+    ]
+
+
+def test_submodule_program_preconditions_fail_without_a_submodule(make_sandbox) -> None:
+    """No submodule means the preconditions do not hold -- a non-match, not a crash.
+
+    A dispatch (or admission's negative side) meeting this program on a
+    repository with no submodule must see a failed predicate, not an exception;
+    the observed text names why. An unknown placeholder still raises, which is a
+    different path (`test_substitute_raises_on_an_unknown_placeholder`).
+    """
+    box = make_sandbox(0, [])
+    program = _submodule_gold_program("init")
+
+    result = evaluate_preconditions(program, box)
+
+    assert not result.ok
+    assert all(not item.ok for item in result.predicates)
+    assert all(item.observed.startswith("not applicable") for item in result.predicates)

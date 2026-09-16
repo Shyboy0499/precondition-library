@@ -129,5 +129,9 @@ class EpisodeOutcome(StrEnum):
     """The guard refused the generated body, so nothing executed. Kept distinct
     from FALLBACK because a high refusal rate is a safety finding, not a cost."""
     INVALID = "invalid"
-    """The episode could not run (sandbox or infrastructure failure). Excluded
-    from metric denominators, reported as its own rate."""
+    """The episode could not be graded (sandbox, checker or infrastructure
+    failure). Excluded from metric denominators, reported as its own rate.
+
+    It is not a claim that nothing was spent: a checker that raises after the arm
+    ran leaves an episode that cost tokens and cannot be graded, and the row
+    carries that spend rather than hiding it."""

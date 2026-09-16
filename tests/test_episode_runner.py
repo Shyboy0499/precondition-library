@@ -279,6 +279,9 @@ def test_solving_and_compiling_is_charged_to_the_episode(tmp_path: Path) -> None
     assert record.fired_variant is None
     assert record.admitted is False, "the compile did not produce a program"
     assert record.succeeded is True, "the agent still resolved the fault"
+    assert "discard, merge, rebase" in provider.calls[-1]["system"], (
+        "the runner must tell the compiler which variant ids this intent declares"
+    )
 
 
 # --- the amortization story, in miniature ------------------------------------
@@ -595,6 +598,154 @@ def test_an_unrunnable_episode_is_recorded_as_invalid(tmp_path: Path, monkeypatc
     assert record.llm_calls == 0
     assert record.succeeded is False
     assert "sandbox failure" in (record.refusal_reason or "")
+
+
+# --- the row records what the episode ran against ----------------------------
+
+
+def test_a_row_carries_the_library_hash_and_arms_differ_when_libraries_do(tmp_path) -> None:
+    """Each row names the library it dispatched against.
+
+    Arms build their own libraries, so an arm-2-versus-arm-3 difference is
+    confounded with a library difference. The digest is recorded per row so that
+    confound is visible: two libraries with different content must produce
+    different digests, and each row must carry its own library's.
+    """
+    library_a = _library_with_admitted(tmp_path / "lib-a", _discard_program())
+    library_b = _library_with_admitted(tmp_path / "lib-b", _discard_program(id="discard-other"))
+    provider = FakeProvider(raises=AssertionError("a replay must not call the model"))
+
+    row_a = run_episode(
+        Arm.PRECONDITION,
+        "diverged",
+        DISCARD_SEED,
+        1,
+        provider=provider,
+        library=library_a,
+        model="fake",
+    )
+    row_b = run_episode(
+        Arm.PRECONDITION,
+        "diverged",
+        DISCARD_SEED,
+        1,
+        provider=provider,
+        library=library_b,
+        model="fake",
+    )
+
+    assert row_a.library_hash == library_a.library_hash()
+    assert row_b.library_hash == library_b.library_hash()
+    assert row_a.library_hash != row_b.library_hash
+
+
+def test_a_row_records_the_similarity_threshold_the_library_used(tmp_path) -> None:
+    """The threshold is read off the library, so an untuned run is visible in the ledger.
+
+    Arm 2's floor is configured on `Library`; the runner records it on every row
+    rather than leaving a reader to infer the value from the code's default.
+    """
+    provider = FakeProvider(*_resolves_discard(), _completion(_MALFORMED_REPLY))
+
+    record = run_episode(
+        Arm.SEMANTIC,
+        "diverged",
+        DISCARD_SEED,
+        1,
+        provider=provider,
+        library=Library(tmp_path / "lib", threshold=0.42),
+        model="fake",
+    )
+
+    assert record.similarity_threshold == 0.42
+
+
+# --- an invalid episode keeps the spend it already made ----------------------
+
+
+def test_an_invalid_row_after_the_arm_ran_carries_the_spend(tmp_path, monkeypatch) -> None:
+    """A checker failure happens after the solve is paid for; the cost must survive.
+
+    The sandbox-failure row is zero-token because nothing ran. This is the other
+    invalid case: the arm ran, the checker then raised, and hardcoding zero would
+    hide real spend (spec §7, item 9).
+    """
+
+    def _boom(box):
+        raise RuntimeError("simulated checker failure")
+
+    monkeypatch.setattr(DIVERGED, "check", _boom)
+    provider = FakeProvider(*_resolves_discard())
+
+    record = run_episode(
+        Arm.REACT,
+        "diverged",
+        DISCARD_SEED,
+        1,
+        provider=provider,
+        library=Library(tmp_path / "lib"),
+        model="fake",
+    )
+
+    assert record.outcome is EpisodeOutcome.INVALID
+    assert record.ground_truth_ok is None
+    assert record.llm_calls == 3, "the solve ran before the checker raised"
+    assert record.tokens_in == 30
+    assert record.tokens_out == 15
+
+
+# --- demotion rests on a postcondition miss, not a runtime mishap ------------
+
+
+def test_demotion_needs_a_postcondition_miss_not_a_timeout(tmp_path, monkeypatch) -> None:
+    """A killed replay must not permanently demote a correct program.
+
+    `demoted` is terminal in the transition table, so demoting on a transient
+    timeout would remove a right program and shrink coverage -- the variable the
+    comparison is matched on. A completed body whose postconditions failed is the
+    only evidence §8 demotes on.
+    """
+    real_replay = replay
+    timeout_root = tmp_path / "lib-timeout"
+    timeout_library = _library_with_admitted(
+        timeout_root, _discard_program(id="slow-but-correct", body="sleep 5\n")
+    )
+    with monkeypatch.context() as patched:
+        patched.setattr(
+            "precondition_library.bench.run.replay",
+            lambda program, env: real_replay(program, env, timeout_s=0.05),
+        )
+        timed_out = run_episode(
+            Arm.PRECONDITION,
+            "diverged",
+            DISCARD_SEED,
+            1,
+            provider=FakeProvider(*_resolves_discard(), _completion(_MALFORMED_REPLY)),
+            library=timeout_library,
+            model="fake",
+        )
+
+    assert timed_out.timed_out is True
+    assert [program.status for program in Library(timeout_root).load_all()] == [
+        ProgramStatus.ADMITTED
+    ], "a timeout is a runtime outcome, not evidence the program is wrong"
+
+    miss_root = tmp_path / "lib-miss"
+    miss_library = _library_with_admitted(miss_root, _discard_program(id="noop", body="true\n"))
+    miss = run_episode(
+        Arm.PRECONDITION,
+        "diverged",
+        DISCARD_SEED,
+        1,
+        provider=FakeProvider(*_resolves_discard(), _completion(_MALFORMED_REPLY)),
+        library=miss_library,
+        model="fake",
+    )
+
+    assert miss.timed_out is False
+    assert [program.status for program in Library(miss_root).load_all()] == [
+        ProgramStatus.DEMOTED
+    ], "a body that ran and left its postconditions unsatisfied is a genuine miss"
 
 
 # --- nothing is written into the repository ----------------------------------
