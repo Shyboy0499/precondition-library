@@ -136,6 +136,21 @@ measured result; there are none yet. See
   `role: "tool"` message keyed by `tool_call_id`, instead of parsing JSON out of
   free text. One protocol path, the API's own.
 
+### Fixed
+
+- `submodule_moved`'s module docstring no longer says the fault is excluded from
+  dispatch measurement. It has carried an `IntentSpec` with three resolutions since
+  issue #3, so `registry.ambiguous_intents()` returns it and `EXCLUDED_FROM_BENCHMARK`
+  does not include it; the prose had restated the status from before it gained an
+  intent. It was not caught by `test_declared_state.py` because the claims table pins
+  four sentences, not this one. The genuinely excluded faults are unaffected.
+- `test_dispatch_arms.py::test_dispatch_leaves_the_repository_clean` no longer
+  asserts an empty `git status --porcelain`. An empty status can only pass on a
+  pristine checkout, so it failed for a contributor whose branch has uncommitted
+  work and made a real leak indistinguishable from their own edits. It now reuses
+  the shared `repository_unchanged` fixture, which asserts the working tree is
+  unchanged since import — the weaker-looking and stronger check.
+
 ### Not done in this change
 
 - `Library.match_semantic` and `Library.match_preconditions` are still stubs that

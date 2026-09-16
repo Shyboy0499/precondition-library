@@ -89,6 +89,28 @@ table, the spec saying a rejected program is not stored while `library.py` store
 it, the README claiming the gold check runs while its test is skipped, and a
 docstring describing injectors as stubs after they existed.
 
+**Where the line falls.** The rule forbids restating status; it does not forbid
+recording it. A document that describes the code **now** must be current, and a
+document that records a decision **at a point in time** must not be rewritten.
+
+- **Live documents are kept current.** `README.md`, the spec, module and function
+  docstrings, this file, `library/README.md`, `bench/gold/README.md` — anything a
+  reader consults to learn what the code does today. When the code moves, correct
+  them in place. The spec's "not stored" claim is the worked example: it was
+  corrected when `library.py` was found to store candidates, and the correction is
+  in the spec's revision history.
+- **Records of a time are not.** Merged changelog entries, ADRs, and the merged plan
+  documents under `docs/superpowers/plans/` describe a state as it was. A superseded
+  record is narrowed by a *new* ADR or changelog entry, never edited. A changelog
+  entry whose "Not done in this change" list has since been overtaken is
+  deliberately left alone (#57).
+
+**Why the second half matters:** an agent that "fixes" history destroys the record
+of the decision it is fixing. Once the entry is rewritten, a reader can no longer
+see that the earlier state was chosen, or why it changed — the correction has
+removed its own evidence. The current state belongs in a live document; the
+decision belongs in the record.
+
 **What that inventory cannot do, and this rule therefore cannot replace:** find a
 document that contradicts another document, or one whose meaning contradicts the
 code. Those are semantic and remain a review obligation. Pin only claims that reduce
