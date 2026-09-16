@@ -9,10 +9,12 @@ facts and the verdicts are derived from them.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
-from precondition_library.bench.ledger import Arm, EpisodeRecord
+from precondition_library.bench.ledger import Arm, EpisodeRecord, append, read
 from precondition_library.program import EpisodeOutcome
 
 
@@ -68,3 +70,42 @@ def test_ground_truth_cannot_be_omitted() -> None:
     del payload["correct_variant"]
     with pytest.raises(ValidationError, match="correct_variant"):
         EpisodeRecord(**payload)
+
+
+def test_guard_refusals_and_compile_failures_are_separate_fields(tmp_path: Path) -> None:
+    """A refusal rate must not pick up a compile failure (issue #60).
+
+    A guard refusal is a safety finding; a compile failure is a compile-quality
+    one. One field carrying both made a refusal rate include "the reply was not a
+    YAML mapping" -- a row where no guard was ever consulted. Each degradation now
+    names its own cause, and the guard refusal rate is a grouping over
+    `refusal_reason` alone, with no second field read to disambiguate it.
+    """
+    rows = [
+        _record(
+            seed=1,
+            outcome=EpisodeOutcome.REFUSAL,
+            refusal_reason="refused network: curl to attacker.invalid",
+        ),
+        _record(
+            seed=2,
+            outcome=EpisodeOutcome.FALLBACK,
+            compile_failure_reason="the reply was not a YAML mapping, so it is not a Program",
+        ),
+        _record(seed=3, outcome=EpisodeOutcome.INVALID, invalid_reason="sandbox build failed"),
+    ]
+    path = tmp_path / "ledger.jsonl"
+    for row in rows:
+        append(path, row)
+    stored = read(path)
+
+    # Each row is distinguishable by which reason field it carries.
+    assert [row.refusal_reason is not None for row in stored] == [True, False, False]
+    assert [row.compile_failure_reason is not None for row in stored] == [False, True, False]
+    assert [row.invalid_reason is not None for row in stored] == [False, False, True]
+
+    # The rate is computable from `refusal_reason` alone, and it does not drift
+    # when a compile failure or an invalid row sits in the same ledger.
+    refusals = [row for row in stored if row.refusal_reason is not None]
+    assert len(refusals) / len(stored) == pytest.approx(1 / 3)
+    assert [row.outcome for row in refusals] == [EpisodeOutcome.REFUSAL]

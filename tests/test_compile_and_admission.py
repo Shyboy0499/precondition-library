@@ -26,6 +26,7 @@ from precondition_library.agents.compile import admit, compile_program
 from precondition_library.library import Library
 from precondition_library.program import Predicate, Program, ProgramStatus, Provenance
 from precondition_library.provider import Completion, TokenUsage
+from precondition_library.runtime.probes import evaluate_preconditions
 from precondition_library.runtime.replay import replay
 from precondition_library.sandbox import Sandbox, create
 from precondition_library.signatures import StateFingerprint, TaskSignature
@@ -290,6 +291,89 @@ def test_the_prompt_names_the_ids_the_intent_will_accept(make_sandbox) -> None:
     system = fake.calls[0]["system"]
     assert "discard, merge, rebase" in system
     assert "__VARIANT_RULE__" not in system, "the placeholder must be replaced"
+
+
+# --- the load path re-checks the invariant admission enforces ---------------
+
+
+def _write_directly(root: Path, program: Program) -> None:
+    """Write a `program.yaml` without `Library.add` and without `admit`.
+
+    This is the path issue #66 names: by hand, by a future compile path, or by
+    anything else that bypasses the gate, so `load_all` cannot assume the file
+    it reads has been through admission.
+    """
+    directory = root / program.id
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "program.yaml").write_text(
+        yaml.safe_dump(program.model_dump(mode="json"), sort_keys=False), encoding="utf-8"
+    )
+
+
+@pytest.mark.parametrize("variant", [None, "not-a-declared-resolution"])
+def test_an_undeclared_variant_is_quarantined_on_load_and_never_dispatched(
+    make_sandbox, tmp_path: Path, variant
+) -> None:
+    """A `program.yaml` written past `admit` cannot be dispatched as scored (#66).
+
+    `EpisodeRecord.misfired` is `fired_variant is not None and fired_variant !=
+    correct_variant`, so a program firing with `variant: None` records as
+    "nothing fired" and deflates the numerator, and a mislabelled id is scored
+    against the wrong resolution. Admission rejects both shapes, but a file
+    written straight to disk skips admission -- so `Library.load_all` re-checks
+    the invariant and quarantines the offender: the lifecycle's existing
+    "withdrawn from dispatch, retained for analysis".
+
+    The mechanism that stopped it is the quarantine, not the matcher: the
+    program's own preconditions hold on this sandbox and the similarity floor is
+    zero, so only its status keeps it out of both arms' results.
+    """
+    box = make_sandbox()
+    offending = _program(id="written-past-admit", variant=variant, status=ProgramStatus.ADMITTED)
+    sound = _program(id="still-admitted", variant="discard", status=ProgramStatus.ADMITTED)
+    _write_directly(tmp_path, offending)
+    _write_directly(tmp_path, sound)
+
+    library = Library(tmp_path, threshold=0.0)
+    loaded = {program.id: program for program in library.load_all()}
+
+    # One bad file does not break the library: the sound program still loads.
+    assert set(loaded) == {"written-past-admit", "still-admitted"}
+    assert loaded["written-past-admit"].status is ProgramStatus.QUARANTINED
+    assert loaded["still-admitted"].status is ProgramStatus.ADMITTED
+
+    # Visible: the quarantine is persisted with its reason, not merely filtered.
+    stored = yaml.safe_load((tmp_path / "written-past-admit" / "program.yaml").read_text())
+    assert stored["status"] == "quarantined"
+    history = (tmp_path / "written-past-admit" / "history.jsonl").read_text().splitlines()
+    transition = json.loads(history[-1])
+    assert (transition["from"], transition["to"]) == ("admitted", "quarantined")
+    assert "ambiguous" in transition["reason"]
+    assert "declares variant id(s)" in transition["reason"]
+
+    # Never dispatched as scored, though the program itself would clear both arms.
+    assert evaluate_preconditions(offending, box).ok
+    assert [program.id for program in library.match_preconditions(_signature(box), box)] == [
+        "still-admitted"
+    ]
+    assert [item.program.id for item in library.match_semantic(_signature(box))] == [
+        "still-admitted"
+    ]
+
+
+def test_a_sound_variant_loads_without_a_quarantine(tmp_path: Path) -> None:
+    """The check rejects the undeclarable, not the ambiguous intent itself."""
+    _write_directly(
+        tmp_path, _program(id="declared", variant="discard", status=ProgramStatus.ADMITTED)
+    )
+
+    library = Library(tmp_path)
+    stored = library.load_all()
+
+    assert [program.status for program in stored] == [ProgramStatus.ADMITTED]
+    assert not (tmp_path / "declared" / "history.jsonl").exists(), (
+        "a sound program must not gain a quarantine history entry"
+    )
 
 
 # --- malformed replies are data --------------------------------------------

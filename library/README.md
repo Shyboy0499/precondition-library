@@ -14,7 +14,7 @@ library/
     └── history.jsonl    # status changes with the episode that caused them
 ```
 
-Two rules keep this directory trustworthy:
+Three rules keep this directory trustworthy:
 
 1. **Only an `admitted` program may be dispatched.** A program here has not
    necessarily passed admission: it is stored as a `candidate` — compiled, never
@@ -27,6 +27,18 @@ Two rules keep this directory trustworthy:
 2. **Nothing is deleted.** A program that mis-fired is marked `demoted` or
    `quarantined` and stays. Removing it would erase the mismatch evidence that
    the primary claim depends on.
+3. **A program on an ambiguous intent must declare one of its resolutions.** Every
+   program whose `intent` names an intent with two or more resolutions must carry
+   a `variant` equal to one of that intent's declared ids. Admission enforces
+   this when it gates a compiled program; because a `program.yaml` can also be
+   written straight to disk, `Library.load_all` re-checks the invariant on every
+   load. A violating program — `variant: null`, or an id the intent does not
+   declare — is marked `quarantined` with the reason written to its
+   `history.jsonl`, so it is retained for analysis but can never be dispatched:
+   both matchers return only `admitted` programs. The check is per program, so a
+   single bad file is withdrawn and the rest of the library still loads. A
+   program whose `intent` names no ambiguous intent has no declared set to
+   violate and is not covered by this rule.
 
 `status` is the field to read first:
 

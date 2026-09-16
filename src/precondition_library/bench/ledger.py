@@ -84,6 +84,27 @@ class EpisodeRecord(BaseModel):
     separately (issue #4)."""
     admitted: bool | None = None
     refusal_reason: str | None = None
+    """Why the guard refused the generated body. Set only when `outcome` is
+    `EpisodeOutcome.REFUSAL`; every other degradation has its own field below.
+
+    Kept apart from compile failures because `refusal` is a safety signal
+    (spec §7 reports the guard refusal rate as a secondary metric): a rate read
+    off this field alone must not pick up a malformed model reply that no guard
+    ever saw. Issue #60 found a merged-run row with `outcome: fallback` and a
+    `refusal_reason` holding "the reply was not a YAML mapping" -- a compile
+    failure wearing the safety metric's name."""
+    compile_failure_reason: str | None = None
+    """Why a compile or admission produced no usable program: a malformed reply,
+    a validation failure, a rejected gate, a duplicate id.
+
+    Set on a row where the arm had to solve and no program came out of it, and
+    never on a row whose only degradation is a guard refusal. It is a
+    compile-quality signal, not a safety one."""
+    invalid_reason: str | None = None
+    """Why the episode could not be graded (a sandbox, checker or other
+    infrastructure failure). Set only when `outcome` is `EpisodeOutcome.INVALID`,
+    so the invalid rate is a grouping over that outcome rather than over a text
+    field shared with refusals."""
     timed_out: bool = False
     """Set when a replay exceeded its timeout. Kept beside `outcome` rather than
     folded into it, since a timeout is a failure mode of the runtime while

@@ -80,14 +80,16 @@ def test_round_trip_preserves_every_field(tmp_path: Path) -> None:
             fired_variant="rebase",
             ground_truth_ok=True,
         ),
-        # A refusal: no fire, benign state, so not a misfire.
+        # A guard refusal: no fire, benign state, so not a misfire. `refusal_reason`
+        # belongs to a `refusal` outcome; a compile failure would carry
+        # `compile_failure_reason` instead (issue #60).
         _record(
             seed=3,
             occurrence_index=3,
             correct_variant=None,
             fired_variant=None,
             ground_truth_ok=True,
-            outcome=EpisodeOutcome.SUCCESS,
+            outcome=EpisodeOutcome.REFUSAL,
             program_id="p-1",
             dispatch_score=0.87,
             admitted=True,
@@ -122,7 +124,7 @@ def test_one_line_per_record(tmp_path: Path) -> None:
     """A record with a newline inside a field must not become two lines."""
     records = [
         _record(seed=1),
-        _record(seed=2, refusal_reason="first line\nsecond line"),
+        _record(seed=2, compile_failure_reason="first line\nsecond line"),
         _record(seed=3),
     ]
     path = tmp_path / "ledger.jsonl"
