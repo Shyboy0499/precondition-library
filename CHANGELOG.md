@@ -135,9 +135,26 @@ measured result; there are none yet. See
   `tool_calls` (`provider.py`) and the baseline answers each call with a native
   `role: "tool"` message keyed by `tool_call_id`, instead of parsing JSON out of
   free text. One protocol path, the API's own.
+- The README describes the repository that exists rather than the design phase it
+  replaced. Its status block now says the apparatus is implemented and the suite
+  is green in CI while **no dispatch comparison and no episode has been run**, so
+  no result is claimed; per-module status points at
+  `tests/test_declared_state.py` and the issue tracker instead of being restated
+  (CONTRIBUTING rule 5); the module layout lists `similarity.py`, the
+  `runtime/probes.py` evaluator, the full `bench/` (report and seed plan
+  included) and the `tasks/` modules; the phase table is replaced by a "State of
+  play" section; and a "Running it" section records that the seed plan is fixed
+  in `bench/splits.py` and that the API key is the caller's, not read from the
+  environment.
 
 ### Fixed
 
+- The README said the skipped gold checkers in `tests/test_checkers_against_gold.py`
+  wait on issue #4. Their own skip reason names issue #9, where the checker
+  execution and its negative controls are tracked, so the reference is corrected.
+  The README also stated that `library/`'s git history *records* programs being
+  demoted; no program has been admitted yet, so that is rewritten as what
+  committing the library is for rather than as a present fact.
 - `submodule_moved`'s module docstring no longer says the fault is excluded from
   dispatch measurement. It has carried an `IntentSpec` with three resolutions since
   issue #3, so `registry.ambiguous_intents()` returns it and `EXCLUDED_FROM_BENCHMARK`

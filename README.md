@@ -6,13 +6,23 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2EA44F?style=flat" alt="MIT License"></a>
-  <img src="https://img.shields.io/badge/status-design%20phase%20%C2%B7%20nothing%20measured-B8860B?style=flat" alt="Status: design phase">
+  <img src="https://img.shields.io/badge/status-apparatus%20implemented%20%C2%B7%20nothing%20measured-B8860B?style=flat" alt="Status: apparatus implemented, nothing measured">
   <img src="https://img.shields.io/badge/python-3.12%2B-3776AB?style=flat" alt="Python 3.12+">
 </p>
 
-> **Status: design phase.** This repository contains a documented skeleton, not a
-> working benchmark. No episode has been run, no figure exists, and **no result is
-> claimed.** Everything below is a hypothesis with a stated way to falsify it.
+> **Status: nothing has been measured.** No dispatch comparison and no episode
+> has been run, so no result is claimed and no figure exists. The apparatus that
+> would produce one is implemented and its suite is green in
+> [CI](https://github.com/Shyboy0499/precondition-library/actions/workflows/ci.yml)
+> — but an implemented apparatus is not a result, and nothing below should be
+> read as one. Everything here is a hypothesis with a stated way to falsify it.
+>
+> Per-module status is deliberately not restated below, because prose that
+> describes the code drifts the moment the code moves (CONTRIBUTING rule 5).
+> Every stub and every skipped test is declared and asserted against the code in
+> [`tests/test_declared_state.py`](tests/test_declared_state.py), and what is
+> outstanding is in the [issue tracker](https://github.com/Shyboy0499/precondition-library/issues).
+> Those are the places to look for what is done.
 >
 > The design was **reframed on 2026-09-13** after a prior-art sweep and a hostile
 > method review. The reasoning, and the claims that were dropped, are recorded in
@@ -208,28 +218,40 @@ src/precondition_library/
 ├── program.py       the artifact: intent, parameters, pre/postconditions, body
 ├── provider.py      the only module allowed to talk to an LLM
 ├── signatures.py    how a task and its environment state are described
+├── similarity.py    arm 2's seam: the text-similarity function it ranks with
 ├── sandbox.py       disposable repos for episodes
-├── library.py       storage, two-sided admission, both dispatch strategies
-├── tasks/faults/    seeded fault injectors, one module each
+├── library.py       storage and both dispatch strategies; admission is in compile.py
+├── tasks/
+│   ├── spec.py      what a fault is: inject, task text, ground-truth checker
+│   ├── intent.py    intents with more than one correct resolution
+│   ├── registry.py  which task families have an experimental surface
+│   └── faults/      seeded fault injectors, one module each
 ├── agents/
 │   ├── react.py     arm 1: the baseline
-│   ├── compile.py   solved task -> candidate program
+│   ├── compile.py   solved task -> candidate program; the two-sided admission gate
 │   └── dispatch.py  arms 2 and 3 — the experiment
 ├── runtime/
 │   ├── replay.py    runs programs; structurally cannot import provider
-│   └── guard.py     screens model-authored code before it executes
-└── bench/           ledger, episode runner, dispatch benchmark, report
+│   ├── guard.py     screens model-authored code before it executes
+│   └── probes.py    evaluates one probe; shared by admission and arm 3
+└── bench/
+    ├── ledger.py    the episode record
+    ├── run.py       the episode runner and its repeat structure
+    ├── pairs.py     labelled (state, resolution) pairs
+    ├── splits.py    the pre-registered seed plan
+    ├── textcontrol.py  the text-only control
+    └── report.py    the ablation table and the two demo figures
 ```
 
 `library/` holds every compiled program, admitted or not, and **is committed on
-purpose** — it is the artifact, and its git history records programs being
-demoted after they mis-fired.
+purpose** — it is the artifact, and the point of committing it is that a program
+demoted after it mis-fired stays visible in the history.
 `bench/gold/` holds the hand-written gold resolutions. What runs today for the two
 ambiguous intents is form validation only: `sync_fork_with_upstream.yaml` and
 `restore_submodule_state.yaml` must parse, be well-formed, cover every declared
 resolution, and have distinct bodies (`tests/test_gold_programs.py`). No probe has
 ever been executed against a sandbox — `tests/test_checkers_against_gold.py` is
-skipped for every fault until the checker execution phase lands (issue #4),
+skipped for every fault until the checker execution phase lands (issue #9),
 because a checker cannot be validated without a state to check.
 
 One structural invariant is enforced by test rather than convention:
@@ -240,17 +262,50 @@ being precise about what that buys, because it is easy to overstate:
 > spends no tokens. It says nothing about whether a replayed program is safe.
 > Safety is the guard's job, and the guard is a seatbelt, not a sandbox boundary.
 
-## Roadmap
+## State of play
 
-| phase | contents | state |
-| --- | --- | --- |
-| 0 | design, scaffold, invariants, CI | done |
-| 1 | reframe after review; correct the experimental design (issues #3, #4, #9) | current |
-| 2 | dispatch-level benchmark harness, calibration sweep, power statement (#5, #6) | not started |
-| 3 | baselines that make the control arm credible (#7); safety hardening (#10) | not started |
-| 4 | run the benchmark; publish the mismatch-vs-coverage curves | not started |
-| 5 | end-to-end agent demo, explicitly underpowered | not started |
-| 6 | (optional) DSH plugin wrapper around the admitted library | not started |
+The pieces run end to end. `bench/run.py` injects a fault into a disposable
+sandbox, one arm acts, the fault's own checker grades the result, and a ledger row
+is written; `bench/report.py` turns the ledger into the ablation table and the two
+demo figures. The suite covering that path is green in
+[CI](https://github.com/Shyboy0499/precondition-library/actions/workflows/ci.yml),
+and the seed sets a run would use are already fixed in `bench/splits.py`. **No run
+against a real model has happened**, so nothing that path can produce is a result
+yet.
+
+What is done is deliberately not tracked here: a table in this file went stale the
+last time a module moved, which is why it is gone. Status is recorded in two
+places, both checked:
+
+- **What the code is now.** Every stub and every skipped test is declared in
+  [`tests/test_declared_state.py`](tests/test_declared_state.py), alongside a small
+  claims table pinning the status sentences that reduce to a mechanical fact. CI
+  fails when the declaration and the code disagree.
+- **What is outstanding.** The
+  [issue tracker](https://github.com/Shyboy0499/precondition-library/issues). The
+  detail lives there, not here: #4, #5 and #6 gate the primary comparison
+  (arm admission against one frozen library, the dispatch-level harness and
+  coverage sweep, and the fault seed as the unit of analysis); #7, #8, #9 and #10
+  are the control baselines, cost ledger, ground-truth decoupling and safety
+  hardening behind them; #25 covers the three faults still excluded from dispatch
+  measurement; #60 is an open correctness defect.
+
+## Running it
+
+The invocation, the seed sets and the ledger format are fixed in the spec's
+[§7, "The seed plan and the run invocation"](docs/superpowers/specs/2026-09-13-precondition-library-design.md#the-seed-plan-and-the-run-invocation);
+that section is the source, and this one does not repeat it. Two properties matter
+before anything runs:
+
+- **The split is frozen in code, not chosen at run time.** `bench/splits.py` names
+  the admit, tune and eval seed sets before any episode exists, because a split
+  chosen after seeing scores is not a split. Changing a seed there is a
+  pre-registration revision (CONTRIBUTING rule 8), not a config tweak.
+- **The API key is the caller's.** `provider.py` reads no environment variables
+  and no files; `DeepSeekProvider` takes the key at construction, and the spec's §7
+  example is what passes `DEEPSEEK_API_KEY` into it. That is a deliberate boundary,
+  not an omission — credential handling stays with the caller, and nothing in the
+  package will find a key on its own.
 
 ## Prior work
 
