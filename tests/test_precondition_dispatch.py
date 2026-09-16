@@ -116,7 +116,11 @@ def _program(
     return Program(
         id=program_id,
         intent="sync_fork_with_upstream",
-        variant=None,
+        # A declared id, because `sync_fork_with_upstream` is ambiguous and
+        # `Library.load_all` quarantines any program on it without one (issue
+        # #66). The variant is not read by arm 3; the fixture declares one so it
+        # is a legal member of the library these tests dispatch against.
+        variant="discard",
         parameters=["work_dir", "upstream_remote", "upstream_branch"],
         preconditions=preconditions,
         body="true",

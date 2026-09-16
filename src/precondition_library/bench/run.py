@@ -101,6 +101,14 @@ class _ArmResult:
     dispatch_score: float | None
     admitted: bool | None
     refusal_reason: str | None
+    """The guard's own reason, set only when the body it refused was the outcome."""
+    compile_failure_reason: str | None
+    """Why the fallback's compile or admission produced no usable program.
+
+    A separate field from `refusal_reason` because they are different signals:
+    the guard refusal rate is a safety metric, the compile success rate a
+    compile-quality one, and one field cannot carry both without conflating
+    them (issue #60)."""
     timed_out: bool
 
 
@@ -265,6 +273,7 @@ def run_episode(
             library_hash=library_hash,
             admitted=result.admitted,
             refusal_reason=result.refusal_reason,
+            compile_failure_reason=result.compile_failure_reason,
             timed_out=result.timed_out,
             model=model,
         )
@@ -294,7 +303,17 @@ def _run_arm(
     """
     if arm is Arm.REACT:
         outcome, transcript = solve(signature, box, accounting)
-        return _ArmResult(outcome, transcript, None, None, None, None, None, False)
+        return _ArmResult(
+            outcome,
+            transcript,
+            fired_variant=None,
+            program_id=None,
+            dispatch_score=None,
+            admitted=None,
+            refusal_reason=None,
+            compile_failure_reason=None,
+            timed_out=False,
+        )
 
     decision: Dispatch = (
         dispatch_semantic(signature, library)
@@ -305,7 +324,15 @@ def _run_arm(
     if decision.program is None:
         outcome, transcript = solve(signature, box, accounting)
         return _ArmResult(
-            _after_fallback(outcome), transcript, None, None, decision.score, None, None, False
+            _after_fallback(outcome),
+            transcript,
+            fired_variant=None,
+            program_id=None,
+            dispatch_score=decision.score,
+            admitted=None,
+            refusal_reason=None,
+            compile_failure_reason=None,
+            timed_out=False,
         )
 
     fired = decision.program
@@ -314,7 +341,15 @@ def _run_arm(
         # The replay path never touched `accounting`, which is the invariant the
         # cost model rests on: a program that applies costs zero LLM calls.
         return _ArmResult(
-            EpisodeOutcome.SUCCESS, None, fired.variant, fired.id, decision.score, True, None, False
+            EpisodeOutcome.SUCCESS,
+            None,
+            fired_variant=fired.variant,
+            program_id=fired.id,
+            dispatch_score=decision.score,
+            admitted=True,
+            refusal_reason=None,
+            compile_failure_reason=None,
+            timed_out=False,
         )
 
     fired_variant = None if replayed.refused else fired.variant
@@ -332,22 +367,24 @@ def _run_arm(
         return _ArmResult(
             EpisodeOutcome.REFUSAL,
             transcript,
-            None,
-            fired.id,
-            decision.score,
-            True,
-            replayed.reason,
-            replayed.timed_out,
+            fired_variant=None,
+            program_id=fired.id,
+            dispatch_score=decision.score,
+            admitted=True,
+            refusal_reason=replayed.reason,
+            compile_failure_reason=None,
+            timed_out=replayed.timed_out,
         )
     return _ArmResult(
         _after_fallback(outcome),
         transcript,
-        fired_variant,
-        fired.id,
-        decision.score,
-        True,
-        None,
-        replayed.timed_out,
+        fired_variant=fired_variant,
+        program_id=fired.id,
+        dispatch_score=decision.score,
+        admitted=True,
+        refusal_reason=None,
+        compile_failure_reason=None,
+        timed_out=replayed.timed_out,
     )
 
 
@@ -443,14 +480,15 @@ def _record_compile_failure(result: _ArmResult, reason: str) -> None:
     """Attach a failed compile or admission to the row without overwriting facts.
 
     `admitted` is only filled in when the arm has not already established it (a
-    fired program was admitted by definition); `refusal_reason` keeps the first
-    reason recorded, which for a guard refusal is the guard's own, not the
-    compiler's.
+    fired program was admitted by definition); `compile_failure_reason` keeps the
+    first reason recorded. It never touches `refusal_reason`: that field is the
+    guard's alone, and writing a malformed reply into it would put a compile
+    failure into the guard refusal rate (issue #60).
     """
     if result.admitted is None:
         result.admitted = False
-    if result.refusal_reason is None:
-        result.refusal_reason = reason
+    if result.compile_failure_reason is None:
+        result.compile_failure_reason = reason
 
 
 def _after_fallback(agent_outcome: EpisodeOutcome) -> EpisodeOutcome:
@@ -528,6 +566,10 @@ def _invalid_record(
     (spec §7, item 9: invalid episodes are "excluded from denominators but never
     hidden"). It is recorded so it appears in the denominator's own invalid rate
     rather than vanishing.
+
+    The reason goes to `invalid_reason`, not `refusal_reason`: a sandbox that
+    would not build is not a guard refusal, and putting it in the refusal field
+    would inflate the safety metric (issue #60).
     """
     return EpisodeRecord(
         arm=arm,
@@ -545,6 +587,6 @@ def _invalid_record(
         ground_truth_ok=None,
         similarity_threshold=threshold,
         library_hash=library_hash,
-        refusal_reason=reason,
+        invalid_reason=reason,
         model=model,
     )

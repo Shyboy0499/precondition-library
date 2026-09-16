@@ -14,6 +14,7 @@
 | 4 | 2026-09-14 | **Lifecycle correction, not a claim change.** A program that fails admission is stored as a `candidate` and its rejection reason recorded, not discarded; the §5 lifecycle diagram and the §8 degradation table said "not stored". Corrected to match `library.py` (which writes the candidate before the gate runs) and `library/README.md`; rejection is data the mismatch analysis needs. No measurement or claim is affected, and no number in this document changes as a result. |
 | 5 | 2026-09-15 | **Arm 2's mechanism is narrowed (ADR-0002).** The arm compares text by a deterministic lexical overlap behind a `Similarity` seam, not by an embedding; an embedding model is the intended replacement behind the same Protocol. Claim 2's wording follows — the comparison is against *text* similarity — and arm 2 is given the full representation (the intent plus the `StateFingerprint` rendered as text), per issue #4, so the ablation does not confound dispatch with representation. **Logged before any episode data existed** — no episode has been run, so no analysis was chosen after seeing results, and no number in this document changes. |
 | 6 | 2026-09-16 | **The seed split is made concrete, and the eval set is stated to be underpowered.** Items 2 and 5 required disjoint admit/tune/eval seeds but no seeds were defined anywhere; §7 now names them and fixes them in `bench/splits.py`. The eval set (40 seeds, 80 decisions) cannot support the primary matched-coverage comparison at a usable interval, so that claim requires the item 6 extension rather than being read off the first run. **Logged before any episode data existed** — no episode has been run, so no analysis was chosen after seeing results, and no number in this document changes. |
+| 7 | 2026-09-16 | **Schema correction, not an analysis change.** The ledger's single reason field carried guard refusals, compile failures and invalid-episode causes at once, so a guard refusal rate read off it would have included malformed replies that no guard saw (issue #60); §7's ledger schema and §8's table now name three fields — `refusal_reason`, `compile_failure_reason`, `invalid_reason`. §7 also records that a program whose `variant` is not a declared resolution of an ambiguous intent is quarantined on load, so a `program.yaml` written straight to disk cannot be dispatched as scored (issue #66). Both are corrections to match the code; no metric definition, denominator or number in this document changes. |
 
 ---
 
@@ -437,7 +438,8 @@ One JSONL line per episode; every number reported is a grouping over this file.
  tokens_in, tokens_out, cached_tokens_in, llm_calls, wall_clock_s,
  outcome: success|fail|fallback|refusal|invalid, timed_out,
  correct_variant, fired_variant, ground_truth_ok,
- program_id, dispatch_score, admitted, refusal_reason, model}
+ program_id, dispatch_score, admitted,
+ refusal_reason, compile_failure_reason, invalid_reason, model}
 ```
 
 - `occurrence_index` — 1 for the first time this fault type is seen, 2 for the
@@ -463,6 +465,14 @@ One JSONL line per episode; every number reported is a grouping over this file.
   runs is a confound that silently invalidates a comparison.
 - `dispatch_score` (arm 2) and `admitted` are recorded so a tuned comparison is
   distinguishable from an untuned one.
+- The three reason fields are separate because they are three different signals.
+  `refusal_reason` holds the guard's reason and is set only when `outcome` is
+  `refusal`, so the guard refusal rate is a grouping over that one field and
+  cannot pick up anything else. `compile_failure_reason` holds why a compile or
+  admission produced no usable program (a malformed reply, a failed gate, a
+  duplicate id). `invalid_reason` holds why an episode could not be graded at
+  all. A single field carrying all three would silently fold compile failures
+  into the safety metric — the defect issue #60 fixed.
 
 ### Design
 
@@ -619,12 +629,12 @@ to an arm and recorded with a reason.
 | --- | --- | --- |
 | replay misses postconditions | demote program; fall back to ReAct **for this episode only**; fallback tokens attributed to the arm | `misfired` (derived), with `outcome` showing how the episode then ended |
 | same program mismatches twice | withdraw from dispatch; retain for analysis | `quarantined` |
-| compile fails admission | stored as a `candidate` and its rejection reason recorded, not discarded; episode keeps its token cost | `candidate`, `admitted=false` |
+| compile fails admission | stored as a `candidate` and its rejection reason recorded, not discarded; episode keeps its token cost | `candidate`, `admitted=false`, `compile_failure_reason` |
 | guard refuses the body | no execution; fall back to ReAct | `refusal` + `refusal_reason` |
 | replay exceeds timeout | process killed, sandbox destroyed | `fail`, `timed_out` |
 | no program applies | solve with LLM, compile, admit | `fallback` (expected, not a failure) |
 | provider error / rate limit | capped backoff retry | `fail`, partial token spend retained |
-| sandbox build fails | episode invalidated, counted | `invalid` |
+| sandbox build fails | episode invalidated, counted | `invalid` + `invalid_reason` |
 
 A fallback is a **cost, not a non-event**: every time no program applies, the arm
 pays full price. The cost curve is therefore partly a coverage story, which is
