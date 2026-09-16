@@ -34,12 +34,12 @@ from ..agents.dispatch import Dispatch, dispatch_preconditions, dispatch_semanti
 from ..agents.react import solve
 from ..library import Library
 from ..program import EpisodeOutcome, ProgramStatus
-from ..provider import Completion, Provider
+from ..provider import Completion, Provider, ProviderError
 from ..runtime.replay import ReplayResult, replay
 from ..sandbox import Sandbox, create
 from ..signatures import StateFingerprint, TaskSignature
 from ..tasks.faults import FAULTS
-from ..tasks.intent import IntentSpec
+from ..tasks.intent import IntentSpec, ResolutionVariant
 from ..tasks.registry import EXCLUDED_FROM_BENCHMARK, ambiguous_intents
 from .ledger import Arm, EpisodeRecord, append
 
@@ -48,6 +48,20 @@ _EXCLUDED_NOTICE = (
     "text is the class label and a text-reading dispatcher could not mis-fire. "
     "Refusing the request rather than skipping it silently (issue #25)"
 )
+
+_RATE_LIMIT_STATUS = 429
+"""HTTP 429: the provider is asking the caller to slow down, so it is retryable."""
+
+_SERVER_ERROR_FLOOR = 500
+"""5xx is transient by HTTP's own contract, unlike a 4xx the request caused."""
+
+_MAX_RETRY_ATTEMPTS = 3
+"""One initial call plus two retries. A small cap: an episode must still fail in
+bounded time, and a transient rate limit is the case this exists for."""
+
+_RETRY_BASE_DELAY_S = 0.5
+_RETRY_MAX_DELAY_S = 2.0
+"""Capped exponential backoff: 0.5s then 1.0s, never more than the cap."""
 
 
 class _AccountingProvider:
@@ -60,9 +74,14 @@ class _AccountingProvider:
     its own usage, but that completion was already seen here, and adding both
     would double the compile's cost onto the episode that triggered it.
 
-    A call that raises is not counted, because the provider never reported usage
-    for it. That is the honest number: the spend of a failed request is unknown
-    to us, and inventing a value would be worse than the gap.
+    Spec §8 gives retry policy to the caller and requires it to be visible, so a
+    rate-limit or 5xx response is retried here with a capped backoff and a 4xx is
+    not. Every *attempt* is added to `llm_calls`, including the ones that raised,
+    which is what keeps a retry from hiding itself: the ledger records three
+    calls for a completion that took three tries, and the token totals stay the
+    sum of the responses that actually returned usage. A failed request's token
+    spend is unknown to us, and inventing a value would be worse than the gap —
+    the count of calls is the part that is knowable, so it is the part recorded.
     """
 
     def __init__(self, provider: Provider) -> None:
@@ -75,12 +94,38 @@ class _AccountingProvider:
     def complete(
         self, *, system: str, messages: list[dict], tools: list[dict] | None = None
     ) -> Completion:
-        completion = self._provider.complete(system=system, messages=messages, tools=tools)
-        self.tokens_in += completion.usage.tokens_in
-        self.tokens_out += completion.usage.tokens_out
-        self.cached_tokens_in += completion.usage.cached_tokens_in
-        self.llm_calls += completion.llm_calls
-        return completion
+        for attempt in range(1, _MAX_RETRY_ATTEMPTS + 1):
+            try:
+                completion = self._provider.complete(system=system, messages=messages, tools=tools)
+            except ProviderError as error:
+                self.llm_calls += 1
+                if attempt == _MAX_RETRY_ATTEMPTS or not _is_retryable(error):
+                    raise
+                time.sleep(_retry_delay_s(attempt))
+                continue
+            self.tokens_in += completion.usage.tokens_in
+            self.tokens_out += completion.usage.tokens_out
+            self.cached_tokens_in += completion.usage.cached_tokens_in
+            self.llm_calls += completion.llm_calls
+            return completion
+        raise AssertionError("unreachable: the loop returns or raises")
+
+
+def _is_retryable(error: ProviderError) -> bool:
+    """Whether a provider error is transient (spec §8): rate limit or 5xx only.
+
+    A 4xx means the request itself was wrong and will be wrong again, so retrying
+    it would only spend more of the budget on the same failure. A `ProviderError`
+    with no status is a malformed body, which is deterministic for the same
+    reply, or a transport failure the caller did not classify.
+    """
+    status = error.status_code
+    return status is not None and (status == _RATE_LIMIT_STATUS or status >= _SERVER_ERROR_FLOOR)
+
+
+def _retry_delay_s(attempt: int) -> float:
+    """The capped exponential backoff before retry number `attempt + 1`."""
+    return min(_RETRY_BASE_DELAY_S * (2 ** (attempt - 1)), _RETRY_MAX_DELAY_S)
 
 
 @dataclass
@@ -251,6 +296,7 @@ def run_episode(
         _learn_from_solution(
             arm, result, signature, box, library, fault_type, seed, occurrence, accounting
         )
+        _record_mismatch(result, library, correct, fault_type, seed, occurrence)
 
         return EpisodeRecord(
             arm=arm,
@@ -386,6 +432,38 @@ def _run_arm(
         compile_failure_reason=None,
         timed_out=replayed.timed_out,
     )
+
+
+def _record_mismatch(
+    result: _ArmResult,
+    library: Library,
+    correct: ResolutionVariant | None,
+    fault_type: str,
+    seed: int,
+    occurrence: int,
+) -> None:
+    """Count one wrong-variant fire against the program that fired (spec §8).
+
+    `misfired` is the ledger's own definition -- a program fired a resolution
+    that was not this state's ground truth -- and it is independent of episode
+    success, which is why this is a separate step from the demotion in
+    `_is_genuine_miss`. A program can be wrong about the resolution and still
+    satisfy its postconditions (`rebase` on a state that requires `merge` reaches
+    a synced tree), so it is never demoted and would mis-fire on every later
+    occurrence; `Library.record_mismatch` withdraws it after the second.
+
+    Nothing is counted when the body did not run to completion: a guard refusal
+    leaves `fired_variant` None, and a timeout is a runtime mishap rather than
+    evidence about the program, matching the bar `_is_genuine_miss` sets for
+    demotion. This runs after grading because the row is derived once the arm has
+    stopped -- the arm itself is never allowed to see ground truth.
+    """
+    correct_id = correct.id if correct is not None else None
+    if result.fired_variant is None or result.fired_variant == correct_id:
+        return
+    if result.program_id is None or result.timed_out:
+        return
+    library.record_mismatch(result.program_id, episode_id=_episode_id(fault_type, seed, occurrence))
 
 
 def _is_genuine_miss(replayed: ReplayResult) -> bool:

@@ -12,6 +12,12 @@ re-run of the same episode would silently face a different repository, and a
 difference between arms could be the developer's git config rather than the
 mechanism under test.
 
+It is also **scrubbed**, not inherited. `git_env` builds from a short allowlist
+of ambient variables rather than `dict(os.environ)`, so an API key the operator
+exported cannot be read by model-authored code (spec §9). `HOME` is not
+ambient: every caller that runs a command passes the sandbox root, so `~`
+resolves inside a throwaway repository.
+
 `run_git` and `git_env` are the single definition of that pinned environment.
 They are module-level rather than underscore-private because fault injectors
 (`tasks/faults/*`) and the state probes (`signatures.StateFingerprint.observe`)
@@ -37,18 +43,35 @@ _GIT_NAME = "precondition-library sandbox"
 _GIT_EMAIL = "sandbox@precondition-library.invalid"
 
 
-def git_env() -> dict[str, str]:
+_ALLOWLISTED_ENV_VARS = ("PATH", "LANG", "LC_ALL", "LC_CTYPE", "TMPDIR")
+"""The only ambient variables a git call or a shell probe may inherit.
+
+Everything else in the caller's environment is dropped rather than copied, which
+is what makes the spec's "the environment is scrubbed" (§9) true: a
+`dict(os.environ)` spread handed any exported API key -- and the operator's
+whole environment -- to model-authored code. A variable belongs here only when a
+call fails without it: `PATH` finds `git` and the probe's tools, the locale
+keeps git's output deterministic, and `TMPDIR` is where tools scratch. `HOME` is
+deliberately absent; callers redirect it into the sandbox (`git_env(home=...)`).
+"""
+
+
+def git_env(home: Path | None = None) -> dict[str, str]:
     """The environment every git call in a sandbox runs under.
 
     `GIT_CONFIG_NOSYSTEM` and `GIT_CONFIG_GLOBAL=/dev/null` make a developer's
     own config unable to change the result; identity comes from the environment
     so no per-machine `user.name` is required (and none is written globally).
+
+    Only `_ALLOWLISTED_ENV_VARS` is inherited, so a leaked `GIT_DIR` /
+    `GIT_WORK_TREE` / `GIT_INDEX_FILE` cannot retarget these commands at the
+    caller's own repository. `home`, when given, becomes `HOME` so a command
+    that expands `~` lands inside the sandbox; a caller with no sandbox to
+    redirect into leaves `HOME` unset rather than inheriting the operator's.
     """
-    env = dict(os.environ)
-    # A developer shell that has GIT_DIR/GIT_WORK_TREE exported would retarget
-    # these commands at their own repository; drop them.
-    for leaked in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"):
-        env.pop(leaked, None)
+    env = {name: os.environ[name] for name in _ALLOWLISTED_ENV_VARS if name in os.environ}
+    if home is not None:
+        env["HOME"] = str(home)
     env.update(
         {
             "GIT_AUTHOR_NAME": _GIT_NAME,
@@ -87,7 +110,7 @@ def run_git(
     result = subprocess.run(
         ["git", *args],
         cwd=cwd,
-        env=git_env(),
+        env=git_env(home=cwd),
         capture_output=True,
         text=True,
         input=stdin,

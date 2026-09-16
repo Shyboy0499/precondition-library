@@ -126,8 +126,8 @@ determines the resolution and the mechanism is not needed. An earlier draft
 pooled the two regimes into one number (0.795–0.801, the control's pre-split
 pooled figures) that described neither. The uninformed regime is gated; the
 informed AUC is reported, never gated. Three of the five faults still return one
-fixed sentence and are excluded from dispatch measurement until converted (issue
-#25).
+fixed sentence and are excluded from dispatch measurement, declared in
+`tasks/registry.py`'s `EXCLUDED_FROM_BENCHMARK`.
 
 The end-to-end episode loop survives as a small demonstration, explicitly
 labelled underpowered. It is not the claim.
@@ -287,8 +287,9 @@ places, both checked:
   (arm admission against one frozen library, the dispatch-level harness and
   coverage sweep, and the fault seed as the unit of analysis); #7, #8, #9 and #10
   are the control baselines, cost ledger, ground-truth decoupling and safety
-  hardening behind them; #25 covers the three faults still excluded from dispatch
-  measurement; #60 is an open correctness defect.
+  hardening behind them. Which faults are still excluded from dispatch
+  measurement is declared in code, not here: `tasks/registry.py`'s
+  `EXCLUDED_FROM_BENCHMARK`, asserted against every fault by a test.
 
 ## Running it
 

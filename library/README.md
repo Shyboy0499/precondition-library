@@ -11,8 +11,14 @@ Layout, one directory per program:
 library/
 └── <program-id>/
     ├── program.yaml     # intent, parameters, preconditions, body, postconditions
-    └── history.jsonl    # status changes with the episode that caused them
+    └── history.jsonl    # status changes, and mismatch events, with the episode
+                         # that caused each
 ```
+
+A mismatch event (`{"event": "mismatch", ...}`) is not a status change: it
+records one wrong-variant fire while the program stays `admitted`, and the
+second such event moves it to `quarantined` (spec §8). The same file therefore
+shows both why and when a program was withdrawn.
 
 Three rules keep this directory trustworthy:
 

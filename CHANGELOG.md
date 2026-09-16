@@ -167,6 +167,37 @@ measured result; there are none yet. See
   work and made a real leak indistinguishable from their own edits. It now reuses
   the shared `repository_unchanged` fixture, which asserts the working tree is
   unchanged since import — the weaker-looking and stronger check.
+- The sandbox environment is an allowlist, not `dict(os.environ)` (spec §9). The
+  spec claimed the environment was scrubbed and `HOME` redirected, but every
+  other variable the operator had — an exported API key included — was handed to
+  model-authored bodies and probes. `git_env` now inherits only `PATH`, the
+  locale, `TMPDIR` and the pinned `GIT_*` set, and `HOME` is redirected into the
+  sandbox by every caller. A test sets a sentinel in the test process and
+  asserts a command under the sandbox environment cannot read it, so a future
+  spread fails rather than passing an allowlist-only check.
+- Spec §8's "same program mismatches twice" is implemented. The runner counts
+  wrong-variant fires in the program's `history.jsonl`, and
+  `Library.record_mismatch` quarantines at the second. This covers the failure
+  demotion never caught: a program that fires the wrong resolution while its
+  postconditions still hold is not demoted, so without the count it would keep
+  mis-firing. A timeout is not counted, matching the bar demotion already sets.
+- Spec §8's "capped backoff retry" is implemented in the episode runner's
+  provider wrapper: 429 and 5xx only, three attempts total, with every attempt
+  added to the ledger's `llm_calls`. A 4xx fails immediately. The retry is
+  therefore visible, as §8 requires — a retry that hid its failed attempts would
+  understate the calls an episode paid for.
+- The compile prompt frames repository content as untrusted data. The whole
+  payload — request, observed state and solution transcript, the last of which
+  carries commit messages and file contents an attacker can write — now travels
+  inside delimiters the system prompt names, with a sentence saying it is data
+  to compile and never instructions to follow (spec §9).
+- `bench/report.py` and spec §7 stated the demo as 5 faults × 4 occurrences × 3
+  arms = 60 episodes. Only the two faults with an ambiguous intent are runnable
+  (`registry.ambiguous_intents()`; the other three are in
+  `EXCLUDED_FROM_BENCHMARK`), so the demo is 24 episodes and 60 is the nominal
+  grid. The README no longer names issue #60 as an open defect (it is fixed) and
+  points at `EXCLUDED_FROM_BENCHMARK` for the fault exclusion rather than at the
+  closed issue #25.
 
 ### Not done in this change
 

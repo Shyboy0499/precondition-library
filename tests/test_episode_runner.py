@@ -43,7 +43,7 @@ from precondition_library.program import (
     ProgramStatus,
     Provenance,
 )
-from precondition_library.provider import Completion, TokenUsage
+from precondition_library.provider import Completion, ProviderError, TokenUsage
 from precondition_library.runtime.replay import replay
 from precondition_library.sandbox import create
 from precondition_library.tasks.faults.diverged import SPEC as DIVERGED
@@ -437,6 +437,58 @@ def test_a_wrong_program_misfires_and_the_episode_still_succeeds(tmp_path: Path)
     )
 
 
+def test_two_wrong_variant_fires_quarantine_the_program(tmp_path: Path) -> None:
+    """§8's "mismatches twice" is reachable, and it is not the demotion path.
+
+    The program declares `rebase` but the state requires `discard`; the body
+    resets to upstream, so the postconditions hold and the replay is a success.
+    A single wrong fire therefore does not demote it -- and a demoted program
+    would never be dispatched again, so the second fire could never happen. The
+    count is what withdraws it: after the second wrong fire the library
+    quarantines it, retaining it for analysis, and a third occurrence would find
+    no admitted program to fire.
+    """
+    wrong = _discard_program(id="always-wrong-variant", variant="rebase")
+    root = tmp_path / "lib"
+    library = _library_with_admitted(root, wrong)
+    provider = FakeProvider(raises=AssertionError("a replay must not call the model"))
+
+    first = run_episode(
+        Arm.PRECONDITION,
+        "diverged",
+        DISCARD_SEED,
+        1,
+        provider=provider,
+        library=library,
+        model="fake",
+    )
+
+    assert first.fired_variant == "rebase"
+    assert first.correct_variant == "discard"
+    assert first.misfired is True
+    assert first.outcome is EpisodeOutcome.SUCCESS, "the body still satisfied its postconditions"
+    assert [program.status for program in Library(root).load_all()] == [ProgramStatus.ADMITTED], (
+        "one mismatch is counted, not yet a withdrawal"
+    )
+    assert library.mismatch_count(wrong.id) == 1
+
+    second = run_episode(
+        Arm.PRECONDITION,
+        "diverged",
+        SECOND_DISCARD_SEED,
+        2,
+        provider=provider,
+        library=library,
+        model="fake",
+    )
+
+    assert second.misfired is True
+    assert library.mismatch_count(wrong.id) == 2
+    assert [program.status for program in Library(root).load_all()] == [
+        ProgramStatus.QUARANTINED
+    ], "the second mismatch must withdraw the program from dispatch"
+
+
 # --- no program applies is a fallback, paid for ------------------------------
 
 
@@ -809,6 +861,100 @@ def test_a_benchmark_writes_only_under_the_output_directory(tmp_path: Path) -> N
     assert (tmp_path / "ledger.jsonl").is_file(), "the ledger belongs under the output"
     assert not (tmp_path / "library-react").exists(), "arm 1 compiles nothing, so writes no library"
     assert not (ROOT / ".sandboxes").exists()
+
+
+# --- a transient provider error is retried, visibly ---------------------------
+
+
+class _FlakyProvider:
+    """Raise each queued status once, then serve the wrapped completions.
+
+    A `provider.complete` call that fails with a status is what the retry policy
+    exists for; the wrapper lets a test put a 429 or a 500 in front of a scripted
+    solve without a network.
+    """
+
+    def __init__(self, statuses: list[int], *completions: Completion) -> None:
+        self._statuses = list(statuses)
+        self._inner = FakeProvider(*completions)
+        self.calls = 0
+
+    def complete(
+        self, *, system: str, messages: list[dict], tools: list[dict] | None = None
+    ) -> Completion:
+        self.calls += 1
+        if self._statuses:
+            status = self._statuses.pop(0)
+            raise ProviderError(f"DeepSeek request failed with HTTP {status}", status_code=status)
+        return self._inner.complete(system=system, messages=messages, tools=tools)
+
+
+def test_a_rate_limited_call_is_retried_and_counted_on_the_row(tmp_path, monkeypatch) -> None:
+    """§8's capped backoff retry, with the retry visible in `llm_calls`.
+
+    The first attempt gets a 429 and the retry succeeds, so the episode's row
+    must show four calls -- the refused attempt plus the three solve turns -- even
+    though only three responses carried usage. A retry that hid itself would make
+    the cost model report a call the arm did not pay for.
+    """
+    monkeypatch.setattr("precondition_library.bench.run.time.sleep", lambda _seconds: None)
+    provider = _FlakyProvider([429], *_resolves_discard())
+
+    record = run_episode(
+        Arm.REACT,
+        "diverged",
+        DISCARD_SEED,
+        1,
+        provider=provider,
+        library=Library(tmp_path / "lib"),
+        model="fake",
+    )
+
+    assert provider.calls == 4, "the 429 must be retried once"
+    assert record.outcome is EpisodeOutcome.SUCCESS
+    assert record.llm_calls == 4, "the failed attempt must appear in the ledger"
+    assert record.tokens_in == 30, "a request that failed has no usage to add"
+    assert record.succeeded is True
+
+
+def test_a_client_error_is_not_retried(tmp_path, monkeypatch) -> None:
+    """A 4xx will fail identically on retry, so it fails the episode immediately."""
+    monkeypatch.setattr("precondition_library.bench.run.time.sleep", lambda _seconds: None)
+    provider = _FlakyProvider([400], *_resolves_discard())
+
+    record = run_episode(
+        Arm.REACT,
+        "diverged",
+        DISCARD_SEED,
+        1,
+        provider=provider,
+        library=Library(tmp_path / "lib"),
+        model="fake",
+    )
+
+    assert provider.calls == 1, "a 4xx must not be retried"
+    assert record.outcome is EpisodeOutcome.FAIL
+    assert record.llm_calls == 1, "the one attempt that was made is still a call"
+
+
+def test_retries_are_capped_and_a_persistent_5xx_fails_the_episode(tmp_path, monkeypatch) -> None:
+    """The cap bounds the spend: three attempts, then a recorded failure."""
+    monkeypatch.setattr("precondition_library.bench.run.time.sleep", lambda _seconds: None)
+    provider = _FlakyProvider([500, 500, 500, 500], *_resolves_discard())
+
+    record = run_episode(
+        Arm.REACT,
+        "diverged",
+        DISCARD_SEED,
+        1,
+        provider=provider,
+        library=Library(tmp_path / "lib"),
+        model="fake",
+    )
+
+    assert provider.calls == 3, "one call plus the two the cap allows"
+    assert record.outcome is EpisodeOutcome.FAIL
+    assert record.llm_calls == 3
 
 
 # --- a sanity check on the fixture itself ------------------------------------

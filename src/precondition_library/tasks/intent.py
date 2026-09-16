@@ -2,8 +2,10 @@
 
 The flaw this module removes: when a fault's request is a single fixed sentence,
 the text *is* the class label, so a dispatcher that reads only the text cannot
-mis-fire and the primary claim is untestable. 60 episodes would produce a number
-that looks like a result while measuring nothing.
+mis-fire and the primary claim is untestable. The runnable episode demo is 24
+episodes -- two measurable faults × four occurrences × three arms -- and on a
+fixed-sentence fault it would produce a number that looks like a result while
+measuring nothing.
 
 An `IntentSpec` separates four things that were previously one:
 

@@ -15,6 +15,7 @@
 | 5 | 2026-09-15 | **Arm 2's mechanism is narrowed (ADR-0002).** The arm compares text by a deterministic lexical overlap behind a `Similarity` seam, not by an embedding; an embedding model is the intended replacement behind the same Protocol. Claim 2's wording follows — the comparison is against *text* similarity — and arm 2 is given the full representation (the intent plus the `StateFingerprint` rendered as text), per issue #4, so the ablation does not confound dispatch with representation. **Logged before any episode data existed** — no episode has been run, so no analysis was chosen after seeing results, and no number in this document changes. |
 | 6 | 2026-09-16 | **The seed split is made concrete, and the eval set is stated to be underpowered.** Items 2 and 5 required disjoint admit/tune/eval seeds but no seeds were defined anywhere; §7 now names them and fixes them in `bench/splits.py`. The eval set (40 seeds, 80 decisions) cannot support the primary matched-coverage comparison at a usable interval, so that claim requires the item 6 extension rather than being read off the first run. **Logged before any episode data existed** — no episode has been run, so no analysis was chosen after seeing results, and no number in this document changes. |
 | 7 | 2026-09-16 | **Schema correction, not an analysis change.** The ledger's single reason field carried guard refusals, compile failures and invalid-episode causes at once, so a guard refusal rate read off it would have included malformed replies that no guard saw (issue #60); §7's ledger schema and §8's table now name three fields — `refusal_reason`, `compile_failure_reason`, `invalid_reason`. §7 also records that a program whose `variant` is not a declared resolution of an ambiguous intent is quarantined on load, so a `program.yaml` written straight to disk cannot be dispatched as scored (issue #66). Both are corrections to match the code; no metric definition, denominator or number in this document changes. |
+| 8 | 2026-09-17 | **Documentation corrections, not analysis changes.** §7's demo figure said 5 faults × 4 occurrences × 3 arms = 60 episodes; only the two faults with an ambiguous intent are runnable (`registry.ambiguous_intents()`), so the runnable demo is 24 and 60 is the nominal grid — the overstatement was 2.5× and sat on a measurement path. §9 names the mechanisms that actually exist for network containment (the guard's textual refusals and the environment allowlist) instead of `sandbox-exec`, which nothing implements. `bench/report.py`'s docstring carried the same 60-episode overstatement. **No measurement or number from a run changes** — no episode has been run. |
 
 ---
 
@@ -384,14 +385,22 @@ through admission.
 
 ### Lifecycle
 
-```
+```text
 candidate ──admission passes──▶ admitted ──postconditions fail──▶ demoted
-(stored, status=candidate)                              │
-    │                                            two mismatches
-    └──admission fails──▶ stays stored                  ▼
-                          (status=candidate;        quarantined
-                           rejection recorded)
+(stored, status=candidate)         │
+    │                              │ two wrong-variant fires
+    └──admission fails──▶ stays    ▼
+         stored (candidate;    quarantined
+          rejection recorded)  (withdrawn from dispatch; retained for analysis)
 ```
+
+The two mismatches are counted over the ledger's own definition: a fire whose
+`fired_variant` is not the state's ground truth, *whether or not the episode
+succeeded*. That is why the count is needed at all — a program that fires the
+wrong resolution and still satisfies its postconditions is never demoted, and a
+demoted program is already withdrawn (both matchers return only `admitted`), so
+it can never accumulate the second mismatch. The load-time variant check is the
+other route into `quarantined`.
 
 Nothing is deleted. A program that mis-fired is the evidence for Claim 2's
 numerator, and removing it would erase the result. A candidate is written to the
@@ -501,12 +510,16 @@ rather than to fit a budget.
 
 **The episode loop is retained only as a demonstration, explicitly underpowered:**
 
-```
-5 faults × 4 occurrences × 3 arms = 60 episodes   (demo, UNDERPOWERED)
+```text
+2 measurable faults × 4 occurrences × 3 arms = 24 episodes   (demo, UNDERPOWERED)
+    (the nominal 5 faults × 4 × 3 = 60 is not runnable: the three other faults
+     return a single fixed sentence and are in EXCLUDED_FROM_BENCHMARK)
 ```
 
 It is labelled underpowered wherever it appears and excluded from the primary
 claim. Its value is showing the harness works end to end, not producing a result.
+The 60-episode figure is the nominal grid; the runnable demo is 24, and an
+earlier draft stated the nominal figure as though it could run.
 
 Seeds are split into disjoint admit / tune / eval sets and every arm is routed
 through the same (fault, seed) pairs, so the comparison is paired rather than
@@ -580,8 +593,8 @@ eval   2000-2039   40 seeds  the reported numbers
 
 Only the two fault families with an ambiguous intent are measurable
 (`registry.ambiguous_intents()`); the other three are excluded from any dispatch
-measurement (issue #25). Each seed injects one state per measurable family, so a
-set of N seeds is N independent instances per family.
+measurement, named in `EXCLUDED_FROM_BENCHMARK`. Each seed injects one state per
+measurable family, so a set of N seeds is N independent instances per family.
 
 **The eval set is too small to support the primary comparison as
 pre-registered.** Eighty decisions cannot put a usable Wilson interval around a
@@ -656,7 +669,7 @@ noted.
 | Injected instructions in repo content steer the model while compiling | repo-derived text is passed in a delimited untrusted channel with explicit framing that it is data, never instruction |
 | The compile step executes something while "testing" | the compile step **never executes** generated code; execution belongs to `runtime`, on a throwaway sandbox, behind the guard |
 | Generated body exfiltrates repository contents | guard refuses outbound network calls and reads of credentials/SSH keys/env vars |
-| Generated body writes outside its environment | guard refuses paths outside `env_root`; `HOME` is redirected into the sandbox and the environment is scrubbed |
+| Generated body writes outside its environment | guard refuses paths outside `env_root`; `HOME` is redirected into the sandbox and the environment is reduced to an allowlist (`PATH`, locale, `TMPDIR`, plus the pinned `GIT_*` variables), so an API key exported by the operator cannot reach the body |
 | Generated body force-pushes to a shared remote | guard refuses pushes to any remote not recognised as a sandbox |
 | Generated body is destructive *inside* the sandbox | **accepted** — that is what the sandbox is for; the sandbox is destroyed afterwards |
 
@@ -669,11 +682,15 @@ noted.
   cannot be talked into asking for help.
 
 **Residual risk, accepted and documented:** a generated body may perform
-destructive-but-permitted actions within its sandbox, and network isolation on
-macOS is best-effort (`sandbox-exec` where available, environment scrubbing
-otherwise) rather than kernel-enforced. Running compiled programs against real
-repositories requires human review of each program and is explicitly out of
-scope; the guard is a seatbelt, not a sandbox boundary.
+destructive-but-permitted actions within its sandbox, and network isolation is
+not kernel-enforced. It is textual and environmental: the guard refuses
+recognisable network tools and URLs in the body, and the environment allowlist
+with a redirected `HOME` keeps ambient credentials out, but neither stops an
+endpoint assembled at run time (the guard's "What the guard cannot see"). There
+is no `sandbox-exec` here; kernel-enforced isolation is issue #10's territory
+and is not implemented. Running compiled programs against real repositories
+requires human review of each program and is explicitly out of scope; the guard
+is a seatbelt, not a sandbox boundary.
 
 ---
 
@@ -707,7 +724,7 @@ TEXT CONTROL    a bag-of-words classifier trained on the request text alone
                 that fires on an intent whose informed wording fully determines
                 the answer, so the control cannot pass by being a no-op. Only
                 registered intents are measured; the three unconverted faults
-                return a fixed sentence and are excluded (issue #25).
+                return a fixed sentence and are excluded (`EXCLUDED_FROM_BENCHMARK`).
 IMPORT GRAPH    replay cannot reach provider, directly or transitively.
                 IMPLEMENTED AND PASSING (tests/test_replay_isolated_from_provider.py)
 ZERO TOKEN      stronger than the import test: replay runs with a provider whose
@@ -804,7 +821,7 @@ claim.
    sentence, so for them the text remains a perfect class label — the original
    defect. They are scoped out of this change and **must not be included in any
    dispatch measurement** until they gain an `IntentSpec` with two or more
-   state-decided resolutions. Tracked in issue #25, and enforced rather than
+   state-decided resolutions. Enforced rather than
    merely stated: `EXCLUDED_FROM_BENCHMARK` in `tasks/registry.py` names them, and
    a test asserts every fault is either intent-covered or listed there, so a fault
    cannot be silently absent from both.

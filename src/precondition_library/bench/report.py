@@ -9,8 +9,12 @@ dispatch pairs -- the seam in `bench.pairs` and the threshold sweep in issue #5.
 This module does not compute it, and no number printed here is that measurement.
 
 The episode loop `bench.run` writes is retained only as a demonstration and is
-explicitly underpowered: 5 faults x 4 occurrences x 3 arms = 60 episodes, which
-spec §7 excludes from the primary claim. So the two figures built here are:
+explicitly underpowered. The nominal grid is 5 faults x 4 occurrences x 3 arms,
+but only two of the five faults are measurable -- the other three are fixed
+single sentences and sit in `tasks.registry.EXCLUDED_FROM_BENCHMARK` -- so the
+runnable demo is 2 faults x 4 occurrences x 3 arms = **24 episodes**, and
+`bench.run` refuses the excluded three rather than skipping them. Spec §7
+excludes the demo from the primary claim. So the two figures built here are:
 
 * a **cost model** -- mean tokens and LLM calls per episode against
   `occurrence_index`, one series per arm. Secondary, and reported as a cost
