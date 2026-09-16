@@ -42,6 +42,7 @@ programs:
     body: |
       git fetch {upstream_remote}
       git checkout {upstream_remote}/{upstream_branch} -- {submodule_path}
+      git commit -q -m "chore: repin nested library to upstream"
     postconditions:
       - name: pinned_to_upstream
         description: The recorded submodule commit is no longer drifted from upstream.
@@ -65,6 +66,7 @@ programs:
       git rm --cached -- {submodule_path}
       git config --file .gitmodules --remove-section submodule.{submodule_path} || true
       git add .gitmodules
+      git commit -q -m "chore: drop nested library reference"
     postconditions:
       - name: no_longer_declared
         description: The submodule is no longer declared in the tree.

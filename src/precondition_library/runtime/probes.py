@@ -162,11 +162,14 @@ def bindings(env: Sandbox) -> dict[str, str]:
     """Values the sandbox supplies for the declared parameter names.
 
     `sandbox.create` clones its only remote as `upstream` and seeds the branch
-    `main`, and the working clone is `env.work`. `submodule_path` is read from
-    the sandbox's own `.gitmodules`; it is present only when the repository
-    declares a submodule, and deliberately absent (not empty) otherwise. An
-    absent declared name is what `substitute` reports as `UnboundParameterError`, so
-    a program that needs a submodule is inapplicable rather than broken on a
+    `main`, and the working clone is `env.work`. `submodule_path` comes from
+    `sandbox.submodule_path`, which prefers the path a fault injector recorded
+    and falls back to the repository's own `.gitmodules`: a correct removal of
+    the submodule deletes that entry, so the recorded value is what still names
+    the path in the state a program needs to bind it. It is present only when one
+    of the two supplies it, and deliberately absent (not empty) otherwise. An
+    absent declared name is what `substitute` reports as `UnboundParameterError`,
+    so a program that needs a submodule is inapplicable rather than broken on a
     repository that has none.
 
     The binding is the sandbox's fixed vocabulary, not a general mechanism; a
