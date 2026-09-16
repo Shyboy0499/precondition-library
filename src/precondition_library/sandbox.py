@@ -144,8 +144,41 @@ def _seed_base(work: Path) -> None:
     run_git(("push", "-q", "-u", "upstream", "main"), cwd=work)
 
 
+_RECORDED_SUBMODULE_PATH_REF = "refs/sandbox/submodule-path"
+"""Where a fault injector records the submodule path it injected, as a blob.
+
+A fault's ground truth lives under `refs/sandbox/` so a branch rewrite cannot
+drop it. This one has a second reason: the path is the *input* to the task, and
+a correct removal deletes the `.gitmodules` entry that would otherwise carry it,
+so the recorded value is what still names it in the state a program must bind.
+
+The `submodule_moved` injector writes this ref and its checker reads it back;
+the runtime needs the same name to bind `{submodule_path}` there, so the literal
+is repeated here beside its reader. `tasks/faults/submodule_moved.py` holds the
+other copy and the two are one convention -- the sandbox cannot import it
+because the faults import the sandbox.
+"""
+
+
+def _recorded_submodule_path(work: Path) -> str | None:
+    """The submodule path a fault injector recorded, or None when none is."""
+    result = run_git(("cat-file", "-p", _RECORDED_SUBMODULE_PATH_REF), cwd=work, check=False)
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+    return result.stdout.strip()
+
+
 def submodule_path(work: Path) -> str | None:
-    """The submodule's path from `.gitmodules`, or None when there is none.
+    """The submodule's path: recorded injection first, `.gitmodules` second.
+
+    The order is the point, not an accident. `.gitmodules` is how a repository
+    that was never faulted reports its submodule, so a program compiled against a
+    real repository still resolves `{submodule_path}` from it. But one resolution
+    of `submodule_moved` is *removing* the submodule, and a correct removal
+    deletes the `.gitmodules` entry -- the evidence of what the path was. Reading
+    it first would leave the program that did the right thing unable to bind the
+    postcondition that says so. The injector records the path under
+    `refs/sandbox/submodule-path`, which survives the removal, so it wins.
 
     Lives here rather than in `signatures` because it is a git read under the
     pinned environment, which this module owns, and because both the observed
@@ -153,6 +186,9 @@ def submodule_path(work: Path) -> str | None:
     the two cannot disagree about where the submodule is. One submodule is all
     the grid models, so the first declared path is returned.
     """
+    recorded = _recorded_submodule_path(work)
+    if recorded is not None:
+        return recorded
     result = run_git(
         ("config", "--file", ".gitmodules", "--get-regexp", r"^submodule\..*\.path$"),
         cwd=work,
