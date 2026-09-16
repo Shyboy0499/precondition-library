@@ -12,7 +12,6 @@ sandbox, and that sandbox is throwaway; neither arm writes to the repository.
 
 from __future__ import annotations
 
-import subprocess
 from dataclasses import fields
 from pathlib import Path
 from typing import get_type_hints
@@ -30,35 +29,21 @@ from precondition_library.runtime.probes import evaluate_preconditions
 from precondition_library.sandbox import Sandbox, create
 from precondition_library.signatures import StateFingerprint, TaskSignature
 
-ROOT = Path(__file__).resolve().parents[1]
 INTENT = "reconcile local commits with upstream"
 
 
-def _git_status() -> str:
-    return subprocess.run(
-        ["git", "status", "--porcelain"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
-
-
 @pytest.fixture(autouse=True)
-def _repository_is_untouched():
+def _repository_is_untouched(repository_unchanged):
     """A dispatch reads the repository and never writes it.
 
     Both arms take a `tmp_path` library and (arm 3) a sandbox under the system
-    temp dir, so the committed library must be byte-identical afterwards.
-    Compared against the status before the test rather than requiring a clean
-    tree, because the branch carrying this file is uncommitted while it is
-    reviewed; `test_dispatch_leaves_the_repository_clean` below is the literal
-    version CI sees on the committed branch.
+    temp dir, so the committed library must be byte-identical afterwards. The
+    comparison itself is `repository_unchanged` in `tests/conftest.py`, shared
+    rather than copied per test module: it asserts the working tree is unchanged
+    since import, which passes for a contributor whose branch has uncommitted
+    work and still catches a leak.
     """
-    before = _git_status()
     yield
-    after = _git_status()
-    assert after == before, f"this test changed the repository:\nbefore:\n{before}\nafter:\n{after}"
 
 
 @pytest.fixture
@@ -367,18 +352,21 @@ def test_arm2_carries_the_score_arm3_does_not(make_sandbox, tmp_path) -> None:
     )
 
 
-def test_dispatch_leaves_the_repository_clean(make_sandbox, tmp_path) -> None:
-    """`git status` is clean after both arms run.
+def test_dispatch_leaves_the_repository_clean(repository_unchanged, make_sandbox, tmp_path) -> None:
+    """Both arms run without writing to the repository's own working tree.
 
     Neither arm writes: the library is under `tmp_path` and the sandbox is
-    throwaway. On the committed branch this asserts an empty `--porcelain`, which
-    is what CI sees. The autouse fixture above is the same check at finer grain
-    (before == after, catching a write even when the checkout is not pristine).
+    throwaway. The assertion is "the working tree is unchanged since import",
+    performed by `repository_unchanged` after the body -- not "the working tree
+    is empty". The weaker-looking check is the stronger one: an empty status can
+    only pass on a pristine checkout, so a contributor running the suite on a
+    branch fails it for reasons unrelated to their change, and a real leak would
+    be indistinguishable from their own edits. "Unchanged" fails only for the
+    one thing this test is about, on any checkout. `_repository_is_untouched`
+    above enforces the same shared check for every test in this file.
     """
     box = make_sandbox(11, [])
     library = _discriminating(tmp_path)
 
     dispatch_semantic(_signature(), library)
     dispatch_preconditions(_signature(), library, box)
-
-    assert _git_status() == ""
