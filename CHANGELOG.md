@@ -12,6 +12,23 @@ measured result; there are none yet. See
 
 ### Added
 
+- The ablation report (`bench/report.py`): `ablation_table` groups the ledger into
+  one row per (arm, fault, occurrence) carrying episodes, success rate, mismatch
+  rate, mean tokens, mean LLM calls and mean wall clock — every rate with its
+  numerator and denominator, every mean with the count it averaged. `invalid`
+  episodes are excluded from those denominators and reported as their own rate,
+  and an invalid rate above 10% is flagged as making the run suspect rather than
+  analysed (spec §7, item 9). `cost_curve` and `mismatch_comparison` are the two
+  demo figures: a secondary cost model grouped by arm and occurrence, and an
+  arm 2 vs arm 3 mismatch rate at matched N with a Wilson interval implemented
+  here in the standard library (no scipy). Both say in their output that the
+  pre-registered primary analysis — mismatch vs coverage at matched coverage over
+  labelled dispatch pairs — is elsewhere, and that the episode loop is
+  underpowered; a rate under the small-N guard is labelled noise, not printed as
+  a finding. `write_report` emits the CSVs, `report.txt` and PNGs. Figures need a
+  plotting library: `matplotlib` was already declared in pyproject's `dev` extra,
+  so it is used and no dependency was added; the CSV is the deliverable and the
+  PNG is a rendering of it.
 - The episode runner (`bench/run.py`): `run_episode` takes one fault and seed end
   to end — build a sandbox, inject, observe, let the arm act, grade with the
   fault's own checker, and return one ledger row — and `run_benchmark` runs the
