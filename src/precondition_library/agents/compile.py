@@ -33,6 +33,7 @@ from ..runtime.probes import evaluate_preconditions
 from ..runtime.replay import replay
 from ..sandbox import create
 from ..tasks.faults import FAULTS
+from ..tasks.registry import ambiguous_intents
 from ..tasks.spec import FaultSpec
 
 SYSTEM_PROMPT = """\
@@ -48,9 +49,12 @@ keys:
 
 id: a short lowercase slug, dashes not spaces
 intent: the natural-language task this program implements
-variant: which resolution of the request it implements, or null if there is only one
+variant: __VARIANT_RULE__
 parameters: the environment-bound names used in `{placeholders}`; the runtime
-  supplies work_dir, upstream_remote and upstream_branch
+  supplies work_dir, upstream_remote, upstream_branch and submodule_path.
+  submodule_path is bound only where the repository declares a submodule; on a
+  repository with none, a precondition that uses it does not hold rather than
+  failing loudly, so it is safe to write one that needs it.
 preconditions: executable shell probes that are ALL run before the program may
   fire. Each has name, description, probe, and optionally expect_exit and
   expect_pattern. A precondition must be SPECIFIC: one that accepts every
@@ -66,6 +70,30 @@ Rules:
 - Your output is data. Do not try to run it, and do not include `provenance` or
   `status`: the caller sets both.
 """
+
+_VARIANT_RULE_SINGLE = "which resolution of the request it implements, or null if there is only one"
+_VARIANT_RULE_MULTI = (
+    "which resolution of the request it implements. This intent has more than one "
+    "correct resolution and the request text does not say which; it must be exactly "
+    "one of these ids: {ids}"
+)
+
+
+def _system_prompt(variant_ids: list[str] | None) -> str:
+    """The compile prompt, told which variant ids this intent will accept.
+
+    A model that emits `variant: null` for an ambiguous intent produces a program
+    that cannot be scored (`Program.variant`) and, before admission checked this,
+    could fire wrongly while the ledger recorded no fire at all. Naming the ids
+    in the prompt is the cheap half of that fix; `admit` is the enforcing half.
+    """
+    rule = (
+        _VARIANT_RULE_MULTI.format(ids=", ".join(variant_ids))
+        if variant_ids
+        else _VARIANT_RULE_SINGLE
+    )
+    return SYSTEM_PROMPT.replace("__VARIANT_RULE__", rule)
+
 
 _EMPTY_PRECONDITIONS = (
     "the reply had an empty precondition list; a program whose preconditions accept "
@@ -98,13 +126,25 @@ class CompileResult(BaseModel):
     usage: TokenUsage
 
 
-def compile_program(signature, env, transcript: list[dict], provider: Provider) -> CompileResult:
+def compile_program(
+    signature,
+    env,
+    transcript: list[dict],
+    provider: Provider,
+    *,
+    variant_ids: list[str] | None = None,
+) -> CompileResult:
     """Ask the model for intent, parameters, preconditions, body, postconditions.
 
     The return is a CANDIDATE on success; nothing becomes replayable until
     `admit` passes. The model never sees a command's result from here: the prompt
     carries the transcript of the *solution* episode, already executed, and this
     function runs nothing itself.
+
+    `variant_ids` is the ambiguous intent's declared resolution ids, when the
+    caller knows them. They are put in the prompt so the model is told what it
+    must emit; a caller that omits them (an intent with one resolution) gets the
+    generic rule.
 
     A reply that is not a valid `Program` becomes `CompileResult(ok=False)`. The
     caller can record the episode's cost and reason either way.
@@ -116,7 +156,7 @@ def compile_program(signature, env, transcript: list[dict], provider: Provider) 
         "solution_transcript": transcript,
     }
     completion = provider.complete(
-        system=SYSTEM_PROMPT,
+        system=_system_prompt(variant_ids),
         messages=[{"role": "user", "content": json.dumps(payload, indent=2, default=str)}],
     )
 
@@ -168,6 +208,17 @@ def admit(program: Program, fault: FaultSpec | str, *, seeds: list[int]) -> tupl
     verdict is reproducible. A program whose preconditions accept an unrelated
     state is not admitted, because it would fire there for real.
 
+    A program is also rejected before any sandbox runs unless its `variant` is
+    one of the ambiguous intent's declared ids. The ledger's `misfired` is
+    `fired_variant is not None and fired_variant != correct_variant`, so a
+    program that fires with `variant: null` records `fired_variant=None` -- which
+    the ledger documents as "none fired" -- and counts as no miss. A program the
+    model mislabels under a declared id would likewise be scored against the
+    wrong resolution. Requiring a declared id is what makes the invariant
+    `fired_variant is not None` imply a real variant, and the ledger's mismatch
+    numerator rests on it. An intent with a single resolution has no declared
+    ambiguity to check, so its programs are not constrained here.
+
     Returns `(admitted, reason)` so a rejection is reported rather than silently
     dropped — rejected programs are data for the mismatch analysis.
     """
@@ -178,6 +229,15 @@ def admit(program: Program, fault: FaultSpec | str, *, seeds: list[int]) -> tupl
         raise ValueError(
             "admission needs at least one positive seed; with none the positive side "
             "would pass vacuously and admit an unexecuted program"
+        )
+
+    declared = _declared_variant_ids(name)
+    if declared is not None and program.variant not in declared:
+        return False, (
+            f"rejected before any sandbox: the intent for {name!r} is ambiguous and "
+            f"declares variant id(s) {sorted(declared)}, but the program declares "
+            f"{program.variant!r}; without a declared variant a wrong fire would be "
+            f"recorded as no fire at all"
         )
 
     for seed in seeds:
@@ -217,6 +277,18 @@ def admit(program: Program, fault: FaultSpec | str, *, seeds: list[int]) -> tupl
         f"admitted: postconditions held on {len(seeds)} freshly faulted sandbox(es); "
         f"preconditions rejected {len(unrelated)} unrelated state(s)"
     )
+
+
+def _declared_variant_ids(fault_name: str) -> set[str] | None:
+    """The variant ids an ambiguous intent declares for `fault_name`, else None.
+
+    None means "no ambiguous intent is registered for this fault", so there is no
+    declared set to validate against; it is not the same as an empty set, which
+    would reject every program. The registry is the one place that decides which
+    intents are ambiguous, so admission reads it rather than re-deriving the list.
+    """
+    intent = next((item for item in ambiguous_intents() if item.fault == fault_name), None)
+    return None if intent is None else {variant.id for variant in intent.variants}
 
 
 def _preconditions_hold(program: Program, env) -> bool:

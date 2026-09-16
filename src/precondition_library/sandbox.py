@@ -144,6 +144,25 @@ def _seed_base(work: Path) -> None:
     run_git(("push", "-q", "-u", "upstream", "main"), cwd=work)
 
 
+def submodule_path(work: Path) -> str | None:
+    """The submodule's path from `.gitmodules`, or None when there is none.
+
+    Lives here rather than in `signatures` because it is a git read under the
+    pinned environment, which this module owns, and because both the observed
+    fingerprint and the runtime's parameter bindings need it; one reader means
+    the two cannot disagree about where the submodule is. One submodule is all
+    the grid models, so the first declared path is returned.
+    """
+    result = run_git(
+        ("config", "--file", ".gitmodules", "--get-regexp", r"^submodule\..*\.path$"),
+        cwd=work,
+        check=False,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+    return result.stdout.split()[-1]
+
+
 def create_submodule_origin(root: Path, name: str) -> Path:
     """Create an empty local repository for a submodule fault to point at.
 

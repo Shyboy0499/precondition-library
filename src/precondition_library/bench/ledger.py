@@ -68,6 +68,20 @@ class EpisodeRecord(BaseModel):
     program_id: str | None = None
     dispatch_score: float | None = None
     """Similarity score for arm 2; None for the other arms."""
+    similarity_threshold: float | None = None
+    """Arm 2's inclusive similarity floor as configured for this episode.
+
+    Recorded per row so an untuned run is distinguishable from a tuned one: the
+    pre-registration has the threshold calibrated on the held-out tune set, and a
+    reader can see from the ledger alone whether that calibration happened rather
+    than inferring it from the code's default."""
+    library_hash: str | None = None
+    """The digest of the arm's library as this episode found it (`Library.library_hash`).
+
+    Each arm grows its own library, so an arm-2-versus-arm-3 difference is
+    confounded with a library difference. Recording the digest per row makes that
+    confound visible rather than silent; removing it is a harness change tracked
+    separately (issue #4)."""
     admitted: bool | None = None
     refusal_reason: str | None = None
     timed_out: bool = False

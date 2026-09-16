@@ -139,17 +139,31 @@ def _query_text(signature: TaskSignature) -> str:
 class Library:
     """Programs on disk under `library/`, committed as a research artifact."""
 
-    def __init__(self, root: Path, *, similarity: Similarity = lexical_similarity) -> None:
+    def __init__(
+        self,
+        root: Path,
+        *,
+        similarity: Similarity = lexical_similarity,
+        threshold: float = DEFAULT_SIMILARITY_THRESHOLD,
+    ) -> None:
         """Open the library at `root`, with arm 2's similarity function injected.
 
         The injectable default is the seam the design requires: replacing lexical
         overlap with an embedding model is `Library(root, similarity=embed)`, and
         neither `match_semantic` nor the dispatcher that calls it changes. The
-        parameter is keyword-only so the seam cannot be set by accident through
+        parameters are keyword-only so the seam cannot be set by accident through
         the positional `root`.
+
+        `threshold` lives here rather than on `match_semantic` so the tune pass
+        (#5) configures arm 2 once, at construction, and `dispatch_semantic` stays
+        a one-line delegation with no tunable of its own. A per-call parameter
+        would let a caller run the arm at a value the harness never recorded;
+        `bench/run.py` reads this attribute and writes it on every ledger row, so
+        a tuned run is distinguishable from an untuned one.
         """
         self.root = root
         self.similarity = similarity
+        self.threshold = threshold
 
     def load_all(self) -> list[Program]:
         """Every stored program, sorted by id so the order is not filesystem luck."""
@@ -246,7 +260,6 @@ class Library:
         signature: TaskSignature,
         *,
         limit: int = 3,
-        threshold: float = DEFAULT_SIMILARITY_THRESHOLD,
     ) -> list[ScoredProgram]:
         """Arm 2. Admitted programs ranked by text similarity to the request.
 
@@ -262,9 +275,11 @@ class Library:
         of a safety property this repository states, and arm 2 must not be the arm
         that quietly breaks it.
 
-        `threshold` is an **inclusive** floor, so a threshold of 0.0 admits a
-        zero-overlap program and the caller can sweep down to "no floor".
-        `limit` caps the result. Ties break by program id, so the order does not
+        `self.threshold` is an **inclusive** floor, so a threshold of 0.0 admits a
+        zero-overlap program and the caller can sweep down to "no floor". It is set
+        at construction (see `__init__`), not passed here, so the value that ran is
+        the value the harness recorded. `limit` caps the result. Ties break by
+        program id, so the order does not
         depend on storage order. `[]` is the fallback path -- the caller records
         it as `EpisodeOutcome.FALLBACK`, not an error.
 
@@ -281,7 +296,7 @@ class Library:
             for program in self.load_all()
             if program.status is ProgramStatus.ADMITTED
         ]
-        above = [item for item in scored if item.score >= threshold]
+        above = [item for item in scored if item.score >= self.threshold]
         above.sort(key=lambda item: (-item.score, item.program.id))
         return above[:limit]
 

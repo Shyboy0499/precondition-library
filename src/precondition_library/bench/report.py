@@ -254,7 +254,9 @@ def cost_curve(ledger: Path) -> list[CostPoint]:
     A secondary cost model, not a result. Grouping is by (arm, occurrence_index)
     and never merges arms: the comparison of the slopes is the only thing the
     curve is for, and pooling two arms would erase it. Invalid episodes are
-    excluded; they spent no tokens.
+    excluded from the curve as they are from every metric denominator; their
+    spend, which is real when the checker raised after the arm ran, is on the
+    ledger rows themselves rather than averaged in here.
     """
     groups: dict[tuple[Arm, int], list[EpisodeRecord]] = {}
     for record in _graded(read(ledger)):
