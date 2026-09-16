@@ -8,12 +8,54 @@ has to be catchable, and it can only be caught by states that require refusal.
 
 from __future__ import annotations
 
+import os
+import subprocess
+from pathlib import Path
 from typing import Any
 
 import pytest
 
 from precondition_library.provider import Completion
 from precondition_library.signatures import StateFingerprint
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def git_status_porcelain() -> str:
+    """The repository's `git status --porcelain`, run from the repository root."""
+    return subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+        env={**os.environ},
+    ).stdout
+
+
+# Snapshotted before any test runs, so "unchanged since import" proves the suite
+# leaked nothing into the repository's own tree.
+GIT_STATUS_AT_IMPORT = git_status_porcelain()
+
+
+@pytest.fixture
+def repository_unchanged():
+    """Fail if the test changed the repository's own working tree.
+
+    The assertion is "the working tree is unchanged since import", not "the
+    working tree is empty". That looks weaker and is strictly stronger. An empty
+    status can only pass on a pristine checkout, so a contributor running the
+    suite on a branch -- which has uncommitted work by definition -- sees a red
+    test with nothing to do with their change, and a real leak becomes
+    indistinguishable from their own edits. "Unchanged" fails for the one thing
+    the test is about, on any checkout. The comparison runs after the body.
+    """
+    before = GIT_STATUS_AT_IMPORT
+    yield
+    after = git_status_porcelain()
+    assert after == before, (
+        f"this test changed the repository:\nat import:\n{before}\nafter:\n{after}"
+    )
 
 
 class FakeProvider:
