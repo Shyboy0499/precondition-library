@@ -114,13 +114,7 @@ def test_every_stub_is_declared() -> None:
 
 
 DECLARED_STUBS: dict[str, str] = {
-    # The report that turns the ledger into the figures: issue #5. The episode
-    # runner left this list when it was implemented, and the arms left it with
-    # `agents/dispatch.py`.
-    "precondition_library.bench.report.ablation_table": "#5",
-    "precondition_library.bench.report.cost_curve": "#5",
-    "precondition_library.bench.report.mismatch_comparison": "#5",
-    "precondition_library.bench.report.write_report": "#5",
+    # The report (issue #5) left this list when `bench/report.py` was implemented.
     # The admission path (issue #4) is the first caller that needs a dry run.
     "precondition_library.runtime.guard.prepare_dry_run": "#4",
     # Not pending work: the base contract. Every fault overrides these, so the
