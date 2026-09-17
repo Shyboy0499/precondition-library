@@ -23,6 +23,16 @@ They are module-level rather than underscore-private because fault injectors
 (`tasks/faults/*`) and the state probes (`signatures.StateFingerprint.observe`)
 must mutate and read the sandbox with the same settings; a second copy in each
 caller is how one fault's commits drift from another's.
+
+**The dependency points one way: `tasks/faults/*` imports this module, and this
+module imports no fault and no registry.** `create` therefore builds a sandbox
+and stops; injecting a fault is the caller's step (`tasks.faults.build_sandbox`).
+An earlier version imported `FAULTS` inside `create` to inject on the caller's
+behalf, which reversed the declared direction (spec §4) and made
+`{sandbox, tasks.faults, signatures, tasks.intent, *}` a single import cycle, so
+`runtime.probes`, `runtime.replay` and `library` could all reach every fault
+injector and the task registry. Injection still happens *after* the environment
+exists, in the same order, through `build_sandbox`; only the direction changed.
 """
 
 from __future__ import annotations
@@ -306,10 +316,19 @@ def create_submodule_origin(root: Path, name: str) -> Path:
 
 
 def create(seed: int, faults: list[str]) -> Sandbox:
-    """Build a sandbox with the named faults injected, deterministically.
+    """Build an *empty* sandbox for `(seed, faults)`, deterministically.
+
+    `faults` names the faults the sandbox is destined to hold; it selects the
+    root (`seed-{seed}-{sorted faults}`) and nothing else. Injecting is the
+    caller's step, because the fault registry is above this module, not below it
+    (see the module docstring): `tasks.faults.build_sandbox` validates the names,
+    calls `create`, and only then applies each fault's `inject`. Splitting the two
+    keeps this function free of the cycle an in-function import used to hide.
 
     Determinism is required for the ablation: both arms must face byte-identical
     environments, and a re-run of the same seed must reproduce the same episode.
+    Every step here is under the pinned environment above, so one seed produces
+    the same clone and the same commit SHAs before any fault runs.
 
     The root is a function of `(seed, faults)`, so calling `create` twice for the
     same pair *replaces* the first sandbox rather than failing. That is safe for
@@ -317,12 +336,6 @@ def create(seed: int, faults: list[str]) -> Sandbox:
     poisoning the next one; callers that need two live sandboxes must use two
     seeds, or destroy the first before rebuilding.
     """
-    from .tasks.faults import FAULTS
-
-    unknown = sorted(set(faults) - set(FAULTS))
-    if unknown:
-        raise ValueError(f"unknown faults {unknown}; known: {sorted(FAULTS)}")
-
     slug = "-".join(sorted(faults)) or "base"
     root = _SANDBOX_DIR / f"seed-{seed}-{slug}"
     if root.exists():
@@ -337,8 +350,4 @@ def create(seed: int, faults: list[str]) -> Sandbox:
     run_git(("config", "user.name", _GIT_NAME), cwd=work)
     run_git(("config", "user.email", _GIT_EMAIL), cwd=work)
     _seed_base(work)
-
-    sandbox = Sandbox(root=root, work=work, upstream=upstream)
-    for name in faults:
-        FAULTS[name].inject(seed, sandbox)
-    return sandbox
+    return Sandbox(root=root, work=work, upstream=upstream)

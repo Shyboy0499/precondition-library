@@ -9,9 +9,14 @@ The ablation's two dispatch strategies meet here, as two functions at one seam.
 `match_semantic` (arm 2) ranks admitted programs by how similar their text is to
 the request; `match_preconditions` (arm 3) returns the admitted programs whose
 executable preconditions accept the environment. The arms differ in which
-function is called and nothing else, so which *similarity function* arm 2 uses is
-chosen when a `Library` is constructed rather than inside either arm: lexical
-today, an embedding model behind the same `Similarity` Protocol tomorrow.
+function is called and nothing else, so **each arm's mechanism is injected at
+construction rather than named in either matcher**: arm 2's `similarity` is
+lexical today and an embedding model behind the same `Similarity` Protocol
+tomorrow, and arm 3's predicate evaluator is passed as `evaluate_preconditions`.
+That seam is also why this module does not import `runtime.probes`: naming the
+probe runtime here is what made arm 2's text matcher depend on arm 3's machinery
+and left the two mechanisms at different levels. The evaluator arrives from the
+caller instead.
 
 Admission is implemented in `agents.compile`, not here. This module's docstring
 once implied otherwise; the safety gate reads a program's probes, runs it in a
@@ -25,11 +30,11 @@ import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
 import yaml
 
-from .program import Program, ProgramStatus
-from .runtime.probes import evaluate_preconditions
+from .program import GroundTruthResult, Program, ProgramStatus
 from .sandbox import Sandbox
 from .signatures import TaskSignature
 from .similarity import Similarity, lexical_similarity
@@ -165,6 +170,19 @@ def _query_text(signature: TaskSignature) -> str:
     return f"{signature.intent}\n{signature.fingerprint.as_text()}"
 
 
+class PreconditionEvaluator(Protocol):
+    """Arm 3's mechanism: does `program`'s preconditions hold on `env`?
+
+    The callable the harness injects is `runtime.probes.evaluate_preconditions`,
+    which runs the program's probes and returns a `GroundTruthResult` naming every
+    predicate's verdict. A Protocol rather than an imported function because the
+    runtime must not be named here (see the module docstring); a plain callable
+    satisfies it structurally, as `lexical_similarity` satisfies `Similarity`.
+    """
+
+    def __call__(self, program: Program, env: Sandbox) -> GroundTruthResult: ...
+
+
 class Library:
     """Programs on disk under `library/`, committed as a research artifact."""
 
@@ -174,14 +192,26 @@ class Library:
         *,
         similarity: Similarity = lexical_similarity,
         threshold: float = DEFAULT_SIMILARITY_THRESHOLD,
+        evaluate_preconditions: PreconditionEvaluator | None = None,
     ) -> None:
-        """Open the library at `root`, with arm 2's similarity function injected.
+        """Open the library at `root`, with arm 2's and arm 3's mechanisms injected.
 
-        The injectable default is the seam the design requires: replacing lexical
-        overlap with an embedding model is `Library(root, similarity=embed)`, and
-        neither `match_semantic` nor the dispatcher that calls it changes. The
-        parameters are keyword-only so the seam cannot be set by accident through
-        the positional `root`.
+        The injectable defaults are the seams the design requires. Replacing
+        lexical overlap with an embedding model is `Library(root,
+        similarity=embed)`, and passing the harness's predicate evaluator is
+        `Library(root, evaluate_preconditions=evaluate_preconditions)`; neither
+        `match_semantic` nor `match_preconditions`, and neither dispatcher, has to
+        change. The parameters are keyword-only so a seam cannot be set by
+        accident through the positional `root`.
+
+        `evaluate_preconditions` has **no imported default on purpose.** The only
+        default would be `runtime.probes.evaluate_preconditions`, and importing it
+        is exactly the dependency this seam removes: with it, this module named
+        the probe runtime directly, so arm 2's text matcher could not be used
+        without arm 3's machinery and the two mechanisms sat at different levels.
+        A library used only for storage or for arm 2 may leave it unset;
+        `match_preconditions` refuses to run without one rather than silently
+        importing it back.
 
         `threshold` lives here rather than on `match_semantic` so the tune pass
         (#5) configures arm 2 once, at construction, and `dispatch_semantic` stays
@@ -193,6 +223,7 @@ class Library:
         self.root = root
         self.similarity = similarity
         self.threshold = threshold
+        self.evaluate_preconditions = evaluate_preconditions
 
     def load_all(self) -> list[Program]:
         """Every stored program, sorted by id so the order is not filesystem luck.
@@ -381,32 +412,45 @@ class Library:
         above.sort(key=lambda item: (-item.score, item.program.id))
         return above[:limit]
 
-    def match_preconditions(self, signature: TaskSignature, env: Sandbox) -> list[Program]:
+    def match_preconditions(self, env: Sandbox) -> list[Program]:
         """Arm 3. Programs whose executable preconditions all accept `env`.
+
+        The predicate evaluator is `self.evaluate_preconditions`, injected at
+        construction like arm 2's `similarity`; this method names no mechanism of
+        its own, so replacing the evaluator does not touch the arm. That also
+        means this module never imports the probe runtime (see the module
+        docstring). Arm 3 takes only the environment, deliberately: its identity
+        is that the *environment* decides, not the request text, and a `signature`
+        parameter would invite a later change to rank by intent -- making it arm 2
+        under another name and comparing two matchers that read the same signal.
+        The parameter is gone rather than merely unused.
 
         Eligibility is `admitted` and nothing else. `library/README.md` rule 1
         makes dispatching a `candidate`, `demoted` or `quarantined` program a
         violation of a safety property this repository states, so a matcher that
         returned those as "candidates for later filtering" would depend on every
         caller remembering the rule. `[]` is the fallback path -- the caller
-        records it as `EpisodeOutcome.FALLBACK`, not an error.
+        records it as `EpisodeOutcome.FALLBACK`, not an error. Both matchers share
+        this one `load_all` and this one eligibility filter, which is what keeps
+        the two arms' *selection* the only thing that differs.
 
         Ordered most-specific-first by precondition count, with the id as a
         tie-break so equally specific programs come back in a stable order. A
         program with more preconditions has accepted a narrower state, so a
         general program cannot shadow a targeted one; ordering by the library's
         directory order would let it.
-
-        `signature` is deliberately not consulted. Arm 3's identity is that the
-        *environment* decides, not the request text: ranking by the intent would
-        make it arm 2 under another name, and the ablation would compare two
-        matchers that read the same signal. The parameter is kept because both
-        arms are called at the same seam.
         """
+        if self.evaluate_preconditions is None:
+            raise ValueError(
+                "arm 3's matcher needs a predicate evaluator; construct the library as "
+                "Library(root, evaluate_preconditions=...) -- importing one here would "
+                "put the probe runtime back into the storage layer and re-hide the seam"
+            )
         accepted = [
             program
             for program in self.load_all()
-            if program.status is ProgramStatus.ADMITTED and evaluate_preconditions(program, env).ok
+            if program.status is ProgramStatus.ADMITTED
+            and self.evaluate_preconditions(program, env).ok
         ]
         accepted.sort(key=lambda program: (-len(program.preconditions), program.id))
         return accepted

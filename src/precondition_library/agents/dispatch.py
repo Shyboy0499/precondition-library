@@ -82,7 +82,7 @@ def dispatch_preconditions(signature: TaskSignature, lib: Library, env: Sandbox)
     A score leaking into arm 3's record would be a silent inconsistency between
     what the arm decided and what the ledger says it decided.
     """
-    accepted = lib.match_preconditions(signature, env)
+    accepted = lib.match_preconditions(env)
     if not accepted:
         return Dispatch(None, None, "no admitted program's preconditions held")
     return Dispatch(accepted[0], None, "first by precondition specificity")

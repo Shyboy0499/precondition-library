@@ -43,8 +43,8 @@ from precondition_library.program import (
     Provenance,
 )
 from precondition_library.provider import Completion, ProviderError, TokenUsage
+from precondition_library.runtime.probes import evaluate_preconditions
 from precondition_library.runtime.replay import replay
-from precondition_library.sandbox import create
 from precondition_library.tasks.faults.diverged import SPEC as DIVERGED
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -174,8 +174,13 @@ _MALFORMED_REPLY = "this is not a YAML mapping: [unclosed"
 
 
 def _library_with_admitted(root: Path, program: Program) -> Library:
-    """A library holding `program` at `admitted`, the only dispatchable status."""
-    library = Library(root)
+    """A library holding `program` at `admitted`, the only dispatchable status.
+
+    Arm 3's predicate evaluator is injected here, because `Library` no longer
+    imports the probe runtime: the injection is what lets arm 2's matcher be used
+    without arm 3's machinery, so the harness passes it explicitly.
+    """
+    library = Library(root, evaluate_preconditions=evaluate_preconditions)
     library.add(program)
     library.set_status(program.id, ProgramStatus.ADMITTED, episode_id="test/admit")
     return library
@@ -264,7 +269,7 @@ def test_solving_and_compiling_is_charged_to_the_episode(tmp_path: Path) -> None
         DISCARD_SEED,
         1,
         provider=provider,
-        library=Library(tmp_path / "lib"),
+        library=Library(tmp_path / "lib", evaluate_preconditions=evaluate_preconditions),
         model="fake",
     )
 
@@ -498,7 +503,7 @@ def test_no_applicable_program_falls_back_at_full_price(tmp_path: Path) -> None:
         DISCARD_SEED,
         1,
         provider=provider,
-        library=Library(tmp_path / "lib"),
+        library=Library(tmp_path / "lib", evaluate_preconditions=evaluate_preconditions),
         model="fake",
     )
 
@@ -536,7 +541,9 @@ def test_correct_variant_is_identical_across_arms(tmp_path: Path) -> None:
                 DISCARD_SEED,
                 1,
                 provider=FakeProvider(*solves),
-                library=Library(tmp_path / f"lib-{arm.value}"),
+                library=Library(
+                    tmp_path / f"lib-{arm.value}", evaluate_preconditions=evaluate_preconditions
+                ),
                 model="fake",
             )
         )
@@ -662,7 +669,7 @@ def test_an_unrunnable_episode_is_recorded_as_invalid(tmp_path: Path, monkeypatc
     def _boom(*args, **kwargs):
         raise RuntimeError("simulated sandbox failure")
 
-    monkeypatch.setattr("precondition_library.bench.run.create", _boom)
+    monkeypatch.setattr("precondition_library.bench.run.build_sandbox", _boom)
 
     record = run_episode(
         Arm.REACT,
@@ -956,17 +963,14 @@ def test_retries_are_capped_and_a_persistent_5xx_fails_the_episode(tmp_path, mon
 # --- a sanity check on the fixture itself ------------------------------------
 
 
-def test_the_discard_fixture_resolves_the_state() -> None:
+def test_the_discard_fixture_resolves_the_state(make_sandbox) -> None:
     """The fixture program must actually fix the state, or every claim above drifts.
 
     A direct check with no runner involved: inject the fault, replay the program,
     and require the fault's own checker to pass. If this fails, the fault's
     checker and the program's postcondition have diverged.
     """
-    box = create(DISCARD_SEED, ["diverged"])
-    try:
-        result = replay(_discard_program(), box)
-        assert result.ok, result.reason
-        assert DIVERGED.check(box).ok
-    finally:
-        box.destroy()
+    box = make_sandbox(DISCARD_SEED, ["diverged"])
+    result = replay(_discard_program(), box)
+    assert result.ok, result.reason
+    assert DIVERGED.check(box).ok

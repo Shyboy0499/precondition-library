@@ -24,9 +24,6 @@ from precondition_library.program import (
     Provenance,
 )
 from precondition_library.runtime.probes import evaluate_preconditions
-from precondition_library.sandbox import Sandbox
-from precondition_library.signatures import StateFingerprint, TaskSignature
-from precondition_library.tasks.faults.diverged import INTENT as DIVERGED_INTENT
 from precondition_library.tasks.faults.submodule_moved import state_for_seed
 
 # `conftest.py`'s grid declares seed 2 as the disjoint state, whose resolution is
@@ -85,15 +82,6 @@ def _program(
     )
 
 
-def _signature(box: Sandbox, seed: int) -> TaskSignature:
-    """A real signature. Arm 3 does not read it; the seam requires one."""
-    return TaskSignature(
-        intent=DIVERGED_INTENT.task_text(seed),
-        fingerprint=StateFingerprint.observe(box),
-        target=str(box.root),
-    )
-
-
 def test_matching_gold_program_dispatches(make_sandbox, tmp_path) -> None:
     """The state its resolution fits accepts the program's preconditions."""
     box = make_sandbox(DIVERGED_SEED, ["diverged"])
@@ -106,7 +94,7 @@ def test_matching_gold_program_dispatches(make_sandbox, tmp_path) -> None:
         predicate.name for predicate in rebase.preconditions
     ]
 
-    matched = library.match_preconditions(_signature(box, DIVERGED_SEED), box)
+    matched = library.match_preconditions(box)
     assert [program.id for program in matched] == [rebase.id]
 
 
@@ -121,7 +109,7 @@ def test_unrelated_state_is_rejected(make_sandbox, tmp_path) -> None:
     library = store_programs(tmp_path, [rebase])
 
     matching = make_sandbox(DIVERGED_SEED, ["diverged"])
-    matched = library.match_preconditions(_signature(matching, DIVERGED_SEED), matching)
+    matched = library.match_preconditions(matching)
     assert [program.id for program in matched] == [rebase.id]
 
     unrelated = make_sandbox(0, ["dirty_tree"])
@@ -129,7 +117,7 @@ def test_unrelated_state_is_rejected(make_sandbox, tmp_path) -> None:
     assert not result.ok, f"rebase preconditions accepted a dirty_tree sandbox: {result.detail}"
     assert any(not item.ok for item in result.predicates), "a rejection must name what failed"
 
-    assert library.match_preconditions(_signature(unrelated, 0), unrelated) == []
+    assert library.match_preconditions(unrelated) == []
 
 
 def test_specificity_orders_most_specific_first(make_sandbox, tmp_path) -> None:
@@ -149,7 +137,7 @@ def test_specificity_orders_most_specific_first(make_sandbox, tmp_path) -> None:
     )
     library = store_programs(tmp_path, [general, specific])
 
-    matched = library.match_preconditions(_signature(box, 11), box)
+    matched = library.match_preconditions(box)
     assert [program.id for program in matched] == ["b-specific", "a-general"]
 
 
@@ -164,7 +152,7 @@ def test_non_admitted_programs_are_never_returned(make_sandbox, tmp_path) -> Non
 
     # Not vacuous: all three are stored and all three would match on probes alone.
     assert len(library.load_all()) == 3
-    matched = library.match_preconditions(_signature(box, 12), box)
+    matched = library.match_preconditions(box)
     assert [program.id for program in matched] == [admitted.id]
 
 
@@ -175,7 +163,7 @@ def test_nothing_matching_returns_an_empty_list(make_sandbox, tmp_path) -> None:
     library = store_programs(tmp_path, [only])
 
     assert evaluate_preconditions(only, box).ok is False
-    assert library.match_preconditions(_signature(box, 13), box) == []
+    assert library.match_preconditions(box) == []
 
 
 # --- a program needing `submodule_path` -------------------------------------
