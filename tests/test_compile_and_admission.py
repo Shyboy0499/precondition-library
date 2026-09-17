@@ -520,6 +520,66 @@ def test_malformed_reply_is_a_recorded_failure(make_sandbox, reply: str) -> None
     assert result.usage.tokens_out == 5
 
 
+# --- the compile contract states every field's shape (issue #78) -----------
+
+
+def test_the_prompt_states_the_shape_of_every_field(make_sandbox) -> None:
+    """Issue #78: the contract the model is asked to satisfy names each shape.
+
+    Shape failures are mechanical, so the prompt is the place to fix them: a
+    `body` as a list and a `parameters` value of the wrong type are both rejected
+    by validation, and the prompt now says what to emit and gives a minimal
+    example. This asserts the contract text, not the model's adherence to it --
+    the adherence rate cannot be measured offline, and it was not.
+    """
+    box = make_sandbox(DISCARD_SEED, ["diverged"])
+    fake = FakeProvider(_completion(_reply_text()))
+
+    compile_program(_signature(box), box, [], fake)
+
+    system = fake.calls[0]["system"]
+    assert "body: string" in system
+    assert "ONE string, not a list" in system
+    assert "newline" in system, "the body's line separator must be stated"
+    assert "parameters: list of strings" in system
+    assert "preconditions: list of mappings" in system
+    assert "postconditions: list of mappings" in system
+    assert "```yaml" in system, "a minimal example must be present"
+
+
+def test_a_list_body_is_rejected_with_the_field_named(make_sandbox) -> None:
+    """The observed #78 shape: a body returned as a list of commands.
+
+    The fix is the prompt, and the rejection is kept: coercing a list into one
+    string would hide the prompt defect and suppress the compile-quality signal
+    that `compile_failure_reason` exists to carry. What must hold either way is
+    that the failure names the field, so the ledger can diagnose it.
+    """
+    box = make_sandbox(DISCARD_SEED, ["diverged"])
+    fake = FakeProvider(
+        _completion(_reply_text(body=["git fetch upstream", "git reset --hard upstream/main"]))
+    )
+
+    result = compile_program(_signature(box), box, [], fake)
+
+    assert not result.ok
+    assert result.program is None
+    assert "('body',)" in result.reason
+    assert result.usage.tokens_in == 10, "a failed parse still cost the reply"
+
+
+def test_a_wrong_type_parameters_is_rejected_with_the_field_named(make_sandbox) -> None:
+    """The other #78 shape: `parameters` given as a bare string, not a list."""
+    box = make_sandbox(DISCARD_SEED, ["diverged"])
+    fake = FakeProvider(_completion(_reply_text(parameters="upstream_remote upstream_branch")))
+
+    result = compile_program(_signature(box), box, [], fake)
+
+    assert not result.ok
+    assert result.program is None
+    assert "('parameters',)" in result.reason
+
+
 # --- compile never executes what it generates ------------------------------
 
 

@@ -52,7 +52,7 @@ Three rules keep this directory trustworthy:
 | --- | --- |
 | `candidate` | compiled, not yet admitted; never replayed |
 | `admitted` | passed the two-sided admission gate; dispatchable |
-| `demoted` | fired on a real episode, postconditions failed |
+| `demoted` | fired on a real episode and could not work — its body ran but its postconditions failed, or its body named a declared parameter the environment could not bind |
 | `quarantined` | withdrawn from dispatch, retained for analysis |
 
 `admitted` was previously named `verified`. The rename is deliberate: a program

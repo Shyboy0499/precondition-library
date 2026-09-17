@@ -24,7 +24,7 @@ from conftest import GOLD_CASES, gold_program
 from precondition_library import provider as provider_module
 from precondition_library.program import Predicate
 from precondition_library.runtime.guard import Verdict, screen
-from precondition_library.runtime.probes import substitute
+from precondition_library.runtime.probes import UnboundParameterError, substitute
 from precondition_library.runtime.replay import replay
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -213,8 +213,6 @@ def test_substitute_distinguishes_declared_from_unknown_names() -> None:
     distinction is what lets a submodule program be inapplicable rather than a
     crash on a repository with no submodule. An unknown name still raises plainly.
     """
-    from precondition_library.runtime.probes import UnboundParameterError
-
     with pytest.raises(UnboundParameterError):
         substitute("git checkout {submodule_path}", {"work_dir": "/tmp/sandbox"})
 
@@ -222,6 +220,51 @@ def test_substitute_distinguishes_declared_from_unknown_names() -> None:
     assert issubclass(UnboundParameterError, KeyError), (
         "body callers still treat it as a lookup miss"
     )
+
+
+# --- an unbound body is a recorded mis-fire, not an abort --------------------
+
+
+def test_unbound_body_parameter_is_recorded_not_raised(make_sandbox) -> None:
+    """Issue #76: a body this environment cannot substitute is a result, not a raise.
+
+    The program *fired*, so the episode is one the primary metric counts; an
+    exception escaping here ended a whole run instead. `postconditions` stays
+    `None` because nothing executed, which is what distinguishes this from a body
+    that ran and failed its postconditions -- that case carries the failed result.
+    """
+    box = make_sandbox(1, ["diverged"])
+    program = gold_program("discard").model_copy(
+        update={"body": "git reset --hard {submodule_path}\n"}
+    )
+
+    result = replay(program, box)
+
+    assert not result.ok
+    assert result.unbound_parameter is True
+    assert result.postconditions is None, "nothing ran, so there is no evidence"
+    assert "submodule_path" in result.reason
+    assert not result.refused and not result.timed_out
+
+
+def test_an_unknown_body_placeholder_still_raises(make_sandbox) -> None:
+    """Issue #77 depends on the vocabulary check surviving the #76 change.
+
+    A name outside `VOCABULARY` is a program defect, so `replay` must let it
+    escape for `admit` to record as a rejection -- only a *declared* name this
+    environment cannot bind is the inapplicable case. The class test is explicit
+    because `UnboundParameterError` subclasses `KeyError`, so catching the parent
+    would not tell the two apart.
+    """
+    box = make_sandbox(1, ["diverged"])
+    program = gold_program("discard").model_copy(
+        update={"body": "git reset --hard {not_a_parameter}\n"}
+    )
+
+    with pytest.raises(KeyError) as excinfo:
+        replay(program, box)
+
+    assert not isinstance(excinfo.value, UnboundParameterError)
 
 
 # --- the fixture is a real cleanup ------------------------------------------
