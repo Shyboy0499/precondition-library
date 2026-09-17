@@ -6,16 +6,22 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2EA44F?style=flat" alt="MIT License"></a>
-  <img src="https://img.shields.io/badge/status-apparatus%20implemented%20%C2%B7%20nothing%20measured-B8860B?style=flat" alt="Status: apparatus implemented, nothing measured">
+  <img src="https://img.shields.io/badge/status-mechanism%20demonstrated%20%C2%B7%20primary%20claim%20unmeasured-B8860B?style=flat" alt="Status: mechanism demonstrated, primary claim unmeasured">
   <img src="https://img.shields.io/badge/python-3.12%2B-3776AB?style=flat" alt="Python 3.12+">
 </p>
 
-> **Status: nothing has been measured.** No dispatch comparison and no episode
-> has been run, so no result is claimed and no figure exists. The apparatus that
-> would produce one is implemented and its suite is green in
+> **Status: the mechanism is demonstrated; the primary claim is not measured.**
+> One smoke pass has run against a real model and is reported in
+> [First demonstration](#first-demonstration): a compiled program is replayed with
+> zero LLM calls on a later occurrence of the same state, and the compiled arms'
+> cost falls while the baseline stays flat. That demonstrates the mechanism, not
+> the claim — the pre-registered comparison (mismatch at matched coverage over
+> labelled dispatch pairs, issue #5) has not been run, and the seeds are the smoke
+> set rather than the eval set. Nothing below should be read as a result, and
+> everything else here is a hypothesis with a stated way to falsify it. The
+> apparatus is implemented and its suite is green in
 > [CI](https://github.com/Shyboy0499/precondition-library/actions/workflows/ci.yml)
-> — but an implemented apparatus is not a result, and nothing below should be
-> read as one. Everything here is a hypothesis with a stated way to falsify it.
+> — but an implemented apparatus is not a result.
 >
 > Per-module status is deliberately not restated below, because prose that
 > describes the code drifts the moment the code moves (CONTRIBUTING rule 5).
@@ -37,7 +43,7 @@ Stated first, because the prior art is real and the honest framing depends on it
 | That compiling a task into a persistent program and replaying it without an LLM is novel | Already published: PreAct, SkillDroid, and Auto each compile a trace and replay it cheaply or with no per-step LLM calls (see [Prior work](#prior-work)). |
 | That dispatching a cached plan by testing **executable preconditions** is a new mechanism | It is MACROPS, 1972: a cached generalized plan is dispatched by testing precondition *kernels* against live state, with an explicit replan fallback. |
 | That "the most similar case is not the most reusable" is a new insight | Smyth & Keane argued it in 1998, in a peer-reviewed journal, at length. |
-| That any number in this repository has been measured | No dispatch comparison and no episode has been run. The only genuine measurement is the text-only control's informed AUC below; the uninformed 0.500 is an identity of the construction, not a measurement, and there is no figure and no `.jsonl`. |
+| That a dispatch comparison has been made, or that any number here is a result for the primary claim | No dispatch comparison has been run. One smoke pass has (see [First demonstration](#first-demonstration)), and it demonstrates the mechanism rather than measuring the claim; the text-only control's informed AUC below is the other genuine measurement, and the uninformed 0.500 is an identity of the construction, not a measurement. |
 
 Amortization is still what makes the project *useful* — it is an engineering
 assumption here, not a finding. It is reported as a cost model, never as a
@@ -130,7 +136,8 @@ fixed sentence and are excluded from dispatch measurement, declared in
 `tasks/registry.py`'s `EXCLUDED_FROM_BENCHMARK`.
 
 The end-to-end episode loop survives as a small demonstration, explicitly
-labelled underpowered. It is not the claim.
+labelled underpowered. It is not the claim; its first run is reported in
+[First demonstration](#first-demonstration).
 
 ## The artifact
 
@@ -249,10 +256,13 @@ demoted after it mis-fired stays visible in the history.
 `bench/gold/` holds the hand-written gold resolutions. What runs today for the two
 ambiguous intents is form validation only: `sync_fork_with_upstream.yaml` and
 `restore_submodule_state.yaml` must parse, be well-formed, cover every declared
-resolution, and have distinct bodies (`tests/test_gold_programs.py`). No probe has
-ever been executed against a sandbox — `tests/test_checkers_against_gold.py` is
-skipped for every fault until the checker execution phase lands (issue #9),
-because a checker cannot be validated without a state to check.
+resolution, and have distinct bodies (`tests/test_gold_programs.py`). No gold
+checker has been executed against a sandbox — `tests/test_checkers_against_gold.py`
+is skipped for every fault until the checker execution phase lands (issue #9),
+because a checker cannot be validated without a state to check. (Probes did run
+against sandboxes in the smoke pass below: admission's two-sided gate and arm 3's
+dispatch both evaluate them, which is why this sentence is now about the gold
+checkers only.)
 
 One structural invariant is enforced by test rather than convention:
 `runtime/replay.py` cannot reach `provider`, directly or transitively. It is worth
@@ -269,9 +279,11 @@ sandbox, one arm acts, the fault's own checker grades the result, and a ledger r
 is written; `bench/report.py` turns the ledger into the ablation table and the two
 demo figures. The suite covering that path is green in
 [CI](https://github.com/Shyboy0499/precondition-library/actions/workflows/ci.yml),
-and the seed sets a run would use are already fixed in `bench/splits.py`. **No run
-against a real model has happened**, so nothing that path can produce is a result
-yet.
+and the seed sets a run would use are already fixed in `bench/splits.py`. **One
+smoke run against a real model has happened** (see
+[First demonstration](#first-demonstration)); it demonstrates the mechanism, but
+the pre-registered comparison has not been run and nothing it produced is a result
+for the primary claim.
 
 What is done is deliberately not tracked here: a table in this file went stale the
 last time a module moved, which is why it is gone. Status is recorded in two
@@ -290,6 +302,78 @@ places, both checked:
   hardening behind them. Which faults are still excluded from dispatch
   measurement is declared in code, not here: `tasks/registry.py`'s
   `EXCLUDED_FROM_BENCHMARK`, asserted against every fault by a test.
+
+## First demonstration
+
+This is a **smoke pass**, not the measurement. Its job is to fail loudly on
+wiring, not to produce a number; the pre-registered comparison — mismatch at
+matched coverage over labelled dispatch pairs, issue #5 — was not run, and the
+seeds are the smoke set from `bench/splits.py`, not the eval set.
+
+**Provenance.** One pass, `deepseek-chat`, 48 episodes = 8 occurrences × 2 faults
+(`diverged` and `submodule_moved`) × 3 arms, using the smoke seeds run twice
+(`[0, 1, 2, 4, 0, 1, 2, 4]`). The raw ledger is
+`.skillpilot/temp/smoke/previous-4/ledger.jsonl`; it is workspace-local and not
+committed, its format is `bench/ledger.py`, and `bench/run.py` regenerates it.
+
+Per arm over the whole pass:
+
+| arm | episodes | correct end state | programs fired | replays | tokens |
+| --- | --- | --- | --- | --- | --- |
+| `react` — arm 1, the baseline | 16 | 16/16 | 0 | 0 | 285,607 |
+| `semantic` — arm 2 | 16 | 15/16 | 5 | 2 | 302,060 |
+| `precondition` — arm 3 | 16 | 16/16 | 5 | 5 | 276,431 |
+
+"Correct end state" is the fault's own checker grading the final repository
+state. A **replay** is an episode in which a program fired and the run spent
+**zero LLM calls**; the seven replays across the two compiled arms each spent
+0 tokens. 17 of 48 compiles were admitted, and 3 episodes carry a
+`replay_failure_reason`.
+
+Mean tokens per episode by occurrence index 1–8, which is the cost curve:
+
+| arm | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `react` — baseline | 22.7k | 13.4k | 11.4k | 19.2k | 13.6k | 23.5k | 17.4k | 21.7k |
+| `semantic` — arm 2 | 25.8k | 25.7k | 22.4k | 25.9k | 18.2k | 18.4k | 8.7k | 5.8k |
+| `precondition` — arm 3 | 20.2k | 38.0k | 8.1k | 30.8k | 9.2k | 12.2k | 10.2k | 9.4k |
+
+LLM calls per occurrence on `submodule_moved`, where the zero-call replays are
+plain to see:
+
+```text
+semantic      submodule_moved   13 13 13 13 10 10  0  0
+precondition  submodule_moved   13 13  0 13  0  0  0  0
+```
+
+**What this shows.** A compiled program is replayed with no LLM calls on a later
+occurrence of the same state, and the compiled arms' cost falls across
+occurrences while the baseline stays flat — the baseline has no library, so it
+must solve every episode with the agent and cannot fall. That is the mechanism,
+demonstrated end to end against a real model.
+
+**What it does not show, and must not be read as showing.**
+
+- **It is not a result for the primary claim.** The pre-registered comparison
+  (mismatch at matched coverage over labelled dispatch pairs, issue #5) did not
+  run here, and these are the smoke seeds, not eval. No figure above measures
+  the claim.
+- **Five fires per compiled arm is not evidence of anything.** Of `semantic`'s
+  five fires, four selected a resolution other than the episode's own correct
+  one, and one of those ended in the wrong state (`semantic`, occurrence 7).
+  `precondition`'s five fires all selected the correct resolution. Four
+  mis-fires against zero is a *signal in the predicted direction* at n=5 fires
+  per arm — not evidence. It is recorded because it is the honest state of the
+  evidence, and a reader should know it exists.
+- **Occurrences 5–8 are not independent observations** (issue #81). The smoke
+  seeds are run twice, so occurrences 5–8 revisit occurrences 1–4's states with
+  the library those occurrences built. The cost curve is computed over them for
+  exactly that reason — the accumulation is the effect being shown — but they
+  are not eight independent samples.
+- **The cache figure is a confound, not a result.** Across the pass 864,098
+  tokens were spent over 407 calls in 687s, and 73% of the input tokens were
+  cache hits, so the baseline's real marginal cost is lower than the raw token
+  counts above suggest.
 
 ## Running it
 

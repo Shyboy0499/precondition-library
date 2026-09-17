@@ -146,6 +146,19 @@ measured result; there are none yet. See
   play" section; and a "Running it" section records that the seed plan is fixed
   in `bench/splits.py` and that the API key is the caller's, not read from the
   environment.
+- The README status block now separates a **demonstrated mechanism from an
+  unmeasured claim**: a smoke pass has run against `deepseek-chat` (48 episodes,
+  the smoke seeds run twice, archived in `.skillpilot/temp/smoke/previous-4/`),
+  so "nothing has been measured" is no longer true, while the pre-registered
+  comparison (mismatch at matched coverage, issue #5) still is not. A new "First
+  demonstration" section reports the pass — per-arm episodes, correct end state,
+  fires, replays and tokens; the per-occurrence cost curve; and the
+  per-occurrence LLM calls — and states, beside the figures, what the pass is
+  not: a result for the primary claim, evidence from five fires per arm,
+  independent observations, or a cache-free cost. The status block, the "What
+  this is not" table and "State of play" were corrected in place because they are
+  live documents (CONTRIBUTING rule 5); the earlier README bullet above is left
+  as the record of what it said before.
 
 ### Fixed
 
