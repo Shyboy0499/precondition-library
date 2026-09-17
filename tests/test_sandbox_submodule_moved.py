@@ -26,6 +26,7 @@ import pytest
 from precondition_library.sandbox import Sandbox, run_git
 from precondition_library.signatures import StateFingerprint
 from precondition_library.tasks.faults.submodule_moved import (
+    INTENT,
     ORIGIN_DIRNAME,
     SPEC,
     SUBMODULE_PATH,
@@ -126,8 +127,19 @@ def _shas(box: Sandbox) -> tuple[str, str, str, str]:
 
 
 def test_seed_mapping_is_pinned() -> None:
-    """The hard-coded seeds above must keep selecting the states they name."""
+    """The hard-coded seeds above must keep selecting the states they name.
+
+    Admission's same-intent negative class reads `SPEC.variant_for_seed`, which
+    returns the injected state name as the resolution. That is only sound because
+    each state is named after the resolution it requires, so the names are the
+    intent's declared variant ids; asserted here rather than assumed.
+    """
     assert {state_for_seed(seed) for seed in SEED_BY_STATE.values()} == set(SEED_BY_STATE)
+
+    declared = {variant.id for variant in INTENT.variants}
+    for state, seed in SEED_BY_STATE.items():
+        assert SPEC.variant_for_seed(seed) == state
+        assert state in declared
 
 
 @pytest.mark.parametrize(("state", "seed"), STATE_CASES)

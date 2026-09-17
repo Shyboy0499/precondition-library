@@ -186,6 +186,15 @@ class DivergedFault(FaultSpec):
         """Delegate to the intent so there is one source of truth for phrasing."""
         return INTENT.task_text(seed)
 
+    def variant_for_seed(self, seed: int) -> str:
+        """The resolution `state_for_seed` makes correct at `seed`.
+
+        `STATE_VARIANT` is the module's declared state-to-resolution map, so
+        admission's same-intent negative class reads the same mapping `inject`
+        uses rather than re-deriving it; the two cannot disagree.
+        """
+        return STATE_VARIANT[state_for_seed(seed)]
+
     def check(self, sandbox: Sandbox) -> GroundTruth:
         """Grade the outcome, not the method: upstream absorbed, local work intact.
 

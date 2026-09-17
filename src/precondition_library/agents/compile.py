@@ -14,9 +14,12 @@ the project's main safety surface. Three defences live here:
   would try to steer the program that is written.
 * Admission is a two-sided test, not a happy path. A program must satisfy its
   postconditions on a freshly faulted sandbox *and* have its preconditions
-  reject negative sandboxes. Preconditions that accept everything are treated
-  as a defect — such a program would fire on unrelated states, which is exactly
-  the mismatch failure this project measures.
+  reject three classes of negative sandbox: a fault-free one where nothing needs
+  doing, the *other* faults' injected states, and the same intent's other
+  injected states — a sibling resolution, where firing would be just as wrong as
+  on an unrelated fault. Preconditions that accept any of them are treated as a
+  defect — such a program would fire on states this project measures as
+  mismatches.
 
 A malformed reply is a failed compile, recorded as a `CompileResult`, not an
 exception: the reply cost tokens, and losing the episode's cost to a traceback
@@ -133,6 +136,23 @@ Fixed rather than sampled so the gate's verdict is reproducible: a gate whose
 verdict flickers would make every downstream comparison meaningless.
 """
 
+_CLEAN_SEED = 0
+"""The seed the fault-free negative sandbox is built at.
+
+`build_sandbox(seed, [])` injects nothing, and `create` ignores the seed when no
+fault is applied, so any value would build the same base clone. Fixed for the same
+reproducibility reason as `_NEGATIVE_SEED`.
+"""
+
+_SIBLING_SEED_SEARCH_LIMIT = 64
+"""How far `_sibling_seeds` scans for a seed that selects each sibling resolution.
+
+Pure computation, not sandboxes: `variant_for_seed` is a hash, so the first
+occurrence of each state is found in a handful of steps. The bound exists so a
+fault whose injector does not expose its seed-to-resolution mapping fails loudly
+instead of searching forever.
+"""
+
 
 class CompileResult(BaseModel):
     """The outcome of one compile, including its cost whether or not it parsed.
@@ -238,11 +258,25 @@ def admit(program: Program, fault: FaultSpec | str, *, seeds: list[int]) -> tupl
     in `seeds` builds a sandbox injected with `fault`, the body is replayed, and
     the program's own postconditions must hold. Failure means not admitted.
 
-    Negative side: on sandboxes in unrelated states the preconditions must
-    reject the program. The unrelated states come from the *other* faults'
-    injectors -- that is what they exist for -- at one fixed seed each, so the
-    verdict is reproducible. A program whose preconditions accept an unrelated
-    state is not admitted, because it would fire there for real.
+    Negative side: on sandboxes in states it must NOT claim, the preconditions
+    must reject the program. Three classes are built, and the order is the
+    cheapest and broadest first, so a too-permissive program is refused before
+    the expensive sandboxes are built:
+
+    1. a **fault-free** sandbox (`build_sandbox(seed, [])`), where nothing needs
+       doing and therefore every program must refuse;
+    2. every **unrelated fault**, at one fixed seed each -- the other injectors'
+       states, which have nothing to do with this program's intent;
+    3. the same intent's **other injected states**: the program's own fault,
+       injected at a seed whose state a sibling resolution is correct in. A
+       program for one resolution must not fire where one of its siblings is the
+       right answer.
+
+    A rejection names the class that rejected it and the number of states that
+    class checked, so a reader can tell how much of the gate actually ran. Under
+    this ordering, reaching class 3 means the program already passed the positive
+    side, rejected the clean sandbox and rejected every unrelated fault -- so a
+    same-intent rejection alone is evidence that only the new class caught it.
 
     A program is also rejected before any sandbox runs unless its `variant` is
     one of the ambiguous intent's declared ids. The ledger's `misfired` is
@@ -290,29 +324,110 @@ def admit(program: Program, fault: FaultSpec | str, *, seeds: list[int]) -> tupl
             detail = result.reason or "the replay did not satisfy its contract"
             return False, f"positive side failed on {name} seed {seed}: {detail}"
 
+    accepted, error = _preconditions_accept(program, _CLEAN_SEED, [])
+    if error is not None:
+        return False, f"negative side failed: preconditions could not be evaluated ({error})"
+    if accepted:
+        return False, (
+            "negative side failed: preconditions accepted a clean sandbox (checked 1 "
+            "clean sandbox, built with no fault injected): nothing needs doing there, "
+            "so every program must refuse it"
+        )
+
     unrelated = sorted(set(FAULTS) - {name})
     if not unrelated:
         raise ValueError(f"no unrelated faults exist to test {name!r} against")
 
     for other in unrelated:
-        box = build_sandbox(_NEGATIVE_SEED, [other])
-        try:
-            accepted = _preconditions_hold(program, box)
-        except KeyError as exc:
-            return False, f"negative side failed: preconditions could not be evaluated ({exc})"
-        finally:
-            box.destroy()
+        accepted, error = _preconditions_accept(program, _NEGATIVE_SEED, [other])
+        if error is not None:
+            return False, f"negative side failed: preconditions could not be evaluated ({error})"
         if accepted:
             return False, (
-                f"negative side failed: preconditions accepted an unrelated state "
-                f"({other} seed {_NEGATIVE_SEED}); a precondition set that accepts "
-                f"unrelated states is a defect"
+                f"negative side failed: preconditions accepted 1 of {len(unrelated)} "
+                f"unrelated states ({other} seed {_NEGATIVE_SEED}); a precondition set "
+                f"that accepts unrelated states is a defect"
+            )
+
+    siblings = _sibling_seeds(name, program.variant, declared)
+    for seed, variant in siblings:
+        accepted, error = _preconditions_accept(program, seed, [name])
+        if error is not None:
+            return False, f"negative side failed: preconditions could not be evaluated ({error})"
+        if accepted:
+            return False, (
+                f"negative side failed: preconditions accepted 1 of {len(siblings)} "
+                f"same-intent states ({name} seed {seed} resolves to {variant!r}, but the "
+                f"program implements {program.variant!r}); firing where a sibling "
+                f"resolution is correct is the mismatch this gate exists to refuse"
             )
 
     return True, (
         f"admitted: postconditions held on {len(seeds)} freshly faulted sandbox(es); "
-        f"preconditions rejected {len(unrelated)} unrelated state(s)"
+        f"preconditions rejected 1 clean sandbox, {len(unrelated)} unrelated state(s) "
+        f"and {len(siblings)} same-intent state(s)"
     )
+
+
+def _preconditions_accept(
+    program: Program, seed: int, faults: list[str]
+) -> tuple[bool, str | None]:
+    """Whether the preconditions hold in a fresh sandbox, or why they could not run.
+
+    One helper so the three negative classes cannot disagree about how a
+    sandbox is built, evaluated and destroyed. A `KeyError` is returned rather
+    than raised because a placeholder outside the vocabulary is a compile defect
+    -- a rejection to record, not a crash that loses the episode's information.
+    """
+    box = build_sandbox(seed, faults)
+    try:
+        return _preconditions_hold(program, box), None
+    except KeyError as exc:
+        return False, str(exc)
+    finally:
+        box.destroy()
+
+
+def _sibling_seeds(
+    name: str, variant: str | None, declared: set[str] | None
+) -> list[tuple[int, str]]:
+    """`(seed, resolution)` for each other resolution of this program's intent.
+
+    Empty when the fault has no ambiguous intent (`declared is None`) or the
+    intent declares only the program's own resolution. Each seed is the first one
+    whose injector selects that sibling, read through `FaultSpec.variant_for_seed`
+    -- the same mapping `inject` uses -- so the sandbox really is the sibling
+    state rather than an assumption that seed 0, say, is one.
+
+    Raises when no seed in the bound selects a declared resolution. That means the
+    injector does not expose its seed-to-state mapping, which admission's
+    deterministic negative side depends on; the alternative -- silently building
+    fewer negatives -- would make the gate's strength depend on a search that
+    failed quietly.
+    """
+    if not declared or variant is None:
+        return []
+    wanted = sorted(declared - {variant})
+    if not wanted:
+        return []
+
+    spec = FAULTS[name]
+    found: dict[str, int] = {}
+    for seed in range(_SIBLING_SEED_SEARCH_LIMIT):
+        selected = spec.variant_for_seed(seed)
+        if selected in wanted and selected not in found:
+            found[selected] = seed
+        if len(found) == len(wanted):
+            break
+
+    missing = [item for item in wanted if item not in found]
+    if missing:
+        raise ValueError(
+            f"cannot build the same-intent negative class for {name!r}: no seed in "
+            f"0..{_SIBLING_SEED_SEARCH_LIMIT - 1} selects {missing}; the injector must "
+            "expose which resolution a seed selects or the gate cannot be deterministic"
+        )
+    return [(found[item], item) for item in wanted]
 
 
 def _declared_variant_ids(fault_name: str) -> set[str] | None:

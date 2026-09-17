@@ -49,3 +49,19 @@ class FaultSpec:
     def check(self, sandbox) -> GroundTruth:
         """Did the environment reach the expected state? Pure git. No model."""
         raise NotImplementedError("implemented per plan: phase 1")
+
+    def variant_for_seed(self, seed: int) -> str | None:
+        """Which declared resolution this fault's injector selects at `seed`, if any.
+
+        Admission's same-intent negative class needs a seed whose injected state a
+        resolution *other* than the program's own is correct in, and it must pick
+        that seed without building a sandbox to observe: scanning seeds by building
+        environments would be slow and would make the gate's cost depend on the
+        search. A fault whose intent has two or more resolutions implements this
+        from the same `sample_index` mapping its `inject` uses, so the seed a
+        sibling is chosen from cannot disagree with the state that gets injected.
+
+        A fault with no ambiguous intent has no sibling resolutions to expose and
+        returns None; admission then builds no same-intent sandboxes for it.
+        """
+        return None

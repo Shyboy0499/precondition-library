@@ -420,12 +420,26 @@ demonstrated:
 POSITIVE   on N freshly faulted sandboxes: body runs, postconditions hold.
            Failure -> not admitted.
 
-NEGATIVE   on sandboxes it must NOT claim: every unrelated state (clean
-           worktree, upstream already merged, different fault injected)
-           must be REJECTED by the preconditions.
-           A precondition set that accepts everything is a DEFECT, not a
-           convenience -- such a program fires on unrelated states, which is
-           exactly the mismatch failure this project measures.
+NEGATIVE   on sandboxes it must NOT claim, the preconditions must REJECT it.
+           Three classes are built, from cheapest and broadest to narrowest:
+
+             fault-free          a clean worktree with upstream already merged
+                                 (`build_sandbox(seed, [])`): nothing needs doing,
+                                 so every program must refuse it. A precondition
+                                 set that accepts it is a DEFECT, not a
+                                 convenience.
+             unrelated fault     every other fault's injected state, at one fixed
+                                 seed each -- a state this program's intent has
+                                 nothing to do with.
+             sibling resolution  the program's own fault, injected at a seed whose
+                                 state a *different* resolution of the same intent
+                                 is correct in. A program for one resolution must
+                                 not fire where a sibling is the right answer.
+
+           Each rejection names the class that rejected it and the number of
+           states that class checked, so a reader can tell how much of the gate
+           actually ran. A program that accepts any of these fires where firing is
+           wrong, which is exactly the mismatch failure this project measures.
 ```
 
 The negative half is what makes Claim 2 testable. Without it, arm 3's advantage

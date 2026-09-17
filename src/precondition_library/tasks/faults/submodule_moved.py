@@ -265,6 +265,19 @@ class SubmoduleMovedFault(FaultSpec):
     def task_text(self, seed: int) -> str:
         return INTENT.task_text(seed)
 
+    def variant_for_seed(self, seed: int) -> str:
+        """The resolution the state injected at `seed` is correct in.
+
+        `INJECTED_STATES` names each state after the resolution it requires -- an
+        uninitialised clone is "init", a drifted pin is "repin", a dropped upstream
+        reference is "remove" -- and those names are the `ResolutionVariant` ids, so
+        the state's name is its resolution. Returning it here exposes the
+        seed-to-resolution mapping admission's same-intent negative class needs
+        without a sandbox to observe, and `test_sandbox_submodule_moved` pins the
+        name/variant-id agreement rather than leaving it assumed.
+        """
+        return state_for_seed(seed)
+
     def check(self, sandbox: Sandbox) -> GroundTruth:
         """Grade the outcome per injected state, from git alone.
 
