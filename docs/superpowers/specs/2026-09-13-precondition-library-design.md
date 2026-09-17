@@ -19,6 +19,7 @@
 | 9 | 2026-09-17 | **Admission negative-side correction, not an analysis change.** §6 named three classes of negative sandbox but `admit` built only "a different fault injected", so a program whose preconditions accepted a sibling resolution of its own intent — firing where firing is wrong — passed the gate (the coupling/duplication audit's case: a submodule program gated only on a gitlink reference accepts the `remove` state). `admit` now builds the missing two: a fault-free sandbox (`build_sandbox(seed, [])`), which every program must refuse, and the program's own fault at a seed whose state a sibling resolution is correct in, chosen from the same seed-to-state mapping the injector uses (`FaultSpec.variant_for_seed`). Each rejection names the class and the number of states it checked. §6 is corrected to describe the three classes the code now builds. Running the hand-written gold programs through the stricter gate found `sync_fork_with_upstream`'s merge preconditions too permissive for the unrelated lockfile-conflict sandbox (the committed record of that tightening is in `bench/gold/sync_fork_with_upstream.yaml`); the gate was not weakened. **No measurement or number from a run changes** — no episode has been run. |
 | 10 | 2026-09-17 | **Two defect corrections to the replay and compile paths, not analysis changes.** A program that fired but whose body names a declared parameter the environment cannot bind raised out of `runtime.replay`, so the exception escaped `run_episode` and ended the whole run instead of recording the mis-fire; it is now a `ReplayResult(unbound_parameter=True)` that demotes the program and is named on the row in §7's new `replay_failure_reason` field (issue #76). The compile prompt states each field's exact shape with a minimal example — `body` is one newline-separated string, `parameters` a list of names — and a list `body` is still rejected with the field named rather than coerced, so the compile-quality signal survives (issue #78). No metric definition, denominator or analysis changes; the smoke pass that found both defects never exercised the replay path, and no result is claimed from it. |
 | 11 | 2026-09-17 | **Two library-integrity corrections, not analysis changes.** A compile that reused a program id on a later episode was correctly refused by the library, so the episode's program was lost and the row showed only a `compile_failure_reason` that read like a malformed reply; the stored id is now derived from the episode's `(fault, occurrence)` plus a sanitised slug, and the residual same-episode collision is recorded *as a collision* (issue #80). The load-time variant check keyed on `Program.intent` matching an `IntentSpec.name`, but a compiled program's intent is prose, as the compile prompt asks, so the check missed exactly the `program.yaml` written past `admit` that it exists for; it now keys on a new required `Provenance.fault` (issue #69). The same correction makes the read pure: `Library.load_all` applies the verdict in memory and writes nothing, and `Library.quarantine_undeclared()` is the explicit write that records it. **No metric definition, denominator or number in this document changes** — no episode has been run. |
+| 12 | 2026-09-17 | **Two admission-gate corrections found by the smoke pass, not analysis changes.** (1) §6 now states a DECLARED condition before the two sides: a body parameter that no precondition's probe names is refused, because a precondition is how a program declares what it needs and the states it may fire in need not bind an undeclared one. The smoke pass produced three rows carrying `replay_failure_reason` from a `submodule` program whose body used `submodule_path` while its preconditions did not (issue #77). (2) The unrelated-fault negative class is corrected from "one fixed seed each" to one seed per distinct state its injector can select, read through `FaultSpec.variant_for_seed`; `diverged` is now built at seeds 0, 1 and 2 and `submodule_moved` at 0, 1 and 4, where the old class built each at seed 0 only, so a program could be rejected on one state and fire on another (issue #75). The faults that expose no seed-to-state mapping remain one state each, labelled as sampling. **No metric definition, denominator or number in this document changes** — no episode has been run, and the smoke pass claims no result. |
 
 ---
 
@@ -426,6 +427,13 @@ A program becomes replayable only when **both** halves of its contract are
 demonstrated:
 
 ```
+DECLARED   before any sandbox: every `{name}` the body uses is named by at least
+           one precondition's probe. A precondition is not only how a program
+           decides *whether* to fire; it is how the program declares what it
+           needs, and a state it may fire in need not bind an undeclared
+           parameter. A body parameter no precondition names -> not admitted,
+           with the parameter named (issue #77).
+
 POSITIVE   on N freshly faulted sandboxes: body runs, postconditions hold.
            Failure -> not admitted.
 
@@ -437,9 +445,12 @@ NEGATIVE   on sandboxes it must NOT claim, the preconditions must REJECT it.
                                  so every program must refuse it. A precondition
                                  set that accepts it is a DEFECT, not a
                                  convenience.
-             unrelated fault     every other fault's injected state, at one fixed
-                                 seed each -- a state this program's intent has
-                                 nothing to do with.
+             unrelated fault     every other fault's injected states: one seed
+                                 per distinct state the injector can select
+                                 (`FaultSpec.variant_for_seed`), so a fault with
+                                 several states is probed in each rather than at
+                                 one fixed seed -- states this program's intent
+                                 has nothing to do with.
              sibling resolution  the program's own fault, injected at a seed whose
                                  state a *different* resolution of the same intent
                                  is correct in. A program for one resolution must
