@@ -63,10 +63,11 @@ def _program(
     return Program(
         id=program_id,
         intent="sync_fork_with_upstream",
-        # A declared id, because `sync_fork_with_upstream` is ambiguous and
-        # `Library.load_all` quarantines any program on it without one (issue
-        # #66). The variant is not read by arm 3; the fixture declares one so it
-        # is a legal member of the library these tests dispatch against.
+        # A declared id, because provenance.fault `diverged` is served by an
+        # ambiguous intent and `Library.load_all` quarantines any program on it
+        # without one (issues #66, #69 -- the check keys on the fault, not the
+        # prose `intent`). The variant is not read by arm 3; the fixture declares
+        # one so it is a legal member of the library these tests dispatch against.
         variant="discard",
         parameters=["work_dir", "upstream_remote", "upstream_branch"],
         preconditions=preconditions,
@@ -77,6 +78,7 @@ def _program(
             model="human",
             compiler_version="human",
             episode_id=f"test/{program_id}",
+            fault="diverged",
         ),
         status=status,
     )

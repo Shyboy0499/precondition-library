@@ -68,6 +68,10 @@ def _program(
     return Program(
         id=program_id,
         intent=intent,
+        # Declared so the fixture is a legal member of the library the arm
+        # dispatches against: the fingerprint is the `diverged` overlap state, and
+        # arm 2's text excludes `variant`, so it cannot score the programs by it.
+        variant="merge",
         preconditions=[precondition or _predicate(description)],
         body="true",
         postconditions=[],
@@ -76,6 +80,7 @@ def _program(
             model="human",
             compiler_version="human",
             episode_id=f"test/{program_id}",
+            fault="diverged",
         ),
         status=status,
     )

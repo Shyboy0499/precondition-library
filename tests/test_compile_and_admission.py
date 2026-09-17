@@ -53,6 +53,18 @@ _PROVENANCE = Provenance(
     model="fake",
     compiler_version="test",
     episode_id="test/fixture",
+    fault="diverged",
+)
+
+# `_audit_program` is a `submodule_moved` program, so it must carry that fault:
+# the load-time check keys on `provenance.fault`, and a `diverged` fault would
+# withdraw a program declaring `init` before the gate this test is about runs.
+_SUBMODULE_PROVENANCE = Provenance(
+    compiled_from_task="test fixture",
+    model="fake",
+    compiler_version="test",
+    episode_id="test/submodule-fixture",
+    fault="submodule_moved",
 )
 
 _DISCARD_PRECONDITIONS = [
@@ -134,7 +146,7 @@ def _audit_program() -> Program:
         preconditions=_HAS_SUBMODULE_REFERENCE,
         body=_SUBMODULE_INIT_BODY,
         postconditions=_SUBMODULE_INITIALISED,
-        provenance=_PROVENANCE,
+        provenance=_SUBMODULE_PROVENANCE,
         status=ProgramStatus.CANDIDATE,
     )
 
@@ -186,7 +198,7 @@ def test_compiled_program_is_admitted_and_stored(make_sandbox, tmp_path) -> None
     ]
     fake = FakeProvider(_completion(_reply_text()))
 
-    result = compile_program(signature, box, transcript, fake)
+    result = compile_program(signature, box, transcript, fake, fault="diverged")
 
     assert result.ok, result.reason
     program = result.program
@@ -194,6 +206,9 @@ def test_compiled_program_is_admitted_and_stored(make_sandbox, tmp_path) -> None
     assert program.status is ProgramStatus.CANDIDATE, "admission sets the status, not compile"
     assert program.provenance.model == "fake", "provenance names the model that replied"
     assert program.provenance.episode_id, "provenance names the episode"
+    assert program.provenance.fault == "diverged", (
+        "the caller sets the fault; the model's intent is prose and cannot name the family"
+    )
     assert not result.warnings
     # The prompt carries the task, the observed state and the solution transcript.
     sent = fake.calls[0]
@@ -322,7 +337,7 @@ def test_empty_preconditions_are_recorded_and_then_rejected(make_sandbox) -> Non
     box = make_sandbox(DISCARD_SEED, ["diverged"])
     fake = FakeProvider(_completion(_reply_text(preconditions=[])))
 
-    result = compile_program(_signature(box), box, [], fake)
+    result = compile_program(_signature(box), box, [], fake, fault="diverged")
 
     assert result.ok, "an empty list is a valid Program, so the parse does not fail"
     assert result.warnings, "the defect must be recorded, not silently accepted"
@@ -373,6 +388,7 @@ def test_the_prompt_names_the_ids_the_intent_will_accept(make_sandbox) -> None:
         box,
         [],
         fake,
+        fault="diverged",
         variant_ids=["discard", "merge", "rebase"],
     )
 
@@ -399,7 +415,7 @@ def test_repository_content_travels_in_a_framed_untrusted_block(make_sandbox) ->
         }
     ]
 
-    compile_program(_signature(box), box, transcript, fake)
+    compile_program(_signature(box), box, transcript, fake, fault="diverged")
 
     sent = fake.calls[0]
     user = sent["messages"][0]["content"]
@@ -441,8 +457,14 @@ def test_an_undeclared_variant_is_quarantined_on_load_and_never_dispatched(
     "nothing fired" and deflates the numerator, and a mislabelled id is scored
     against the wrong resolution. Admission rejects both shapes, but a file
     written straight to disk skips admission -- so `Library.load_all` re-checks
-    the invariant and quarantines the offender: the lifecycle's existing
+    the invariant and returns the offender `quarantined`: the lifecycle's existing
     "withdrawn from dispatch, retained for analysis".
+
+    The read is pure (issue #69): `load_all` applies the verdict in memory and
+    writes nothing, so a read-only library directory still reads and
+    `library_hash` does not mutate the library it is hashing. The explicit
+    `quarantine_undeclared` is what makes the verdict durable, and it is
+    idempotent.
 
     The mechanism that stopped it is the quarantine, not the matcher: the
     program's own preconditions hold on this sandbox and the similarity floor is
@@ -462,14 +484,23 @@ def test_an_undeclared_variant_is_quarantined_on_load_and_never_dispatched(
     assert loaded["written-past-admit"].status is ProgramStatus.QUARANTINED
     assert loaded["still-admitted"].status is ProgramStatus.ADMITTED
 
-    # Visible: the quarantine is persisted with its reason, not merely filtered.
-    stored = yaml.safe_load((tmp_path / "written-past-admit" / "program.yaml").read_text())
-    assert stored["status"] == "quarantined"
+    # The read wrote nothing: the artifact still says what it said.
+    artifact = tmp_path / "written-past-admit" / "program.yaml"
+    assert yaml.safe_load(artifact.read_text())["status"] == "admitted", (
+        "load_all is a read and must not write a quarantine back"
+    )
+    assert not (tmp_path / "written-past-admit" / "history.jsonl").exists()
+
+    # Visible: the explicit write persists the quarantine with its reason.
+    assert library.quarantine_undeclared() == ["written-past-admit"]
+    assert yaml.safe_load(artifact.read_text())["status"] == "quarantined"
     history = (tmp_path / "written-past-admit" / "history.jsonl").read_text().splitlines()
     transition = json.loads(history[-1])
     assert (transition["from"], transition["to"]) == ("admitted", "quarantined")
     assert "ambiguous" in transition["reason"]
     assert "declares variant id(s)" in transition["reason"]
+    assert library.quarantine_undeclared() == [], "a second write must be a no-op"
+    assert len((tmp_path / "written-past-admit" / "history.jsonl").read_text().splitlines()) == 1
 
     # Never dispatched as scored, though the program itself would clear both arms.
     assert evaluate_preconditions(offending, box).ok
@@ -477,6 +508,38 @@ def test_an_undeclared_variant_is_quarantined_on_load_and_never_dispatched(
     assert [item.program.id for item in library.match_semantic(_signature(box))] == [
         "still-admitted"
     ]
+
+
+def test_a_prose_intent_with_an_undeclared_variant_is_still_quarantined(tmp_path: Path) -> None:
+    """The check keys on `provenance.fault`, not on `intent` being a registry key (#69).
+
+    A compiled program's `intent` is natural-language prose -- the compile prompt
+    asks for exactly that -- so keying the check on `intent` matching an
+    `IntentSpec.name` protected only the hand-written artifacts and missed the
+    programs the check was written for. `provenance.fault` is set from the
+    episode's fault by the caller, so the check fires for prose and slugs alike.
+    """
+    prose = "Bring my fork back in line with upstream without losing my work."
+    offending = _program(
+        id="prose-intent-undeclared", intent=prose, variant="not-a-declared-resolution"
+    )
+    sound = _program(id="prose-intent-declared", intent=prose, variant="discard")
+    _write_directly(tmp_path, offending)
+    _write_directly(tmp_path, sound)
+
+    library = Library(tmp_path)
+    loaded = {program.id: program for program in library.load_all()}
+
+    assert loaded["prose-intent-undeclared"].status is ProgramStatus.QUARANTINED, (
+        "a prose intent must not hide an undeclared variant"
+    )
+    assert loaded["prose-intent-declared"].status is ProgramStatus.CANDIDATE
+
+    assert library.quarantine_undeclared() == ["prose-intent-undeclared"]
+    history = (tmp_path / "prose-intent-undeclared" / "history.jsonl").read_text().splitlines()
+    assert "diverged" in json.loads(history[-1])["reason"], (
+        "the reason must name the fault the check keyed on"
+    )
 
 
 def test_a_sound_variant_loads_without_a_quarantine(tmp_path: Path) -> None:
@@ -511,7 +574,7 @@ def test_malformed_reply_is_a_recorded_failure(make_sandbox, reply: str) -> None
     box = make_sandbox(DISCARD_SEED, ["diverged"])
     fake = FakeProvider(_completion(reply))
 
-    result = compile_program(_signature(box), box, [], fake)
+    result = compile_program(_signature(box), box, [], fake, fault="diverged")
 
     assert not result.ok
     assert result.program is None
@@ -535,7 +598,7 @@ def test_the_prompt_states_the_shape_of_every_field(make_sandbox) -> None:
     box = make_sandbox(DISCARD_SEED, ["diverged"])
     fake = FakeProvider(_completion(_reply_text()))
 
-    compile_program(_signature(box), box, [], fake)
+    compile_program(_signature(box), box, [], fake, fault="diverged")
 
     system = fake.calls[0]["system"]
     assert "body: string" in system
@@ -560,7 +623,7 @@ def test_a_list_body_is_rejected_with_the_field_named(make_sandbox) -> None:
         _completion(_reply_text(body=["git fetch upstream", "git reset --hard upstream/main"]))
     )
 
-    result = compile_program(_signature(box), box, [], fake)
+    result = compile_program(_signature(box), box, [], fake, fault="diverged")
 
     assert not result.ok
     assert result.program is None
@@ -573,7 +636,7 @@ def test_a_wrong_type_parameters_is_rejected_with_the_field_named(make_sandbox) 
     box = make_sandbox(DISCARD_SEED, ["diverged"])
     fake = FakeProvider(_completion(_reply_text(parameters="upstream_remote upstream_branch")))
 
-    result = compile_program(_signature(box), box, [], fake)
+    result = compile_program(_signature(box), box, [], fake, fault="diverged")
 
     assert not result.ok
     assert result.program is None
@@ -598,7 +661,7 @@ def test_compile_never_executes_the_body(make_sandbox) -> None:
         )
     )
 
-    result = compile_program(_signature(box), box, [], fake)
+    result = compile_program(_signature(box), box, [], fake, fault="diverged")
 
     assert result.ok, result.reason
     assert result.program is not None

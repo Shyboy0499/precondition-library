@@ -41,6 +41,17 @@ class Provenance(BaseModel):
     model: str
     compiler_version: str
     episode_id: str
+    fault: str
+    """The `FaultSpec.name` whose states this program serves.
+
+    The load-time variant check keys on this, not on `intent`
+    (`Library._reject_undeclared_variant`). `intent` is free text -- the compile
+    prompt asks the model for a natural-language task, so a compiled program's
+    intent is prose that matches no registry key -- while a `variant` is only
+    scoreable against the intent family the fault selects. Admission is handed the
+    fault by its caller; storing it on the program is what lets a load re-check
+    the invariant for a `program.yaml` that never went through admission (issue
+    #69)."""
 
 
 class ProgramStatus(StrEnum):
@@ -71,7 +82,15 @@ class Program(BaseModel):
 
     id: str
     intent: str
-    """Natural-language statement of what this program does, e.g. 'sync fork with upstream'."""
+    """Free-text statement of what this program does, e.g. 'sync the fork with upstream'.
+
+    Prose is what the compile prompt asks for, and the hand-written gold artifacts
+    happen to use the registered intent name instead; neither is load-bearing. The
+    task family this program belongs to -- and therefore which `variant` ids are
+    scoreable for it -- is `provenance.fault`, which is what the load-time variant
+    check reads (issue #69). `_program_text` still uses this string as arm 2's
+    request-side text, which is why its readability matters even though the check
+    does not key on it."""
     parameters: list[str] = Field(default_factory=list)
     """Names of environment-bound values, so one program serves many repos."""
     preconditions: list[Predicate]
