@@ -30,10 +30,11 @@ from pathlib import Path
 
 import pytest
 import yaml
-from conftest import GIT_STATUS_AT_IMPORT, FakeProvider, git_status_porcelain
+from conftest import GIT_STATUS_AT_IMPORT, FakeProvider, git_status_porcelain, gold_program
 
-from precondition_library.bench.ledger import Arm, EpisodeRecord, read
+from precondition_library.bench.ledger import Arm, EpisodeRecord, OccurrenceRole, read
 from precondition_library.bench.run import _program_id, run_benchmark, run_episode
+from precondition_library.bench.splits import SMOKE_SEEDS, occurrence_roles
 from precondition_library.library import Library
 from precondition_library.program import (
     EpisodeOutcome,
@@ -55,6 +56,14 @@ COMMITTED_LIBRARY = ROOT / "library"
 # lets occurrence 2 replay the program occurrence 1 compiled.
 DISCARD_SEED = 1
 SECOND_DISCARD_SEED = 3
+
+# The same relation inside the *declared* plan: `SMOKE_SEEDS`' first and last
+# seeds both inject `diverged`'s `overlapping_files`, whose resolution is
+# `merge`. The plan therefore calls the first a variant and the second a replay
+# (`bench.splits.occurrence_roles`), which is what the end-to-end test below
+# exercises -- a state the plan declares recurring, not one this file picked.
+VARIANT_SEED = SMOKE_SEEDS[0]
+REPLAY_SEED = SMOKE_SEEDS[-1]
 
 _PROVENANCE = Provenance(
     compiled_from_task="episode-runner test fixture",
@@ -98,6 +107,20 @@ def _tool(command: str) -> Completion:
 
 def _finish(text: str = "done") -> Completion:
     return _completion(text=text)
+
+
+def _resolves_merge() -> list[Completion]:
+    """The scripted solve for an `overlapping_files` state: merge upstream in.
+
+    Both sides changed `app.py`, in different regions, so the merge is
+    conflict-free and leaves both sides' work reachable -- which is what
+    `diverged.check` grades and what the `merge` resolution exists for.
+    """
+    return [
+        _tool("git fetch -q upstream"),
+        _tool("git merge --no-edit upstream/main"),
+        _finish(),
+    ]
 
 
 def _resolves_discard() -> list[Completion]:
@@ -231,6 +254,7 @@ def test_a_replay_episode_spends_nothing(arm: Arm, tmp_path: Path) -> None:
         "diverged",
         DISCARD_SEED,
         1,
+        role=OccurrenceRole.VARIANT,
         provider=provider,
         library=library,
         model="fake",
@@ -269,6 +293,7 @@ def test_solving_and_compiling_is_charged_to_the_episode(tmp_path: Path) -> None
         "diverged",
         DISCARD_SEED,
         1,
+        role=OccurrenceRole.VARIANT,
         provider=provider,
         library=Library(tmp_path / "lib", evaluate_preconditions=evaluate_preconditions),
         model="fake",
@@ -309,6 +334,7 @@ def test_a_guard_refusal_is_not_a_compile_failure(tmp_path: Path) -> None:
         "diverged",
         DISCARD_SEED,
         1,
+        role=OccurrenceRole.VARIANT,
         provider=provider,
         library=library,
         model="fake",
@@ -367,6 +393,112 @@ def test_second_occurrence_replays_what_the_first_compiled(tmp_path: Path) -> No
     assert second.fired_variant == "discard"
     assert second.correct_variant == "discard"
     assert second.succeeded is True
+
+
+def test_a_program_admitted_on_a_variant_fires_on_its_replay_occurrence(
+    tmp_path: Path,
+) -> None:
+    """The property the whole cost curve rests on, on the plan's own seed pair.
+
+    `SMOKE_SEEDS[0]` and `SMOKE_SEEDS[-1]` both inject `diverged`'s
+    `overlapping_files` state, so the plan calls the first a variant and the
+    second a replay. Run as a two-occurrence plan, the model solves and compiles
+    the first, the program clears admission, and the second -- same state, a
+    different seed, a library that grew in between -- is dispatched to it with no
+    LLM call at all. Without this the curve cannot bend, whatever the plan says.
+
+    The provider is scripted for exactly the first occurrence: a call from the
+    replay would find an empty queue and fail the episode, so the zero-call row
+    is a fact about the run rather than an absence of evidence.
+    """
+    provider = FakeProvider(
+        *_resolves_merge(),
+        _completion(_reply_text(gold_program("merge")), tokens_in=100, tokens_out=40),
+    )
+    out = tmp_path / "ledger.jsonl"
+
+    run_benchmark(
+        arms=[Arm.PRECONDITION],
+        faults=["diverged"],
+        occurrences=2,
+        seeds=[VARIANT_SEED, REPLAY_SEED],
+        out=out,
+        model="fake",
+        provider=provider,
+    )
+
+    first, second = read(out)
+    assert [row.occurrence_role for row in (first, second)] == list(
+        occurrence_roles([VARIANT_SEED, REPLAY_SEED], "diverged")
+    )
+
+    assert first.occurrence_role is OccurrenceRole.VARIANT
+    assert first.correct_variant == "merge"
+    assert first.admitted is True, "the compile must clear admission to be dispatchable"
+    assert first.llm_calls > 0
+
+    assert second.occurrence_role is OccurrenceRole.REPLAY
+    assert second.correct_variant == "merge"
+    assert second.fired_variant == "merge", "the variant's program must answer the replay"
+    assert second.outcome is EpisodeOutcome.SUCCESS
+    assert second.llm_calls == 0
+    assert second.tokens_in == 0
+    assert second.tokens_out == 0
+    assert second.cached_tokens_in == 0
+    assert second.succeeded is True
+
+
+def test_the_runner_labels_every_occurrence_with_the_plan_s_role(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """The ledger's roles are the plan's, for the whole declared smoke set.
+
+    The sandbox is made to fail so every occurrence is labelled without paying
+    for an episode: a role is a property of the seed sequence, knowable before
+    any sandbox exists.
+
+    The expected sequences are written out rather than only compared against
+    `occurrence_roles`, because the runner *calls* that function -- a test that
+    compared output to its own input would pass even if both regressed together.
+    A report left to infer the role from `occurrence_index` would get `diverged`
+    occurrence 4 wrong (it is a replay) and `submodule_moved` occurrence 3 wrong
+    (it is a replay too); those are the facts asserted here.
+    """
+    variant = OccurrenceRole.VARIANT
+    replay = OccurrenceRole.REPLAY
+    expected = {
+        # Seeds 0, 1, 2, 4: merge, discard, rebase, and seed 4 repeats seed 0's
+        # `overlapping_files`, so the last occurrence is a replay.
+        "diverged": [variant, variant, variant, replay],
+        # Seeds 0, 1, 2, 4: remove, repin, repin, init -- seed 2 repeats seed 1's
+        # `repin`, so the *third* occurrence is the replay here.
+        "submodule_moved": [variant, variant, replay, variant],
+    }
+
+    def _no_sandbox(seed: int, faults: list[str]):
+        raise RuntimeError("this test never builds a sandbox")
+
+    monkeypatch.setattr("precondition_library.bench.run.build_sandbox", _no_sandbox)
+    out = tmp_path / "ledger.jsonl"
+
+    run_benchmark(
+        arms=[Arm.PRECONDITION],
+        faults=["diverged", "submodule_moved"],
+        occurrences=len(SMOKE_SEEDS),
+        seeds=list(SMOKE_SEEDS),
+        out=out,
+        model="fake",
+        provider=FakeProvider(),
+    )
+
+    rows = read(out)
+    assert [row.outcome for row in rows] == [EpisodeOutcome.INVALID] * len(rows)
+    for fault, expected_roles in expected.items():
+        labelled = [row.occurrence_role for row in rows if row.fault_type == fault]
+        assert labelled == expected_roles, f"the rows for {fault} do not carry the plan's roles"
+        assert labelled == list(occurrence_roles(SMOKE_SEEDS, fault)), (
+            f"the plan's own derivation disagrees with the declared roles for {fault}"
+        )
 
 
 def test_the_ledger_gets_one_row_per_episode(tmp_path: Path) -> None:
@@ -435,6 +567,7 @@ def test_two_episodes_reusing_one_model_id_are_stored_under_distinct_ids(tmp_pat
         "diverged",
         DISCARD_SEED,
         1,
+        role=OccurrenceRole.VARIANT,
         provider=provider,
         library=library,
         model="fake",
@@ -444,6 +577,7 @@ def test_two_episodes_reusing_one_model_id_are_stored_under_distinct_ids(tmp_pat
         "diverged",
         DISCARD_SEED,
         2,
+        role=OccurrenceRole.VARIANT,
         provider=provider,
         library=library,
         model="fake",
@@ -482,6 +616,7 @@ def test_a_reused_id_within_one_occurrence_is_recorded_as_a_collision(tmp_path: 
         "diverged",
         DISCARD_SEED,
         1,
+        role=OccurrenceRole.VARIANT,
         provider=provider,
         library=library,
         model="fake",
@@ -492,6 +627,7 @@ def test_a_reused_id_within_one_occurrence_is_recorded_as_a_collision(tmp_path: 
         "diverged",
         DISCARD_SEED,
         1,
+        role=OccurrenceRole.VARIANT,
         provider=provider,
         library=library,
         model="fake",
@@ -541,6 +677,7 @@ def test_a_wrong_program_misfires_and_the_episode_still_succeeds(tmp_path: Path)
         "diverged",
         DISCARD_SEED,
         1,
+        role=OccurrenceRole.VARIANT,
         provider=provider,
         library=library,
         model="fake",
@@ -580,6 +717,7 @@ def test_two_wrong_variant_fires_quarantine_the_program(tmp_path: Path) -> None:
         "diverged",
         DISCARD_SEED,
         1,
+        role=OccurrenceRole.VARIANT,
         provider=provider,
         library=library,
         model="fake",
@@ -599,6 +737,9 @@ def test_two_wrong_variant_fires_quarantine_the_program(tmp_path: Path) -> None:
         "diverged",
         SECOND_DISCARD_SEED,
         2,
+        # The second sight of the state, so the plan calls it a replay -- which is
+        # also why its misfire is the same program's error being counted again.
+        role=OccurrenceRole.REPLAY,
         provider=provider,
         library=library,
         model="fake",
@@ -623,6 +764,7 @@ def test_no_applicable_program_falls_back_at_full_price(tmp_path: Path) -> None:
         "diverged",
         DISCARD_SEED,
         1,
+        role=OccurrenceRole.VARIANT,
         provider=provider,
         library=Library(tmp_path / "lib", evaluate_preconditions=evaluate_preconditions),
         model="fake",
@@ -661,6 +803,7 @@ def test_correct_variant_is_identical_across_arms(tmp_path: Path) -> None:
                 "diverged",
                 DISCARD_SEED,
                 1,
+                role=OccurrenceRole.VARIANT,
                 provider=FakeProvider(*solves),
                 library=Library(
                     tmp_path / f"lib-{arm.value}", evaluate_preconditions=evaluate_preconditions
@@ -697,6 +840,7 @@ def test_an_excluded_fault_is_refused_loudly(tmp_path: Path) -> None:
             "dirty_tree",
             0,
             1,
+            role=OccurrenceRole.VARIANT,
             provider=FakeProvider(),
             library=Library(tmp_path / "lib"),
             model="fake",
@@ -710,6 +854,7 @@ def test_an_unknown_fault_is_refused(tmp_path: Path) -> None:
             "not_a_fault",
             0,
             1,
+            role=OccurrenceRole.VARIANT,
             provider=FakeProvider(),
             library=Library(tmp_path / "lib"),
             model="fake",
@@ -748,6 +893,7 @@ def test_the_same_episode_twice_reaches_the_same_state(tmp_path: Path) -> None:
             "diverged",
             DISCARD_SEED,
             1,
+            role=OccurrenceRole.VARIANT,
             provider=FakeProvider(raises=AssertionError("replay must not call the model")),
             library=library,
             model="fake",
@@ -766,6 +912,7 @@ def test_react_episodes_are_deterministic(tmp_path: Path) -> None:
             "diverged",
             DISCARD_SEED,
             1,
+            role=OccurrenceRole.VARIANT,
             provider=FakeProvider(*_resolves_discard()),
             library=Library(tmp_path / f"lib-{run}"),
             model="fake",
@@ -797,6 +944,7 @@ def test_an_unrunnable_episode_is_recorded_as_invalid(tmp_path: Path, monkeypatc
         "diverged",
         DISCARD_SEED,
         1,
+        role=OccurrenceRole.VARIANT,
         provider=FakeProvider(),
         library=Library(tmp_path / "lib"),
         model="fake",
@@ -832,6 +980,7 @@ def test_a_row_carries_the_library_hash_and_arms_differ_when_libraries_do(tmp_pa
         "diverged",
         DISCARD_SEED,
         1,
+        role=OccurrenceRole.VARIANT,
         provider=provider,
         library=library_a,
         model="fake",
@@ -841,6 +990,7 @@ def test_a_row_carries_the_library_hash_and_arms_differ_when_libraries_do(tmp_pa
         "diverged",
         DISCARD_SEED,
         1,
+        role=OccurrenceRole.VARIANT,
         provider=provider,
         library=library_b,
         model="fake",
@@ -864,6 +1014,7 @@ def test_a_row_records_the_similarity_threshold_the_library_used(tmp_path) -> No
         "diverged",
         DISCARD_SEED,
         1,
+        role=OccurrenceRole.VARIANT,
         provider=provider,
         library=Library(tmp_path / "lib", threshold=0.42),
         model="fake",
@@ -894,6 +1045,7 @@ def test_an_invalid_row_after_the_arm_ran_carries_the_spend(tmp_path, monkeypatc
         "diverged",
         DISCARD_SEED,
         1,
+        role=OccurrenceRole.VARIANT,
         provider=provider,
         library=Library(tmp_path / "lib"),
         model="fake",
@@ -932,6 +1084,7 @@ def test_demotion_needs_a_postcondition_miss_not_a_timeout(tmp_path, monkeypatch
             "diverged",
             DISCARD_SEED,
             1,
+            role=OccurrenceRole.VARIANT,
             provider=FakeProvider(*_resolves_discard(), _completion(_MALFORMED_REPLY)),
             library=timeout_library,
             model="fake",
@@ -949,6 +1102,7 @@ def test_demotion_needs_a_postcondition_miss_not_a_timeout(tmp_path, monkeypatch
         "diverged",
         DISCARD_SEED,
         1,
+        role=OccurrenceRole.VARIANT,
         provider=FakeProvider(*_resolves_discard(), _completion(_MALFORMED_REPLY)),
         library=miss_library,
         model="fake",
@@ -983,6 +1137,7 @@ def test_a_body_that_cannot_substitute_is_recorded_and_demotes(tmp_path: Path) -
         "diverged",
         DISCARD_SEED,
         1,
+        role=OccurrenceRole.VARIANT,
         provider=provider,
         library=library,
         model="fake",
@@ -1114,6 +1269,7 @@ def test_a_rate_limited_call_is_retried_and_counted_on_the_row(tmp_path, monkeyp
         "diverged",
         DISCARD_SEED,
         1,
+        role=OccurrenceRole.VARIANT,
         provider=provider,
         library=Library(tmp_path / "lib"),
         model="fake",
@@ -1136,6 +1292,7 @@ def test_a_client_error_is_not_retried(tmp_path, monkeypatch) -> None:
         "diverged",
         DISCARD_SEED,
         1,
+        role=OccurrenceRole.VARIANT,
         provider=provider,
         library=Library(tmp_path / "lib"),
         model="fake",
@@ -1156,6 +1313,7 @@ def test_retries_are_capped_and_a_persistent_5xx_fails_the_episode(tmp_path, mon
         "diverged",
         DISCARD_SEED,
         1,
+        role=OccurrenceRole.VARIANT,
         provider=provider,
         library=Library(tmp_path / "lib"),
         model="fake",

@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 from conftest import GIT_STATUS_AT_IMPORT, git_status_porcelain, make_record
 
-from precondition_library.bench.ledger import Arm, EpisodeRecord, append
+from precondition_library.bench.ledger import Arm, EpisodeRecord, OccurrenceRole, append
 from precondition_library.bench.report import (
     SMALL_SAMPLE_N,
     Mean,
@@ -39,14 +39,23 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _record(**overrides) -> EpisodeRecord:
-    """This module's baseline: arm 2, a successful episode.
+    """This module's baseline: arm 2, a successful *variant* episode.
 
     A caller's own `arm`/`outcome` still win, because the baseline is set with
-    `setdefault` rather than passed alongside them.
+    `setdefault` rather than passed alongside them. Variant is the baseline
+    because it is the role the mismatch comparison reads; a test about the cost
+    curve says `_replay` instead, so neither figure can be fed the other's
+    occurrences by accident.
     """
     overrides.setdefault("arm", Arm.SEMANTIC)
     overrides.setdefault("outcome", EpisodeOutcome.SUCCESS)
     return make_record(**overrides)
+
+
+def _replay(**overrides) -> EpisodeRecord:
+    """The same baseline, labelled as a later sight of a state."""
+    overrides["occurrence_role"] = OccurrenceRole.REPLAY
+    return _record(**overrides)
 
 
 def _write(path: Path, records: list[EpisodeRecord]) -> Path:
@@ -307,10 +316,10 @@ def test_cost_curve_groups_by_occurrence_and_arm_without_merging(tmp_path: Path)
     ledger = _write(
         tmp_path / "ledger.jsonl",
         [
-            _record(seed=1, occurrence_index=1, tokens_in=10),
-            _record(seed=2, occurrence_index=1, tokens_in=20),
-            _record(seed=3, occurrence_index=2, tokens_in=30),
-            _record(
+            _replay(seed=1, occurrence_index=1, tokens_in=10),
+            _replay(seed=2, occurrence_index=1, tokens_in=20),
+            _replay(seed=3, occurrence_index=2, tokens_in=30),
+            _replay(
                 arm=Arm.PRECONDITION,
                 seed=4,
                 occurrence_index=1,
@@ -337,14 +346,35 @@ def test_cost_curve_groups_by_occurrence_and_arm_without_merging(tmp_path: Path)
     assert by_key[(Arm.PRECONDITION, 1)].mean_tokens == Mean(n=1, value=5.0)
     for point in points:
         assert point.mean_tokens.n == point.episodes
+        assert point.occurrence_role is OccurrenceRole.REPLAY
+
+
+def test_cost_curve_is_computed_over_replay_occurrences_only(tmp_path: Path) -> None:
+    """A variant is the learning pass, so it is not on the amortization curve.
+
+    The two roles are on the same occurrence index and the same arm, so a curve
+    that grouped by occurrence alone would average the 10-token learning pass into
+    the 1-token replay and report a mean that is neither.
+    """
+    ledger = _write(
+        tmp_path / "ledger.jsonl",
+        [
+            _record(seed=1, occurrence_index=1, tokens_in=10),
+            _replay(seed=2, occurrence_index=1, tokens_in=1),
+        ],
+    )
+    (point,) = cost_curve(ledger)
+    assert point.episodes == 1
+    assert point.mean_tokens == Mean(n=1, value=1.0)
+    assert point.occurrence_role is OccurrenceRole.REPLAY
 
 
 def test_cost_curve_excludes_invalid_episodes(tmp_path: Path) -> None:
     ledger = _write(
         tmp_path / "ledger.jsonl",
         [
-            _record(seed=1, tokens_in=10),
-            _record(
+            _replay(seed=1, tokens_in=10),
+            _replay(
                 seed=2,
                 outcome=EpisodeOutcome.INVALID,
                 correct_variant=None,
@@ -387,8 +417,37 @@ def test_mismatch_comparison_matches_n_and_says_which_n(tmp_path: Path) -> None:
     assert comparison.semantic.interval is not None
     assert comparison.precondition.interval is not None
     assert "Matched N=2" in comparison.note
-    assert "3 graded episode(s)" in comparison.note
+    assert "3 graded variant episode(s)" in comparison.note
     assert "underpowered" in comparison.note
+    assert comparison.occurrence_role is OccurrenceRole.VARIANT
+
+
+def test_mismatch_comparison_is_computed_over_variant_occurrences_only(
+    tmp_path: Path,
+) -> None:
+    """A replay is one observation counted again, so it is not in the interval.
+
+    The replay misfires and succeeds, exactly as the variant beside it does: if
+    the comparison pooled them the matched N would double and the interval would
+    narrow on evidence that is one episode's program firing twice.
+    """
+    ledger = _write(
+        tmp_path / "ledger.jsonl",
+        [
+            _record(seed=1, occurrence_index=1, fired_variant="rebase"),
+            _replay(seed=2, occurrence_index=2, fired_variant="rebase"),
+            _record(arm=Arm.PRECONDITION, seed=1, occurrence_index=1, fired_variant="merge"),
+            _replay(arm=Arm.PRECONDITION, seed=2, occurrence_index=2, fired_variant="merge"),
+        ],
+    )
+    comparison = mismatch_comparison(ledger)
+
+    assert comparison.matched_n == 1, "one graded variant episode per arm, not two"
+    assert comparison.semantic.available == 1
+    assert comparison.precondition.available == 1
+    assert comparison.semantic.mismatch == Rate(numerator=1, denominator=1)
+    assert "2 graded row(s) in this ledger" in comparison.note
+    assert "variant occurrences only" in comparison.note
 
 
 def test_mismatch_comparison_is_not_presented_as_the_primary_claim(tmp_path: Path) -> None:
@@ -454,10 +513,18 @@ def test_write_report_emits_tables_and_figures_into_dest(tmp_path: Path) -> None
     assert "mismatch_numerator,mismatch_denominator,mismatch_rate" in header
     assert "invalid_numerator,invalid_denominator,invalid_rate" in header
 
+    # Both figures' CSVs say which occurrences they cover, so the numbers cannot
+    # be read as a curve or an interval over every row.
+    assert "occurrence_role" in (dest / "cost_curve.csv").read_text(encoding="utf-8")
+    assert "occurrence_role" in (dest / "mismatch_comparison.csv").read_text(encoding="utf-8")
+
     report = (dest / "report.txt").read_text(encoding="utf-8")
     assert "NOT the pre-registered primary analysis" in report
     assert "Invalid episodes" in report
     assert "matplotlib" in report
+    assert "Occurrences by role" in report
+    assert "Cost curve (secondary; replay occurrences only" in report
+    assert "variant occurrences only" in report
 
 
 def test_write_report_flags_a_suspect_invalid_rate(tmp_path: Path) -> None:

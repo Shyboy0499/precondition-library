@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 import yaml
 
-from precondition_library.bench.ledger import Arm, EpisodeRecord
+from precondition_library.bench.ledger import Arm, EpisodeRecord, OccurrenceRole
 from precondition_library.library import DEFAULT_SIMILARITY_THRESHOLD, Library
 from precondition_library.program import EpisodeOutcome, Program, ProgramStatus
 from precondition_library.provider import Completion
@@ -203,13 +203,17 @@ def make_record(
 
     `arm` and `outcome` are keyword parameters rather than overrides so a caller
     can set a different baseline for a whole module without restating the other
-    twelve fields; every other field goes through `overrides`.
+    fields; every other field goes through `overrides`. The baseline role is
+    `variant`, the independent one: a test that means to exercise the replay path
+    must say so, so a suite that forgot could not label its rows as independent
+    by omission.
     """
     base: dict[str, Any] = {
         "arm": arm,
         "task_id": "sync_fork_with_upstream/seed-1",
         "fault_type": "diverged",
         "occurrence_index": 1,
+        "occurrence_role": OccurrenceRole.VARIANT,
         "seed": 1,
         "tokens_in": 0,
         "tokens_out": 0,

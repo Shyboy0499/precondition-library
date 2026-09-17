@@ -115,6 +115,30 @@ measured result; there are none yet. See
 
 ### Changed
 
+- Every ledger row now carries a required `occurrence_role` — `variant` for the
+  first occurrence of a resolution of its fault, `replay` for every later one —
+  and the two demo figures are computed over different roles (issue #81). The
+  role is declared in `bench/splits.py` from the injectors' own
+  seed-to-resolution mapping (`occurrence_roles`), written by `bench/run.py`, and
+  required on the record with no default: a missing role would read as a variant,
+  which is the role that may be counted as an independent observation, so a
+  default would claim independence the plan does not provide. The cost curve is
+  computed over the **replays** — a variant is the state's learning pass, where
+  no program can exist yet and the curve cannot bend — and the mismatch
+  comparison over the **variants**, the only independent observations, since a
+  replay's program was admitted by the occurrence that introduced its state. Both
+  figures, both CSVs and `report.txt` name the occurrences they used, and
+  `report.txt` reports the count of each role so a reader can see what was
+  excluded. The eval set's arithmetic is stated in spec §7 and pinned by
+  `tests/test_seed_splits.py`: each measurable fault declares three states, so
+  40 eval seeds yield 3 variants and 37 replays per family, and the episode-level
+  mismatch comparison has six independent observations rather than eighty.
+  **This narrows a claim rather than adding one** — the pre-registration's
+  primary comparison is the pair-level one (issue #5), which the episode loop
+  never produced — and it is logged as revision 13 in the spec's history before
+  any eval data exists. Ledgers written before this change cannot be read back;
+  they are re-run rather than migrated, because a role guessed after the fact is
+  the defect the field exists to fix.
 - `diverged` and `submodule_moved` now have three state-decided resolutions each,
   replacing the single fixed request sentence that made the task text a class
   label and the primary claim untestable (issue #3).
