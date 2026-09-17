@@ -198,6 +198,28 @@ measured result; there are none yet. See
   grid. The README no longer names issue #60 as an open defect (it is fixed) and
   points at `EXCLUDED_FROM_BENCHMARK` for the fault exclusion rather than at the
   closed issue #25.
+- A replay whose *body* names a declared parameter the current environment cannot
+  bind is a recorded outcome, not an exception (issue #76). `runtime.replay` used
+  to raise `UnboundParameterError` out of `bench.run`'s `replay(fired, box)`, so a
+  program that fired and could not work — the primary metric's numerator — killed
+  the whole run instead of being counted, and every later episode was lost.
+  `ReplayResult.unbound_parameter` now records it: the body never runs, the
+  program is demoted (it fired on a state it cannot serve), the episode falls back
+  to ReAct for that episode only, and the ledger's new `replay_failure_reason`
+  names the cause, keeping it distinct from a body that ran and failed its
+  postconditions. A placeholder outside the runtime's vocabulary still raises, so
+  admission still refuses that compile defect and issue #77 can rely on the
+  distinction.
+- The compile prompt states the exact shape of every field with a minimal example
+  (issue #78). Three of four `semantic`-arm compile replies failed `Program`
+  validation on field *shape* — `body` returned as a list of commands and
+  `parameters` of the wrong type — and the prompt named the fields in prose
+  without saying what shape to emit. `body` is now stated to be one
+  newline-separated string and `parameters` a list of names. Shape drift is not
+  coerced: a list body is still rejected with the field named, because joining it
+  would hide the prompt defect and suppress the compile-quality signal
+  `compile_failure_reason` carries. The change makes the contract testable; it does
+  not measure the real-model rate, which one smoke arm cannot.
 
 ### Not done in this change
 

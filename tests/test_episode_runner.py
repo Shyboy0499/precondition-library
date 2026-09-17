@@ -839,6 +839,91 @@ def test_demotion_needs_a_postcondition_miss_not_a_timeout(tmp_path, monkeypatch
     ], "a body that ran and left its postconditions unsatisfied is a genuine miss"
 
 
+# --- a body that cannot be substituted is recorded, not an abort -------------
+
+
+def test_a_body_that_cannot_substitute_is_recorded_and_demotes(tmp_path: Path) -> None:
+    """Issue #76: a fire whose body cannot be substituted is a row, not a traceback.
+
+    The body names `submodule_path`, which a `diverged` sandbox has no value for,
+    so no command runs. The episode must still be recorded, the row must name the
+    cause in `replay_failure_reason`, the fire must survive (`fired_variant`), and
+    the program must be demoted -- it fired on a state it cannot serve. The field
+    is what makes this distinguishable from a body that ran and failed its
+    postconditions, whose cause is recorded as `None` there.
+    """
+    program = _discard_program(id="unbound-body", body="git reset --hard {submodule_path}\n")
+    root = tmp_path / "lib"
+    library = _library_with_admitted(root, program)
+    provider = FakeProvider(*_resolves_discard(), _completion(_MALFORMED_REPLY))
+
+    record = run_episode(
+        Arm.PRECONDITION,
+        "diverged",
+        DISCARD_SEED,
+        1,
+        provider=provider,
+        library=library,
+        model="fake",
+    )
+
+    assert record.fired_variant == "discard", "the program did fire; that fact must survive"
+    assert record.program_id == program.id
+    assert "submodule_path" in (record.replay_failure_reason or "")
+    assert record.outcome is EpisodeOutcome.FALLBACK
+    assert record.succeeded is True, "the fallback agent still resolves the fault"
+    assert [item.status for item in Library(root).load_all()] == [ProgramStatus.DEMOTED]
+    assert record.timed_out is False
+    assert record.refusal_reason is None, "an unbound body is not a guard refusal"
+
+
+def test_one_unbound_body_episode_does_not_stop_the_run(tmp_path: Path, monkeypatch) -> None:
+    """Issue #76's run-level guarantee: the later episode is still recorded.
+
+    The preloaded program fires on occurrence 1 and cannot substitute its body.
+    Before the fix the exception escaped `run_episode` and ended `run_benchmark`,
+    losing every episode after it. Occurrence 2 must still run and produce a row,
+    and the demoted program must not be dispatched again.
+    """
+    out = tmp_path / "ledger.jsonl"
+    _library_with_admitted(
+        tmp_path / "library-precondition",
+        _discard_program(id="unbound-body", body="git reset --hard {submodule_path}\n"),
+    )
+    # The library is deliberately preloaded, which the arm's empty-start rule
+    # refuses; this test is about a run reaching an episode after the failing one.
+    monkeypatch.setattr(
+        "precondition_library.bench.run._require_empty_library", lambda root, arm: None
+    )
+    provider = FakeProvider(
+        *_resolves_discard(),
+        _completion(_MALFORMED_REPLY),
+        *_resolves_discard(),
+        _completion(_MALFORMED_REPLY),
+    )
+
+    run_benchmark(
+        arms=[Arm.PRECONDITION],
+        faults=["diverged"],
+        occurrences=2,
+        seeds=[DISCARD_SEED, SECOND_DISCARD_SEED],
+        out=out,
+        model="fake",
+        provider=provider,
+    )
+
+    rows = read(out)
+
+    assert len(rows) == 2, "the run must record the episode after the failing one"
+    first, second = rows
+    assert first.occurrence_index == 1
+    assert first.fired_variant == "discard"
+    assert "submodule_path" in (first.replay_failure_reason or "")
+    assert second.occurrence_index == 2
+    assert second.fired_variant is None, "the demoted program must not fire again"
+    assert second.outcome is EpisodeOutcome.FALLBACK
+
+
 # --- nothing is written into the repository ----------------------------------
 
 

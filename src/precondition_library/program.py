@@ -52,7 +52,9 @@ class ProgramStatus(StrEnum):
                  Deliberately not called "verified" -- this project's own gate is
                  not external validation, and the word would imply an assurance
                  the gate cannot confer.
-    DEMOTED      fired on a real episode and its postconditions failed
+    DEMOTED      fired on a real episode and could not work: the body ran and its
+                 postconditions failed, or the body named a declared parameter
+                 the environment could not bind, so it never ran at all
     QUARANTINED  withdrawn from dispatch; retained for analysis, never replayed.
                  Reached by a load-time variant violation, or by two recorded
                  mismatches (spec §8)

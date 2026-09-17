@@ -105,6 +105,16 @@ class EpisodeRecord(BaseModel):
     infrastructure failure). Set only when `outcome` is `EpisodeOutcome.INVALID`,
     so the invalid rate is a grouping over that outcome rather than over a text
     field shared with refusals."""
+    replay_failure_reason: str | None = None
+    """Why a program that fired could not be run at all (issue #76).
+
+    Today the one cause is a body naming a declared parameter this environment
+    cannot bind, so no command executed and there is no postcondition evidence.
+    Distinct from a body that ran and failed its postconditions, which leaves the
+    demotion and the postcondition results rather than this field, and distinct
+    from a guard refusal, which has `refusal_reason`. The guard refusal rate is a
+    grouping over that field alone, so a replay failure must not be written
+    there — the defect issue #60 fixed."""
     timed_out: bool = False
     """Set when a replay exceeded its timeout. Kept beside `outcome` rather than
     folded into it, since a timeout is a failure mode of the runtime while

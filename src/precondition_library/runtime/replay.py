@@ -14,6 +14,14 @@ postcondition check is **unconditional once the body has run** — including whe
 it exited non-zero or was killed by the timeout — because that evidence is what
 the failure policy demotes a program on. A replay that reported success because
 the body's own exit code was zero would be measuring the wrong thing.
+
+A body whose declared placeholders this environment cannot bind never runs
+(issue #76). That is a recorded `ReplayResult`, not an exception: the program
+*fired*, so the episode is a mis-fire the metric counts and must survive to be
+recorded, and an unhandled raise here ended a whole run. The raise is kept for
+the other case — a placeholder outside the vocabulary is a compile defect, and
+`admit` still refuses that program — because #77 depends on the two being
+distinguishable.
 """
 
 from __future__ import annotations
@@ -25,7 +33,7 @@ from pydantic import BaseModel
 from ..program import GroundTruthResult, Program
 from ..sandbox import Sandbox, git_env
 from .guard import Verdict, screen
-from .probes import SHELL, bindings, evaluate_predicates, substitute
+from .probes import SHELL, UnboundParameterError, bindings, evaluate_predicates, substitute
 
 
 class ReplayResult(BaseModel):
@@ -40,9 +48,17 @@ class ReplayResult(BaseModel):
     """Populated whenever the body ran, even on failure — the evidence for demotion."""
     refused: bool = False
     """The guard refused the body, so nothing executed."""
+    unbound_parameter: bool = False
+    """The body named a declared parameter this environment cannot bind, so the
+    body never ran and there is no postcondition evidence (issue #76).
+
+    Distinct from a body that ran and failed its postconditions, which sets
+    `postconditions` to the failed result: here `postconditions` stays `None`
+    because nothing executed. A name *outside* the vocabulary is a program
+    defect and is not this case — `substitute` still raises for it."""
     reason: str = ""
-    """Why `ok` is false: a refusal, a timeout, a non-zero exit, or failed
-    postconditions. Empty when `ok`."""
+    """Why `ok` is false: a refusal, an unbound body parameter, a timeout, a
+    non-zero exit, or failed postconditions. Empty when `ok`."""
 
 
 def _text(value: str | bytes | None) -> str:
@@ -74,6 +90,11 @@ def replay(program: Program, env: Sandbox, *, timeout_s: float = 60.0) -> Replay
     rather than folded into a generic failure. Postconditions are then checked
     whatever the exit status was, and `ok` requires all three: the body exited
     zero, it did not time out, and every postcondition held.
+
+    A body that names a declared parameter this environment cannot bind returns
+    `unbound_parameter=True` instead of raising (issue #76); a placeholder
+    outside the vocabulary still raises, because that is a compile defect rather
+    than an inapplicable program.
     """
     decision = screen(program.body, env_root=str(env.work))
     if decision.verdict is Verdict.REFUSE:
@@ -86,7 +107,19 @@ def replay(program: Program, env: Sandbox, *, timeout_s: float = 60.0) -> Replay
             reason=f"guard {decision.reason}",
         )
 
-    body = substitute(program.body, bindings(env))
+    try:
+        body = substitute(program.body, bindings(env))
+    except UnboundParameterError as exc:
+        # A program that fired and whose body cannot be substituted is a
+        # mis-fire, not a crash: the episode must be recorded, not lose the run.
+        return ReplayResult(
+            ok=False,
+            exit_code=-1,
+            stdout="",
+            stderr="",
+            unbound_parameter=True,
+            reason=f"the body could not be run: {exc}",
+        )
     # `git_env` inherits only the allowlisted variables (spec §9: the environment
     # is scrubbed) and redirects `HOME` into the sandbox, so `~` resolves onto
     # nothing a credential read could use. The guard still screens explicit

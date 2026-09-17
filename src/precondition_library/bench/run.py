@@ -155,6 +155,11 @@ class _ArmResult:
     the guard refusal rate is a safety metric, the compile success rate a
     compile-quality one, and one field cannot carry both without conflating
     them (issue #60)."""
+    replay_failure_reason: str | None
+    """Why a fired program could not be run at all, when that is the cause a row
+    must name (issue #76). None for a refusal, which carries `refusal_reason`,
+    and for a body that ran and failed its postconditions, whose evidence is the
+    demotion and the postcondition results."""
     timed_out: bool
     compilable: bool
     """Whether this episode solved a task whose solution should be compiled.
@@ -331,6 +336,7 @@ def run_episode(
             admitted=result.admitted,
             refusal_reason=result.refusal_reason,
             compile_failure_reason=result.compile_failure_reason,
+            replay_failure_reason=result.replay_failure_reason,
             timed_out=result.timed_out,
             model=model,
         )
@@ -369,6 +375,7 @@ def _run_arm(
             admitted=None,
             refusal_reason=None,
             compile_failure_reason=None,
+            replay_failure_reason=None,
             timed_out=False,
             # Arm 1 has no library, so its solution is not compiled.
             compilable=False,
@@ -391,6 +398,7 @@ def _run_arm(
             admitted=None,
             refusal_reason=None,
             compile_failure_reason=None,
+            replay_failure_reason=None,
             timed_out=False,
             compilable=True,
         )
@@ -409,6 +417,7 @@ def _run_arm(
             admitted=True,
             refusal_reason=None,
             compile_failure_reason=None,
+            replay_failure_reason=None,
             timed_out=False,
             # No model ran, so there is no transcript to compile.
             compilable=False,
@@ -416,10 +425,13 @@ def _run_arm(
 
     fired_variant = None if replayed.refused else fired.variant
     if _is_genuine_miss(replayed):
-        # §8: a fire whose postconditions failed is demoted, and the fallback is
-        # charged to this episode. Anything else -- a guard refusal, a timeout --
-        # is a runtime outcome rather than evidence the program is wrong, so the
-        # program is left as it was.
+        # §8: a fire that could not work is demoted, and the fallback is charged
+        # to this episode. That is a body whose postconditions failed, and also a
+        # body that never ran because this environment cannot bind a parameter it
+        # names (issue #76) -- the program fired on a state it cannot serve, which
+        # is the same "too permissive to be correct" defect. Anything else -- a
+        # guard refusal, a timeout -- is a runtime outcome rather than evidence
+        # the program is wrong, so the program is left as it was.
         library.set_status(
             fired.id, ProgramStatus.DEMOTED, episode_id=_episode_id(fault_type, seed, occurrence)
         )
@@ -435,6 +447,10 @@ def _run_arm(
             admitted=True,
             refusal_reason=replayed.reason,
             compile_failure_reason=None,
+            # A refusal is a safety signal, not a replay failure: it must not be
+            # read as one, or the refusal rate would pick up rows no guard refused
+            # (issue #60).
+            replay_failure_reason=None,
             timed_out=replayed.timed_out,
             compilable=True,
         )
@@ -447,6 +463,9 @@ def _run_arm(
         admitted=True,
         refusal_reason=None,
         compile_failure_reason=None,
+        # None for a postcondition miss, whose evidence is the demotion; set when
+        # the body could not run at all (issue #76).
+        replay_failure_reason=replayed.reason if replayed.unbound_parameter else None,
         timed_out=replayed.timed_out,
         compilable=True,
     )
@@ -488,21 +507,24 @@ def _is_genuine_miss(replayed: ReplayResult) -> bool:
     """Whether a failed replay is evidence the program is wrong (spec §8).
 
     Demotion is terminal (`library._TRANSITIONS`), so it must rest on the
-    program's own contract, not on the runtime's mood. Only a body that ran to
-    completion and left its postconditions unsatisfied is evidence; a guard
-    refusal executed nothing, and a timeout was killed before it finished. The
-    body exiting non-zero is not in this test on purpose: the postconditions are
-    the program's own statement of done, and spec §8 demotes on a postcondition
-    miss, not on an exit code. A transient timeout demoting a correct program
-    would remove it permanently and shrink coverage -- the variable the
-    comparison is matched on.
+    program's own contract, not on the runtime's mood. Two outcomes qualify: a
+    body that ran to completion and left its postconditions unsatisfied, and a
+    body this environment cannot bind a declared parameter for, which never ran
+    at all (issue #76). Both are the program's own defect -- its preconditions
+    accepted a state where it cannot work -- so both are the "too permissive to
+    be correct" evidence §8 demotes on. A guard refusal executed nothing and a
+    timeout was killed before it finished, and neither says anything about the
+    program; they are excluded. The body exiting non-zero is not in this test on
+    purpose: the postconditions are the program's own statement of done, and
+    spec §8 demotes on a postcondition miss, not on an exit code. A transient
+    timeout demoting a correct program would remove it permanently and shrink
+    coverage -- the variable the comparison is matched on.
     """
-    return (
-        not replayed.refused
-        and not replayed.timed_out
-        and replayed.postconditions is not None
-        and not replayed.postconditions.ok
-    )
+    if replayed.refused or replayed.timed_out:
+        return False
+    if replayed.unbound_parameter:
+        return True
+    return replayed.postconditions is not None and not replayed.postconditions.ok
 
 
 def _learn_from_solution(

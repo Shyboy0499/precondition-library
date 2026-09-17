@@ -17,6 +17,7 @@
 | 7 | 2026-09-16 | **Schema correction, not an analysis change.** The ledger's single reason field carried guard refusals, compile failures and invalid-episode causes at once, so a guard refusal rate read off it would have included malformed replies that no guard saw (issue #60); §7's ledger schema and §8's table now name three fields — `refusal_reason`, `compile_failure_reason`, `invalid_reason`. §7 also records that a program whose `variant` is not a declared resolution of an ambiguous intent is quarantined on load, so a `program.yaml` written straight to disk cannot be dispatched as scored (issue #66). Both are corrections to match the code; no metric definition, denominator or number in this document changes. |
 | 8 | 2026-09-17 | **Documentation corrections, not analysis changes.** §7's demo figure said 5 faults × 4 occurrences × 3 arms = 60 episodes; only the two faults with an ambiguous intent are runnable (`registry.ambiguous_intents()`), so the runnable demo is 24 and 60 is the nominal grid — the overstatement was 2.5× and sat on a measurement path. §9 names the mechanisms that actually exist for network containment (the guard's textual refusals and the environment allowlist) instead of `sandbox-exec`, which nothing implements. `bench/report.py`'s docstring carried the same 60-episode overstatement. **No measurement or number from a run changes** — no episode has been run. |
 | 9 | 2026-09-17 | **Admission negative-side correction, not an analysis change.** §6 named three classes of negative sandbox but `admit` built only "a different fault injected", so a program whose preconditions accepted a sibling resolution of its own intent — firing where firing is wrong — passed the gate (the coupling/duplication audit's case: a submodule program gated only on a gitlink reference accepts the `remove` state). `admit` now builds the missing two: a fault-free sandbox (`build_sandbox(seed, [])`), which every program must refuse, and the program's own fault at a seed whose state a sibling resolution is correct in, chosen from the same seed-to-state mapping the injector uses (`FaultSpec.variant_for_seed`). Each rejection names the class and the number of states it checked. §6 is corrected to describe the three classes the code now builds. Running the hand-written gold programs through the stricter gate found `sync_fork_with_upstream`'s merge preconditions too permissive for the unrelated lockfile-conflict sandbox (the committed record of that tightening is in `bench/gold/sync_fork_with_upstream.yaml`); the gate was not weakened. **No measurement or number from a run changes** — no episode has been run. |
+| 10 | 2026-09-17 | **Two defect corrections to the replay and compile paths, not analysis changes.** A program that fired but whose body names a declared parameter the environment cannot bind raised out of `runtime.replay`, so the exception escaped `run_episode` and ended the whole run instead of recording the mis-fire; it is now a `ReplayResult(unbound_parameter=True)` that demotes the program and is named on the row in §7's new `replay_failure_reason` field (issue #76). The compile prompt states each field's exact shape with a minimal example — `body` is one newline-separated string, `parameters` a list of names — and a list `body` is still rejected with the field named rather than coerced, so the compile-quality signal survives (issue #78). No metric definition, denominator or analysis changes; the smoke pass that found both defects never exercised the replay path, and no result is claimed from it. |
 
 ---
 
@@ -463,7 +464,7 @@ One JSONL line per episode; every number reported is a grouping over this file.
  outcome: success|fail|fallback|refusal|invalid, timed_out,
  correct_variant, fired_variant, ground_truth_ok,
  program_id, dispatch_score, admitted,
- refusal_reason, compile_failure_reason, invalid_reason, model}
+ refusal_reason, compile_failure_reason, invalid_reason, replay_failure_reason, model}
 ```
 
 - `occurrence_index` — 1 for the first time this fault type is seen, 2 for the
@@ -489,13 +490,17 @@ One JSONL line per episode; every number reported is a grouping over this file.
   runs is a confound that silently invalidates a comparison.
 - `dispatch_score` (arm 2) and `admitted` are recorded so a tuned comparison is
   distinguishable from an untuned one.
-- The three reason fields are separate because they are three different signals.
+- The four reason fields are separate because they are four different signals.
   `refusal_reason` holds the guard's reason and is set only when `outcome` is
   `refusal`, so the guard refusal rate is a grouping over that one field and
   cannot pick up anything else. `compile_failure_reason` holds why a compile or
   admission produced no usable program (a malformed reply, a failed gate, a
   duplicate id). `invalid_reason` holds why an episode could not be graded at
-  all. A single field carrying all three would silently fold compile failures
+  all. `replay_failure_reason` holds why a program that *fired* could not be run
+  at all — today, a body naming a declared parameter the environment cannot bind,
+  so no command executed and there is no postcondition evidence (issue #76); a
+  body that ran and failed its postconditions is recorded by the demotion
+  instead. A single field carrying all four would silently fold compile failures
   into the safety metric — the defect issue #60 fixed.
 
 ### Design
@@ -656,6 +661,7 @@ to an arm and recorded with a reason.
 | event | action | recorded as |
 | --- | --- | --- |
 | replay misses postconditions | demote program; fall back to ReAct **for this episode only**; fallback tokens attributed to the arm | `misfired` (derived), with `outcome` showing how the episode then ended |
+| a fired body names a declared parameter this environment cannot bind | no command runs; demote the program; fall back to ReAct **for this episode only** | `replay_failure_reason`, with `outcome` showing how the episode then ended (issue #76) |
 | same program mismatches twice | withdraw from dispatch; retain for analysis | `quarantined` |
 | compile fails admission | stored as a `candidate` and its rejection reason recorded, not discarded; episode keeps its token cost | `candidate`, `admitted=false`, `compile_failure_reason` |
 | guard refuses the body | no execution; fall back to ReAct | `refusal` + `refusal_reason` |
