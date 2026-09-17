@@ -19,12 +19,13 @@ from pathlib import Path
 
 import pytest
 import yaml
-from conftest import FakeProvider
+from conftest import FakeProvider, gold_program
 from pydantic import BaseModel
 
 from precondition_library.agents.compile import (
     UNTRUSTED_CLOSE,
     UNTRUSTED_OPEN,
+    _state_seeds,
     admit,
     compile_program,
 )
@@ -95,12 +96,37 @@ _DISCARD_BODY = (
 )
 
 # The audit's precondition: true in every submodule state and false everywhere
-# else, so it cannot tell the three resolutions apart.
+# else, so it cannot tell the three resolutions apart. It names the path because
+# issue #77's gate rejects a body parameter no precondition references -- the
+# audit program's body uses `{submodule_path}`.
+_HAS_SUBMODULE_REFERENCE_AT_PATH = [
+    Predicate(
+        name="has_submodule_reference",
+        description="HEAD records a gitlink for the submodule at the declared path.",
+        probe='test -n "$(git ls-tree -r HEAD -- {submodule_path} | grep "^160000")"',
+    )
+]
+
+# The same intent, but with a precondition that does NOT name the path, which is
+# the smoke pass's case for issue #77: only the body uses `{submodule_path}`.
 _HAS_SUBMODULE_REFERENCE = [
     Predicate(
         name="has_submodule_reference",
         description="HEAD records a gitlink for a submodule.",
         probe='test -n "$(git ls-tree -r HEAD | grep "^160000")"',
+    )
+]
+
+# A precondition set that imposes no condition and still names the body's
+# parameters. `probe="true"` would accept every state identically, but issue #77's
+# gate refuses a body parameter no precondition names, so the fixture declares
+# them: the tests below are about the negative side catching an all-accepting set,
+# not about the declaration contract.
+_ACCEPTS_EVERY_STATE = [
+    Predicate(
+        name="always",
+        description="accepts every state, and names the parameters the body uses.",
+        probe='test -n "{upstream_remote}" && test -n "{upstream_branch}"',
     )
 ]
 
@@ -136,14 +162,15 @@ def _audit_program() -> Program:
 
     This is the coupling/duplication audit's exact case: the probe is true in all
     three injected submodule states, so the program accepts the `remove` state,
-    where the `init` resolution it implements is wrong.
+    where the `init` resolution it implements is wrong. It names `submodule_path`
+    so it clears issue #77's declaration check and reaches the class under test.
     """
     return Program(
         id="audit-has-submodule-reference",
         intent="restore_submodule_state",
         variant="init",
         parameters=["work_dir", "upstream_remote", "upstream_branch", "submodule_path"],
-        preconditions=_HAS_SUBMODULE_REFERENCE,
+        preconditions=_HAS_SUBMODULE_REFERENCE_AT_PATH,
         body=_SUBMODULE_INIT_BODY,
         postconditions=_SUBMODULE_INITIALISED,
         provenance=_SUBMODULE_PROVENANCE,
@@ -239,9 +266,7 @@ def test_all_accepting_preconditions_are_rejected() -> None:
     there rather than by the unrelated faults: it is the cheapest class and every
     program must refuse it. The rejection still names the class it met.
     """
-    program = _program(
-        preconditions=[Predicate(name="always", description="accepts every state", probe="true")]
-    )
+    program = _program(preconditions=_ACCEPTS_EVERY_STATE)
 
     admitted, reason = admit(program, FAULTS["diverged"], seeds=[DISCARD_SEED])
 
@@ -262,9 +287,12 @@ def test_a_program_that_fires_on_a_clean_sandbox_is_rejected() -> None:
     program = _program(
         preconditions=[
             Predicate(
-                name="worktree_is_clean",
-                description="The worktree has no uncommitted changes.",
-                probe='test -z "$(git status --porcelain)"',
+                name="upstream_exists_and_worktree_is_clean",
+                description="The upstream ref exists and the worktree is clean.",
+                probe=(
+                    "git rev-parse --verify {upstream_remote}/{upstream_branch} >/dev/null "
+                    '&& test -z "$(git status --porcelain)"'
+                ),
             )
         ]
     )
@@ -323,9 +351,7 @@ def test_admission_is_deterministic() -> None:
         _program(), FAULTS["diverged"], seeds=[DISCARD_SEED]
     )
 
-    accepting = _program(
-        preconditions=[Predicate(name="always", description="accepts every state", probe="true")]
-    )
+    accepting = _program(preconditions=_ACCEPTS_EVERY_STATE)
     first = admit(accepting, FAULTS["diverged"], seeds=[DISCARD_SEED])
     second = admit(accepting, FAULTS["diverged"], seeds=[DISCARD_SEED])
     assert first == second
@@ -397,6 +423,76 @@ def test_the_prompt_names_the_ids_the_intent_will_accept(make_sandbox) -> None:
     assert "__VARIANT_RULE__" not in system, "the placeholder must be replaced"
 
 
+# --- issue #77: a precondition is how a program declares what it needs ------
+
+
+def _unguarded_submodule_program() -> Program:
+    """The smoke pass's exact case: only the body names `submodule_path`.
+
+    The precondition is true in every submodule state, so it cannot guard the
+    binding; the body needs the path, which a `diverged` sandbox does not bind.
+    """
+    return Program(
+        id="unguarded-submodule-path",
+        intent="restore_submodule_state",
+        variant="init",
+        parameters=["work_dir", "upstream_remote", "upstream_branch", "submodule_path"],
+        preconditions=_HAS_SUBMODULE_REFERENCE,
+        body=_SUBMODULE_INIT_BODY,
+        postconditions=_SUBMODULE_INITIALISED,
+        provenance=_SUBMODULE_PROVENANCE,
+        status=ProgramStatus.CANDIDATE,
+    )
+
+
+def test_a_body_parameter_that_no_precondition_names_is_rejected() -> None:
+    """Issue #77: a body that uses `submodule_path` with no precondition naming it.
+
+    The smoke pass's program accepted a `diverged` sandbox -- which binds no
+    submodule and therefore no path -- fired there, and could not run. The check is
+    syntactic, so it refuses the program before any sandbox is built, and the
+    reason names the parameter, which is the diagnosis that failure lacked.
+    """
+    admitted, reason = admit(
+        _unguarded_submodule_program(), FAULTS["submodule_moved"], seeds=[SUBMODULE_INIT_SEED]
+    )
+
+    assert not admitted
+    assert "submodule_path" in reason, reason
+    assert "precondition" in reason, reason
+    assert "before any sandbox" in reason, reason
+
+
+def test_a_body_parameter_named_by_a_precondition_is_admitted() -> None:
+    """The rule refuses the undeclared, not a program that declares its needs.
+
+    The committed `submodule-init` gold uses `{submodule_path}` in its body and
+    names it in a precondition, so it clears the declaration check and the rest of
+    the gate.
+    """
+    program = gold_program("init", "restore_submodule_state")
+
+    admitted, reason = admit(program, FAULTS["submodule_moved"], seeds=[SUBMODULE_INIT_SEED])
+
+    assert admitted, reason
+
+
+def test_the_prompt_states_the_declaration_obligation(make_sandbox) -> None:
+    """Issue #77's check enforces a contract the model must be told about."""
+    box = make_sandbox(DISCARD_SEED, ["diverged"])
+    fake = FakeProvider(_completion(_reply_text()))
+
+    compile_program(_signature(box), box, [], fake, fault="diverged")
+
+    system = fake.calls[0]["system"]
+    assert "Declare what the body needs" in system, "the obligation must be stated"
+    assert "precondition's probe" in system, "the declaration's home must be named"
+    assert "must appear in" in system
+    assert "rejects a body parameter that no" in system, (
+        "the prompt must say the check exists, not just describe good practice"
+    )
+
+
 def test_repository_content_travels_in_a_framed_untrusted_block(make_sandbox) -> None:
     """Spec §9: repo-derived text is data, in a delimited channel, not instruction.
 
@@ -427,6 +523,118 @@ def test_repository_content_travels_in_a_framed_untrusted_block(make_sandbox) ->
         "the framing sentence must name the delimiters it is talking about"
     )
     assert "never" in system and "instructions" in system
+
+
+# --- issue #75: each unrelated fault is probed at each of its states --------
+
+
+def _unrelated_state_coverage_program() -> Program:
+    """A `dirty_tree` program whose preconditions accept one submodule state.
+
+    Its fault has no ambiguous intent, so it has no siblings, and it rejects every
+    seed-0 unrelated state -- under the old one-seed-per-fault class the gate
+    admitted it. `submodule_moved` seed 1 injects `repin`, which the class now
+    builds and this program accepts.
+    """
+    return Program(
+        id="unrelated-state-coverage",
+        intent="keep the local work and sync with upstream",
+        variant=None,
+        parameters=["upstream_remote", "upstream_branch"],
+        preconditions=[
+            Predicate(
+                name="upstream_has_new_commits",
+                description="Upstream has commits HEAD lacks.",
+                probe=(
+                    'test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0'
+                ),
+            ),
+            Predicate(
+                name="local_branch_is_not_behind",
+                description="HEAD has no commits upstream lacks.",
+                probe=(
+                    'test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -eq 0'
+                ),
+            ),
+            Predicate(
+                name="upstream_left_gitmodules_alone",
+                description="Upstream's new commits did not touch .gitmodules.",
+                probe=(
+                    'test -z "$(git diff --name-only '
+                    'HEAD...{upstream_remote}/{upstream_branch} | grep -x ".gitmodules")"'
+                ),
+            ),
+        ],
+        body=(
+            "git fetch {upstream_remote}\ngit merge --ff-only {upstream_remote}/{upstream_branch}\n"
+        ),
+        postconditions=[
+            Predicate(
+                name="upstream_contained",
+                description="Upstream's tip is reachable from HEAD.",
+                probe="git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD",
+            ),
+            Predicate(
+                name="local_work_survives",
+                description="The uncommitted readme edit is still in the tree.",
+                probe='test -n "$(git diff --name-only -- docs/readme.md)"',
+            ),
+        ],
+        provenance=Provenance(
+            compiled_from_task="test fixture",
+            model="fake",
+            compiler_version="test",
+            episode_id="test/unrelated-state-coverage",
+            fault="dirty_tree",
+        ),
+        status=ProgramStatus.CANDIDATE,
+    )
+
+
+def test_every_state_of_an_unrelated_fault_gets_a_seed() -> None:
+    """The class probes one seed per distinct state, not one seed per fault (#75).
+
+    `variant_for_seed` is the injector's own mapping, so the distinct values it
+    returns are the states the class can name. `dirty_tree`, `branch_renamed` and
+    `lockfile_conflict` expose no mapping -- their injected states are not declared
+    resolutions -- so they are still probed at seed 0 only. That remainder is
+    sampling, not coverage, and the rejection reason reports the count actually
+    built so the two cannot be confused.
+    """
+    assert _state_seeds(FAULTS["diverged"]) == [0, 1, 2]
+    assert _state_seeds(FAULTS["submodule_moved"]) == [0, 1, 4]
+    assert _state_seeds(FAULTS["dirty_tree"]) == [0]
+    assert _state_seeds(FAULTS["branch_renamed"]) == [0]
+    assert _state_seeds(FAULTS["lockfile_conflict"]) == [0]
+
+
+def test_a_non_seed_0_state_of_an_unrelated_fault_is_rejected(make_sandbox) -> None:
+    """Issue #75: a program the old single-seed class admitted is now refused.
+
+    This program's fault has no ambiguous intent, so it has no siblings, and it
+    rejects every seed-0 unrelated state -- the old class built only those, so the
+    gate admitted it. It accepts `submodule_moved` seed 1 (`repin`), which the
+    per-state class now builds and rejects. The direct verdicts below are the
+    falsification: the seed the class used to check rejects the program, so it was
+    never the reason it passed, and the seed it now also checks accepts it.
+    """
+    program = _unrelated_state_coverage_program()
+
+    admitted, reason = admit(program, FAULTS["dirty_tree"], seeds=[0])
+
+    assert not admitted, "the new class must catch what a single seed missed"
+    assert "negative side" in reason, reason
+    assert "submodule_moved seed 1" in reason, reason
+    assert "unrelated states" in reason, reason
+
+    seed_0 = make_sandbox(0, ["submodule_moved"])
+    seed_1 = make_sandbox(1, ["submodule_moved"])
+    assert evaluate_preconditions(program, seed_0).ok is False, (
+        "the old coverage rejected the program at seed 0; that is why it passed before"
+    )
+    assert evaluate_preconditions(program, seed_1).ok is True, (
+        "the program really does accept the state a single-seed class never built"
+    )
 
 
 # --- the load path re-checks the invariant admission enforces ---------------

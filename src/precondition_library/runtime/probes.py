@@ -102,6 +102,22 @@ def substitute(text: str, parameters: dict[str, str]) -> str:
     return _PLACEHOLDER.sub(replace, text)
 
 
+def placeholders(text: str) -> list[str]:
+    """Every `{name}` placeholder in `text`, first-appearance order, deduplicated.
+
+    Built on the same `_PLACEHOLDER` pattern `substitute` uses, so a caller asking
+    "which names does this text use?" cannot disagree with the substitution that
+    runs it. This is a *syntactic* read: it does not know whether a name is in
+    `VOCABULARY` or whether the environment binds it, which is exactly what
+    admission's declaration check needs -- it compares a body's names with the
+    preconditions' without running either.
+    """
+    seen: dict[str, None] = {}
+    for match in _PLACEHOLDER.finditer(text):
+        seen.setdefault(match.group(1), None)
+    return list(seen)
+
+
 def _excerpt(text: str) -> str:
     """A one-line, length-bounded view of a probe's output for `observed`."""
     return " ".join(text.split())[:_MAX_EXCERPT]

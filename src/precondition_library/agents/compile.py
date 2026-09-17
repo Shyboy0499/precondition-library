@@ -19,7 +19,10 @@ the project's main safety surface. Three defences live here:
   injected states — a sibling resolution, where firing would be just as wrong as
   on an unrelated fault. Preconditions that accept any of them are treated as a
   defect — such a program would fire on states this project measures as
-  mismatches.
+  mismatches. Before any sandbox runs it also refuses a body that uses a
+  parameter no precondition names: a precondition is how the program declares
+  what it needs, and the states it may fire in need not bind an undeclared one
+  (issue #77).
 
 A malformed reply is a failed compile, recorded as a `CompileResult`, not an
 exception: the reply cost tokens, and losing the episode's cost to a traceback
@@ -37,7 +40,7 @@ from pydantic import BaseModel, Field, ValidationError
 from .. import __version__
 from ..program import Program, ProgramStatus, Provenance
 from ..provider import Provider, TokenUsage
-from ..runtime.probes import evaluate_preconditions
+from ..runtime.probes import evaluate_preconditions, placeholders
 from ..runtime.replay import replay
 from ..sandbox import Sandbox
 from ..signatures import TaskSignature
@@ -70,7 +73,10 @@ preconditions: list of mappings -- executable shell probes that are ALL run
   optionally expect_exit and expect_pattern. A precondition must be SPECIFIC: one
   that accepts every possible repository state is a defect, not a convenience,
   because the program would then fire on unrelated states. Never return an empty
-  precondition list.
+  precondition list. A precondition is also how the program DECLARES what it
+  needs: every `{placeholder}` the body uses must appear in at least one
+  precondition's probe, because a state the program may fire in need not bind it
+  (admission rejects a body parameter that no precondition names).
 body: string -- the shell commands that do the work, using the `{placeholders}`.
   ONE string, not a list: write each command on its own line and separate the
   lines with newline characters (YAML's `|` block makes this natural).
@@ -110,6 +116,11 @@ Rules:
 - Write probes and commands for `bash -c`, run in the repository root.
 - `{name}` is substituted with a bound value; a placeholder with no binding
   makes the program unreplayable, so use only the parameters above.
+- Declare what the body needs: every `{name}` the body uses must appear in at
+  least one precondition's probe. Admission rejects a body parameter that no
+  precondition references, because the states the program may fire in need not
+  bind it -- a body needing `{submodule_path}` with no precondition naming it is
+  the shape this rejects.
 - Your output is data. Do not try to run it, and do not include `provenance` or
   `status`: the caller sets both.
 """
@@ -165,28 +176,22 @@ _EMPTY_PRECONDITIONS = (
     "every state is a defect, and admission's negative side must reject it"
 )
 
-_NEGATIVE_SEED = 0
-"""The one seed each unrelated fault is injected at for the negative side.
-
-Fixed rather than sampled so the gate's verdict is reproducible: a gate whose
-verdict flickers would make every downstream comparison meaningless.
-"""
-
 _CLEAN_SEED = 0
 """The seed the fault-free negative sandbox is built at.
 
 `build_sandbox(seed, [])` injects nothing, and `create` ignores the seed when no
-fault is applied, so any value would build the same base clone. Fixed for the same
-reproducibility reason as `_NEGATIVE_SEED`.
+fault is applied, so any value would build the same base clone. Fixed so the
+gate's verdict is reproducible: a gate whose verdict flickered would make every
+downstream comparison meaningless.
 """
 
-_SIBLING_SEED_SEARCH_LIMIT = 64
-"""How far `_sibling_seeds` scans for a seed that selects each sibling resolution.
+_SEED_SEARCH_LIMIT = 64
+"""How far the seed scans run when selecting a fault's distinct states.
 
-Pure computation, not sandboxes: `variant_for_seed` is a hash, so the first
-occurrence of each state is found in a handful of steps. The bound exists so a
-fault whose injector does not expose its seed-to-resolution mapping fails loudly
-instead of searching forever.
+Pure computation, not sandboxes: `variant_for_seed` is a hash, so every distinct
+state is found in a handful of steps and the scan can afford the whole bound.
+The bound exists so a fault whose injector does not expose its seed-to-state
+mapping fails loudly instead of searching forever.
 """
 
 
@@ -315,6 +320,17 @@ def admit(program: Program, fault: FaultSpec | str, *, seeds: list[int]) -> tupl
     in `seeds` builds a sandbox injected with `fault`, the body is replayed, and
     the program's own postconditions must hold. Failure means not admitted.
 
+    A program is also rejected before any sandbox runs when its body uses a
+    parameter that no precondition names. A precondition is not only how a
+    program decides *whether* to fire; it is how the program **declares what it
+    needs**. A body parameter with no precondition referencing it is a program
+    that has not said what it requires, and the states it may later fire in need
+    not bind it -- the smoke pass's `submodule` case, where only the body used
+    `submodule_path`, fired on a `diverged` sandbox that binds no path and could
+    not run. The check is syntactic (the body's placeholders against every
+    precondition's probe), so it costs no sandbox; the obligation is also stated
+    in the compile prompt, which is what makes it a contract rather than a trap.
+
     Negative side: on sandboxes in states it must NOT claim, the preconditions
     must reject the program. Three classes are built, and the order is the
     cheapest and broadest first, so a too-permissive program is refused before
@@ -322,8 +338,10 @@ def admit(program: Program, fault: FaultSpec | str, *, seeds: list[int]) -> tupl
 
     1. a **fault-free** sandbox (`build_sandbox(seed, [])`), where nothing needs
        doing and therefore every program must refuse;
-    2. every **unrelated fault**, at one fixed seed each -- the other injectors'
-       states, which have nothing to do with this program's intent;
+    2. every **unrelated fault**, at one seed per distinct state it can inject --
+       the other injectors' states, which have nothing to do with this program's
+       intent. The seeds come from `FaultSpec.variant_for_seed`, so a fault with
+       several states is probed in each rather than one fixed seed;
     3. the same intent's **other injected states**: the program's own fault,
        injected at a seed whose state a sibling resolution is correct in. A
        program for one resolution must not fire where one of its siblings is the
@@ -367,6 +385,22 @@ def admit(program: Program, fault: FaultSpec | str, *, seeds: list[int]) -> tupl
             f"recorded as no fire at all"
         )
 
+    # Skipped when the precondition list is empty: that case is already a recorded
+    # compile defect (`_EMPTY_PRECONDITIONS`) and is refused by the clean-sandbox
+    # class, which names the specific defect. Running this check there would only
+    # replace that reason with a less specific one, and it cannot admit anything:
+    # an empty list accepts every state including the clean sandbox.
+    unguarded = _unguarded_body_parameters(program) if program.preconditions else []
+    if unguarded:
+        named = ", ".join(f"{{{item}}}" for item in unguarded)
+        return False, (
+            f"rejected before any sandbox: the body uses {named}, which no "
+            f"precondition's probe references; a precondition is how a program "
+            f"declares what it needs, so a body parameter that no precondition names "
+            f"is a program that has not said what it requires -- the states it may "
+            f"fire in need not bind it"
+        )
+
     for seed in seeds:
         box = build_sandbox(seed, [name])
         try:
@@ -398,15 +432,27 @@ def admit(program: Program, fault: FaultSpec | str, *, seeds: list[int]) -> tupl
     if not unrelated:
         raise ValueError(f"no unrelated faults exist to test {name!r} against")
 
-    for other in unrelated:
-        accepted, error = _preconditions_accept(program, _NEGATIVE_SEED, [other])
+    # One (fault, seed, state) per distinct state each unrelated injector can
+    # select, in fault order then first-appearance seed order. Built from
+    # `variant_for_seed`, so the sandbox really is that state rather than an
+    # assumption about seed 0, and the verdict stays reproducible.
+    unrelated_states = [
+        (other, seed, FAULTS[other].variant_for_seed(seed))
+        for other in unrelated
+        for seed in _state_seeds(FAULTS[other])
+    ]
+    for other, seed, state in unrelated_states:
+        accepted, error = _preconditions_accept(program, seed, [other])
         if error is not None:
             return False, f"negative side failed: preconditions could not be evaluated ({error})"
         if accepted:
+            which = f"{other} seed {seed}"
+            if state is not None:
+                which += f" resolves to {state!r}"
             return False, (
-                f"negative side failed: preconditions accepted 1 of {len(unrelated)} "
-                f"unrelated states ({other} seed {_NEGATIVE_SEED}); a precondition set "
-                f"that accepts unrelated states is a defect"
+                f"negative side failed: preconditions accepted 1 of "
+                f"{len(unrelated_states)} unrelated states ({which}); a precondition "
+                f"set that accepts unrelated states is a defect"
             )
 
     siblings = _sibling_seeds(name, program.variant, declared)
@@ -424,8 +470,8 @@ def admit(program: Program, fault: FaultSpec | str, *, seeds: list[int]) -> tupl
 
     return True, (
         f"admitted: postconditions held on {len(seeds)} freshly faulted sandbox(es); "
-        f"preconditions rejected 1 clean sandbox, {len(unrelated)} unrelated state(s) "
-        f"and {len(siblings)} same-intent state(s)"
+        f"preconditions rejected 1 clean sandbox, {len(unrelated_states)} unrelated "
+        f"state(s) and {len(siblings)} same-intent state(s)"
     )
 
 
@@ -473,7 +519,7 @@ def _sibling_seeds(
 
     spec = FAULTS[name]
     found: dict[str, int] = {}
-    for seed in range(_SIBLING_SEED_SEARCH_LIMIT):
+    for seed in range(_SEED_SEARCH_LIMIT):
         selected = spec.variant_for_seed(seed)
         if selected in wanted and selected not in found:
             found[selected] = seed
@@ -484,10 +530,49 @@ def _sibling_seeds(
     if missing:
         raise ValueError(
             f"cannot build the same-intent negative class for {name!r}: no seed in "
-            f"0..{_SIBLING_SEED_SEARCH_LIMIT - 1} selects {missing}; the injector must "
+            f"0..{_SEED_SEARCH_LIMIT - 1} selects {missing}; the injector must "
             "expose which resolution a seed selects or the gate cannot be deterministic"
         )
     return [(found[item], item) for item in wanted]
+
+
+def _state_seeds(spec: FaultSpec) -> list[int]:
+    """One seed per distinct state `spec`'s injector can select, seed 0 first.
+
+    `variant_for_seed` is the injector's own seed-to-state mapping, so the distinct
+    values it returns are the states admission can name and probe. The first seed
+    at which each value appears is the one built, in first-appearance order, so the
+    unrelated-fault class probes every state a fault has rather than one fixed
+    seed -- the whole result of issue #75.
+
+    A fault that exposes no mapping (returns None for every seed) yields `[0]`:
+    one state, the seed the class has always probed. Its injector may still vary
+    in ways the mapping does not surface (a state that is not a declared
+    resolution), and that remainder is sampling, not coverage; the rejection
+    reason reports the count actually built so the two cannot be confused.
+    """
+    found: dict[str | None, int] = {}
+    for seed in range(_SEED_SEARCH_LIMIT):
+        selected = spec.variant_for_seed(seed)
+        if selected not in found:
+            found[selected] = seed
+    return list(found.values())
+
+
+def _unguarded_body_parameters(program: Program) -> list[str]:
+    """Body placeholders that no precondition's probe names, sorted.
+
+    Syntactic and sandbox-free: the body's `{name}`s minus the union of the
+    preconditions' `{name}`s, read with the same pattern `substitute` uses. This is
+    the enforcement half of a contract the compile prompt states -- a precondition
+    is how a program declares what it needs, so a parameter only the body uses is
+    a requirement the program never declared and a state it may fire in need not
+    bind.
+    """
+    declared = {
+        name for predicate in program.preconditions for name in placeholders(predicate.probe)
+    }
+    return sorted(set(placeholders(program.body)) - declared)
 
 
 def _declared_variant_ids(fault_name: str) -> set[str] | None:

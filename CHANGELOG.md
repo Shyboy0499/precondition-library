@@ -233,6 +233,23 @@ measured result; there are none yet. See
   would hide the prompt defect and suppress the compile-quality signal
   `compile_failure_reason` carries. The change makes the contract testable; it does
   not measure the real-model rate, which one smoke arm cannot.
+- Admission refuses a body that uses a parameter no precondition names (issue #77).
+  A precondition is not only how a program decides whether to fire, it is how the
+  program declares what it needs: the smoke pass produced three rows carrying
+  `replay_failure_reason` because a `submodule` program whose body used
+  `submodule_path` and whose preconditions did not mention it accepted a `diverged`
+  sandbox, fired there, and could not run. The check is syntactic -- the body's
+  placeholders against every precondition's probe -- so it runs before any sandbox,
+  and the rejection names the parameter. The obligation is stated in the compile
+  prompt, which is what makes it a contract rather than a trap.
+- The unrelated-fault negative class probes one seed per *state*, not one fixed
+  seed per fault (issue #75). `FaultSpec.variant_for_seed` makes each injector's
+  seed-to-state mapping queryable, so `diverged` is built at seeds 0, 1 and 2 and
+  `submodule_moved` at 0, 1 and 4, where the old class built each at seed 0 only.
+  The rejection reason reports the count actually built, so the number matches the
+  coverage. The faults that expose no mapping (`dirty_tree`, `branch_renamed`,
+  `lockfile_conflict`) are still one state each; that remainder is sampling and is
+  labelled as such in `_state_seeds`' docstring rather than presented as coverage.
 
 ### Not done in this change
 
