@@ -17,11 +17,23 @@ runnable demo is 2 faults x 4 occurrences x 3 arms = **24 episodes**, and
 excludes the demo from the primary claim. So the two figures built here are:
 
 * a **cost model** -- mean tokens and LLM calls per episode against
-  `occurrence_index`, one series per arm. Secondary, and reported as a cost
-  model rather than as a result; the token curve is not the finding.
+  `occurrence_index`, one series per arm, over the **replay** occurrences: the
+  later sightings of a state, which are the only occurrences where a library
+  could have had something to answer with, and therefore the only place the
+  curve can bend. Secondary, and reported as a cost model rather than as a
+  result; the token curve is not the finding.
 * an **episode-level arm 2 vs arm 3 mismatch comparison at matched N** -- the
-  demo's comparative number, reported with a Wilson interval, not the
-  pre-registered claim. Its note says so in the output.
+  demo's comparative number, reported with a Wilson interval over the **variant**
+  occurrences: the first sight of each state, the only independent observations
+  in the ledger. Not the pre-registered claim, and its note says so in the
+  output.
+
+The two figures take different occurrences on purpose, and each says which it
+used. A replay's state was introduced by an earlier episode and the program that
+answers it was admitted there, so counting a replay in the mismatch comparison
+counts one observation twice; a variant is the learning pass, before anything
+could be replayed, so a cost curve drawn over variants cannot bend. Spec §7's
+"Ledger" and "Figures" are the source for the rule; `bench.splits` declares it.
 
 Every rate carries its numerator and its denominator, and every mean carries the
 number of episodes it averaged. A rate over a handful of episodes is noise, so
@@ -46,7 +58,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from ..program import EpisodeOutcome
-from .ledger import Arm, EpisodeRecord, read
+from .ledger import Arm, EpisodeRecord, OccurrenceRole, read
 
 Z_95 = 1.96
 """The normal quantile for a 95% interval, the conventional rounded value."""
@@ -126,9 +138,14 @@ class AblationRow(BaseModel):
 
 
 class CostPoint(BaseModel):
-    """One point of the secondary cost model, for one arm at one occurrence."""
+    """One point of the secondary cost model, for one arm at one occurrence.
+
+    `occurrence_role` is always `REPLAY` here, and it is on the point so that a
+    reader of the CSV cannot mistake the curve for one over every occurrence.
+    """
 
     arm: Arm
+    occurrence_role: OccurrenceRole
     occurrence_index: int
     episodes: int
     mean_tokens: Mean
@@ -141,16 +158,26 @@ class ArmMismatch(BaseModel):
 
     arm: Arm
     available: int
-    """Graded episodes this arm has in the ledger, before matching."""
+    """Graded *variant* episodes this arm has in the ledger, before matching.
+
+    Replays are not in this count. A replay's state was introduced by an earlier
+    occurrence and the program that answers it was admitted there, so its
+    outcome carries no information the variant did not already carry."""
     matched_n: int
-    """Graded episodes used; equal across the two arms by construction."""
+    """Graded variant episodes used; equal across the two arms by construction."""
     mismatch: Rate
     interval: Interval | None
 
 
 class MismatchComparison(BaseModel):
-    """Arm 2 vs arm 3 mismatch at matched N -- the demo's number, not the claim."""
+    """Arm 2 vs arm 3 mismatch at matched N -- the demo's number, not the claim.
 
+    Computed over the variant occurrences, and `occurrence_role` says so on the
+    model rather than only in the prose: the independent observations are the
+    first sightings of a state, not every episode the run happened to record.
+    """
+
+    occurrence_role: OccurrenceRole
     matched_n: int
     semantic: ArmMismatch
     precondition: ArmMismatch
@@ -255,6 +282,18 @@ def ablation_table(ledger: Path) -> list[AblationRow]:
 def cost_curve(ledger: Path) -> list[CostPoint]:
     """Figure 1. Mean tokens per episode against occurrence_index, per arm.
 
+    Computed over the **replay** occurrences and no others. A variant occurrence
+    is the first sight of its state, so no program admitted from that state can
+    exist yet and the episode pays the full price of solving it: the learning
+    pass, not the amortized one. The curve is the accumulation's effect, and it
+    can only bend on occurrences the library could answer -- which is exactly the
+    replays. Arm 1 pays full price on the same occurrence indices because it has
+    no library, and that contrast is what the figure is for.
+
+    A ledger with no replay occurrence yields no points and the report says so.
+    That is not the same as a curve of zero: it means the run never revisited a
+    state, so nothing about amortization can be read off it.
+
     A secondary cost model, not a result. Grouping is by (arm, occurrence_index)
     and never merges arms: the comparison of the slopes is the only thing the
     curve is for, and pooling two arms would erase it. Invalid episodes are
@@ -264,6 +303,8 @@ def cost_curve(ledger: Path) -> list[CostPoint]:
     """
     groups: dict[tuple[Arm, int], list[EpisodeRecord]] = {}
     for record in _graded(read(ledger)):
+        if record.occurrence_role is not OccurrenceRole.REPLAY:
+            continue
         key = (record.arm, record.occurrence_index)
         groups.setdefault(key, []).append(record)
 
@@ -274,6 +315,7 @@ def cost_curve(ledger: Path) -> list[CostPoint]:
         points.append(
             CostPoint(
                 arm=arm,
+                occurrence_role=OccurrenceRole.REPLAY,
                 occurrence_index=occurrence,
                 episodes=len(group),
                 mean_tokens=_mean(r.tokens_in + r.tokens_out for r in group),
@@ -282,6 +324,18 @@ def cost_curve(ledger: Path) -> list[CostPoint]:
             )
         )
     return points
+
+
+def occurrence_counts(ledger: Path) -> dict[OccurrenceRole, int]:
+    """How many graded rows of each role the ledger holds.
+
+    Reported so a reader can see what each figure left out. Invalid episodes are
+    excluded, as they are from every metric denominator.
+    """
+    counts = {role: 0 for role in OccurrenceRole}
+    for record in _graded(read(ledger)):
+        counts[record.occurrence_role] += 1
+    return counts
 
 
 def _by_seed(records: list[EpisodeRecord]) -> list[EpisodeRecord]:
@@ -333,14 +387,24 @@ def _arm_mismatch(
     )
 
 
-def _comparison_note(matched_n: int, semantic_available: int, precondition_available: int) -> str:
+def _comparison_note(
+    matched_n: int,
+    semantic_available: int,
+    precondition_available: int,
+    replays_excluded: int,
+) -> str:
     parts = [
         "Episode-level demo, not the pre-registered analysis: the primary metric is "
         "mismatch vs coverage at matched coverage over labelled dispatch pairs (spec "
         "§7), the episode loop is underpowered, and it is excluded from that claim.",
-        f"Matched N={matched_n} (arm 2 has {semantic_available} graded episode(s), arm 3 "
-        f"{precondition_available}); any episode outside a common stratum is reported in "
-        "`available`, not dropped silently.",
+        "Computed over the variant occurrences only -- the first sight of each state, "
+        "which are the independent observations. Replay occurrences are excluded "
+        f"({replays_excluded} graded row(s) in this ledger): a replay's state was "
+        "introduced by an earlier occurrence and the program answering it was admitted "
+        "there, so counting it would count that one observation again.",
+        f"Matched N={matched_n} (arm 2 has {semantic_available} graded variant episode(s), "
+        f"arm 3 {precondition_available}); any episode outside a common stratum is "
+        "reported in `available`, not dropped silently.",
     ]
     if matched_n == 0:
         parts.append("No graded episode is common to both arms, so no rate is reported.")
@@ -360,17 +424,29 @@ def mismatch_comparison(ledger: Path) -> MismatchComparison:
     metric exists for: a wrong fire in an episode that still succeeded. Invalid
     episodes are excluded from the rates and their absence is reported in
     `available`.
+
+    Computed over the **variant** occurrences and no others. A replay occurrence
+    re-asks a state an earlier episode already saw, and the program that answers
+    it -- correctly or not -- was admitted by that episode, so its mismatch is
+    that program's error counted a second time. An interval over every row would
+    therefore be narrower than the evidence, which is the one direction an
+    underpowered demo must not fail in.
     """
-    records = _graded(read(ledger))
+    graded = _graded(read(ledger))
+    records = [record for record in graded if record.occurrence_role is OccurrenceRole.VARIANT]
+    replays_excluded = sum(
+        1 for record in graded if record.occurrence_role is OccurrenceRole.REPLAY
+    )
     semantic = [record for record in records if record.arm is Arm.SEMANTIC]
     precondition = [record for record in records if record.arm is Arm.PRECONDITION]
     matched_semantic, matched_precondition = _match_strata(semantic, precondition)
     matched_n = len(matched_semantic)
     return MismatchComparison(
+        occurrence_role=OccurrenceRole.VARIANT,
         matched_n=matched_n,
         semantic=_arm_mismatch(Arm.SEMANTIC, semantic, matched_semantic),
         precondition=_arm_mismatch(Arm.PRECONDITION, precondition, matched_precondition),
-        note=_comparison_note(matched_n, len(semantic), len(precondition)),
+        note=_comparison_note(matched_n, len(semantic), len(precondition), replays_excluded),
     )
 
 
@@ -458,6 +534,7 @@ def _write_ablation_csv(path: Path, rows: list[AblationRow]) -> None:
 def _write_cost_csv(path: Path, points: list[CostPoint]) -> None:
     header = [
         "arm",
+        "occurrence_role",
         "occurrence_index",
         "episodes",
         "mean_tokens",
@@ -473,6 +550,7 @@ def _write_cost_csv(path: Path, points: list[CostPoint]) -> None:
         [
             [
                 point.arm.value,
+                point.occurrence_role.value,
                 point.occurrence_index,
                 point.episodes,
                 point.mean_tokens.value,
@@ -490,6 +568,7 @@ def _write_cost_csv(path: Path, points: list[CostPoint]) -> None:
 def _write_mismatch_csv(path: Path, comparison: MismatchComparison) -> None:
     header = [
         "arm",
+        "occurrence_role",
         "available_graded_episodes",
         "matched_n",
         "mismatch_numerator",
@@ -504,6 +583,7 @@ def _write_mismatch_csv(path: Path, comparison: MismatchComparison) -> None:
         rows.append(
             [
                 side.arm.value,
+                comparison.occurrence_role.value,
                 side.available,
                 side.matched_n,
                 side.mismatch.numerator,
@@ -529,7 +609,8 @@ def _pyplot() -> Any:
 def _plot_cost_curve(points: list[CostPoint], dest: Path) -> None:
     plt = _pyplot()
     figure, axes = plt.subplots(figsize=(7.0, 4.0))
-    for arm in sorted({point.arm for point in points}, key=lambda candidate: candidate.value):
+    arms = sorted({point.arm for point in points}, key=lambda candidate: candidate.value)
+    for arm in arms:
         series = [point for point in points if point.arm is arm]
         axes.plot(
             [point.occurrence_index for point in series],
@@ -537,10 +618,14 @@ def _plot_cost_curve(points: list[CostPoint], dest: Path) -> None:
             marker="o",
             label=arm.value,
         )
-    axes.set_xlabel("occurrence index")
+    axes.set_xlabel("occurrence index (replay occurrences only)")
     axes.set_ylabel("mean tokens per episode")
-    axes.set_title("Cost vs repeat -- secondary, underpowered episode demo")
-    axes.legend(title="arm")
+    axes.set_title("Cost vs repeat, replay occurrences -- secondary, underpowered demo")
+    if arms:
+        # No labeled artist means no legend to draw; the report text carries the
+        # explanation of the empty curve, and an empty figure is the honest
+        # picture of a run that never revisited a state.
+        axes.legend(title="arm")
     figure.savefig(dest, dpi=150)
     plt.close(figure)
 
@@ -566,7 +651,9 @@ def _plot_mismatch_comparison(comparison: MismatchComparison, dest: Path) -> Non
     )
     axes.set_ylabel("mismatch rate")
     axes.set_ylim(0.0, 1.0)
-    axes.set_title(f"Mismatch at matched N={comparison.matched_n} -- underpowered demo")
+    axes.set_title(
+        f"Mismatch at matched N={comparison.matched_n}, variant occurrences -- underpowered demo"
+    )
     figure.savefig(dest, dpi=150)
     plt.close(figure)
 
@@ -582,7 +669,10 @@ def _format_mean(mean: Mean, label: str) -> str:
 
 
 def _summary(
-    rows: list[AblationRow], points: list[CostPoint], comparison: MismatchComparison
+    rows: list[AblationRow],
+    points: list[CostPoint],
+    comparison: MismatchComparison,
+    counts: dict[OccurrenceRole, int],
 ) -> str:
     invalid = _overall_invalid(rows)
     lines = [
@@ -595,6 +685,13 @@ def _summary(
         "that claim; the figures below are a secondary cost model and a demo comparison.",
         "",
         f"Invalid episodes (excluded from every metric denominator): {_format_rate(invalid)}.",
+        "Occurrences by role (graded rows): "
+        f"{OccurrenceRole.VARIANT.value}={counts[OccurrenceRole.VARIANT]} "
+        f"{OccurrenceRole.REPLAY.value}={counts[OccurrenceRole.REPLAY]}. A variant is the "
+        "first sight of",
+        "a state and is the only kind of independent observation; a replay revisits a state an",
+        "earlier occurrence introduced. The cost curve uses the replays, the mismatch comparison",
+        "the variants, and each figure says so below. `bench.splits` declares the roles.",
     ]
     if invalid.value is not None and invalid.value > INVALID_RATE_ALARM:
         lines.append(
@@ -615,16 +712,27 @@ def _summary(
             f" {_format_mean(row.mean_llm_calls, 'llm_calls')}"
             f" {_format_mean(row.mean_wall_clock_s, 'wall_s')}"
         )
-    lines += ["", "Cost curve (secondary; a cost model, not a result):"]
+    lines += [
+        "",
+        "Cost curve (secondary; replay occurrences only -- the ones a library could "
+        "answer; a cost model, not a result):",
+    ]
     if not points:
-        lines.append("  (no graded episode, so no curve)")
+        lines.append(
+            "  (no graded replay occurrence in this ledger, so no curve: with no state "
+            "revisited, nothing about amortization can be read off the run)"
+        )
     for point in points:
         lines.append(
             f"  {point.arm.value} occ={point.occurrence_index} episodes={point.episodes}"
             f" {_format_mean(point.mean_tokens, 'tokens')}"
             f" {_format_mean(point.mean_llm_calls, 'llm_calls')}"
         )
-    lines += ["", f"Mismatch comparison (arm 2 vs arm 3, matched N={comparison.matched_n}):"]
+    lines += [
+        "",
+        f"Mismatch comparison (arm 2 vs arm 3, matched N={comparison.matched_n}, "
+        "variant occurrences only -- the independent ones):",
+    ]
     for side in (comparison.semantic, comparison.precondition):
         interval = side.interval
         rendered = (
@@ -653,12 +761,14 @@ def write_report(ledger: Path, dest: Path) -> Path:
     Writes `ablation_table.csv`, `cost_curve.csv` and `mismatch_comparison.csv`
     (the numbers, each rate beside its denominator), `cost_curve.png` and
     `mismatch_comparison.png` (renderings of those numbers) and `report.txt`
-    (the caveats, the invalid rate, and the plain statement that the primary
-    pre-registered analysis is not here). Returns `dest`.
+    (the caveats, the invalid rate, the occurrences each figure used, and the
+    plain statement that the primary pre-registered analysis is not here).
+    Returns `dest`.
     """
     rows = ablation_table(ledger)
     points = cost_curve(ledger)
     comparison = mismatch_comparison(ledger)
+    counts = occurrence_counts(ledger)
 
     dest.mkdir(parents=True, exist_ok=True)
     _write_ablation_csv(dest / "ablation_table.csv", rows)
@@ -666,5 +776,5 @@ def write_report(ledger: Path, dest: Path) -> Path:
     _write_mismatch_csv(dest / "mismatch_comparison.csv", comparison)
     _plot_cost_curve(points, dest / "cost_curve.png")
     _plot_mismatch_comparison(comparison, dest / "mismatch_comparison.png")
-    (dest / "report.txt").write_text(_summary(rows, points, comparison), encoding="utf-8")
+    (dest / "report.txt").write_text(_summary(rows, points, comparison, counts), encoding="utf-8")
     return dest

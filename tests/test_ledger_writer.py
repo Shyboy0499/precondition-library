@@ -116,7 +116,7 @@ import os
 import sys
 from pathlib import Path
 
-from precondition_library.bench.ledger import Arm, EpisodeRecord, append
+from precondition_library.bench.ledger import Arm, EpisodeRecord, OccurrenceRole, append
 from precondition_library.program import EpisodeOutcome
 
 record = EpisodeRecord(
@@ -124,6 +124,7 @@ record = EpisodeRecord(
     task_id="sync_fork_with_upstream/seed-1",
     fault_type="diverged",
     occurrence_index=1,
+    occurrence_role=OccurrenceRole.VARIANT,
     seed=1,
     tokens_in=10,
     tokens_out=5,

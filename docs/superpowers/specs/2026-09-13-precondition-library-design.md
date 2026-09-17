@@ -20,6 +20,7 @@
 | 10 | 2026-09-17 | **Two defect corrections to the replay and compile paths, not analysis changes.** A program that fired but whose body names a declared parameter the environment cannot bind raised out of `runtime.replay`, so the exception escaped `run_episode` and ended the whole run instead of recording the mis-fire; it is now a `ReplayResult(unbound_parameter=True)` that demotes the program and is named on the row in §7's new `replay_failure_reason` field (issue #76). The compile prompt states each field's exact shape with a minimal example — `body` is one newline-separated string, `parameters` a list of names — and a list `body` is still rejected with the field named rather than coerced, so the compile-quality signal survives (issue #78). No metric definition, denominator or analysis changes; the smoke pass that found both defects never exercised the replay path, and no result is claimed from it. |
 | 11 | 2026-09-17 | **Two library-integrity corrections, not analysis changes.** A compile that reused a program id on a later episode was correctly refused by the library, so the episode's program was lost and the row showed only a `compile_failure_reason` that read like a malformed reply; the stored id is now derived from the episode's `(fault, occurrence)` plus a sanitised slug, and the residual same-episode collision is recorded *as a collision* (issue #80). The load-time variant check keyed on `Program.intent` matching an `IntentSpec.name`, but a compiled program's intent is prose, as the compile prompt asks, so the check missed exactly the `program.yaml` written past `admit` that it exists for; it now keys on a new required `Provenance.fault` (issue #69). The same correction makes the read pure: `Library.load_all` applies the verdict in memory and writes nothing, and `Library.quarantine_undeclared()` is the explicit write that records it. **No metric definition, denominator or number in this document changes** — no episode has been run. |
 | 12 | 2026-09-17 | **Two admission-gate corrections found by the smoke pass, not analysis changes.** (1) §6 now states a DECLARED condition before the two sides: a body parameter that no precondition's probe names is refused, because a precondition is how a program declares what it needs and the states it may fire in need not bind an undeclared one. The smoke pass produced three rows carrying `replay_failure_reason` from a `submodule` program whose body used `submodule_path` while its preconditions did not (issue #77). (2) The unrelated-fault negative class is corrected from "one fixed seed each" to one seed per distinct state its injector can select, read through `FaultSpec.variant_for_seed`; `diverged` is now built at seeds 0, 1 and 2 and `submodule_moved` at 0, 1 and 4, where the old class built each at seed 0 only, so a program could be rejected on one state and fire on another (issue #75). The faults that expose no seed-to-state mapping remain one state each, labelled as sampling. **No metric definition, denominator or number in this document changes** — no episode has been run, and the smoke pass claims no result. |
+| 13 | 2026-09-17 | **Pre-registration revision: occurrences are labelled by role, and the episode loop's independent observations are stated (issue #81).** A smoke pass reported zero replays because its seeds each select a different resolution, and a program admitted for one resolution correctly refuses the others — so the plan as written produced a flat cost curve *by construction*. §7 gains a required `occurrence_role` on every ledger row, declared from the injectors' own seed-to-resolution mapping and written by the runner: **variant** for the first sight of a resolution, **replay** for every later one. The cost curve is computed over the replays (where the accumulation is visible), the mismatch comparison over the variants (the only independent observations), and both figures name the occurrences they used. §7's "Design" resolves the choice the earlier text left open — held-out variants or relabelled replays — in favour of replays, **because the injectors do not vary branch names, file sets or conflict positions by seed**; widening them is issue #6. The eval set's arithmetic is now stated: each measurable fault declares three states, so 40 seeds yield **3 variant and 37 replay occurrences per family**, and the episode-level mismatch comparison has six independent observations rather than eighty. **Logged before any eval data existed** — no eval episode has been run, so no analysis was chosen after seeing results; the smoke pass that motivated it is excluded from every claim in §7, and no reported number changes. |
 
 ---
 
@@ -477,7 +478,7 @@ specific preconditions, not an inconvenience to be suppressed.
 One JSONL line per episode; every number reported is a grouping over this file.
 
 ```
-{arm, task_id, fault_type, occurrence_index, seed,
+{arm, task_id, fault_type, occurrence_index, occurrence_role, seed,
  tokens_in, tokens_out, cached_tokens_in, llm_calls, wall_clock_s,
  outcome: success|fail|fallback|refusal|invalid, timed_out,
  correct_variant, fired_variant, ground_truth_ok,
@@ -487,6 +488,22 @@ One JSONL line per episode; every number reported is a grouping over this file.
 
 - `occurrence_index` — 1 for the first time this fault type is seen, 2 for the
   second, and so on. Grouping by it produces the headline curve.
+- `occurrence_role` — `variant` for the first occurrence of a resolution of this
+  fault, `replay` for every later one. Declared by `bench/splits.py` from the
+  injector's own seed-to-resolution mapping and written onto every row by
+  `bench/run.py`; required, with no default. **The two analyses need different
+  occurrences.** The cost curve is only meaningful on the replays, because a
+  variant is the first sight of a state and no program can have been admitted
+  from it yet — the curve bends exactly where a state recurs. The mismatch
+  comparison is only meaningful on the variants, because a replay's state was
+  introduced by an earlier occurrence and the program that answers it was
+  admitted there, so counting a replay counts one observation twice. It records
+  the plan's role and not what happened: a row labelled `replay` may still have
+  paid full price, because no program was admitted for its state or the one that
+  fired was refused. `llm_calls`, `outcome` and `fired_variant` say what
+  happened. A reader who does not know this will compute the curve over the
+  occurrences where it cannot bend, or an interval over one observation counted
+  many times.
 - **Correctness is derived, not stored.** `correct_variant` is the ground truth for
   the state (from the intent's decision rules, in separate code from the programs'
   probe strings), `fired_variant` is what the program that ran actually resolves,
@@ -562,9 +579,17 @@ earlier draft stated the nominal figure as though it could run.
 Seeds are split into disjoint admit / tune / eval sets and every arm is routed
 through the same (fault, seed) pairs, so the comparison is paired rather than
 between-populations. The unit of analysis is the fault seed, not the episode:
-occurrences 2-4 are **held-out variants** of a fault (different branch names,
-file sets, conflict positions, submodule states), or they are relabelled
-"replays" and excluded from independence claims.
+occurrences 2-4 were to be **held-out variants** of a fault (different branch
+names, file sets, conflict positions, submodule states), or relabelled
+"replays" and excluded from independence claims. **The replay branch is the one
+this design takes, because the injectors do not vary those things by seed** (see
+the revision history, row 13, and issue #6, which owns widening them): a fault's
+`INJECTED_STATES` declares three states and everything else about the injected
+environment is fixed, so an occurrence whose resolution has already been seen is
+a repeat of that state rather than a held-out instance of it. So an occurrence is
+a **variant** the first time its resolution is seen and a **replay** every later
+time, and the two are used by different analyses — the mismatch comparison over
+the variants, the cost curve over the replays (see "Figures").
 
 ### Figures
 
@@ -573,8 +598,14 @@ across acceptance thresholds; mismatch rate against coverage, Wilson intervals a
 each operating point, and the pre-registered coverage point marked.
 
 **Figure 2 — cost vs repeat (secondary).** Mean tokens and LLM calls per episode
-against `occurrence_index`, one line per arm, from the underpowered demo. Reported
-as a cost model, not as a contribution.
+against `occurrence_index`, one line per arm, from the underpowered demo and
+**over its replay occurrences only**. A variant occurrence is the learning pass —
+no program admitted from a state the run had not yet seen can exist — so a curve
+that included the variants would average the cost of learning a state into the
+cost of replaying it. Arm 1 pays full price on the same occurrence indices,
+because it has no library, and that contrast is the comparison the figure exists
+for. Reported as a cost model, not as a contribution; the figure and its CSV name
+the occurrences used.
 
 **Figure 3 — the admission factor.** The 2×2 {dispatch: semantic|precondition} ×
 {admission: gated|ungated} comparison, which separates the negative-sandbox
@@ -592,7 +623,10 @@ after seeing results.
    between dispatchers **at matched coverage**. The directional claim is stated at
    a pre-registered coverage point; the full curve is reported regardless.
 2. **Unit of analysis:** the fault seed/family, not the episode. Seeds split into
-   disjoint admit / tune / eval sets; episodes paired by (fault, seed).
+   disjoint admit / tune / eval sets; episodes paired by (fault, seed). Within the
+   episode loop the independent observations are its **variant** occurrences only:
+   a replay re-asks a state an earlier occurrence introduced, and is excluded from
+   every independence claim (see "Ledger").
 3. **Power statement:** required — the detectable effect size at the chosen pair
    count, coverage points, and alpha.
 4. **Secondary metrics:** tokens and LLM calls per episode by occurrence index
@@ -629,19 +663,46 @@ tune   1000-1015   16 seeds  calibrate arm 2's similarity threshold (item 5)
 eval   2000-2039   40 seeds  the reported numbers
 ```
 
-Only the two fault families with an ambiguous intent are measurable
-(`registry.ambiguous_intents()`); the other three are excluded from any dispatch
-measurement, named in `EXCLUDED_FROM_BENCHMARK`. Each seed injects one state per
-measurable family, so a set of N seeds is N independent instances per family.
+Each of those seeds is an *occurrence*, and occurrences split by role
+(`bench/splits.py`'s `occurrence_roles`, written onto every ledger row):
 
-**The eval set is too small to support the primary comparison as
-pre-registered.** Eighty decisions cannot put a usable Wilson interval around a
-mismatch difference at any but a very large effect size, so the interval from
-this set is expected to span zero and settle nothing. The primary claim therefore
-requires extending the pair count under the extension rule (item 6), and item 3's
-power statement cannot be made from this set alone. Forty seeds buy a first
-estimate and a check that the curve behaves as expected, not the result. The
-counts are what a run can pay for, not what the analysis wants.
+| set | seeds | variant occurrences per family | replay occurrences per family |
+| --- | --- | --- | --- |
+| smoke | 0, 1, 2, 4 | 3 | 1 |
+| tune | 1000-1015 | 3 | 13 |
+| eval | 2000-2039 | 3 | 37 |
+
+**Three, not forty, is the number the independent observations come to**, and it
+is the injector grid that fixes it. Only the two fault families with an ambiguous
+intent are measurable (`registry.ambiguous_intents()`); the other three are
+excluded from any dispatch measurement, named in `EXCLUDED_FROM_BENCHMARK`. Each
+measurable fault's injector declares exactly three states, and a program is
+admitted for the resolution of one of them, so a seed set of any length yields at
+most three variant occurrences per family — six episodes across the two families.
+Everything after the first sight of a state is a replay: a real repeat of the
+run's own earlier state, which is what the cost curve is read from and what no
+independence claim may be read from. **A larger seed set does not change the
+count**; it buys replay occurrences, not power.
+
+**The eval set is therefore not merely underpowered for the episode-level
+mismatch comparison — the episode loop cannot support it at any seed count.** The
+previous statement here said eighty decisions could not put a usable Wilson
+interval around a mismatch difference; the honest arithmetic is that only six of
+those eighty are independent observations, and an interval over six is wider
+still. The pre-registered primary comparison is unaffected, because
+it is not computed from the episode loop: it is the pair-level one over labelled
+(state, program) pairs (item 1), where the state grid is crossed with seeds, no
+library accumulates between pairs, and the pair count is chosen for power rather
+than for what a run can pay for (issue #5). The episode loop's own comparative
+figure stays reported, labelled underpowered, with its variant N shown.
+
+**What more episodes would buy.** Replay occurrences for the cost curve, and
+only that: the 40-seed eval set is sized for a repeat structure long enough to
+show whether a compiled arm's cost falls and the baseline's does not, not for the
+comparison. Independent observations are bought by **more states**, not more
+seeds — the injector work issue #6 owns (held-out variants with new branch names,
+file sets, conflict positions, submodule states) — or by the pair-level harness,
+which crosses states with seeds and is not budget-bound.
 
 A run is invoked like this. The ledger goes outside the repository; the API key
 comes from the caller's environment and is never read by this repository

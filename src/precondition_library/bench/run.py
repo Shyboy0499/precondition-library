@@ -7,6 +7,16 @@ so that occurrence_index counts genuine recurrences of a task family rather
 than repetitions of one scripted scenario. The seed varies across occurrences
 and the fault type stays fixed, which is the experimental design in one line.
 
+Repeats are also the difficulty, and the runner has to be honest about it. A
+fault's injector declares only a handful of states, so a later occurrence can
+select a state an earlier one already injected -- and a program admitted from
+that earlier episode will be offered for it. That occurrence is a genuine repeat
+of the same state and a *dependent* observation of the same experiment, so the
+runner labels every row with the role the plan gives it (`bench.splits`) rather
+than leaving the report to infer independence from the occurrence index. Both
+things are wanted: the recurrence is what makes amortization visible, and the
+label is what keeps it out of an independence claim.
+
 Each arm builds its library from empty and sees the same faults in the same
 order, so the arms cannot differ by luck of scheduling.
 
@@ -43,7 +53,8 @@ from ..signatures import StateFingerprint, TaskSignature
 from ..tasks.faults import FAULTS, build_sandbox
 from ..tasks.intent import IntentSpec, ResolutionVariant
 from ..tasks.registry import EXCLUDED_FROM_BENCHMARK, ambiguous_intents
-from .ledger import Arm, EpisodeRecord, append
+from .ledger import Arm, EpisodeRecord, OccurrenceRole, append
+from .splits import occurrence_roles
 
 _EXCLUDED_NOTICE = (
     "excluded from the benchmark: their request text is a fixed sentence, so the "
@@ -196,6 +207,13 @@ def run_benchmark(
     `model` because the provider owns its credentials and this repository reads
     no environment variables; `model` is the identifier recorded on every row.
 
+    Each occurrence's role -- variant the first time a resolution is seen, replay
+    every later time -- is read from the plan (`bench.splits.occurrence_roles`)
+    and written onto the row, so the report can group by it instead of inferring
+    it. The roles depend only on the seed sequence and the fault, never on the
+    arm, so they are computed once and shared; a reader can therefore reproduce
+    the labelling from the ledger's `seed` and `fault_type` alone.
+
     Only faults with a registered, ambiguous intent are measurable. A fault in
     `EXCLUDED_FROM_BENCHMARK`, or one with no intent at all, raises before any
     episode runs: silently skipping it would make the run's denominator a
@@ -210,6 +228,12 @@ def run_benchmark(
             f"reusing one seed across occurrences would make them one instance, not repeats"
         )
 
+    # The plan's role for each occurrence, per fault. Arm-independent, so it is
+    # computed once: every arm must label the same occurrence the same way, or
+    # the report's grouping would be a property of the arm rather than of the
+    # plan. `seeds[:occurrences]` because the extra seeds, if any, are never run.
+    roles = {fault_type: occurrence_roles(seeds[:occurrences], fault_type) for fault_type in faults}
+
     for arm in arms:
         library_root = out.parent / f"library-{arm.value}"
         _require_empty_library(library_root, arm)
@@ -221,6 +245,7 @@ def run_benchmark(
                     fault_type,
                     seeds[occurrence - 1],
                     occurrence,
+                    role=roles[fault_type][occurrence - 1],
                     provider=provider,
                     library=library,
                     model=model,
@@ -235,6 +260,7 @@ def run_episode(
     seed: int,
     occurrence: int,
     *,
+    role: OccurrenceRole,
     provider: Provider,
     library: Library,
     model: str,
@@ -245,6 +271,13 @@ def run_episode(
     success means the same thing everywhere. The record is returned rather than
     written, so the caller owns the ledger path and `run_benchmark` appends one
     line per episode.
+
+    `role` is required and never defaulted: only the caller that owns the whole
+    seed sequence can know whether this occurrence is the first sight of its
+    state, and a default would silently label a repeat as an independent
+    observation -- the one error the field exists to prevent. `run_benchmark`
+    reads it from the plan; a caller running one episode in isolation labels it
+    explicitly.
 
     The three arms differ in exactly one place, `_run_arm`: arm 1 solves with
     the agent, arms 2 and 3 ask their dispatcher for a stored program and fall
@@ -275,6 +308,7 @@ def run_episode(
                 fault_type,
                 seed,
                 occurrence,
+                role,
                 model,
                 started,
                 str(exc),
@@ -297,6 +331,7 @@ def run_episode(
                 fault_type,
                 seed,
                 occurrence,
+                role,
                 model,
                 started,
                 str(exc),
@@ -320,6 +355,7 @@ def run_episode(
             task_id=intent.name,
             fault_type=fault_type,
             occurrence_index=occurrence,
+            occurrence_role=role,
             seed=seed,
             tokens_in=accounting.tokens_in,
             tokens_out=accounting.tokens_out,
@@ -712,6 +748,7 @@ def _invalid_record(
     fault_type: str,
     seed: int,
     occurrence: int,
+    role: OccurrenceRole,
     model: str,
     started: float,
     reason: str,
@@ -734,12 +771,19 @@ def _invalid_record(
     The reason goes to `invalid_reason`, not `refusal_reason`: a sandbox that
     would not build is not a guard refusal, and putting it in the refusal field
     would inflate the safety metric (issue #60).
+
+    The role is written even here. It is a property of the plan's seed sequence,
+    knowable before any sandbox exists, so an episode that never ran still has
+    one -- and leaving it off would make the row unreadable by a report that
+    groups by role, which is the report's only defence against counting a repeat
+    as an independent observation.
     """
     return EpisodeRecord(
         arm=arm,
         task_id=task_id,
         fault_type=fault_type,
         occurrence_index=occurrence,
+        occurrence_role=role,
         seed=seed,
         tokens_in=accounting.tokens_in,
         tokens_out=accounting.tokens_out,

@@ -330,7 +330,12 @@ state. A **replay** is an episode in which a program fired and the run spent
 0 tokens. 17 of 48 compiles were admitted, and 3 episodes carry a
 `replay_failure_reason`.
 
-Mean tokens per episode by occurrence index 1–8, which is the cost curve:
+Mean tokens per episode by occurrence index 1–8. These are the raw per-occurrence
+means for the pass, not the figure `bench/report.py` reports: the reported cost
+curve is computed over the replay occurrences only (here occurrences 3–8 for
+`submodule_moved` and 4–8 for `diverged`, per the roles in the bullet below),
+because a variant is the learning pass. The table shows every occurrence so the
+learning pass is visible too.
 
 | arm | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -365,11 +370,16 @@ demonstrated end to end against a real model.
   mis-fires against zero is a *signal in the predicted direction* at n=5 fires
   per arm — not evidence. It is recorded because it is the honest state of the
   evidence, and a reader should know it exists.
-- **Occurrences 5–8 are not independent observations** (issue #81). The smoke
-  seeds are run twice, so occurrences 5–8 revisit occurrences 1–4's states with
-  the library those occurrences built. The cost curve is computed over them for
-  exactly that reason — the accumulation is the effect being shown — but they
-  are not eight independent samples.
+- **Not every occurrence above is an independent observation** (issue #81). By
+  the roles `bench/splits.py` now derives, occurrences 5–8 are all replays (the
+  smoke seeds are run twice, so they revisit occurrences 1–4's states with the
+  library those occurrences built), and two first-pass occurrences are replays
+  too: seed 2 re-injects `repin` for `submodule_moved` (occurrence 3) and seed 4
+  re-injects `overlapping_files` for `diverged` (occurrence 4). So the
+  independent observations in the eight occurrences are 3 per family, not 8. The
+  cost curve is computed over the replays — the accumulation is the effect being
+  shown — and the mismatch comparison would be computed over the variants, which
+  is why it cannot be read off this pass as a finding.
 - **The cache figure is a confound, not a result.** Across the pass 864,098
   tokens were spent over 407 calls in 687s, and 73% of the input tokens were
   cache hits, so the baseline's real marginal cost is lower than the raw token
@@ -386,6 +396,15 @@ before anything runs:
   the admit, tune and eval seed sets before any episode exists, because a split
   chosen after seeing scores is not a split. Changing a seed there is a
   pre-registration revision (CONTRIBUTING rule 8), not a config tweak.
+- **Every occurrence carries a role, and the two figures use different ones.**
+  `bench/splits.py` also derives, from the injector's own seed-to-resolution
+  mapping, which occurrences are **variants** (the first sight of a resolution —
+  the independent observations) and which are **replays** (later sights of one —
+  what the cost curve is read from). `bench/run.py` writes the role onto every
+  ledger row; `bench/report.py` computes the cost curve over the replays and the
+  mismatch comparison over the variants, and says so in each figure. The
+  arithmetic for the eval set is in the spec's §7: three variant occurrences per
+  fault family, not forty.
 - **The API key is the caller's.** `provider.py` reads no environment variables
   and no files; `DeepSeekProvider` takes the key at construction, and the spec's §7
   example is what passes `DEEPSEEK_API_KEY` into it. That is a deliberate boundary,
