@@ -32,6 +32,7 @@ programs:
       model: human
       compiler_version: human
       episode_id: gold/sync_fork_with_upstream/discard
+      fault: diverged
     status: candidate
 
   - id: sync-fork-disjoint-rebase
@@ -63,6 +64,7 @@ programs:
       model: human
       compiler_version: human
       episode_id: gold/sync_fork_with_upstream/rebase
+      fault: diverged
     status: candidate
 
   - id: sync-fork-overlapping-merge
@@ -98,4 +100,5 @@ programs:
       model: human
       compiler_version: human
       episode_id: gold/sync_fork_with_upstream/merge
+      fault: diverged
     status: candidate

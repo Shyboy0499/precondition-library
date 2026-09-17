@@ -33,7 +33,7 @@ import yaml
 from conftest import GIT_STATUS_AT_IMPORT, FakeProvider, git_status_porcelain
 
 from precondition_library.bench.ledger import Arm, EpisodeRecord, read
-from precondition_library.bench.run import run_benchmark, run_episode
+from precondition_library.bench.run import _program_id, run_benchmark, run_episode
 from precondition_library.library import Library
 from precondition_library.program import (
     EpisodeOutcome,
@@ -61,6 +61,7 @@ _PROVENANCE = Provenance(
     model="fake",
     compiler_version="test",
     episode_id="test/fixture",
+    fault="diverged",
 )
 
 _CALL_IDS = itertools.count(1)
@@ -392,6 +393,126 @@ def test_the_ledger_gets_one_row_per_episode(tmp_path: Path) -> None:
     # Within an arm, occurrence order: 1 then 2.
     assert [row.occurrence_index for row in rows] == [1, 2]
     assert all(row.model == "fake" for row in rows)
+
+
+# --- a compiled program's stored id is unique to its episode (issue #80) -----
+
+
+def _repeated_id_reply() -> Completion:
+    """A compile reply whose `id` a later episode repeats.
+
+    The program fails admission (an empty precondition list), so it is stored as
+    a `candidate` and never dispatched: every occurrence falls back and compiles
+    again, which is what makes the repeated id reachable.
+    """
+    return _completion(
+        _reply_text(_discard_program(id="sync-fork-rebase", preconditions=[])),
+        tokens_in=100,
+        tokens_out=40,
+    )
+
+
+def test_two_episodes_reusing_one_model_id_are_stored_under_distinct_ids(tmp_path: Path) -> None:
+    """A repeated model id must not cost the later episode its program (#80).
+
+    Both replies carry `sync-fork-rebase`, but the stored id is derived from the
+    episode's `(fault, occurrence)`, so the second program is kept under a
+    distinct id instead of being refused by `add` as a duplicate and dropped --
+    which used to be invisible except as a `compile_failure_reason` reading like
+    a malformed reply.
+    """
+    root = tmp_path / "lib"
+    library = Library(root, evaluate_preconditions=evaluate_preconditions)
+    provider = FakeProvider(
+        *_resolves_discard(),
+        _repeated_id_reply(),
+        *_resolves_discard(),
+        _repeated_id_reply(),
+    )
+
+    first = run_episode(
+        Arm.PRECONDITION,
+        "diverged",
+        DISCARD_SEED,
+        1,
+        provider=provider,
+        library=library,
+        model="fake",
+    )
+    second = run_episode(
+        Arm.PRECONDITION,
+        "diverged",
+        DISCARD_SEED,
+        2,
+        provider=provider,
+        library=library,
+        model="fake",
+    )
+
+    stored = sorted(program.id for program in Library(root).load_all())
+    assert stored == ["diverged-occ1-sync-fork-rebase", "diverged-occ2-sync-fork-rebase"], (
+        "both programs must be stored, under ids that name their episode"
+    )
+    assert first.program_id == "diverged-occ1-sync-fork-rebase"
+    assert second.program_id == "diverged-occ2-sync-fork-rebase"
+    assert "already exists" not in (second.compile_failure_reason or ""), (
+        "the second program was stored, so its row must not report a collision"
+    )
+
+
+def test_a_reused_id_within_one_occurrence_is_recorded_as_a_collision(tmp_path: Path) -> None:
+    """The residual collision is named as a collision, not as a bad reply (#80).
+
+    Deriving the id from `(fault, occurrence)` makes a collision require the same
+    episode to compile twice into one library -- a re-run, or a duplicated
+    episode. The row must then say *collision*, distinguishable from a reply that
+    failed validation or a gate rejection, which is what `compile_failure_reason`
+    carries for those.
+    """
+    root = tmp_path / "lib"
+    library = Library(root, evaluate_preconditions=evaluate_preconditions)
+    provider = FakeProvider(
+        *_resolves_discard(),
+        _repeated_id_reply(),
+        *_resolves_discard(),
+        _repeated_id_reply(),
+    )
+    run_episode(
+        Arm.PRECONDITION,
+        "diverged",
+        DISCARD_SEED,
+        1,
+        provider=provider,
+        library=library,
+        model="fake",
+    )
+
+    repeat = run_episode(
+        Arm.PRECONDITION,
+        "diverged",
+        DISCARD_SEED,
+        1,
+        provider=provider,
+        library=library,
+        model="fake",
+    )
+
+    reason = repeat.compile_failure_reason or ""
+    assert "program id collision" in reason
+    assert "already exists" in reason, "the reason must carry the library's own refusal"
+    assert "did not validate" not in reason
+
+
+def test_the_derived_program_id_is_a_single_path_component() -> None:
+    """Model output becomes a path component, so it is sanitised, not trusted.
+
+    `Library.add` refuses anything that is not a single component, so trusting
+    the model's slug would let a stray `/` decide whether the program is stored
+    -- the same defect in another form.
+    """
+    assert _program_id("diverged", 4, "Sync/Fork Rebase") == "diverged-occ4-sync-fork-rebase"
+    assert _program_id("diverged", 4, "../../escape") == "diverged-occ4-escape"
+    assert _program_id("diverged", 4, "") == "diverged-occ4-program"
 
 
 # --- a misfire is recorded independently of success --------------------------

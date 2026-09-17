@@ -25,6 +25,7 @@ Two rules from the design decide the code below, and both are easy to break by
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,7 +33,7 @@ from pathlib import Path
 from ..agents.compile import admit, compile_program
 from ..agents.dispatch import Dispatch, dispatch_preconditions, dispatch_semantic
 from ..agents.react import solve
-from ..library import Library
+from ..library import Library, ProgramIdCollisionError
 from ..program import EpisodeOutcome, ProgramStatus
 from ..provider import Completion, Provider, ProviderError
 from ..runtime.probes import evaluate_preconditions
@@ -555,6 +556,11 @@ def _learn_from_solution(
     gate is kept as a `candidate` — §8: a rejected program is data, not rubbish —
     and its reason is recorded on the row rather than lost with the traceback a
     raise would produce.
+
+    The program is stored under an id derived from the episode (`_program_id`),
+    and its provenance names the fault this episode injected, so the family its
+    `variant` is scoreable against is recorded by the caller rather than the
+    model (issues #69, #80).
     """
     if not result.compilable or result.transcript is None:
         # `compilable` is set only where a transcript exists; the second test is
@@ -569,6 +575,7 @@ def _learn_from_solution(
             box,
             result.transcript,
             accounting,
+            fault=fault_type,
             variant_ids=[variant.id for variant in intent.variants],
         )
     except Exception as exc:
@@ -579,12 +586,23 @@ def _learn_from_solution(
         _record_compile_failure(result, compiled.reason or "the compile returned no program")
         return
 
-    program = compiled.program
+    # The stored id is derived from this episode's identity, not taken from the
+    # model: a later episode reusing a slug must not lose its program to the
+    # library's correct refusal to overwrite (issue #80).
+    program = compiled.program.model_copy(
+        update={"id": _program_id(fault_type, occurrence, compiled.program.id)}
+    )
     admitted, gate_reason = admit(program, fault_type, seeds=[seed])
     try:
         library.add(program)
+    except ProgramIdCollisionError as exc:
+        # Reachable only when one episode compiles twice into one library (a
+        # re-run at the same occurrence). It is a naming collision, not a reply
+        # that failed to parse or a gate rejection, and the row must say so.
+        _record_compile_failure(result, f"program id collision: {exc}")
+        return
     except ValueError as exc:
-        # The library never overwrites, so a duplicate id is refused. The episode
+        # The library never overwrites, so a refused add is reported. The episode
         # keeps the cost of the compile that produced it.
         _record_compile_failure(result, str(exc))
         return
@@ -663,6 +681,29 @@ def _require_empty_library(root: Path, arm: Arm) -> None:
 
 def _episode_id(fault_type: str, seed: int, occurrence: int) -> str:
     return f"{fault_type}/seed-{seed}/occurrence-{occurrence}"
+
+
+def _program_id(fault_type: str, occurrence: int, proposed: str) -> str:
+    """The id a compiled program is stored under: unique to its episode.
+
+    The model's `id` is a readability hint, not a key. Two episodes can emit the
+    same slug, and `Library.add` refuses a duplicate rather than overwriting, so
+    the later episode's program would be paid for and dropped -- a library whose
+    growth depends on how the model happened to name things (issue #80). The
+    episode's `(fault, occurrence)` pair is unique within a run -- one compile per
+    episode -- so prefixing it makes the stored id unique by construction.
+    `occurrence` rather than `seed` because it is the episode's identity in the
+    ledger and is stable across a re-seeded run.
+
+    The model's slug is kept as a suffix so a directory still says what it does.
+    It is sanitised because it is model output used as a path component:
+    `Library.add` rejects anything that is not a single component, and letting a
+    stray `/` decide whether the program is stored would be the same defect in
+    another form. A collision can then still occur only if one episode compiles
+    twice into one library, which the runner records as a collision.
+    """
+    slug = re.sub(r"[^a-z0-9]+", "-", proposed.lower()).strip("-") or "program"
+    return f"{fault_type}-occ{occurrence}-{slug}"
 
 
 def _invalid_record(

@@ -38,6 +38,7 @@ from .program import GroundTruthResult, Program, ProgramStatus
 from .sandbox import Sandbox
 from .signatures import TaskSignature
 from .similarity import Similarity, lexical_similarity
+from .tasks.intent import IntentSpec
 from .tasks.registry import INTENTS
 
 
@@ -97,20 +98,45 @@ def _canonical(program: Program) -> str:
     return json.dumps(program.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
 
 
-def _declared_variants(intent_name: str) -> frozenset[str] | None:
-    """The declared resolution ids for an ambiguous intent name, else None.
+def _intent_for_fault(fault_name: str) -> IntentSpec | None:
+    """The registered intent a fault's states are served by, else None.
 
-    None means the program's `intent` does not name a registered ambiguous intent
-    (a single-resolution intent, a free-text statement), so there is no declared
-    set to validate against. It is not the same as an empty set, which would
-    reject every program. The registry is the one place that decides which
-    intents are ambiguous, so this reads it rather than re-deriving the list --
-    the same source `admit` validates against.
+    The registry is the one place that decides which intents are ambiguous and
+    which fault each belongs to, so the load-time check reads it rather than
+    re-deriving the mapping -- the same source `admit` validates against.
     """
-    intent = INTENTS.get(intent_name)
+    return next((intent for intent in INTENTS.values() if intent.fault == fault_name), None)
+
+
+def _undeclared_variant_reason(program: Program) -> str | None:
+    """Why `program` cannot be scored, or None when its variant is declared.
+
+    The declared set comes from `Provenance.fault`, not from `intent`: a compiled
+    program's intent is prose that matches no registry key, so keying on it
+    protected only the hand-written artifacts and missed the programs the check
+    exists for (issue #69). The registry is the one place that decides which
+    intents are ambiguous, so this reads it rather than re-deriving the list --
+    the same source `admit` validates against. A fault with no registered
+    ambiguous intent has no declared set to violate, so it is not checked at all;
+    that is not the same as an empty set, which would reject every program.
+
+    One definition for both the in-memory verdict `load_all` applies and the
+    durable record `quarantine_undeclared` writes, so the two cannot disagree
+    about which programs are withdrawn or why.
+    """
+    fault = program.provenance.fault
+    intent = _intent_for_fault(fault)
     if intent is None or not intent.is_ambiguous:
         return None
-    return frozenset(variant.id for variant in intent.variants)
+    declared = sorted(variant.id for variant in intent.variants)
+    if program.variant in declared:
+        return None
+    return (
+        f"quarantined on load (issues #66, #69): fault {fault!r} is served by ambiguous "
+        f"intent {intent.name!r}, which declares variant id(s) {declared}, but the stored "
+        f"program declares {program.variant!r}; admission rejects this shape because a fire "
+        f"would be recorded as nothing fired"
+    )
 
 
 DEFAULT_SIMILARITY_THRESHOLD = 0.1
@@ -183,6 +209,20 @@ class PreconditionEvaluator(Protocol):
     def __call__(self, program: Program, env: Sandbox) -> GroundTruthResult: ...
 
 
+class ProgramIdCollisionError(ValueError):
+    """`add` was given an id the library already stores.
+
+    A distinct type so a caller can record a *naming collision* as a collision
+    rather than as a malformed reply or a gate rejection. It is a subclass of
+    `ValueError` because the format is "refused for a reason", not a missing
+    file, and every existing caller that catches `ValueError` keeps working.
+    """
+
+    def __init__(self, program_id: str) -> None:
+        self.program_id = program_id
+        super().__init__(f"program {program_id!r} already exists; nothing is overwritten")
+
+
 class Library:
     """Programs on disk under `library/`, committed as a research artifact."""
 
@@ -233,25 +273,58 @@ class Library:
         set by bypassing `admit` (see `_reject_undeclared_variant`). An offending
         program is returned `quarantined` rather than dropped or allowed to break
         the load, so the caller sees it and the rest of the library still reads.
+
+        **This is a read.** The quarantine is applied in memory and nothing is
+        written, because `library_hash` loads every program and a write here would
+        change the digest of the library being hashed (the concern left open by
+        PR #68), and because a read-only library directory must still read. The
+        verdict is durable only once `quarantine_undeclared` records it; until
+        then the on-disk `program.yaml` still carries the status the check has
+        withdrawn, and both matchers already ignore the program in memory.
         """
-        if not self.root.exists():
-            return []
-        programs = [
-            self._load(directory.name)
-            for directory in sorted(self.root.iterdir())
-            if directory.is_dir() and (directory / "program.yaml").is_file()
-        ]
+        programs = [self._load(directory.name) for directory in self._program_directories()]
         programs.sort(key=lambda program: program.id)
         return programs
+
+    def quarantine_undeclared(self) -> list[str]:
+        """Persist the load-time variant quarantine and name the programs moved.
+
+        The explicit write half of `load_all`'s read: each program whose file
+        still carries a status the variant check withdraws is written back as
+        `quarantined`, with the reason appended to its `history.jsonl`. Without
+        this call the artifact would keep claiming a dispatchable status that both
+        matchers have already stopped honouring, which is the objection PR #68
+        raised against filtering at the point of use. Idempotent: a program whose
+        file already says `quarantined` is left alone.
+        """
+        settled: list[str] = []
+        for directory in self._program_directories():
+            stored = self._read(directory.name)
+            reason = _undeclared_variant_reason(stored)
+            if reason is None or stored.status is ProgramStatus.QUARANTINED:
+                continue
+            self._write(stored.model_copy(update={"status": ProgramStatus.QUARANTINED}))
+            self._append_history(
+                stored.id,
+                from_status=stored.status,
+                to_status=ProgramStatus.QUARANTINED,
+                episode_id=None,
+                reason=reason,
+            )
+            settled.append(stored.id)
+        return settled
 
     def add(self, program: Program) -> None:
         """Write a newly compiled candidate. Refuses anything else.
 
         Admission sets the status after the positive and negative sides both
         pass, so a program arriving here already `admitted` would be claiming a
-        gate result it never went through. A duplicate id is refused rather than
-        overwritten: `library/README.md` says nothing is deleted, and replacing a
-        program's history would be a deletion in all but name.
+        gate result it never went through. A duplicate id raises
+        `ProgramIdCollisionError` rather than being overwritten: `library/README.md`
+        says nothing is deleted, and replacing a program's history would be a
+        deletion in all but name. The dedicated type lets a caller record the
+        collision as a naming collision rather than as a malformed reply (issue
+        #80).
         """
         if program.status is not ProgramStatus.CANDIDATE:
             raise ValueError(
@@ -261,7 +334,7 @@ class Library:
         if not program.id or Path(program.id).name != program.id:
             raise ValueError(f"program id {program.id!r} is not a single path component")
         if (self.root / program.id / "program.yaml").exists():
-            raise ValueError(f"program {program.id!r} already exists; nothing is overwritten")
+            raise ProgramIdCollisionError(program.id)
         (self.root / program.id).mkdir(parents=True)
         self._write(program)
         self._append_history(
@@ -455,18 +528,37 @@ class Library:
         accepted.sort(key=lambda program: (-len(program.preconditions), program.id))
         return accepted
 
-    def _load(self, program_id: str) -> Program:
+    def _program_directories(self) -> list[Path]:
+        """Every directory under the root that holds a `program.yaml`, sorted.
+
+        Sorted so neither the load order nor the order `quarantine_undeclared`
+        writes depends on filesystem luck.
+        """
+        if not self.root.exists():
+            return []
+        return sorted(
+            directory
+            for directory in self.root.iterdir()
+            if directory.is_dir() and (directory / "program.yaml").is_file()
+        )
+
+    def _read(self, program_id: str) -> Program:
+        """The stored program exactly as its file holds it: no check, no write."""
         path = self.root / program_id / "program.yaml"
         if not path.is_file():
             raise ValueError(f"no program {program_id!r} under {self.root}")
         document = yaml.safe_load(path.read_text(encoding="utf-8"))
-        return self._reject_undeclared_variant(Program.model_validate(document))
+        return Program.model_validate(document)
+
+    def _load(self, program_id: str) -> Program:
+        """One program with the load-time variant check applied, in memory."""
+        return self._reject_undeclared_variant(self._read(program_id))
 
     def _reject_undeclared_variant(self, program: Program) -> Program:
-        """Withdraw a stored program whose variant cannot be scored, on load.
+        """Withdraw a stored program whose variant cannot be scored, in memory.
 
-        `admit` refuses a program whose `variant` is not one of its ambiguous
-        intent's declared ids, because `EpisodeRecord.misfired` is
+        `admit` refuses a program whose `variant` is not one of its fault's
+        ambiguous intent's declared ids, because `EpisodeRecord.misfired` is
         `fired_variant is not None and fired_variant != correct_variant`: a
         program firing with `variant: None` records as "nothing fired" and
         quietly deflates the mismatch numerator, and a mislabelled one is scored
@@ -475,38 +567,25 @@ class Library:
         has not been through that gate, so the check is repeated here rather than
         trusted (issue #66).
 
-        The verdict is `quarantined`, the lifecycle's existing "withdrawn from
-        dispatch, retained for analysis": the program stays for analysis, the
-        admitted-only filter in both matchers keeps it out of dispatch, and the
-        reason is written to its history so the bad artifact is visible rather
-        than silently filtered. The check is per program, so one offending file
-        is withdrawn while every other program still loads.
+        The check keys on `Provenance.fault`, not on `intent`. `intent` is free
+        text -- a compiled program's is prose, as the compile prompt asks -- so
+        keying on it protected only the hand-written artifacts whose intent
+        happened to be a registry key, and missed exactly the programs the check
+        was written for (issue #69). A program whose fault has no registered
+        ambiguous intent has no declared set to violate and is left as it is;
+        admission still governs its status.
 
-        The declared set comes from the program's `intent` naming a registered
-        ambiguous intent. A program whose `intent` names none has no declared set
-        to violate and is left as it is; admission still governs its status.
+        The verdict is `quarantined`, the lifecycle's existing "withdrawn from
+        dispatch, retained for analysis": the program stays for analysis and the
+        admitted-only filter in both matchers keeps it out of dispatch. It is
+        applied in memory only -- this is a read, and `quarantine_undeclared` is
+        the explicit write that says so durably. The check is per program, so one
+        offending file is withdrawn while every other program still loads.
         """
-        declared = _declared_variants(program.intent)
-        if declared is None or program.variant in declared:
+        reason = _undeclared_variant_reason(program)
+        if reason is None or program.status is ProgramStatus.QUARANTINED:
             return program
-        if program.status is ProgramStatus.QUARANTINED:
-            return program
-        reason = (
-            f"quarantined on load (issue #66): intent {program.intent!r} is ambiguous and "
-            f"declares variant id(s) {sorted(declared)}, but the stored program declares "
-            f"{program.variant!r}; admission rejects this shape because a fire would be "
-            f"recorded as nothing fired"
-        )
-        quarantined = program.model_copy(update={"status": ProgramStatus.QUARANTINED})
-        self._write(quarantined)
-        self._append_history(
-            program.id,
-            from_status=program.status,
-            to_status=ProgramStatus.QUARANTINED,
-            episode_id=None,
-            reason=reason,
-        )
-        return quarantined
+        return program.model_copy(update={"status": ProgramStatus.QUARANTINED})
 
     def _write(self, program: Program) -> None:
         data = program.model_dump(mode="json")

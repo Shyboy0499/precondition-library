@@ -33,18 +33,28 @@ Three rules keep this directory trustworthy:
 2. **Nothing is deleted.** A program that mis-fired is marked `demoted` or
    `quarantined` and stays. Removing it would erase the mismatch evidence that
    the primary claim depends on.
-3. **A program on an ambiguous intent must declare one of its resolutions.** Every
-   program whose `intent` names an intent with two or more resolutions must carry
-   a `variant` equal to one of that intent's declared ids. Admission enforces
-   this when it gates a compiled program; because a `program.yaml` can also be
-   written straight to disk, `Library.load_all` re-checks the invariant on every
-   load. A violating program — `variant: null`, or an id the intent does not
-   declare — is marked `quarantined` with the reason written to its
-   `history.jsonl`, so it is retained for analysis but can never be dispatched:
-   both matchers return only `admitted` programs. The check is per program, so a
-   single bad file is withdrawn and the rest of the library still loads. A
-   program whose `intent` names no ambiguous intent has no declared set to
-   violate and is not covered by this rule.
+3. **A program on an ambiguous fault must declare one of its resolutions.** Every
+   program whose `provenance.fault` names a fault with two or more resolutions
+   must carry a `variant` equal to one of that fault's intent's declared ids. The
+   key is the fault, not the `intent`: a compiled program's `intent` is
+   natural-language prose, because that is what the compile prompt asks for, so
+   keying on it protected only the hand-written artifacts and missed the programs
+   the check exists for (issue #69). Admission enforces this when it gates a
+   compiled program; because a `program.yaml` can also be written straight to
+   disk, `Library.load_all` re-checks the invariant on every load. A violating
+   program — `variant: null`, or an id the fault's intent does not declare — is
+   returned `quarantined`, so it is retained for analysis but can never be
+   dispatched: both matchers return only `admitted` programs. The check is per
+   program, so a single bad file is withdrawn and the rest of the library still
+   loads. A program whose fault has no registered ambiguous intent has no declared
+   set to violate and is not covered by this rule.
+
+   `load_all` is a read: it applies that verdict **in memory** and writes
+   nothing, so a read-only library directory still reads and `library_hash` does
+   not mutate the library it is hashing. `Library.quarantine_undeclared()` is the
+   explicit write that makes the verdict durable — `status` in `program.yaml`,
+   reason in `history.jsonl` — and a library whose files should say what the
+   check decided needs that call.
 
 `status` is the field to read first:
 

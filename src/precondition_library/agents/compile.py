@@ -214,6 +214,7 @@ def compile_program(
     transcript: list[dict],
     provider: Provider,
     *,
+    fault: str,
     variant_ids: list[str] | None = None,
 ) -> CompileResult:
     """Ask the model for intent, parameters, preconditions, body, postconditions.
@@ -222,6 +223,12 @@ def compile_program(
     `admit` passes. The model never sees a command's result from here: the prompt
     carries the transcript of the *solution* episode, already executed, and this
     function runs nothing itself.
+
+    `fault` is the `FaultSpec.name` the episode injected. It replaces anything the
+    model sent, exactly as `status` and the rest of `provenance` do, and it is
+    what `Library.load_all` later keys the variant check on: a compiled program's
+    `intent` is prose, so the fault is the only reliable record of the family its
+    `variant` is scoreable against (issue #69).
 
     `variant_ids` is the ambiguous intent's declared resolution ids, when the
     caller knows them. They are put in the prompt so the model is told what it
@@ -284,6 +291,7 @@ def compile_program(
         model=completion.model,
         compiler_version=__version__,
         episode_id=f"{signature.intent}/{env.root.name}",
+        fault=fault,
     ).model_dump(mode="json")
 
     try:

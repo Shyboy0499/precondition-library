@@ -23,6 +23,7 @@ programs:
       model: human
       compiler_version: human
       episode_id: gold/restore_submodule_state/init
+      fault: submodule_moved
     status: candidate
 
   - id: submodule-repin
@@ -52,6 +53,7 @@ programs:
       model: human
       compiler_version: human
       episode_id: gold/restore_submodule_state/repin
+      fault: submodule_moved
     status: candidate
 
   - id: submodule-remove
@@ -76,4 +78,5 @@ programs:
       model: human
       compiler_version: human
       episode_id: gold/restore_submodule_state/remove
+      fault: submodule_moved
     status: candidate

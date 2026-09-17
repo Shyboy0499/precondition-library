@@ -88,7 +88,11 @@ def _program(
     return Program(
         id=program_id,
         intent=intent,
-        variant=None,
+        # The fingerprint is the `diverged` overlap state, so `merge` is the
+        # declared variant that fits it. The arms do not read `variant`; it is set
+        # because a program on an ambiguous fault must declare one to load
+        # (issues #66, #69).
+        variant="merge",
         parameters=["work_dir", "upstream_remote", "upstream_branch"],
         preconditions=[
             Predicate(name=name, description=description, probe=probe)
@@ -101,6 +105,7 @@ def _program(
             model="human",
             compiler_version="human",
             episode_id=f"test/{program_id}",
+            fault="diverged",
         ),
         status=status,
     )
