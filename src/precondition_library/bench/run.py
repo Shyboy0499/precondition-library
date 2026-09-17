@@ -35,10 +35,11 @@ from ..agents.react import solve
 from ..library import Library
 from ..program import EpisodeOutcome, ProgramStatus
 from ..provider import Completion, Provider, ProviderError
+from ..runtime.probes import evaluate_preconditions
 from ..runtime.replay import ReplayResult, replay
-from ..sandbox import Sandbox, create
+from ..sandbox import Sandbox
 from ..signatures import StateFingerprint, TaskSignature
-from ..tasks.faults import FAULTS
+from ..tasks.faults import FAULTS, build_sandbox
 from ..tasks.intent import IntentSpec, ResolutionVariant
 from ..tasks.registry import EXCLUDED_FROM_BENCHMARK, ambiguous_intents
 from .ledger import Arm, EpisodeRecord, append
@@ -155,6 +156,16 @@ class _ArmResult:
     compile-quality one, and one field cannot carry both without conflating
     them (issue #60)."""
     timed_out: bool
+    compilable: bool
+    """Whether this episode solved a task whose solution should be compiled.
+
+    Set by `_run_arm` from what actually happened: true only when a compiled arm
+    had to solve, has a transcript, and owns a library to store into. It is a
+    property of the result rather than of the arm so `_learn_from_solution`
+    branches on the episode, not on which arm ran it -- §4 keeps arm-specific
+    logic inside `dispatch.py`, and a fourth arm must not need this file audited
+    for it. Arm 1's solve is not compilable because arm 1 has no library; a
+    replay hit is not compilable because no model ran."""
 
 
 def run_benchmark(
@@ -196,7 +207,7 @@ def run_benchmark(
     for arm in arms:
         library_root = out.parent / f"library-{arm.value}"
         _require_empty_library(library_root, arm)
-        library = Library(library_root)
+        library = Library(library_root, evaluate_preconditions=evaluate_preconditions)
         for occurrence in range(1, occurrences + 1):
             for fault_type in faults:
                 record = run_episode(
@@ -249,7 +260,7 @@ def run_episode(
     box: Sandbox | None = None
     try:
         try:
-            box = create(seed, [fault_type])
+            box = build_sandbox(seed, [fault_type])
             state = StateFingerprint.observe(box)
         except Exception as exc:
             return _invalid_record(
@@ -291,10 +302,10 @@ def run_episode(
         # Grading is done with this sandbox, so it is safe to release it now.
         # Admission (below) rebuilds sandboxes at deterministic paths, and one of
         # them is this episode's own (seed, fault) pair; leaving the box alive
-        # would let admission's `create` replace it under the checker.
+        # would let admission's `build_sandbox` replace it under the checker.
         box.destroy()
         _learn_from_solution(
-            arm, result, signature, box, library, fault_type, seed, occurrence, accounting
+            result, signature, box, library, fault_type, seed, occurrence, accounting
         )
         _record_mismatch(result, library, correct, fault_type, seed, occurrence)
 
@@ -359,6 +370,8 @@ def _run_arm(
             refusal_reason=None,
             compile_failure_reason=None,
             timed_out=False,
+            # Arm 1 has no library, so its solution is not compiled.
+            compilable=False,
         )
 
     decision: Dispatch = (
@@ -379,6 +392,7 @@ def _run_arm(
             refusal_reason=None,
             compile_failure_reason=None,
             timed_out=False,
+            compilable=True,
         )
 
     fired = decision.program
@@ -396,6 +410,8 @@ def _run_arm(
             refusal_reason=None,
             compile_failure_reason=None,
             timed_out=False,
+            # No model ran, so there is no transcript to compile.
+            compilable=False,
         )
 
     fired_variant = None if replayed.refused else fired.variant
@@ -420,6 +436,7 @@ def _run_arm(
             refusal_reason=replayed.reason,
             compile_failure_reason=None,
             timed_out=replayed.timed_out,
+            compilable=True,
         )
     return _ArmResult(
         _after_fallback(outcome),
@@ -431,6 +448,7 @@ def _run_arm(
         refusal_reason=None,
         compile_failure_reason=None,
         timed_out=replayed.timed_out,
+        compilable=True,
     )
 
 
@@ -488,7 +506,6 @@ def _is_genuine_miss(replayed: ReplayResult) -> bool:
 
 
 def _learn_from_solution(
-    arm: Arm,
     result: _ArmResult,
     signature: TaskSignature,
     box: Sandbox,
@@ -498,22 +515,28 @@ def _learn_from_solution(
     occurrence: int,
     accounting: _AccountingProvider,
 ) -> None:
-    """Compile the arm's solution into a candidate and gate it, in place.
+    """Compile the episode's solution into a candidate and gate it, in place.
 
-    Arms 2 and 3 only reach here when they had to solve, so the compile — and
-    every token it spends — belongs to the episode that needed it. Arm 1 has no
-    library and never compiles. A replay hit has no transcript and therefore
-    nothing to compile.
+    The decision to compile is read from the result, not from the arm: an episode
+    that solved a task and owns a library is compilable, a replay is not (no model
+    ran), and arm 1's solve is not (arm 1 has no library). `_run_arm` sets that
+    flag where the episode's shape is known, so this function needs no arm branch
+    — §4 keeps per-arm logic inside `dispatch.py`, and a fourth arm must not
+    require auditing here.
 
-    `box` has already been destroyed: `compile_program` reads the signature and
-    the transcript, and only uses the environment for its name, so a throwaway
-    target is honest. Building the program is `compile_program`'s job; deciding
-    whether it may be dispatched is `admit`'s, and this function only stores the
-    verdict. A program that fails the gate is kept as a `candidate` — §8: a
-    rejected program is data, not rubbish — and its reason is recorded on the row
-    rather than lost with the traceback a raise would produce.
+    Only a fallback reaches here, so the compile — and every token it spends —
+    belongs to the episode that needed it. `box` has already been destroyed:
+    `compile_program` reads the signature and the transcript, and only uses the
+    environment for its name, so a throwaway target is honest. Building the
+    program is `compile_program`'s job; deciding whether it may be dispatched is
+    `admit`'s, and this function only stores the verdict. A program that fails the
+    gate is kept as a `candidate` — §8: a rejected program is data, not rubbish —
+    and its reason is recorded on the row rather than lost with the traceback a
+    raise would produce.
     """
-    if arm is Arm.REACT or result.transcript is None:
+    if not result.compilable or result.transcript is None:
+        # `compilable` is set only where a transcript exists; the second test is
+        # what lets the type checker see that, without a branch on the arm.
         return
 
     episode_id = _episode_id(fault_type, seed, occurrence)

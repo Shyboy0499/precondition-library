@@ -356,7 +356,7 @@ def test_an_undeclared_variant_is_quarantined_on_load_and_never_dispatched(
     _write_directly(tmp_path, offending)
     _write_directly(tmp_path, sound)
 
-    library = Library(tmp_path, threshold=0.0)
+    library = Library(tmp_path, threshold=0.0, evaluate_preconditions=evaluate_preconditions)
     loaded = {program.id: program for program in library.load_all()}
 
     # One bad file does not break the library: the sound program still loads.
@@ -375,9 +375,7 @@ def test_an_undeclared_variant_is_quarantined_on_load_and_never_dispatched(
 
     # Never dispatched as scored, though the program itself would clear both arms.
     assert evaluate_preconditions(offending, box).ok
-    assert [program.id for program in library.match_preconditions(_signature(box), box)] == [
-        "still-admitted"
-    ]
+    assert [program.id for program in library.match_preconditions(box)] == ["still-admitted"]
     assert [item.program.id for item in library.match_semantic(_signature(box))] == [
         "still-admitted"
     ]

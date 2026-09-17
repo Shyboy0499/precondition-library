@@ -154,7 +154,7 @@ class _CannedLibrary:
         self.semantic_calls += 1
         return list(self._ranked)
 
-    def match_preconditions(self, signature: TaskSignature, env: Sandbox) -> list[Program]:
+    def match_preconditions(self, env: Sandbox) -> list[Program]:
         self.precondition_calls += 1
         return list(self._accepted)
 
@@ -294,7 +294,7 @@ def test_below_the_floor_or_rejected_reports_nothing_applies(make_sandbox, tmp_p
     # Not vacuous: each matcher really is empty, for the reason this test names.
     assert library.match_semantic(signature) == []
     assert evaluate_preconditions(unrelated, box).ok is False
-    assert library.match_preconditions(signature, box) == []
+    assert library.match_preconditions(box) == []
 
     semantic = dispatch_semantic(signature, library)
     preconditions = dispatch_preconditions(signature, library, box)

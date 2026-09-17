@@ -6,6 +6,7 @@ asks "what faults exist". Adding a fault here extends every arm at once.
 
 from __future__ import annotations
 
+from ...sandbox import Sandbox, create
 from ..spec import FaultSpec
 from .branch_renamed import SPEC as BRANCH_RENAMED
 from .dirty_tree import SPEC as DIRTY_TREE
@@ -26,4 +27,31 @@ FAULTS: dict[str, FaultSpec] = {
 
 ALL: list[str] = sorted(FAULTS)
 
-__all__ = ["ALL", "FAULTS"]
+
+def build_sandbox(seed: int, faults: list[str]) -> Sandbox:
+    """Create a sandbox and inject `faults` into it, in the order given.
+
+    This is where the two steps meet, and the side they meet on is the point:
+    the fault registry depends on `sandbox`, never the reverse (spec §4). An
+    earlier version reached the other way -- `sandbox.create` imported this
+    registry inside the function to inject on the caller's behalf -- which put
+    `sandbox`, every fault injector and the task registry in one import cycle.
+    Keeping the call here is what makes the direction checkable rather than
+    conventional.
+
+    Validation runs before `create`, so an unknown name is refused without
+    leaving a half-built sandbox behind, and injection runs *after* `create`
+    returns, so a fault always mutates a fully seeded clone. Both are the
+    behaviour the old in-`create` loop had; only the module that owns it moved.
+    """
+    unknown = sorted(set(faults) - set(FAULTS))
+    if unknown:
+        raise ValueError(f"unknown faults {unknown}; known: {sorted(FAULTS)}")
+
+    sandbox = create(seed, faults)
+    for name in faults:
+        FAULTS[name].inject(seed, sandbox)
+    return sandbox
+
+
+__all__ = ["ALL", "FAULTS", "build_sandbox"]

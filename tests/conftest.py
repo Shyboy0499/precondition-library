@@ -20,8 +20,10 @@ from precondition_library.bench.ledger import Arm, EpisodeRecord
 from precondition_library.library import DEFAULT_SIMILARITY_THRESHOLD, Library
 from precondition_library.program import EpisodeOutcome, Program, ProgramStatus
 from precondition_library.provider import Completion
-from precondition_library.sandbox import Sandbox, create
+from precondition_library.runtime.probes import evaluate_preconditions
+from precondition_library.sandbox import Sandbox
 from precondition_library.signatures import StateFingerprint
+from precondition_library.tasks.faults import build_sandbox
 
 ROOT = Path(__file__).resolve().parents[1]
 GOLD_DIR = ROOT / "bench" / "gold"
@@ -232,9 +234,11 @@ def store_programs(
 
     `Library.add` takes only a candidate, so each program is added as one and
     then moved through the real transition table. `threshold` is arm 2's floor,
-    configured at construction because that is where the harness sets it.
+    configured at construction because that is where the harness sets it, and the
+    predicate evaluator is arm 3's mechanism, injected the same way so
+    `match_preconditions` works without `library.py` importing the probe runtime.
     """
-    library = Library(path, threshold=threshold)
+    library = Library(path, threshold=threshold, evaluate_preconditions=evaluate_preconditions)
     for program in programs:
         library.add(program.model_copy(update={"status": ProgramStatus.CANDIDATE}))
         if program.status is not ProgramStatus.CANDIDATE:
@@ -250,11 +254,16 @@ def make_sandbox():
     through this fixture is destroyed after the test, including when an assertion
     fails. A wrong teardown leaks a `.sandboxes/` root, which is why this is a
     fixture rather than each test module owning a copy.
+
+    The injection the old `sandbox.create` did inline now lives in
+    `tasks.faults.build_sandbox`, which this fixture calls; that keeps every test
+    call site (`make_sandbox(seed, faults)`) unchanged while the sandbox module
+    no longer imports the fault registry, breaking the import cycle.
     """
     live: list[Sandbox] = []
 
     def build(seed: int, faults: list[str]) -> Sandbox:
-        box = create(seed, faults)
+        box = build_sandbox(seed, faults)
         live.append(box)
         return box
 

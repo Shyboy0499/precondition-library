@@ -36,8 +36,9 @@ from ..program import Program, ProgramStatus, Provenance
 from ..provider import Provider, TokenUsage
 from ..runtime.probes import evaluate_preconditions
 from ..runtime.replay import replay
-from ..sandbox import create
-from ..tasks.faults import FAULTS
+from ..sandbox import Sandbox
+from ..signatures import TaskSignature
+from ..tasks.faults import FAULTS, build_sandbox
 from ..tasks.registry import ambiguous_intents
 from ..tasks.spec import FaultSpec
 
@@ -152,8 +153,8 @@ class CompileResult(BaseModel):
 
 
 def compile_program(
-    signature,
-    env,
+    signature: TaskSignature,
+    env: Sandbox,
     transcript: list[dict],
     provider: Provider,
     *,
@@ -276,7 +277,7 @@ def admit(program: Program, fault: FaultSpec | str, *, seeds: list[int]) -> tupl
         )
 
     for seed in seeds:
-        box = create(seed, [name])
+        box = build_sandbox(seed, [name])
         try:
             result = replay(program, box)
         except KeyError as exc:
@@ -294,7 +295,7 @@ def admit(program: Program, fault: FaultSpec | str, *, seeds: list[int]) -> tupl
         raise ValueError(f"no unrelated faults exist to test {name!r} against")
 
     for other in unrelated:
-        box = create(_NEGATIVE_SEED, [other])
+        box = build_sandbox(_NEGATIVE_SEED, [other])
         try:
             accepted = _preconditions_hold(program, box)
         except KeyError as exc:
@@ -326,7 +327,7 @@ def _declared_variant_ids(fault_name: str) -> set[str] | None:
     return None if intent is None else {variant.id for variant in intent.variants}
 
 
-def _preconditions_hold(program: Program, env) -> bool:
+def _preconditions_hold(program: Program, env: Sandbox) -> bool:
     """Whether every precondition accepts `env`. Runs probes only, no model.
 
     Delegates to `runtime.probes.evaluate_preconditions`, which is also what arm
