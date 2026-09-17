@@ -76,6 +76,13 @@ programs:
       - name: upstream_touched_a_local_file
         description: At least one file both sides changed, so rewriting local history would risk losing a resolution.
         probe: 'test -n "$(comm -12 <(git diff --name-only {upstream_remote}/{upstream_branch}...HEAD | sort) <(git diff --name-only HEAD...{upstream_remote}/{upstream_branch} | sort))"'
+      - name: local_work_beyond_the_overlap
+        description: >-
+          The local-only commits change a file upstream did not, so there is local
+          work to preserve. Without this the overlap rule also matches a single
+          shared file whose right resolution is not a merge; tightened after the
+          admission gate caught this program on the lockfile-conflict sandbox.
+        probe: 'test -n "$(comm -23 <(git diff --name-only {upstream_remote}/{upstream_branch}...HEAD | sort) <(git diff --name-only HEAD...{upstream_remote}/{upstream_branch} | sort))"'
     body: |
       git fetch {upstream_remote}
       git merge --no-edit {upstream_remote}/{upstream_branch}

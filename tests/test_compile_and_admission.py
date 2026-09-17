@@ -44,6 +44,10 @@ COMMITTED_LIBRARY = REPO_ROOT / "library"
 # mapping is `diverged.state_for_seed`, the same one test_runtime_replay uses.
 DISCARD_SEED = 1
 
+# Seed 4 injects `init`, whose resolution is `init`. From
+# `submodule_moved.state_for_seed`, found via `FaultSpec.variant_for_seed`.
+SUBMODULE_INIT_SEED = 4
+
 _PROVENANCE = Provenance(
     compiled_from_task="test fixture",
     model="fake",
@@ -78,6 +82,25 @@ _DISCARD_BODY = (
     "git fetch {upstream_remote}\ngit reset --hard {upstream_remote}/{upstream_branch}\n"
 )
 
+# The audit's precondition: true in every submodule state and false everywhere
+# else, so it cannot tell the three resolutions apart.
+_HAS_SUBMODULE_REFERENCE = [
+    Predicate(
+        name="has_submodule_reference",
+        description="HEAD records a gitlink for a submodule.",
+        probe='test -n "$(git ls-tree -r HEAD | grep "^160000")"',
+    )
+]
+
+_SUBMODULE_INIT_BODY = "git submodule update --init -- {submodule_path}\n"
+_SUBMODULE_INITIALISED = [
+    Predicate(
+        name="submodule_initialised",
+        description="No submodule is left uninitialised.",
+        probe='test -z "$(git submodule status | grep "^-")"',
+    )
+]
+
 
 def _program(**overrides) -> Program:
     """A program equivalent to the `discard` gold resolution, with overrides."""
@@ -94,6 +117,26 @@ def _program(**overrides) -> Program:
     }
     base.update(overrides)
     return Program(**base)
+
+
+def _audit_program() -> Program:
+    """A submodule program gated only on `has_submodule_reference`.
+
+    This is the coupling/duplication audit's exact case: the probe is true in all
+    three injected submodule states, so the program accepts the `remove` state,
+    where the `init` resolution it implements is wrong.
+    """
+    return Program(
+        id="audit-has-submodule-reference",
+        intent="restore_submodule_state",
+        variant="init",
+        parameters=["work_dir", "upstream_remote", "upstream_branch", "submodule_path"],
+        preconditions=_HAS_SUBMODULE_REFERENCE,
+        body=_SUBMODULE_INIT_BODY,
+        postconditions=_SUBMODULE_INITIALISED,
+        provenance=_PROVENANCE,
+        status=ProgramStatus.CANDIDATE,
+    )
 
 
 def _reply_text(**overrides) -> str:
@@ -175,7 +218,12 @@ def test_compiled_program_is_admitted_and_stored(make_sandbox, tmp_path) -> None
 
 
 def test_all_accepting_preconditions_are_rejected() -> None:
-    """A precondition set that accepts everything must fail the negative side."""
+    """A precondition set that accepts everything must fail the negative side.
+
+    The clean sandbox is checked first now, so an all-accepting program is caught
+    there rather than by the unrelated faults: it is the cheapest class and every
+    program must refuse it. The rejection still names the class it met.
+    """
     program = _program(
         preconditions=[Predicate(name="always", description="accepts every state", probe="true")]
     )
@@ -184,7 +232,57 @@ def test_all_accepting_preconditions_are_rejected() -> None:
 
     assert not admitted
     assert "negative side" in reason, reason
-    assert "unrelated" in reason, reason
+    assert "clean sandbox" in reason, reason
+
+
+def test_a_program_that_fires_on_a_clean_sandbox_is_rejected() -> None:
+    """A fault-free sandbox needs nothing done, so every program must refuse it.
+
+    A probe that only checks the worktree is clean is a realistic too-permissive
+    precondition: it holds on the faulted sandbox the program was compiled for, so
+    the positive side passes, and it also holds on the fault-free sandbox, where
+    replaying a body that resets to upstream would be wrong. The reason names the
+    class and the count of states it checked.
+    """
+    program = _program(
+        preconditions=[
+            Predicate(
+                name="worktree_is_clean",
+                description="The worktree has no uncommitted changes.",
+                probe='test -z "$(git status --porcelain)"',
+            )
+        ]
+    )
+
+    admitted, reason = admit(program, FAULTS["diverged"], seeds=[DISCARD_SEED])
+
+    assert not admitted
+    assert "negative side" in reason, reason
+    assert "clean sandbox" in reason, reason
+    assert "checked 1 clean sandbox" in reason, reason
+
+
+def test_a_sibling_resolution_acceptance_is_rejected_by_the_same_intent_class() -> None:
+    """The audit's case: a program that fires where a sibling resolution is right.
+
+    `has_submodule_reference` is true in every injected submodule state, so a
+    program for the `init` resolution gated only on it accepts the `remove` state
+    -- where upstream dropped the submodule and re-initialising it is the wrong
+    answer. It rejects the clean sandbox and every non-submodule fault (neither
+    records a gitlink) and its body fixes the init sandbox, so under the old gate
+    it was admitted. The gate checks the positive side, the clean sandbox and all
+    four unrelated faults *before* the same-intent class, so reaching that class
+    at all is evidence the sibling acceptance is the only thing that caught it.
+    """
+    program = _audit_program()
+
+    admitted, reason = admit(program, FAULTS["submodule_moved"], seeds=[SUBMODULE_INIT_SEED])
+
+    assert not admitted
+    assert "negative side" in reason, reason
+    assert "same-intent" in reason, reason
+    assert "remove" in reason, "the reason must name the sibling resolution that was accepted"
+    assert "1 of 2 same-intent states" in reason, reason
 
 
 def test_body_that_does_not_work_is_rejected() -> None:
