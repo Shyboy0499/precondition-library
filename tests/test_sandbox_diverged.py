@@ -20,6 +20,7 @@ import subprocess
 import pytest
 from conftest import GOLD_CASES, gold_program
 
+from precondition_library.runtime.probes import SHELL
 from precondition_library.sandbox import Sandbox, git_env, run_git
 from precondition_library.signatures import StateFingerprint
 from precondition_library.tasks.faults.diverged import INTENT, SPEC, STATE_VARIANT
@@ -40,12 +41,24 @@ def _run_body(variant: str, box: Sandbox) -> None:
 
     A full templating engine is not needed: the bodies reference exactly the
     three declared parameters, so `str.format` is the whole substitution.
+
+    The body goes through `SHELL`, the interpreter `probes.py` declares, rather
+    than `shell=True`. These are multi-line POSIX bodies: `shell=True` picks the
+    platform's own shell, and on Windows that is `cmd.exe`, which runs the first
+    line, discards the rest, and returns **0**. The body would appear to succeed
+    while the assertions below failed for a reason naming the gold body instead.
     """
     body = gold_program(variant).body.format(
         work_dir=str(box.work), upstream_remote="upstream", upstream_branch="main"
     )
     result = subprocess.run(
-        body, cwd=box.work, shell=True, capture_output=True, text=True, env=git_env()
+        [*SHELL, body],
+        cwd=box.work,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=git_env(),
     )
     assert result.returncode == 0, f"{variant} body failed:\n{result.stdout}\n{result.stderr}"
 

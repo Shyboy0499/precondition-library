@@ -29,20 +29,34 @@ ROOT = Path(__file__).resolve().parents[1]
 GOLD_DIR = ROOT / "bench" / "gold"
 
 
-def git_status_porcelain() -> str:
-    """The repository's `git status --porcelain`, run from the repository root."""
-    return subprocess.run(
-        ["git", "status", "--porcelain"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-        env={**os.environ},
-    ).stdout
+def git_status_porcelain() -> str | None:
+    """The repository's `git status --porcelain`, or `None` outside a git repository.
+
+    `None` means "this checkout has no git metadata to compare against", not "the
+    tree is clean". A directory obtained from GitHub's *Download ZIP* has no
+    `.git`, and `git status` exits 128 there; returning `None` keeps that from
+    becoming an import-time error that stops **every** unrelated test from being
+    collected (exit 4, nothing run). The old failure named neither git nor the
+    missing `.git`, and the README never said the project has to be cloned.
+    """
+    try:
+        return subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=True,
+            env={**os.environ},
+        ).stdout
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        # 128: not a git repository. FileNotFoundError: git is not installed.
+        return None
 
 
 # Snapshotted before any test runs, so "unchanged since import" proves the suite
-# leaked nothing into the repository's own tree.
+# leaked nothing into the repository's own tree. `None` in a non-git checkout.
 GIT_STATUS_AT_IMPORT = git_status_porcelain()
 
 
@@ -59,6 +73,11 @@ def repository_unchanged():
     the test is about, on any checkout. The comparison runs after the body.
     """
     before = GIT_STATUS_AT_IMPORT
+    if before is None:
+        pytest.skip(
+            "no git working tree here, so there is no import-time baseline to compare "
+            "against (a Download ZIP snapshot has no .git). Use `git clone` to run this."
+        )
     yield
     after = git_status_porcelain()
     assert after == before, (
