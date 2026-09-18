@@ -32,12 +32,18 @@ non-match or let a typo'd program ship.
 Probes run under `bash -c`, not `/bin/sh`. The gold probes use process
 substitution (`comm -12 <(...)`), which is a bash extension and not POSIX; a
 POSIX-only runner would make a correct probe report a false negative on Linux.
+*Which* `bash` that is, is resolved per platform by `_find_bash`, because on
+Windows a bare `bash` is the WSL launcher: it exits non-zero without running the
+probe, so every precondition evaluates false while the run looks complete.
 """
 
 from __future__ import annotations
 
+import os
 import re
+import shutil
 import subprocess
+from pathlib import Path
 
 from ..program import GroundTruthResult, Predicate, PredicateResult, Program
 from ..sandbox import Sandbox, git_env, submodule_path
@@ -69,7 +75,38 @@ class UnboundParameterError(KeyError):
 # not a templating engine, and `{a,b}` / `{print $1}` must pass through intact.
 _PLACEHOLDER = re.compile(r"(?<!\$)\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
-SHELL: tuple[str, ...] = ("bash", "-c")
+
+def _find_bash() -> str:
+    """Resolve a `bash` that can actually run a probe on this platform.
+
+    On POSIX, `bash` is the right answer and `PATH` finds it. On Windows it is
+    not: `bash` resolves to `C:\\Windows\\System32\\bash.exe`, the WSL launcher,
+    because `CreateProcess` searches the system directory *before* `PATH`. With
+    no WSL distribution installed it exits non-zero without running anything, so
+    every probe evaluates false and every body does nothing -- silently, because
+    the probe still "completed". Prepending Git Bash to `PATH` does not help, for
+    the same system-directory reason; only an explicit path does.
+
+    So prefer a resolved `bash` that is not the system stub, then the known Git
+    for Windows locations. A fallback is returned rather than raising, so a
+    genuinely missing `bash` stays a failing probe with a readable excerpt
+    instead of becoming an import error.
+    """
+    found = shutil.which("bash")
+    if os.name != "nt":
+        return found or "bash"
+    if found and "system32" not in found.lower():
+        return found
+    for candidate in (
+        r"C:\Program Files\Git\bin\bash.exe",
+        r"C:\Program Files (x86)\Git\bin\bash.exe",
+    ):
+        if Path(candidate).is_file():
+            return candidate
+    return found or "bash"
+
+
+SHELL: tuple[str, ...] = (_find_bash(), "-c")
 """The interpreter probes and bodies run under. See the module docstring."""
 
 _MAX_EXCERPT = 160
@@ -152,6 +189,13 @@ def evaluate_predicate(
             cwd=env.work,
             capture_output=True,
             text=True,
+            # Explicit, because the default is the machine locale. On a non-UTF-8
+            # console a decode failure kills the reader thread and leaves
+            # `stdout` as `None`, which then raises a confusing `AttributeError`
+            # in `_excerpt` -- naming neither the encoding nor the probe.
+            # `errors="replace"` keeps the excerpt readable instead.
+            encoding="utf-8",
+            errors="replace",
             env=git_env(home=env.root),
             timeout=timeout_s,
         )

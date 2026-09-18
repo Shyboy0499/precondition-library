@@ -133,6 +133,11 @@ def replay(program: Program, env: Sandbox, *, timeout_s: float = 60.0) -> Replay
             cwd=env.work,
             capture_output=True,
             text=True,
+            # Same reason as `probes.evaluate_predicate`: decode explicitly rather
+            # than with the machine locale, and keep undecodable bytes readable
+            # instead of letting the reader thread turn `stdout` into `None`.
+            encoding="utf-8",
+            errors="replace",
             env=run_env,
             timeout=timeout_s,
         )

@@ -39,8 +39,10 @@ from __future__ import annotations
 
 import os
 import shutil
+import stat
 import subprocess
-from collections.abc import Sequence
+import warnings
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -123,6 +125,10 @@ def run_git(
         env=git_env(home=cwd),
         capture_output=True,
         text=True,
+        # Explicit rather than the machine locale: git's output is compared and
+        # asserted on, so its decoding should not depend on the console code page.
+        encoding="utf-8",
+        errors="replace",
         input=stdin,
         timeout=timeout,
     )
@@ -147,6 +153,60 @@ def store_blob(work: Path, ref: str, content: str) -> None:
     run_git(("update-ref", ref, sha), cwd=work)
 
 
+def _force_writable(path: str) -> None:
+    """Add the owner write bit, leaving every other bit alone.
+
+    The recipe usually quoted for this is `os.chmod(path, stat.S_IWRITE)`, and it
+    is wrong on POSIX for the same reason the naive `rmtree` is wrong on Windows:
+    it *replaces* the mode rather than adding to it, so a directory that tripped
+    this handler would come back as owner-write-only, losing the execute bit that
+    makes it traversable. OR-ing the bit in is what both platforms actually want
+    -- Windows maps the owner write bit onto `FILE_ATTRIBUTE_READONLY`, so the
+    same call clears the attribute there.
+    """
+    os.chmod(path, os.lstat(path).st_mode | stat.S_IWUSR)
+
+
+def _clear_readonly(func: Callable[..., object], path: str, _exc: BaseException) -> None:
+    """Clear the write protection and retry, for a caller that must not fail.
+
+    A `onexc` handler for `shutil.rmtree`. Git for Windows marks every loose
+    object `FILE_ATTRIBUTE_READONLY`; POSIX `unlink` only needs the containing
+    directory writable, but Windows `DeleteFile` refuses a read-only file
+    outright. A bare `shutil.rmtree` therefore deletes a Linux sandbox and
+    necessarily fails on a Windows one.
+
+    Anything the retry does not fix re-raises, so a genuine failure surfaces at
+    the call site that caused it rather than being deferred.
+    """
+    _force_writable(path)
+    func(path)
+
+
+def _clear_readonly_quiet(func: Callable[..., object], path: str, exc: BaseException) -> None:
+    """`_clear_readonly` for a caller that must not raise: record instead.
+
+    Used by `Sandbox.destroy()`, whose contract is idempotence: an already-absent
+    root stays silent. Every other failure is *recorded* rather than swallowed.
+    Silently discarding it leaves `.sandboxes/` residue that blows up later, in
+    the next `create()`, inside whichever unrelated test happens to run then --
+    an error naming neither the residue nor this call. That is the same
+    report-success-while-doing-nothing shape the library exists to catch.
+    """
+    if isinstance(exc, FileNotFoundError):
+        # The root (or a path inside it) is already gone. Idempotence, not a fault.
+        return
+    try:
+        _clear_readonly(func, path, exc)
+    except OSError as retry_exc:
+        warnings.warn(
+            f"left residue at {path}: {retry_exc}. A later create() may fail on it; "
+            f"clear .sandboxes/ before the next run.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+
+
 @dataclass(frozen=True)
 class Sandbox:
     """A disposable environment and the handles needed to inspect it."""
@@ -159,7 +219,7 @@ class Sandbox:
 
     def destroy(self) -> None:
         """Remove the sandbox from disk. Idempotent: a missing root is fine."""
-        shutil.rmtree(self.root, ignore_errors=True)
+        shutil.rmtree(self.root, onexc=_clear_readonly_quiet)
         # Leave no empty `.sandboxes/` behind when the last sandbox goes; rmdir
         # fails harmlessly while another one is still there.
         if self.root.parent == _SANDBOX_DIR:
@@ -339,7 +399,9 @@ def create(seed: int, faults: list[str]) -> Sandbox:
     slug = "-".join(sorted(faults)) or "base"
     root = _SANDBOX_DIR / f"seed-{seed}-{slug}"
     if root.exists():
-        shutil.rmtree(root)
+        # Residue from a crashed run, including read-only git objects on Windows;
+        # `_clear_readonly` retries past them and re-raises anything it cannot fix.
+        shutil.rmtree(root, onexc=_clear_readonly)
     root.mkdir(parents=True)
 
     upstream = root / "upstream.git"

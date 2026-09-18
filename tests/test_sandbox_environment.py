@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import subprocess
 
+from precondition_library.runtime.probes import SHELL
 from precondition_library.sandbox import git_env
 
 SENTINEL = "SMOKE_SECRET"
@@ -42,11 +43,17 @@ def test_a_command_under_the_sandbox_environment_cannot_read_the_sentinel(
     """The falsifiable half: run a real command with the environment git_env builds."""
     monkeypatch.setenv(SENTINEL, _SENTINEL_VALUE)
 
+    # `SHELL`, not a hardcoded "bash": a bare `bash` is the WSL launcher on
+    # Windows, so this would return non-zero for a reason unrelated to the
+    # environment it is testing -- and would keep doing so after `SHELL` was
+    # fixed, because this line bypasses it.
     completed = subprocess.run(
-        ["bash", "-c", f'printenv {SENTINEL} || echo "<unset>"'],
+        [*SHELL, f'printenv {SENTINEL} || echo "<unset>"'],
         env=git_env(home=tmp_path),
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
 
     assert completed.returncode == 0
