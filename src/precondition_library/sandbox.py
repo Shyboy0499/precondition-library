@@ -48,6 +48,14 @@ from pathlib import Path
 
 _SANDBOX_DIR = Path(__file__).resolve().parents[2] / ".sandboxes"
 
+_PROCESS_TOKEN = str(os.getpid())
+"""A per-process token in every sandbox root, so two runs cannot collide (#72).
+
+Read once at import rather than per call: it identifies the *process*, and a value
+that could change between two calls would break the "calling `create` twice for
+the same pair replaces the first sandbox" property callers depend on.
+"""
+
 # Fixed so that the same seed yields the same SHAs. Real-world ordering is not
 # needed; reproducibility is.
 _GIT_DATE = "2026-01-01T00:00:00+00:00"
@@ -394,11 +402,22 @@ def create_submodule_origin(root: Path, name: str) -> Path:
     return origin
 
 
+def _sandbox_root(seed: int, faults: list[str]) -> Path:
+    """Where the sandbox for `(seed, faults)` lives: the pair, plus this process.
+
+    Read as a pure function of its inputs so the root rule can be tested without
+    building a sandbox -- the concurrency property in issue #72 is about the path,
+    not about the git objects under it.
+    """
+    slug = "-".join(sorted(faults)) or "base"
+    return _SANDBOX_DIR / f"seed-{seed}-{slug}-{_PROCESS_TOKEN}"
+
+
 def create(seed: int, faults: list[str]) -> Sandbox:
     """Build an *empty* sandbox for `(seed, faults)`, deterministically.
 
-    `faults` names the faults the sandbox is destined to hold; it selects the
-    root (`seed-{seed}-{sorted faults}`) and nothing else. Injecting is the
+    `faults` names the faults the sandbox is destined to hold; with the seed it
+    selects the root (see `_sandbox_root`) and nothing else. Injecting is the
     caller's step, because the fault registry is above this module, not below it
     (see the module docstring): `tasks.faults.build_sandbox` validates the names,
     calls `create`, and only then applies each fault's `inject`. Splitting the two
@@ -409,14 +428,24 @@ def create(seed: int, faults: list[str]) -> Sandbox:
     Every step here is under the pinned environment above, so one seed produces
     the same clone and the same commit SHAs before any fault runs.
 
-    The root is a function of `(seed, faults)`, so calling `create` twice for the
-    same pair *replaces* the first sandbox rather than failing. That is safe for
-    a throwaway environment and keeps leftover state from a crashed run from
-    poisoning the next one; callers that need two live sandboxes must use two
-    seeds, or destroy the first before rebuilding.
+    The root is a function of `(seed, faults)` plus a per-process token, so
+    calling `create` twice in one process for the same pair *replaces* the first
+    sandbox rather than failing. That is safe for a throwaway environment and
+    keeps leftover state from a crashed run from poisoning the next one; callers
+    that need two live sandboxes must use two seeds, or destroy the first before
+    rebuilding.
+
+    The token is the process id, which is what lets two runs overlap: a second
+    `pytest` process, or CI alongside a local run, works in its own root instead
+    of colliding with the first (issue #72). That was blocked until the content
+    stopped depending on where the sandbox was built -- the token changes the
+    root, so a fault that committed its own absolute path would have had the token
+    enter every commit SHA. `test_content_is_independent_of_where_it_was_built`
+    pins that property. The cost is that a crashed run leaves a root named for a
+    dead pid, which the next run does not reuse and so does not clean up; the
+    residue is inert but it accumulates, and `.sandboxes/` can be cleared freely.
     """
-    slug = "-".join(sorted(faults)) or "base"
-    root = _SANDBOX_DIR / f"seed-{seed}-{slug}"
+    root = _sandbox_root(seed, faults)
     if root.exists():
         # Residue from a crashed run, including read-only git objects on Windows;
         # `_clear_readonly` retries past them and re-raises anything it cannot fix.
