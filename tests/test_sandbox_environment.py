@@ -17,7 +17,7 @@ from __future__ import annotations
 import subprocess
 
 from precondition_library.runtime.probes import SHELL
-from precondition_library.sandbox import git_env
+from precondition_library.sandbox import _GIT_HARDENING, git_env, run_git
 
 SENTINEL = "SMOKE_SECRET"
 """A variable the test process exports; no sandbox command may see it."""
@@ -115,3 +115,40 @@ def test_the_platform_scratch_directory_is_inherited_on_every_platform(monkeypat
     assert env["TEMP"] == r"C:\Temp"
     assert env["TMP"] == r"C:\Temp"
     assert env["SystemRoot"] == r"C:\Windows"
+
+
+def test_a_repository_hook_does_not_run_under_the_sandbox_environment(
+    make_sandbox, tmp_path
+) -> None:
+    """A repository's hooks are arbitrary code, and ours must not run them (#10).
+
+    `post-checkout` fires from a body doing ordinary git work -- unattended, with
+    no model and no human watching -- so a hostile repository would get code
+    execution out of the replay path. `core.hooksPath=/dev/null` is what stops it.
+    This is the behavioural half: the hook is installed and executable, the
+    checkout really happens, and the marker it would write must not exist.
+    """
+    box = make_sandbox(0, [])
+    marker = tmp_path / "the-hook-ran"
+    hook = box.work / ".git" / "hooks" / "post-checkout"
+    hook.write_text(f"#!/bin/sh\ntouch {marker}\n", encoding="utf-8")
+    hook.chmod(0o755)
+
+    run_git(("checkout", "-q", "-b", "hook-would-fire-here"), cwd=box.work)
+
+    assert not marker.exists(), "a repository hook ran during a sandbox git call"
+
+
+def test_the_hardening_config_is_pinned_on_every_git_call(make_sandbox) -> None:
+    """The values #10 names, read back through git rather than from our own dict.
+
+    Asserting the env dict would only prove we built it; asking git is what proves
+    it took effect. A `-c` is deliberately absent here because command-line config
+    beats this, which is how `submodule_moved` still allows the local file protocol
+    for its own `submodule add`.
+    """
+    box = make_sandbox(0, [])
+
+    for key, expected in _GIT_HARDENING:
+        got = run_git(("config", "--get", key), cwd=box.work, check=False).stdout.strip()
+        assert got == expected, f"{key} is {got!r}, not {expected!r}"

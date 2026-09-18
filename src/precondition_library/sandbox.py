@@ -92,6 +92,35 @@ which is also what keeps a command expanding `~` or `%USERPROFILE%` inside it.
 """
 
 
+_GIT_HARDENING: tuple[tuple[str, str], ...] = (
+    ("core.hooksPath", "/dev/null"),
+    ("core.fsmonitor", "false"),
+    ("core.pager", "cat"),
+    ("fetch.recurseSubmodules", "false"),
+)
+"""Config pinned on every git call, whatever the repository or the operator asks.
+
+Passed through `GIT_CONFIG_COUNT` / `GIT_CONFIG_KEY_n` / `GIT_CONFIG_VALUE_n`
+rather than as `-c` on each command line, so it reaches every call site -- `run_git`,
+the probes, and anything a fault injector adds -- without threading an argument
+through all of them and without a call site being able to forget it (issue #10).
+
+`core.hooksPath` is the one that matters for #10's threat model. A repository's
+hooks are arbitrary code that runs on our own commands: `post-checkout` and
+`post-merge` fire from a body doing ordinary git work, unattended, with no model
+and no human watching. Pointing the hooks path at `/dev/null` is the same idiom as
+`GIT_CONFIG_GLOBAL` below -- git finds no directory there and runs no hook, on
+either platform. `fetch.recurseSubmodules=false` removes the implicit submodule
+fetch a plain `git fetch` would otherwise perform; `core.fsmonitor=false` and
+`core.pager=cat` remove two more ways the surrounding machine can change what a
+command does.
+
+These do not override a fault injector's explicit `-c`: command-line config wins
+over this, which is why `submodule_moved` can still allow the local file protocol
+for its own `submodule add`.
+"""
+
+
 def git_env(home: Path | None = None) -> dict[str, str]:
     """The environment every git call in a sandbox runs under.
 
@@ -123,6 +152,13 @@ def git_env(home: Path | None = None) -> dict[str, str]:
             "GIT_CONFIG_GLOBAL": "/dev/null",
         }
     )
+    # Pin the hardening config on this call. `GIT_CONFIG_COUNT` is the one env var
+    # git reads as a config list, so this is the only way to reach every call site
+    # at once without a `-c` argument on each command line.
+    env["GIT_CONFIG_COUNT"] = str(len(_GIT_HARDENING))
+    for index, (key, value) in enumerate(_GIT_HARDENING):
+        env[f"GIT_CONFIG_KEY_{index}"] = key
+        env[f"GIT_CONFIG_VALUE_{index}"] = value
     return env
 
 
