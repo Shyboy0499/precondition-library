@@ -67,3 +67,51 @@ def test_home_is_omitted_when_the_caller_has_no_sandbox_to_redirect_into(monkeyp
     monkeypatch.setenv("HOME", "/home/the-operator")
 
     assert "HOME" not in git_env()
+
+
+def test_userprofile_is_redirected_into_the_sandbox_like_home(monkeypatch, tmp_path) -> None:
+    """Windows tools read `USERPROFILE`, POSIX tools read `HOME` (issue #87).
+
+    Both have to point at the sandbox, or a `~`-expanding command lands inside it
+    on one platform and in the operator's home on the other. Asserting the pair
+    together is the point: setting only `HOME` is what the first version did.
+    """
+    monkeypatch.setenv("USERPROFILE", r"C:\Users\the-operator")
+
+    env = git_env(home=tmp_path)
+
+    assert env["USERPROFILE"] == str(tmp_path), "USERPROFILE must be redirected too"
+    assert env["HOME"] == str(tmp_path)
+
+
+def test_userprofile_is_omitted_when_the_caller_has_no_sandbox(monkeypatch) -> None:
+    """`USERPROFILE` is not inherited, for the same reason `HOME` is not.
+
+    It names the operator's home, so inheriting it would hand model-authored code
+    a path to their dotfiles -- the leak `git_env` exists to prevent. #87 listed it
+    with the Windows variables a call *needs*; it is instead handled like `HOME`.
+    """
+    monkeypatch.setenv("USERPROFILE", r"C:\Users\the-operator")
+
+    assert "USERPROFILE" not in git_env()
+
+
+def test_the_platform_scratch_directory_is_inherited_on_every_platform(monkeypatch) -> None:
+    """`TMPDIR` on POSIX, `TEMP`/`TMP` on Windows: git needs one of them to run.
+
+    The allowlist carried only `TMPDIR`, which is the POSIX name, so on Windows
+    the scratch directory was dropped and git lost it (#87, O2). `SystemRoot` is
+    asserted with them because Windows resolves its own system directory through
+    it, and none of the three names user data.
+    """
+    monkeypatch.setenv("TMPDIR", "/tmp/posix-scratch")
+    monkeypatch.setenv("TEMP", r"C:\Temp")
+    monkeypatch.setenv("TMP", r"C:\Temp")
+    monkeypatch.setenv("SystemRoot", r"C:\Windows")
+
+    env = git_env()
+
+    assert env["TMPDIR"] == "/tmp/posix-scratch"
+    assert env["TEMP"] == r"C:\Temp"
+    assert env["TMP"] == r"C:\Temp"
+    assert env["SystemRoot"] == r"C:\Windows"

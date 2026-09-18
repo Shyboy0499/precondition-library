@@ -694,21 +694,22 @@ def test_an_undeclared_variant_is_quarantined_on_load_and_never_dispatched(
 
     # The read wrote nothing: the artifact still says what it said.
     artifact = tmp_path / "written-past-admit" / "program.yaml"
-    assert yaml.safe_load(artifact.read_text())["status"] == "admitted", (
+    assert yaml.safe_load(artifact.read_text(encoding="utf-8"))["status"] == "admitted", (
         "load_all is a read and must not write a quarantine back"
     )
     assert not (tmp_path / "written-past-admit" / "history.jsonl").exists()
 
     # Visible: the explicit write persists the quarantine with its reason.
     assert library.quarantine_undeclared() == ["written-past-admit"]
-    assert yaml.safe_load(artifact.read_text())["status"] == "quarantined"
-    history = (tmp_path / "written-past-admit" / "history.jsonl").read_text().splitlines()
+    assert yaml.safe_load(artifact.read_text(encoding="utf-8"))["status"] == "quarantined"
+    history_path = tmp_path / "written-past-admit" / "history.jsonl"
+    history = history_path.read_text(encoding="utf-8").splitlines()
     transition = json.loads(history[-1])
     assert (transition["from"], transition["to"]) == ("admitted", "quarantined")
     assert "ambiguous" in transition["reason"]
     assert "declares variant id(s)" in transition["reason"]
     assert library.quarantine_undeclared() == [], "a second write must be a no-op"
-    assert len((tmp_path / "written-past-admit" / "history.jsonl").read_text().splitlines()) == 1
+    assert len(history_path.read_text(encoding="utf-8").splitlines()) == 1
 
     # Never dispatched as scored, though the program itself would clear both arms.
     assert evaluate_preconditions(offending, box).ok
@@ -744,7 +745,11 @@ def test_a_prose_intent_with_an_undeclared_variant_is_still_quarantined(tmp_path
     assert loaded["prose-intent-declared"].status is ProgramStatus.CANDIDATE
 
     assert library.quarantine_undeclared() == ["prose-intent-undeclared"]
-    history = (tmp_path / "prose-intent-undeclared" / "history.jsonl").read_text().splitlines()
+    history = (
+        (tmp_path / "prose-intent-undeclared" / "history.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    )
     assert "diverged" in json.loads(history[-1])["reason"], (
         "the reason must name the fault the check keyed on"
     )

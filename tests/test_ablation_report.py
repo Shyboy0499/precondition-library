@@ -229,7 +229,9 @@ def test_mismatch_and_success_come_from_derived_verdicts_not_one_stored_field(
             )
         ],
     )
-    record = EpisodeRecord.model_validate_json((tmp_path / "ledger.jsonl").read_text().strip())
+    record = EpisodeRecord.model_validate_json(
+        (tmp_path / "ledger.jsonl").read_text(encoding="utf-8").strip()
+    )
     assert record.misfired is True
     assert record.succeeded is True
 
