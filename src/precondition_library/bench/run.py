@@ -52,6 +52,7 @@ from ..sandbox import Sandbox
 from ..signatures import StateFingerprint, TaskSignature
 from ..tasks.faults import FAULTS, build_sandbox
 from ..tasks.intent import IntentSpec, ResolutionVariant
+from ..tasks.invariants import refs_intact
 from ..tasks.registry import EXCLUDED_FROM_BENCHMARK, ambiguous_intents
 from .ledger import Arm, EpisodeRecord, OccurrenceRole, append
 from .splits import occurrence_roles
@@ -323,7 +324,16 @@ def run_episode(
 
         result = _run_arm(arm, signature, box, library, fault_type, seed, occurrence, accounting)
         try:
-            ground_truth_ok = fault.check(box).ok
+            verdict = fault.check(box)
+            if verdict.ok:
+                # Reaching the expected state is not sufficient on its own: a
+                # resolution can reach it by discarding everything else, and then the
+                # arm would be scored as succeeding by destroying the repository
+                # rather than by repairing the fault (issue #9, item 3). Checked only
+                # when the fault's own clause passed, so a fault-level failure keeps
+                # its own reason rather than being reported as a ref violation.
+                verdict = refs_intact(box)
+            ground_truth_ok = verdict.ok
         except Exception as exc:
             return _invalid_record(
                 arm,

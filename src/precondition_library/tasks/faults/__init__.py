@@ -7,6 +7,7 @@ asks "what faults exist". Adding a fault here extends every arm at once.
 from __future__ import annotations
 
 from ...sandbox import Sandbox, create
+from ..invariants import record_refs_at_start
 from ..spec import FaultSpec
 from .branch_renamed import SPEC as BRANCH_RENAMED
 from .dirty_tree import SPEC as DIRTY_TREE
@@ -51,6 +52,9 @@ def build_sandbox(seed: int, faults: list[str]) -> Sandbox:
     sandbox = create(seed, faults)
     for name in faults:
         FAULTS[name].inject(seed, sandbox)
+    # After injection, not before: injectors legitimately delete and rename upstream
+    # refs, so a pre-injection snapshot would call the fault itself a violation.
+    record_refs_at_start(sandbox)
     return sandbox
 
 
