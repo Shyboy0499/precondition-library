@@ -1,0 +1,13 @@
+# Normalise line endings to LF on checkout, on every platform.
+#
+# Git for Windows defaults to `core.autocrlf=true`, so without this a Windows
+# clone checks out every file as CRLF. That is measured as harmless for ruff,
+# mypy and pytest -- but not for `body` in `bench/gold/*.yaml`. That text is
+# handed to a shell, where a single trailing `\r` can make an entire program body
+# ineffective while the command still exits 0. That presents exactly like a real
+# mis-fire: a silent false success, which is the failure class this repository
+# exists to measure, so it must not be reachable through a checkout setting.
+#
+# Every tracked file here is text, so one rule covers the repository and no
+# binary exceptions are needed.
+* text=auto eol=lf
