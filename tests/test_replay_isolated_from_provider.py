@@ -1,26 +1,37 @@
-"""Two boundaries must stay closed: neither replay nor the library may reach a model.
+"""Boundaries that must stay closed, asserted against the import graph.
 
-A replay episode costs zero tokens, and so does a dispatch decision. Both claims
-are structural, not behavioural: an import that makes `provider` reachable from
-`runtime.replay` or from `library` would make the claim false without breaking any
-obvious test, so the invariants are asserted against the import graph instead of
-trusted.
+A boundary here is a claim that would go false without breaking any obvious test,
+because the breach is one import rather than one behaviour. So each is checked
+structurally, by walking the graph from source with `ast`: a function-local or
+`if False:` import is seen like any other, and transitivity is handled, so a helper
+module in the middle cannot hide the edge.
 
-The two boundaries guarded here, and why exactly these:
+Two classes of boundary are guarded.
 
-* `runtime.replay` must not reach `provider`. If it could, a replay could call a
-  model and the central cost claim -- a stored program is executed with no LLM in
-  the loop -- would be void.
-* `library` must not reach `provider`. This is what makes *both* dispatch arms'
-  decisions cost zero tokens: an episode that dispatches (hit or miss) spends
-  nothing on the choice. It is also the boundary a foreseeable change would
-  breach: arm 2's mechanism is a lexical proxy today and the intended replacement
-  is an embedding model, so the swap is exactly the edit that would import an API
-  client into the library.
+**Cost.** Neither `runtime.replay` nor `library` may reach `provider`. A replay
+episode costs zero tokens, and so does a dispatch decision; if either could call a
+model, the central cost claim would be void. `library` is the boundary a
+foreseeable change would breach: arm 2's mechanism is a lexical proxy today and the
+intended replacement is an embedding model, so that swap is exactly the edit that
+would import an API client into the library.
 
-Parameterised over `(entry, forbidden)` so both are checked by one walker rather
-than two copies that could drift. The graph is walked from source with `ast`, not
-read by eye, so a function-local or `if False:` import is seen like any other.
+**Ground truth.** `tasks.faults` may reach neither `program` nor `runtime` (#9).
+The fault checkers grade an episode's outcome, and `program` is the artifact
+contract -- `Program`, and the `Predicate` type its postconditions are made of. If
+a checker could reach it, ground truth could be evaluated from a program's own
+claim of done, and the artifact would define its own correctness: the mismatch
+column the whole comparison rests on would measure nothing. `runtime` is listed
+because it is the machinery that gives a predicate its meaning, so reaching it is
+the same collapse by another route. This is #9's second item -- ground truth is not
+the admission postconditions -- pinned as unreachability rather than resemblance.
+
+Parameterised over `(entry, forbidden)` so every boundary is checked by one walker
+rather than a copy each that could drift.
+
+The module name records the first boundary only; the other two live here because
+they are the same kind of guard -- an invariant that one import would break
+silently -- and a second copy of this walker would be the thing that drifts. The
+spec's "IMPORT GRAPH" mechanism points at this file.
 
 This test is deliberately implemented while nearly everything else is a stub: it
 is the guardrail, and a guardrail that arrives with the implementation is not a
@@ -40,6 +51,8 @@ PKG = SRC / "precondition_library"
 BOUNDARIES: list[tuple[str, str]] = [
     ("precondition_library.runtime.replay", "precondition_library.provider"),
     ("precondition_library.library", "precondition_library.provider"),
+    ("precondition_library.tasks.faults", "precondition_library.program"),
+    ("precondition_library.tasks.faults", "precondition_library.runtime"),
 ]
 """`(entry, forbidden)`: `forbidden` must not be reachable from `entry`.
 
@@ -101,12 +114,14 @@ def test_entry_module_exists(entry: str, forbidden: str) -> None:
 
 
 @pytest.mark.parametrize(("entry", "forbidden"), BOUNDARIES)
-def test_entry_cannot_reach_provider(entry: str, forbidden: str) -> None:
+def test_entry_cannot_reach_forbidden(entry: str, forbidden: str) -> None:
     """No path in the import graph leads from `entry` to `forbidden`."""
     graph = _graph()
     reachable = _reachable(graph, entry)
     assert forbidden not in reachable, (
-        f"{forbidden} became reachable from {entry}; either a replay or a dispatch "
-        f"decision could now spend tokens and the claim would be void. Reachable "
-        f"set: {sorted(reachable)}"
+        f"{forbidden} became reachable from {entry}. For the cost boundaries that "
+        f"means a replay or a dispatch decision could spend tokens; for the ground "
+        f"truth boundaries it means a fault checker could read the artifact it "
+        f"grades, so the artifact would define its own correctness. Either way the "
+        f"claim the boundary carries is now void. Reachable set: {sorted(reachable)}"
     )
