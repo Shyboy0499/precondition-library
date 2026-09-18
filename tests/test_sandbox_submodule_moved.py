@@ -23,8 +23,10 @@ from __future__ import annotations
 
 import pytest
 
+import precondition_library.sandbox as sandbox_module
 from precondition_library.sandbox import Sandbox, run_git
 from precondition_library.signatures import StateFingerprint
+from precondition_library.tasks.faults import build_sandbox
 from precondition_library.tasks.faults.submodule_moved import (
     INTENT,
     ORIGIN_DIRNAME,
@@ -235,12 +237,68 @@ def test_correct_resolution_passes_check(state: str, seed: int, make_sandbox) ->
 
 @pytest.mark.parametrize(("state", "seed"), STATE_CASES)
 def test_same_seed_reproduces_commit_shas(state: str, seed: int, make_sandbox) -> None:
-    """Same seed, same content: every recorded SHA must match."""
+    """Same seed, same content: every recorded SHA must match.
+
+    This compares two builds at the **same root**, so it accepts anything that
+    enters the committed content from the root path -- which is exactly what an
+    absolute submodule URL used to do, and why it passed while the sandbox was not
+    reproducible across checkouts. `test_content_is_independent_of_where_it_was_built`
+    below is the assertion that catches that; this one catches a seed-dependent
+    change in the injection itself.
+    """
     first = make_sandbox(seed, ["submodule_moved"])
     shas_first = _shas(first)
     first.destroy()
     second = make_sandbox(seed, ["submodule_moved"])
     assert _shas(second) == shas_first
+
+
+def test_content_is_independent_of_where_it_was_built(tmp_path, monkeypatch) -> None:
+    """The determinism claim *across checkouts*, not just twice inside one root (#72).
+
+    A sandbox built in this checkout has to be byte-identical to one built in
+    yours, or "both arms face identical environments" and "a re-run reproduces the
+    episode" are claims about one machine. The injector used to record the
+    submodule's absolute origin path in the committed `.gitmodules`, which put
+    every commit SHA of this fault at the mercy of where the sandbox happened to
+    be built -- measured as a full HEAD divergence between two roots.
+
+    The URL is now relative to the superproject's origin, and this builds the same
+    `(seed, fault)` at two different roots, at different depths, to hold that.
+    """
+    roots = [tmp_path / "first", tmp_path / "deeper" / "second-checkout-name"]
+    shas: list[tuple[str, str, str, str]] = []
+
+    for root in roots:
+        root.mkdir(parents=True)
+        monkeypatch.setattr(sandbox_module, "_SANDBOX_DIR", root)
+        box = build_sandbox(SEED_BY_STATE["remove"], ["submodule_moved"])
+        try:
+            shas.append(_shas(box))
+        finally:
+            box.destroy()
+
+    assert shas[0] == shas[1], (
+        "the same (seed, fault) built at two absolute roots produced different SHAs, "
+        "so something that depends on the path is entering the committed content"
+    )
+
+
+def test_the_root_carries_a_per_process_token(tmp_path, monkeypatch) -> None:
+    """Two runs must not collide on one root; that is what blocked concurrency (#72).
+
+    Checked as a pure function of the token rather than by building two sandboxes:
+    the property is about the path, and building one to compare names would cost a
+    sandbox per assertion. Varying the token is the stand-in for a second process.
+    """
+    monkeypatch.setattr(sandbox_module, "_SANDBOX_DIR", tmp_path)
+    monkeypatch.setattr(sandbox_module, "_PROCESS_TOKEN", "first-process")
+    one = sandbox_module._sandbox_root(0, ["diverged"])
+    monkeypatch.setattr(sandbox_module, "_PROCESS_TOKEN", "second-process")
+    two = sandbox_module._sandbox_root(0, ["diverged"])
+
+    assert one != two, "two processes would share a sandbox root"
+    assert one.parent == two.parent == tmp_path
 
 
 @pytest.mark.parametrize(("state", "seed"), STATE_CASES)

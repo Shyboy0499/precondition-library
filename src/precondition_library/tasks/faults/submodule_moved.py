@@ -204,8 +204,16 @@ class SubmoduleMovedFault(FaultSpec):
 
         # Add the submodule and publish the commit that pins it, so upstream and
         # the clone agree before the state-specific mutation.
+        #
+        # The URL is *relative* to the superproject's origin (`<root>/upstream.git`)
+        # rather than an absolute path into this sandbox root. An absolute path is
+        # written into the committed `.gitmodules`, so it enters every commit SHA
+        # of this fault and the same `(seed, fault)` built at a different root has
+        # a different HEAD -- measured in #72. A relative URL resolves to the same
+        # `<root>/submodule-origin` these two repositories already stand in, and
+        # keeps the committed content independent of where the sandbox was built.
         run_git(
-            (*_FILE_PROTOCOL, "submodule", "add", "-q", str(origin), SUBMODULE_PATH),
+            (*_FILE_PROTOCOL, "submodule", "add", "-q", f"../{ORIGIN_DIRNAME}", SUBMODULE_PATH),
             cwd=work,
         )
         run_git(("commit", "-q", "-m", "chore: add nested library"), cwd=work)
