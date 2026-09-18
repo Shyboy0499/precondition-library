@@ -55,7 +55,16 @@ _GIT_NAME = "precondition-library sandbox"
 _GIT_EMAIL = "sandbox@precondition-library.invalid"
 
 
-_ALLOWLISTED_ENV_VARS = ("PATH", "LANG", "LC_ALL", "LC_CTYPE", "TMPDIR")
+_ALLOWLISTED_ENV_VARS = (
+    "PATH",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "TMPDIR",
+    "TEMP",
+    "TMP",
+    "SystemRoot",
+)
 """The only ambient variables a git call or a shell probe may inherit.
 
 Everything else in the caller's environment is dropped rather than copied, which
@@ -63,8 +72,15 @@ is what makes the spec's "the environment is scrubbed" (§9) true: a
 `dict(os.environ)` spread handed any exported API key -- and the operator's
 whole environment -- to model-authored code. A variable belongs here only when a
 call fails without it: `PATH` finds `git` and the probe's tools, the locale
-keeps git's output deterministic, and `TMPDIR` is where tools scratch. `HOME` is
-deliberately absent; callers redirect it into the sandbox (`git_env(home=...)`).
+keeps git's output deterministic, and the scratch directory is where tools write
+temporaries -- `TMPDIR` on POSIX, `TEMP`/`TMP` on Windows, which is what the
+platform actually reads (issue #87). `SystemRoot` is how Windows locates its own
+system directory; it names no user data.
+
+`HOME` and `USERPROFILE` are deliberately absent. Both name the operator's home
+directory, and inheriting either would hand model-authored code a path to their
+dotfiles; callers redirect them into the sandbox instead (`git_env(home=...)`),
+which is also what keeps a command expanding `~` or `%USERPROFILE%` inside it.
 """
 
 
@@ -77,13 +93,16 @@ def git_env(home: Path | None = None) -> dict[str, str]:
 
     Only `_ALLOWLISTED_ENV_VARS` is inherited, so a leaked `GIT_DIR` /
     `GIT_WORK_TREE` / `GIT_INDEX_FILE` cannot retarget these commands at the
-    caller's own repository. `home`, when given, becomes `HOME` so a command
-    that expands `~` lands inside the sandbox; a caller with no sandbox to
-    redirect into leaves `HOME` unset rather than inheriting the operator's.
+    caller's own repository. `home`, when given, becomes `HOME` **and**
+    `USERPROFILE` so a command that expands either lands inside the sandbox --
+    Windows tools read `USERPROFILE`, POSIX tools read `HOME`. A caller with no
+    sandbox to redirect into leaves both unset rather than inheriting the
+    operator's (issue #87).
     """
     env = {name: os.environ[name] for name in _ALLOWLISTED_ENV_VARS if name in os.environ}
     if home is not None:
         env["HOME"] = str(home)
+        env["USERPROFILE"] = str(home)
     env.update(
         {
             "GIT_AUTHOR_NAME": _GIT_NAME,
