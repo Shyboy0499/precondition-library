@@ -47,6 +47,7 @@ from precondition_library.provider import Completion, ProviderError, TokenUsage
 from precondition_library.runtime.probes import evaluate_preconditions
 from precondition_library.runtime.replay import replay
 from precondition_library.tasks.faults.diverged import SPEC as DIVERGED
+from precondition_library.tasks.spec import GroundTruth
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMITTED_LIBRARY = ROOT / "library"
@@ -1338,3 +1339,50 @@ def test_the_discard_fixture_resolves_the_state(make_sandbox) -> None:
     result = replay(_discard_program(), box)
     assert result.ok, result.reason
     assert DIVERGED.check(box).ok
+
+
+# --- the non-destructive invariant on the episode path (#9, item 3) -----------
+
+
+def test_a_destructive_resolution_is_recorded_as_not_ground_truth(tmp_path, monkeypatch) -> None:
+    """The invariant must reach the ledger, not just exist.
+
+    It is folded into the same verdict the fault checker returns, so it is recorded
+    through the existing `ground_truth_ok` column rather than needing a field of its
+    own -- which is why this test asserts the column and not the invariant's own
+    return value.
+
+    `refs_intact` is stubbed rather than provoked: provoking it means scripting a
+    body that reaches the expected state *while* destroying recorded refs, and that
+    would test the script rather than the wiring. The unpatched run is the control
+    that keeps the assertion from passing on a column that is always false.
+    """
+
+    def _run(out: Path) -> EpisodeRecord:
+        # Each run gets its own directory: the arm's library is derived from the
+        # ledger's parent and must start empty, so two runs cannot share one.
+        out.parent.mkdir(parents=True, exist_ok=True)
+        provider = FakeProvider(
+            *_resolves_merge(),
+            _completion(_reply_text(gold_program("merge")), tokens_in=100, tokens_out=40),
+        )
+        run_benchmark(
+            arms=[Arm.PRECONDITION],
+            faults=["diverged"],
+            occurrences=1,
+            seeds=[VARIANT_SEED],
+            out=out,
+            model="fake",
+            provider=provider,
+        )
+        (row,) = read(out)
+        return row
+
+    assert _run(tmp_path / "clean" / "ledger.jsonl").ground_truth_ok is True
+
+    with monkeypatch.context() as patched:
+        patched.setattr(
+            "precondition_library.bench.run.refs_intact",
+            lambda box: GroundTruth(ok=False, detail="a recorded ref was destroyed"),
+        )
+        assert _run(tmp_path / "destructive" / "ledger.jsonl").ground_truth_ok is False
