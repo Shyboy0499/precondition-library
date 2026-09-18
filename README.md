@@ -385,6 +385,37 @@ demonstrated end to end against a real model.
   cache hits, so the baseline's real marginal cost is lower than the raw token
   counts above suggest.
 
+## Installing
+
+Two things the commands alone do not tell you:
+
+- **Obtain the repository with `git clone`.** The suite proves it leaked nothing
+  into this repository's own tree by comparing `git status --porcelain` against a
+  snapshot taken at import (`tests/conftest.py`). A GitHub *Download ZIP* snapshot
+  has no `.git` to compare against, so those tests **skip with that reason**
+  instead of failing and the rest of the suite still runs — but the guarantee
+  they carry is only meaningful in a clone.
+- **Install the dev extra**, which is what provides `pytest`, `ruff`, `mypy` and
+  `pandas` (see `pyproject.toml`). CI runs exactly these four gates:
+
+  ```console
+  git clone git@github.com:Shyboy0499/precondition-library.git
+  cd precondition-library
+  uv sync --extra dev
+  uv run pytest                      # the suite
+  uv run ruff check .                # lint
+  uv run ruff format --check .       # formatting, including Python inside markdown
+  uv run mypy src                    # types
+  ```
+
+Python 3.12 or newer is required (`requires-python` in `pyproject.toml`).
+
+**Platform support.** CI runs `ubuntu-latest` only, so Linux is the only platform
+this repository has evidence for. A Windows verification pass is recorded in
+[#87](https://github.com/Shyboy0499/precondition-library/issues/87), which found
+four deterministic defects there — two of which fail **silently**, reporting
+success while doing nothing — and none of which the CI above could have caught.
+
 ## Running it
 
 The invocation, the seed sets and the ledger format are fixed in the spec's
