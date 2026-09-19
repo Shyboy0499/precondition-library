@@ -28,6 +28,7 @@
 | 18 | 2026-09-18 | **A pre-registered TOST gates any "equal success rate" wording, and the verdict is reported (issue #8, item 8).** §7 gains principle 10: "equal" requires an equivalence test and "comparable" is the fallback, at a margin of ±10pp and α = 0.05 registered here before any data. `bench/report.py` runs it on arms 2 and 3's pooled success rates and prints the difference, the 90% interval, both one-sided p-values and which of three cases holds — equivalent; outside the margin; or too wide to decide, which is an underpowered run rather than a difference. The margin and alpha are named constants, so the choice is visible and dated rather than buried in a call, and the variance is Agresti–Coull-adjusted so a 0%/100% rate cannot produce a zero-width interval. **No live document currently claims an equal success rate** — Claim 1 already says an arm that succeeds more often may spend more, and defers to cost per success — so this closes the gap between that claim and its evidence before such a sentence can be written, rather than correcting one. No metric definition, denominator or reported number changes and no result is claimed; no episode has been run. |
 | 19 | 2026-09-18 | **The raw prompt prefix length is reported, once rather than per arm (issue #8, item 5).** The item asks for it per arm, and measuring first showed the premise does not hold: both prompts are module-level constants — `agents/react.py`'s `SYSTEM_PROMPT` and the one derived in `agents/compile.py` — and **every arm sends the same two**, so a per-arm column would print one number three times and imply a difference that does not exist. §7's metrics list now requires the prefix length in raw characters, reported once with that reason, and notes that the arm-level difference is transcript growth around the prefix rather than the prefix. The compile prefix is the only one that is not fixed: it grows by the joined length of an intent's declared variant ids. No metric definition, denominator or reported number changes and no result is claimed — no episode has been run. |
 | 20 | 2026-09-18 | **Input tokens are metered in three components, with the provider mapping stated (issue #8, items 1-2).** §7's ledger gains `uncached_tokens_in` and `cache_write_tokens_in` beside the existing cache-read field, and a bullet records how each is derived and what it means per provider: OpenAI-style APIs report `prompt_tokens` **including** cached tokens, so the uncached component is derived from `prompt_cache_miss_tokens` where published (DeepSeek publishes it) and by saturating subtraction otherwise; Anthropic-style APIs bill a separate cache write, which is why that field exists though DeepSeek always writes zero. `tokens_in` is documented as the provider's total and explicitly **not** a billing basis — cache-hit input is published at 1/50th of cache-miss input, so pricing the total at one rate overstates the arm that caches most. `bench/report.py` reports the components per cell and warns at the cost figure. **Not implemented:** applying rates. That needs a rate table, and DeepSeek's rates differ by peak and off-peak hours, so a correct figure needs the rate or the call time recorded per episode. No metric definition, denominator or reported number changes and no result is claimed — no episode has been run. |
+| 21 | 2026-09-18 | **Claim 1 is restated to match the figures that now exist (issue #8, item 9).** The claim said tokens and calls fall per episode with cost per success beside cost per episode, which understated what the report now does and overstated what it can claim: the curve it is read from is cumulative and amortized with an explicit break-even (#94), the triple including cost per success and its Pareto frontier is reported (#97), the cache components are metered separately so input is not priced as one number (#100), and any "equal success rate" wording requires a pre-registered equivalence test (#98). The claim now names the cumulative figure, the triple, and **two limits that belong to the claim** rather than to its footnotes: it is a claim about tokens and calls and not about currency, because pricing needs rates that vary by peak and off-peak hours and are not applied; and equality of success rates is not available to it, because that needs the equivalence test to pass. No metric definition, denominator or reported number changes and no result is claimed — no episode has been run. |
 
 ---
 
@@ -62,10 +63,25 @@ ADR-0001 records the reasoning and the source-checked citations.
 
 **Claim 1 (context, not a contribution).** Tokens and LLM calls per episode fall
 across repeated occurrences for the compiled arms and stay flat for the ReAct
-baseline — with cost per success reported alongside cost per episode (§7), since
-an arm that succeeds more often may legitimately spend more. This is an
-engineering assumption and a cost model. It is established prior art and is never
-presented as a finding.
+baseline, **read off the cumulative amortized curve with its break-even marked**
+(Figure 2) — with the arm triple reported alongside: success rate, tokens per
+episode and **cost per success** (§7 item 8), since an arm that succeeds more often
+may legitimately spend more. Two limits are part of the claim rather than caveats
+around it:
+
+- **It is a claim about tokens and calls, not about currency.** No cost figure is
+  reported, because pricing input correctly needs a rate table and DeepSeek's rates
+  differ by peak and off-peak hours, so the rate or the call time would have to be
+  recorded per episode (§7's ledger bullet). Input is metered as uncached,
+  cache-read and cache-write so a cost figure can be computed once rates exist;
+  until then the figure is tokens.
+- **"Equal success rate" is not available to it.** Comparing the two dispatch arms'
+  success rates requires the pre-registered equivalence test (§7 item 10); where it
+  does not pass, the text says "comparable success rate". No episode has been run,
+  so nothing is equal or comparable yet.
+
+This is an engineering assumption and a cost model. It is established prior art and
+is never presented as a finding.
 
 **Claim 2 (primary, empirical form).** At **matched dispatch coverage**,
 executable-precondition dispatch is *expected* to mis-fire less often than
@@ -376,7 +392,7 @@ postconditions:
 
 provenance:
   compiled_from_task: "My local uncommitted work must survive, and this fork needs to be in sync."
-  model: deepseek-chat
+  model: deepseek-flash
   episode_id: react/dirty_tree/seed-12
   fault: dirty_tree          # the family whose states this program serves
 status: candidate            # not yet admitted; see the caveat below
@@ -791,7 +807,7 @@ run.run_benchmark(
     occurrences=len(TUNE_SEEDS),
     seeds=list(TUNE_SEEDS),
     out=Path(tempfile.gettempdir()) / "precondition-ledger.jsonl",
-    model="deepseek-chat",
+    model="deepseek-flash",
     provider=provider,
 )
 ```

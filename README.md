@@ -43,6 +43,7 @@ Stated first, because the prior art is real and the honest framing depends on it
 | That compiling a task into a persistent program and replaying it without an LLM is novel | Already published: PreAct, SkillDroid, and Auto each compile a trace and replay it cheaply or with no per-step LLM calls (see [Prior work](#prior-work)). |
 | That dispatching a cached plan by testing **executable preconditions** is a new mechanism | It is MACROPS, 1972: a cached generalized plan is dispatched by testing precondition *kernels* against live state, with an explicit replan fallback. |
 | That "the most similar case is not the most reusable" is a new insight | Smyth & Keane argued it in 1998, in a peer-reviewed journal, at length. |
+| That these token counts are a **cost** | They are tokens. Pricing input needs a rate table, and the provider's rates differ by peak and off-peak hours, so no currency figure is reported — input is metered as uncached, cache-read and cache-write so one can be computed once rates exist. |
 | That a dispatch comparison has been made, or that any number here is a result for the primary claim | No dispatch comparison has been run. One smoke pass has (see [First demonstration](#first-demonstration)), and it demonstrates the mechanism rather than measuring the claim; the text-only control's informed AUC below is the other genuine measurement, and the uninformed 0.500 is an identity of the construction, not a measurement. |
 
 Amortization is still what makes the project *useful* — it is an engineering
@@ -331,11 +332,18 @@ state. A **replay** is an episode in which a program fired and the run spent
 `replay_failure_reason`.
 
 Mean tokens per episode by occurrence index 1–8. These are the raw per-occurrence
-means for the pass, not the figure `bench/report.py` reports: the reported cost
-curve is computed over the replay occurrences only (here occurrences 3–8 for
-`submodule_moved` and 4–8 for `diverged`, per the roles in the bullet below),
-because a variant is the learning pass. The table shows every occurrence so the
-learning pass is visible too.
+means for the pass, not the figure `bench/report.py` reports. Two differences, and
+both matter for reading the table below:
+
+- **The reported figure is cumulative, not per-occurrence.** `bench/report.py`
+  plots the running amortized tokens per episode with the break-even marked, because
+  a per-occurrence mean is a snapshot: it cannot show whether an arm has yet paid
+  back what compiling cost it. On this pass's numbers the two readings disagree
+  about when the compiled arms cross the baseline, and the cumulative one is later.
+- **It is computed over the replay occurrences only** (here occurrences 3–8 for
+  `submodule_moved` and 4–8 for `diverged`, per the roles in the bullet below),
+  because a variant is the learning pass. The table shows every occurrence so the
+  learning pass is visible too.
 
 | arm | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
