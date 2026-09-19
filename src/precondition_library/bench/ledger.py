@@ -92,6 +92,14 @@ class EpisodeRecord(BaseModel):
     tokens_in: int
     tokens_out: int
     cached_tokens_in: int = 0
+    refs_intact: bool | None = None
+    """Whether the resolution left the recorded refs and upstream's history alone.
+
+    `None` means not checked -- an invalid episode, or one predating the check. The
+    *fact*, not a verdict: spec-gaming is derived from it (a row that reached the
+    expected state but destroyed recorded state on the way), because a stored verdict
+    could not sit beside `ground_truth_ok` without the two disagreeing (issue #9).
+    """
     llm_calls: int
     wall_clock_s: float
 

@@ -706,3 +706,83 @@ def test_the_report_states_the_break_even_in_words(tmp_path: Path) -> None:
 
     assert "break-even: precondition's amortized cost first reached react's" in report
     assert "cumulative tokens/episode" in report
+
+
+# --- spec-gaming is derived from a fact (issue #9, item 4) -------------------
+
+
+def test_spec_gaming_is_counted_from_the_recorded_fact(tmp_path: Path) -> None:
+    """A destructive resolution is its own column, not just a failure.
+
+    Without this, a row that reached the expected state by destroying recorded state
+    carries `ground_truth_ok=False` and is indistinguishable from one that simply did
+    not repair the fault -- the finding would be invisible in exactly the table that
+    is meant to report it.
+    """
+    ledger = _write(
+        tmp_path / "ledger.jsonl",
+        [
+            # Reached the expected state, but destroyed recorded state on the way.
+            _record(seed=1, ground_truth_ok=False, refs_intact=False),
+            # Reached it non-destructively.
+            _record(seed=2),
+            # Did not reach it at all: a plain failure, not gaming.
+            _record(seed=3, ground_truth_ok=False),
+        ],
+    )
+
+    (row,) = ablation_table(ledger)
+
+    assert row.spec_gaming == Rate(numerator=1, denominator=3)
+    # Gaming is a *subset* of non-success, not an orthogonal column: a resolution
+    # that destroyed recorded state did not reach the expected state either, because
+    # `ground_truth_ok` is the conjunction. What the column adds is the reason --
+    # one of the two failures here lost its recorded refs, the other did not.
+    assert row.success == Rate(numerator=1, denominator=3)
+
+
+def test_a_row_whose_check_did_not_run_is_not_spec_gaming(tmp_path: Path) -> None:
+    """`None` is "not checked", and counting it would flag every older row.
+
+    The check is only consulted when the fault's own clause passes, so a row that
+    failed the fault check carries `None`; so does any row written before the field
+    existed. Falsy-but-not-False would sweep both into the numerator.
+    """
+    ledger = _write(
+        tmp_path / "ledger.jsonl",
+        [
+            _record(seed=1, ground_truth_ok=False, refs_intact=None),
+            _record(seed=2, ground_truth_ok=False, refs_intact=False),
+        ],
+    )
+
+    (row,) = ablation_table(ledger)
+
+    assert row.spec_gaming == Rate(numerator=1, denominator=2)
+
+
+def test_the_report_states_the_spec_gaming_count(tmp_path: Path) -> None:
+    ledger = _write(
+        tmp_path / "ledger.jsonl",
+        [
+            _record(seed=1, ground_truth_ok=False, refs_intact=False),
+            _record(seed=2),
+        ],
+    )
+
+    report = (write_report(ledger, tmp_path / "out") / "report.txt").read_text(encoding="utf-8")
+
+    assert "Spec-gaming" in report
+    assert "tasks/invariants.py" in report
+    csv = (tmp_path / "out" / "ablation_table.csv").read_text(encoding="utf-8")
+    assert "spec_gaming_numerator" in csv
+
+
+def test_a_run_with_no_spec_gaming_says_zero_rather_than_nothing(tmp_path: Path) -> None:
+    """An absent line would leave a reader unsure whether it was checked."""
+    ledger = _write(tmp_path / "ledger.jsonl", [_record(seed=1)])
+
+    report = (write_report(ledger, tmp_path / "out") / "report.txt").read_text(encoding="utf-8")
+
+    assert "Spec-gaming" in report
+    assert "0/1" in report

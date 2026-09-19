@@ -23,6 +23,7 @@
 | 13 | 2026-09-17 | **Pre-registration revision: occurrences are labelled by role, and the episode loop's independent observations are stated (issue #81).** A smoke pass reported zero replays because its seeds each select a different resolution, and a program admitted for one resolution correctly refuses the others — so the plan as written produced a flat cost curve *by construction*. §7 gains a required `occurrence_role` on every ledger row, declared from the injectors' own seed-to-resolution mapping and written by the runner: **variant** for the first sight of a resolution, **replay** for every later one. The cost curve is computed over the replays (where the accumulation is visible), the mismatch comparison over the variants (the only independent observations), and both figures name the occurrences they used. §7's "Design" resolves the choice the earlier text left open — held-out variants or relabelled replays — in favour of replays, **because the injectors do not vary branch names, file sets or conflict positions by seed**; widening them is issue #6. The eval set's arithmetic is now stated: each measurable fault declares three states, so 40 seeds yield **3 variant and 37 replay occurrences per family**, and the episode-level mismatch comparison has six independent observations rather than eighty. **Logged before any eval data existed** — no eval episode has been run, so no analysis was chosen after seeing results; the smoke pass that motivated it is excluded from every claim in §7, and no reported number changes. |
 | 14 | 2026-09-18 | **Portability corrections, not analysis changes (issue #87).** §7's invocation wrote its ledger to a hardcoded `/tmp/precondition-ledger.jsonl`, which is not a path that exists on Windows; it now uses `Path(tempfile.gettempdir())`, which keeps the same intent (the ledger stays outside the repository) without naming a platform. Recorded alongside four source and test defects a Windows verification pass found — a bare `bash` resolving to the WSL launcher, `shell=True` selecting `cmd.exe` for multi-line bodies, `shutil.rmtree` failing on git's read-only loose objects, and an import-time `git status` that stopped the suite being collected outside a git checkout. No metric definition, denominator or number in this document changes, and no result is claimed from that pass. |
 | 15 | 2026-09-18 | **Figure 2 reports cumulative amortized cost with the break-even, not per-occurrence means (issue #8).** Claim 1 is about cost falling across occurrences, and a mean per occurrence is a snapshot: it says what one occurrence cost, not whether the compile has been repaid, so no crossover could be read off the figure the claim rests on. Figure 2 now plots the running amortized tokens and LLM calls per episode, with the break-even marked on the figure and stated in the report text, and §7's secondary-metrics list says so. `bench/report.py` computes the accumulation and reports why a crossing is not computable when it is not. No metric definition, denominator or reported number changes, the ledger schema is unchanged, and the analysis reported is the one rev 13 describes, read off an accumulating series rather than a per-occurrence one. **Logged before any eval data existed** — no eval episode has been run. |
+| 16 | 2026-09-18 | **Spec-gaming becomes its own recorded fact and its own column (issue #9).** §7's ledger gains `refs_intact`, the fact of whether a resolution left the recorded refs and upstream's history alone; a row that reached the expected state while that is false was spec-gamed, and the ablation table and report now count it separately from a resolution that simply failed. Recorded as a fact and derived, not stored as a verdict, for the reason §7 already gives for `misfired`/`succeeded`: a stored verdict could not sit beside `ground_truth_ok` without the two disagreeing. `null` means the check did not run and is never counted as gaming. No metric definition, denominator or reported number changes and no result is claimed — no episode has been run. |
 
 ---
 
@@ -483,7 +484,7 @@ One JSONL line per episode; every number reported is a grouping over this file.
 {arm, task_id, fault_type, occurrence_index, occurrence_role, seed,
  tokens_in, tokens_out, cached_tokens_in, llm_calls, wall_clock_s,
  outcome: success|fail|fallback|refusal|invalid, timed_out,
- correct_variant, fired_variant, ground_truth_ok,
+ correct_variant, fired_variant, ground_truth_ok, refs_intact,
  program_id, dispatch_score, admitted,
  refusal_reason, compile_failure_reason, invalid_reason, replay_failure_reason, model}
 ```
@@ -514,6 +515,17 @@ One JSONL line per episode; every number reported is a grouping over this file.
   a wrong fire in an episode that nevertheless succeeded via the fallback — is
   expressible. A stored outcome could not hold both halves without the two
   disagreeing, and `outcome` therefore records only how the mechanism completed.
+- **Spec-gaming is derived from a fact, like the other correctness verdicts.**
+  `refs_intact` records whether the resolution left the recorded `refs/sandbox/*`
+  state and upstream's history alone (`tasks/invariants.py`, checked after the
+  fault's own clause passes and recorded on every row it ran for). A row that
+  reached the expected state while `refs_intact` is `false` was **spec-gamed**:
+  it repaired the fault destructively, satisfying the graded predicate by an
+  unintended route. That is its own column in the ablation table and its own
+  pooled line in the report, because such a row otherwise carries
+  `ground_truth_ok=false` and reads exactly like a resolution that simply failed
+  to repair the fault. `null` means the check did not run — an invalid episode, or
+  a row written before it existed — and is never counted as gaming.
 - **Denominator rule.** `fail`, `fallback` and `refusal` all carry
   their token spend into the means — an episode that crashed after 4,000 tokens
   still cost 4,000 tokens. `invalid` is the sole exception: the episode never

@@ -323,6 +323,7 @@ def run_episode(
         signature = TaskSignature(intent=request, fingerprint=state, target=str(box.work))
 
         result = _run_arm(arm, signature, box, library, fault_type, seed, occurrence, accounting)
+        refs_ok: bool | None = None
         try:
             verdict = fault.check(box)
             if verdict.ok:
@@ -332,7 +333,9 @@ def run_episode(
                 # rather than by repairing the fault (issue #9, item 3). Checked only
                 # when the fault's own clause passed, so a fault-level failure keeps
                 # its own reason rather than being reported as a ref violation.
-                verdict = refs_intact(box)
+                intact = refs_intact(box)
+                refs_ok = intact.ok
+                verdict = intact
             ground_truth_ok = verdict.ok
         except Exception as exc:
             return _invalid_record(
@@ -376,6 +379,7 @@ def run_episode(
             correct_variant=correct.id if correct is not None else None,
             fired_variant=result.fired_variant,
             ground_truth_ok=ground_truth_ok,
+            refs_intact=refs_ok,
             program_id=result.program_id,
             dispatch_score=result.dispatch_score,
             similarity_threshold=library.threshold,
