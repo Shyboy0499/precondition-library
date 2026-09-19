@@ -217,7 +217,9 @@ class DivergedFault(FaultSpec):
                 detail=f"upstream tip {upstream_tip[:12]} is not contained in the local branch",
             )
 
-        base = git_out("rev-parse", "refs/sandbox/base", cwd=work)
+        # From the harness, not the clone: a base ref in the working repository is a
+        # diff against the injected change (issue #103).
+        base = sandbox.recorded["base"]
         local_tip = git_out("rev-parse", "refs/sandbox/local-tip", cwd=work)
         local_patch = run_git(("diff", base, local_tip), cwd=work).stdout
         if local_patch.strip():
