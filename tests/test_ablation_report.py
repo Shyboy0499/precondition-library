@@ -1058,3 +1058,59 @@ def test_the_report_reports_the_prefix_once_not_per_arm(tmp_path: Path) -> None:
     assert "Prompt prefixes the run sends" in report
     assert "shared by every arm" in report
     assert report.count("learn (ReAct):") == 1
+
+
+# --- input is metered in three components (issue #8, items 1-2) --------------
+
+
+def test_the_table_reports_uncached_and_cache_read_separately(tmp_path: Path) -> None:
+    """One summed input number cannot be priced, so the components are columns.
+
+    A cache hit is billed at a fraction of a miss, so a reader given only the total has
+    to price cached tokens at the uncached rate -- which overstates exactly the arm that
+    caches most, and arm 1 is the one whose prompt grows.
+    """
+    ledger = _write(
+        tmp_path / "ledger.jsonl",
+        [_record(seed=1, tokens_in=1000, uncached_tokens_in=128, cached_tokens_in=872)],
+    )
+
+    (row,) = ablation_table(ledger)
+
+    assert row.mean_uncached_tokens_in == Mean(n=1, value=128.0)
+    assert row.mean_cached_tokens_in == Mean(n=1, value=872.0)
+    assert row.mean_cache_write_tokens_in == Mean(n=1, value=0.0)
+
+
+def test_the_components_survive_the_ledger_round_trip(tmp_path: Path) -> None:
+    """Written by the runner, read back by the report: the fields must not be dropped."""
+    ledger = _write(
+        tmp_path / "ledger.jsonl",
+        [
+            _record(
+                seed=1,
+                tokens_in=1000,
+                uncached_tokens_in=200,
+                cached_tokens_in=750,
+                cache_write_tokens_in=50,
+            )
+        ],
+    )
+
+    (row,) = ablation_table(ledger)
+
+    assert row.mean_uncached_tokens_in.value == 200.0
+    assert row.mean_cached_tokens_in.value == 750.0
+    assert row.mean_cache_write_tokens_in.value == 50.0
+
+
+def test_the_report_warns_that_the_total_is_not_a_billing_basis(tmp_path: Path) -> None:
+    """The mispricing hazard stated where the cost figure is, not only in the schema."""
+    ledger = _write(tmp_path / "ledger.jsonl", [_record(seed=1, tokens_in=100)])
+    dest = write_report(ledger, tmp_path / "out")
+
+    report = (dest / "report.txt").read_text(encoding="utf-8")
+
+    assert "NOT a billing basis" in report
+    csv = (dest / "ablation_table.csv").read_text(encoding="utf-8")
+    assert "mean_uncached_tokens_in" in csv and "mean_cache_write_tokens_in" in csv

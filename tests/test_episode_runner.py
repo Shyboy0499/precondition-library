@@ -94,14 +94,16 @@ def _tool_call(command: str) -> dict:
 
 def _completion(text: str = "", *, tokens_in: int = 10, tokens_out: int = 5) -> Completion:
     return Completion(
-        text=text, usage=TokenUsage(tokens_in=tokens_in, tokens_out=tokens_out), model="fake"
+        text=text,
+        usage=TokenUsage(tokens_in=tokens_in, tokens_out=tokens_out, uncached_tokens_in=tokens_in),
+        model="fake",
     )
 
 
 def _tool(command: str) -> Completion:
     return Completion(
         tool_calls=[_tool_call(command)],
-        usage=TokenUsage(tokens_in=10, tokens_out=5),
+        usage=TokenUsage(tokens_in=10, tokens_out=5, uncached_tokens_in=10),
         model="fake",
     )
 

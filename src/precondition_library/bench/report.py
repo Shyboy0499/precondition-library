@@ -143,7 +143,12 @@ class AblationRow(BaseModel):
     `ground_truth_ok=False` and reads exactly like a resolution that simply failed
     to repair the fault, when the finding is that it repaired it destructively."""
     mean_tokens: Mean
+    mean_uncached_tokens_in: Mean
+    """Input tokens billed at the full input rate. Reported beside the cache-read mean
+    so a reader can see the split pricing needs, rather than one summed input number
+    (issue #8)."""
     mean_cached_tokens_in: Mean
+    mean_cache_write_tokens_in: Mean
     mean_llm_calls: Mean
     mean_wall_clock_s: Mean
 
@@ -485,7 +490,7 @@ def _mean(values: Iterable[int | float]) -> Mean:
 
 def _rows(
     group: list[EpisodeRecord],
-) -> tuple[list[EpisodeRecord], int, Rate, Rate, Rate, Rate, Mean, Mean, Mean, Mean]:
+) -> tuple[list[EpisodeRecord], int, Rate, Rate, Rate, Rate, Mean, Mean, Mean, Mean, Mean, Mean]:
     """The shared arithmetic for one cell: graded rows, counts, rates and means."""
     graded = _graded(group)
     return (
@@ -498,7 +503,9 @@ def _rows(
         # would report every pre-check row as spec-gaming.
         Rate(numerator=sum(1 for r in graded if r.refs_intact is False), denominator=len(graded)),
         _mean(r.tokens_in + r.tokens_out for r in graded),
+        _mean(r.uncached_tokens_in for r in graded),
         _mean(r.cached_tokens_in for r in graded),
+        _mean(r.cache_write_tokens_in for r in graded),
         _mean(r.llm_calls for r in graded),
         _mean(r.wall_clock_s for r in graded),
     )
@@ -524,7 +531,7 @@ def ablation_table(ledger: Path) -> list[AblationRow]:
         computed = _rows(group)
         graded, episodes = computed[0], computed[1]
         invalid, success, mismatch, gaming = computed[2:6]
-        tokens, cached, calls, wall = computed[6:]
+        tokens, uncached, cached, write, calls, wall = computed[6:]
         rows.append(
             AblationRow(
                 arm=arm,
@@ -537,7 +544,9 @@ def ablation_table(ledger: Path) -> list[AblationRow]:
                 mismatch=mismatch,
                 spec_gaming=gaming,
                 mean_tokens=tokens,
+                mean_uncached_tokens_in=uncached,
                 mean_cached_tokens_in=cached,
+                mean_cache_write_tokens_in=write,
                 mean_llm_calls=calls,
                 mean_wall_clock_s=wall,
             )
@@ -1041,8 +1050,12 @@ def _write_ablation_csv(path: Path, rows: list[AblationRow]) -> None:
         "spec_gaming_rate",
         "mean_tokens",
         "mean_tokens_n",
+        "mean_uncached_tokens_in",
+        "mean_uncached_tokens_in_n",
         "mean_cached_tokens_in",
         "mean_cached_tokens_in_n",
+        "mean_cache_write_tokens_in",
+        "mean_cache_write_tokens_in_n",
         "mean_llm_calls",
         "mean_llm_calls_n",
         "mean_wall_clock_s",
@@ -1072,8 +1085,12 @@ def _write_ablation_csv(path: Path, rows: list[AblationRow]) -> None:
                 row.spec_gaming.value,
                 row.mean_tokens.value,
                 row.mean_tokens.n,
+                row.mean_uncached_tokens_in.value,
+                row.mean_uncached_tokens_in.n,
                 row.mean_cached_tokens_in.value,
                 row.mean_cached_tokens_in.n,
+                row.mean_cache_write_tokens_in.value,
+                row.mean_cache_write_tokens_in.n,
                 row.mean_llm_calls.value,
                 row.mean_llm_calls.n,
                 row.mean_wall_clock_s.value,
@@ -1300,7 +1317,10 @@ def _summary(
     lines += [
         "",
         "Cost curve (secondary; replay occurrences only -- the ones a library could "
-        "answer; a cost model, not a result):",
+        "answer; a cost model, not a result). `tokens` is the provider's reported total "
+        "and is NOT a billing basis: input is metered as uncached + cache-read + "
+        "cache-write in `ablation_table.csv`, and a cache hit is billed at a fraction of "
+        "a miss, so pricing this total at one rate overstates any arm that caches:",
     ]
     if not points:
         lines.append(

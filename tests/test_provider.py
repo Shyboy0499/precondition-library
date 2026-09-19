@@ -35,11 +35,14 @@ def _ok_body(
     prompt_tokens: int = 11,
     completion_tokens: int = 7,
     cached: int | None = 3,
+    miss: int | None = None,
     model: str = "deepseek-chat",
 ) -> dict:
     usage: dict = {"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens}
     if cached is not None:
         usage["prompt_cache_hit_tokens"] = cached
+    if miss is not None:
+        usage["prompt_cache_miss_tokens"] = miss
     message: dict = {"role": "assistant", "content": content}
     if tool_calls is not None:
         message["tool_calls"] = tool_calls
@@ -105,7 +108,11 @@ def test_response_parses_into_real_usage() -> None:
 
     assert isinstance(completion, Completion)
     assert completion.text == "done"
-    assert completion.usage == TokenUsage(tokens_in=120, tokens_out=34, cached_tokens_in=100)
+    # `prompt_tokens` includes the cached part, so the uncached component is derived:
+    # 120 total - 100 cached = 20 billed at the full input rate.
+    assert completion.usage == TokenUsage(
+        tokens_in=120, tokens_out=34, uncached_tokens_in=20, cached_tokens_in=100
+    )
     assert completion.usage.total == 154
     assert completion.llm_calls == 1
     assert completion.model == "deepseek-chat"
@@ -128,7 +135,9 @@ def test_tool_calls_without_content_parse_and_surface_unreshaped() -> None:
 
     assert completion.text == ""
     assert completion.tool_calls == calls
-    assert completion.usage == TokenUsage(tokens_in=11, tokens_out=7, cached_tokens_in=3)
+    assert completion.usage == TokenUsage(
+        tokens_in=11, tokens_out=7, uncached_tokens_in=8, cached_tokens_in=3
+    )
 
 
 def test_absent_cache_field_defaults_to_zero() -> None:
@@ -137,6 +146,53 @@ def test_absent_cache_field_defaults_to_zero() -> None:
     completion = _provider(transport).complete(system="s", messages=[])
     assert completion.usage.cached_tokens_in == 0
     assert completion.usage.tokens_in == 11
+    # No cache at all, so every prompt token is billed at the full input rate.
+    assert completion.usage.uncached_tokens_in == 11
+
+
+def test_the_published_miss_count_is_preferred_over_subtraction() -> None:
+    """DeepSeek publishes `prompt_cache_miss_tokens`; it is authoritative.
+
+    The subtraction is the fallback for an API that does not publish it, but it
+    assumes `prompt_tokens` decomposes exactly, which is an assumption about the
+    provider rather than a reading of what it said.
+    """
+    transport, _ = _capturing(
+        _ok_body(prompt_tokens=1000, cached=872, miss=128, completion_tokens=20)
+    )
+    completion = _provider(transport).complete(system="s", messages=[])
+
+    assert completion.usage.uncached_tokens_in == 128
+    assert completion.usage.cached_tokens_in == 872
+
+
+def test_cached_greater_than_prompt_saturates_rather_than_going_negative() -> None:
+    """A provider reporting more cache hits than prompt tokens must not underflow.
+
+    Subtracting the raw numbers would make the uncached component negative and price
+    the episode as though it had been paid to read the cache.
+    """
+    transport, _ = _capturing(_ok_body(prompt_tokens=100, cached=250, completion_tokens=5))
+    completion = _provider(transport).complete(system="s", messages=[])
+
+    assert completion.usage.uncached_tokens_in == 0
+    assert completion.usage.cached_tokens_in == 250
+
+
+def test_the_three_components_account_for_the_reported_total() -> None:
+    """The invariant that makes the split checkable against the provider's own number.
+
+    `tokens_in` is kept as the provider reported it precisely so this can be asserted;
+    if the components stopped summing to it, one of them is being double-counted and
+    the cost figure would be wrong in a way no rate table could fix.
+    """
+    transport, _ = _capturing(_ok_body(prompt_tokens=120, cached=100, completion_tokens=34))
+    usage = _provider(transport).complete(system="s", messages=[]).usage
+
+    assert (
+        usage.uncached_tokens_in + usage.cached_tokens_in + usage.cache_write_tokens_in
+        == usage.tokens_in
+    )
 
 
 def test_response_model_is_reported_when_the_body_names_it() -> None:
@@ -196,7 +252,9 @@ def test_fake_provider_is_usable_wherever_a_provider_is_expected() -> None:
     def consume(provider: Provider) -> Completion:
         return provider.complete(system="sys", messages=[{"role": "user", "content": "go"}])
 
-    expected = Completion(text="ok", usage=TokenUsage(tokens_in=5, tokens_out=2), model="fake")
+    expected = Completion(
+        text="ok", usage=TokenUsage(tokens_in=5, tokens_out=2, uncached_tokens_in=5), model="fake"
+    )
     fake = FakeProvider(expected)
 
     assert consume(fake) is expected

@@ -21,13 +21,35 @@ DEFAULT_BASE_URL = "https://api.deepseek.com"
 
 
 class TokenUsage(BaseModel):
-    """Token accounting, read from the API response rather than estimated."""
+    """Token accounting, read from the API response rather than estimated.
+
+    **Input is three separately-metered components, and `tokens_in` is their total.**
+    Cache hits are billed at a small fraction of misses (DeepSeek publishes
+    cache-hit input at 1/50th of cache-miss input), so a single input number priced
+    at one rate overstates any arm that caches -- and arm 1, whose prompt grows with
+    the transcript, is the arm that caches most. Nothing may price `tokens_in`; it is
+    the provider's own sum, kept so the components can be checked against it.
+
+    `uncached_tokens_in` is required rather than defaulted on purpose: a provider that
+    silently reported 0 uncached input would make every input token look like a cache
+    hit, which is the same mispricing inverted and just as invisible.
+    """
 
     tokens_in: int
+    """Total input tokens as the provider reported them: uncached + cache reads +
+    cache writes. Not a billing basis."""
     tokens_out: int
+    uncached_tokens_in: int
+    """Input tokens the provider did **not** serve from cache. This is the component
+    billed at the full input rate."""
     cached_tokens_in: int = 0
-    """Provider-side prompt-cache hits. Reported separately because a cache hit
-    makes the ReAct baseline look cheaper than the work actually performed."""
+    """Input tokens served from the prompt cache -- the *cache-read* component, billed
+    at the cache-hit rate. Named for the wire field it comes from; see the class
+    docstring for why it is not folded into `tokens_in`."""
+    cache_write_tokens_in: int = 0
+    """Input tokens written to the cache. Zero for DeepSeek, which bills no separate
+    write; a provider that does (Anthropic-style) sets it here so the accounting stays
+    provider-complete."""
 
     @property
     def total(self) -> int:
@@ -164,6 +186,15 @@ class DeepSeekProvider:
             usage = body["usage"]
             tokens_in = usage["prompt_tokens"]
             tokens_out = usage["completion_tokens"]
+            # `prompt_tokens` INCLUDES cached tokens on OpenAI-style APIs, so the
+            # uncached component is derived, never the raw total. DeepSeek publishes
+            # `prompt_cache_miss_tokens` directly and it is the authoritative source;
+            # the subtraction is the fallback for an API that does not, saturating so
+            # a provider reporting cached > prompt cannot make it negative.
+            cached = usage.get("prompt_cache_hit_tokens") or 0
+            miss = usage.get("prompt_cache_miss_tokens")
+            uncached = miss if miss is not None else max(0, tokens_in - cached)
+            cache_write = usage.get("prompt_cache_write_tokens") or 0
         except (KeyError, IndexError, TypeError, ValueError) as exc:
             raise ProviderError(f"malformed DeepSeek completion response: {exc!r}") from exc
 
@@ -184,7 +215,9 @@ class DeepSeekProvider:
             usage=TokenUsage(
                 tokens_in=tokens_in,
                 tokens_out=tokens_out,
-                cached_tokens_in=usage.get("prompt_cache_hit_tokens", 0) or 0,
+                uncached_tokens_in=uncached,
+                cached_tokens_in=cached,
+                cache_write_tokens_in=cache_write,
             ),
             model=body.get("model") or self._model,
         )

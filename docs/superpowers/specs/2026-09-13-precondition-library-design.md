@@ -27,6 +27,7 @@
 | 17 | 2026-09-18 | **The arm triple and its Pareto frontier are reported, making item 8's promise true (issue #8).** §7 item 8 and Claim 1 both require cost per success beside cost per episode, and the report stated only the latter. It now reports the triple — success rate, tokens per episode, tokens per success, each with the denominator it was taken over — pooled over every graded episode of the arm with the failures kept in the denominator per item 7, plus a Pareto frontier over the three so no arm is read on one axis alone (`arm_triples.csv`, `pareto.png`). Cost per success is the arm's total tokens over its successes, not the mean cost of a successful episode; the two differ whenever an arm fails, and the second would flatter an arm that fails often. An arm with no success has no cost per success and is reported unranked rather than assigned a place. No metric definition, denominator or reported number changes and no result is claimed — no episode has been run. |
 | 18 | 2026-09-18 | **A pre-registered TOST gates any "equal success rate" wording, and the verdict is reported (issue #8, item 8).** §7 gains principle 10: "equal" requires an equivalence test and "comparable" is the fallback, at a margin of ±10pp and α = 0.05 registered here before any data. `bench/report.py` runs it on arms 2 and 3's pooled success rates and prints the difference, the 90% interval, both one-sided p-values and which of three cases holds — equivalent; outside the margin; or too wide to decide, which is an underpowered run rather than a difference. The margin and alpha are named constants, so the choice is visible and dated rather than buried in a call, and the variance is Agresti–Coull-adjusted so a 0%/100% rate cannot produce a zero-width interval. **No live document currently claims an equal success rate** — Claim 1 already says an arm that succeeds more often may spend more, and defers to cost per success — so this closes the gap between that claim and its evidence before such a sentence can be written, rather than correcting one. No metric definition, denominator or reported number changes and no result is claimed; no episode has been run. |
 | 19 | 2026-09-18 | **The raw prompt prefix length is reported, once rather than per arm (issue #8, item 5).** The item asks for it per arm, and measuring first showed the premise does not hold: both prompts are module-level constants — `agents/react.py`'s `SYSTEM_PROMPT` and the one derived in `agents/compile.py` — and **every arm sends the same two**, so a per-arm column would print one number three times and imply a difference that does not exist. §7's metrics list now requires the prefix length in raw characters, reported once with that reason, and notes that the arm-level difference is transcript growth around the prefix rather than the prefix. The compile prefix is the only one that is not fixed: it grows by the joined length of an intent's declared variant ids. No metric definition, denominator or reported number changes and no result is claimed — no episode has been run. |
+| 20 | 2026-09-18 | **Input tokens are metered in three components, with the provider mapping stated (issue #8, items 1-2).** §7's ledger gains `uncached_tokens_in` and `cache_write_tokens_in` beside the existing cache-read field, and a bullet records how each is derived and what it means per provider: OpenAI-style APIs report `prompt_tokens` **including** cached tokens, so the uncached component is derived from `prompt_cache_miss_tokens` where published (DeepSeek publishes it) and by saturating subtraction otherwise; Anthropic-style APIs bill a separate cache write, which is why that field exists though DeepSeek always writes zero. `tokens_in` is documented as the provider's total and explicitly **not** a billing basis — cache-hit input is published at 1/50th of cache-miss input, so pricing the total at one rate overstates the arm that caches most. `bench/report.py` reports the components per cell and warns at the cost figure. **Not implemented:** applying rates. That needs a rate table, and DeepSeek's rates differ by peak and off-peak hours, so a correct figure needs the rate or the call time recorded per episode. No metric definition, denominator or reported number changes and no result is claimed — no episode has been run. |
 
 ---
 
@@ -485,7 +486,8 @@ One JSONL line per episode; every number reported is a grouping over this file.
 
 ```
 {arm, task_id, fault_type, occurrence_index, occurrence_role, seed,
- tokens_in, tokens_out, cached_tokens_in, llm_calls, wall_clock_s,
+ tokens_in, tokens_out, uncached_tokens_in, cached_tokens_in, cache_write_tokens_in,
+ llm_calls, wall_clock_s,
  outcome: success|fail|fallback|refusal|invalid, timed_out,
  correct_variant, fired_variant, ground_truth_ok, refs_intact,
  program_id, dispatch_score, admitted,
@@ -510,6 +512,24 @@ One JSONL line per episode; every number reported is a grouping over this file.
   happened. A reader who does not know this will compute the curve over the
   occurrences where it cannot bend, or an interval over one observation counted
   many times.
+- **Input tokens are metered in three components, and none of them is a total.**
+  `uncached_tokens_in` is what the provider billed at the full input rate,
+  `cached_tokens_in` is the **cache-read** component, and `cache_write_tokens_in` is
+  what was written to the cache. `tokens_in` is the provider's own reported total —
+  their sum — and is kept so the split can be checked against it, **never as a billing
+  basis**: DeepSeek publishes cache-hit input at 1/50th of cache-miss input, so pricing
+  the total at one rate overstates any arm that caches, and arm 1 is the arm whose
+  prompt grows with the transcript. Derived as: `prompt_cache_miss_tokens` when the
+  provider publishes it (DeepSeek does), otherwise `prompt_tokens - cache hits`,
+  saturating so a provider reporting more hits than prompt tokens cannot make it
+  negative. **Per provider:** OpenAI-style APIs report `prompt_tokens` *including*
+  cached tokens, so it is never the uncached count; Anthropic-style APIs report the
+  cached portions as their own fields and bill a separate cache write, which is why
+  `cache_write_tokens_in` exists even though DeepSeek always writes zero. Pricing the
+  three at published rates is a separate step and is not implemented — it needs a rate
+  table, and DeepSeek's rates also differ by peak and off-peak hours, so a correct
+  figure needs the rate (or the call time) recorded per episode rather than applied
+  afterwards.
 - **Correctness is derived, not stored.** `correct_variant` is the ground truth for
   the state (from the intent's decision rules, in separate code from the programs'
   probe strings), `fired_variant` is what the program that ran actually resolves,
