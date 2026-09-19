@@ -16,7 +16,7 @@ says which invariant broke.
 
 from __future__ import annotations
 
-from precondition_library.sandbox import git_out, run_git
+from precondition_library.sandbox import run_git
 from precondition_library.tasks.invariants import refs_intact
 
 FAULT = "diverged"
@@ -35,12 +35,12 @@ def test_a_fresh_sandbox_satisfies_the_invariants(make_sandbox) -> None:
 def test_destroying_recorded_state_is_a_violation(make_sandbox) -> None:
     """`refs/sandbox/` is where ground truth lives; losing it is the re-clone case."""
     box = make_sandbox(SEED, [FAULT])
-    run_git(("update-ref", "-d", "refs/sandbox/base"), cwd=box.work)
+    run_git(("update-ref", "-d", "refs/sandbox/local-tip"), cwd=box.work)
 
     verdict = refs_intact(box)
 
     assert not verdict.ok
-    assert "refs/sandbox/base" in verdict.detail and "destroyed" in verdict.detail
+    assert "refs/sandbox/local-tip" in verdict.detail and "destroyed" in verdict.detail
 
 
 def test_deleting_an_upstream_ref_is_a_violation(make_sandbox) -> None:
@@ -60,7 +60,7 @@ def test_rewriting_upstream_history_is_a_violation(make_sandbox) -> None:
     comparison against the recorded value can see it.
     """
     box = make_sandbox(SEED, [FAULT])
-    base = git_out("rev-parse", "refs/sandbox/base", cwd=box.work)
+    base = box.recorded["base"]
     run_git(("update-ref", "refs/heads/main", base), cwd=box.upstream)
 
     verdict = refs_intact(box)

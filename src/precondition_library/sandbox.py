@@ -43,7 +43,7 @@ import stat
 import subprocess
 import warnings
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 _SANDBOX_DIR = Path(__file__).resolve().parents[2] / ".sandboxes"
@@ -292,6 +292,18 @@ class Sandbox:
     cannot name two states, and guessing a representative one would be worse than
     saying nothing.
     """
+    recorded: dict[str, str] = field(default_factory=dict)
+    """Values the injectors need the checkers to have, held **here** rather than in the clone.
+
+    A dict on a frozen dataclass: the field cannot be rebound, but its contents can be
+    filled as the injectors run, which is what lets them hand a value back without
+    changing `FaultSpec.inject`'s signature.
+
+    The reason it exists is issue #103. A value recorded under `refs/sandbox/` lives in the
+    same clone the graded code reads, so a body can diff it against `HEAD` and *see the
+    injected change* instead of diagnosing the fault. Holding it here puts it in the
+    harness's own memory, which the graded code cannot reach.
+    """
 
     def destroy(self) -> None:
         """Remove the sandbox from disk. Idempotent: a missing root is fine."""
@@ -305,16 +317,23 @@ class Sandbox:
                 pass
 
 
-BASE_REF = "refs/sandbox/base"
-"""Where a fault records the tip it injected on top of.
+INJECTED_REF = "refs/sandbox/injected"
+"""Where a fault marks that it has run: an empty blob, and deliberately nothing more.
 
-Ground truth lives under `refs/sandbox/` so a branch rewrite cannot drop it. A
-fault's own state ref (such as `submodule_moved`'s) is a different name, so this
-is only the shared "the sandbox was pristine at this commit" record.
+`require_uninjected` needs a durable "already injected" marker, and the marker used to be
+`refs/sandbox/base` -- which named the pre-injection tip, so `git diff refs/sandbox/base
+HEAD` showed the injected fault without diagnosing it (issue #103). The base commit is
+still recorded, in `Sandbox.recorded`, where the graded code cannot read it; what stays in
+the clone is a ref whose content says only "a fault ran here", which the task text already
+says.
+
+It stays a ref rather than moving to memory because its whole job is to survive on disk: a
+second `inject` call on a rebuilt sandbox has to see it, and an in-memory marker would not
+outlive the object that carried it.
 """
 
 
-def require_uninjected(sandbox: Sandbox, *, fault: str, ref: str = BASE_REF) -> None:
+def require_uninjected(sandbox: Sandbox, *, fault: str, ref: str = INJECTED_REF) -> None:
     """Raise if this sandbox already has `fault` injected.
 
     Injecting a fault twice would build a state that is neither fault, so it is an
@@ -336,7 +355,9 @@ def record_base(sandbox: Sandbox, *, fault: str) -> str:
     require_uninjected(sandbox, fault=fault)
     work = sandbox.work
     base = git_out("rev-parse", "HEAD", cwd=work)
-    run_git(("update-ref", BASE_REF, base), cwd=work)
+    # The value goes to the harness; the clone gets only the marker. See `INJECTED_REF`.
+    sandbox.recorded["base"] = base
+    store_blob(work, INJECTED_REF, "")
     return base
 
 
