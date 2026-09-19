@@ -51,6 +51,8 @@ the CSV is the deliverable, the picture is a convenience.
 from __future__ import annotations
 
 import csv
+import math
+import statistics
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -228,6 +230,142 @@ class ParetoFrontier(BaseModel):
     frontier: list[Arm]
     dominated: list[ArmDominance]
     unranked: list[Arm]
+
+
+EQUIVALENCE_MARGIN = 0.10
+"""The pre-registered equivalence margin, in success-rate proportion points.
+
+Registering the margin *before* data exists is the point of a TOST: one chosen after
+seeing the interval can be widened until equivalence passes (spec §7 item 10).
+"""
+TOST_ALPHA = 0.05
+"""The per-test alpha. Two one-sided tests at this level give a 90% interval."""
+
+
+class Equivalence(BaseModel):
+    """A two-one-sided-tests verdict on two arms' success rates.
+
+    Carries the margin and alpha it ran at, because an equivalence claim without them
+    says nothing: the same data is equivalent at 20pp and not at 5pp.
+
+    `reason` distinguishes *why* equivalence did not pass, which the two failures are
+    easily confused for. An interval too wide to fit inside the margin is an
+    underpowered run, not evidence that the arms differ; an interval lying wholly
+    outside the margin is evidence they do. Reporting both as "not equivalent" would
+    let a thin sample read as a finding.
+    """
+
+    margin: float
+    alpha: float
+    difference: float
+    interval: Interval
+    p_lower: float
+    p_upper: float
+    equivalent: bool
+    reason: str
+
+
+def _phi(z: float) -> float:
+    """The standard normal CDF, from the stdlib -- no SciPy for one function."""
+    return 0.5 * (1.0 + math.erf(z / math.sqrt(2.0)))
+
+
+def _adjusted_variance(rate: Rate, z: float) -> float:
+    """The Agresti-Coull adjusted variance of a proportion, over its denominator.
+
+    The raw Wald variance is `p(1-p)/n`, which is **zero** whenever a rate is 0% or
+    100% -- so a single episode scoring 1/1 against 1/1 would give a zero-width
+    interval and be declared equivalent to anything. That is the same unearned upgrade
+    from "no evidence of a difference" to "no difference" that this test exists to
+    prevent, arriving through the arithmetic rather than the prose. Adding the
+    adjustment's pseudo-counts keeps the variance positive at the boundary, so a thin
+    sample reports that it is underpowered instead.
+    """
+    successes = rate.numerator
+    total = rate.denominator
+    adjusted_n = total + z * z
+    adjusted_p = (successes + z * z / 2.0) / adjusted_n
+    return adjusted_p * (1.0 - adjusted_p) / adjusted_n
+
+
+def tost_equivalence(
+    first: Rate,
+    second: Rate,
+    *,
+    margin: float = EQUIVALENCE_MARGIN,
+    alpha: float = TOST_ALPHA,
+) -> Equivalence | None:
+    """Whether two success rates are equivalent within `margin`, by TOST.
+
+    Two one-sided tests against the margin, which is the same as asking whether the
+    (1-2*alpha) interval for the difference lies wholly inside +/- margin. `None` when
+    either arm has no graded episode: an equivalence claim needs two rates, and 0/0 is
+    not one.
+    """
+    first_rate, second_rate = first.value, second.value
+    if first_rate is None or second_rate is None:
+        return None
+
+    z = statistics.NormalDist().inv_cdf(1.0 - alpha)
+    difference = first_rate - second_rate
+    variance = _adjusted_variance(first, z) + _adjusted_variance(second, z)
+    standard_error = math.sqrt(variance)
+
+    p_lower = _phi((difference - margin) / standard_error)
+    p_upper = 1.0 - _phi((difference + margin) / standard_error)
+    interval = Interval(low=difference - z * standard_error, high=difference + z * standard_error)
+    equivalent = max(p_lower, p_upper) < alpha
+
+    if equivalent:
+        reason = (
+            f"the {1 - 2 * alpha:.0%} interval for the difference lies inside "
+            f"+/-{margin:.0%}, so the two success rates are equivalent at this margin"
+        )
+    elif interval.low > -margin or interval.high < margin:
+        reason = (
+            f"the {1 - 2 * alpha:.0%} interval lies outside +/-{margin:.0%}, so the arms "
+            f"differ by more than the margin: not equivalent, and not merely underpowered"
+        )
+    else:
+        reason = (
+            f"the {1 - 2 * alpha:.0%} interval is wider than +/-{margin:.0%}, so this run is "
+            f"underpowered to show equivalence either way -- which is not the same as showing "
+            f"the arms differ"
+        )
+
+    return Equivalence(
+        margin=margin,
+        alpha=alpha,
+        difference=difference,
+        interval=interval,
+        p_lower=p_lower,
+        p_upper=p_upper,
+        equivalent=equivalent,
+        reason=reason,
+    )
+
+
+def success_rate_wording(
+    first: Rate,
+    second: Rate,
+    *,
+    margin: float = EQUIVALENCE_MARGIN,
+    alpha: float = TOST_ALPHA,
+) -> tuple[str, Equivalence | None]:
+    """The words a report may use about two success rates, and the test behind them.
+
+    Spec §7 item 10: "equal" is allowed only where the equivalence test passes;
+    otherwise the text says "comparable". Returning the phrase rather than leaving the
+    choice to whoever writes the prose, because the failure mode is a sentence that
+    quietly upgrades "did not differ detectably" into "did not differ".
+    """
+    verdict = tost_equivalence(first, second, margin=margin, alpha=alpha)
+    wording = (
+        "equal success rate"
+        if verdict is not None and verdict.equivalent
+        else "comparable success rate"
+    )
+    return wording, verdict
 
 
 class ArmMismatch(BaseModel):
@@ -1180,6 +1318,27 @@ def _summary(
             "  unranked (no success to divide by, so not compared): "
             f"{', '.join(a.value for a in pareto.unranked)}"
         )
+    lines.append(
+        f"Success-rate equivalence (pre-registered TOST, margin +/-{EQUIVALENCE_MARGIN:.0%}, "
+        f"alpha {TOST_ALPHA}; spec §7 item 10):"
+    )
+    by_arm = {triple.arm: triple for triple in triples}
+    semantic, precondition = by_arm.get(Arm.SEMANTIC), by_arm.get(Arm.PRECONDITION)
+    if semantic is None or precondition is None:
+        lines.append("  not computable here: both dispatch arms need a graded episode")
+    else:
+        wording, verdict = success_rate_wording(semantic.success, precondition.success)
+        lines.append(f'  arm 2 vs arm 3 success rates are a "{wording}" by this test')
+        if verdict is None:
+            lines.append("  no test ran: an arm has no graded episode to take a rate over")
+        else:
+            lines.append(
+                f"  difference={verdict.difference:+.3f}"
+                f" {1 - 2 * verdict.alpha:.0%} interval"
+                f" [{verdict.interval.low:+.3f}, {verdict.interval.high:+.3f}]"
+                f" p_lower={verdict.p_lower:.3f} p_upper={verdict.p_upper:.3f}"
+            )
+            lines.append(f"  {verdict.reason}")
     lines += [
         "",
         f"Mismatch comparison (arm 2 vs arm 3, matched N={comparison.matched_n}, "
