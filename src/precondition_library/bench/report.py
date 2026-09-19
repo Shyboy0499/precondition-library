@@ -143,6 +143,11 @@ class AblationRow(BaseModel):
     `ground_truth_ok=False` and reads exactly like a resolution that simply failed
     to repair the fault, when the finding is that it repaired it destructively."""
     mean_tokens: Mean
+    mean_embedding_tokens: Mean
+    """Arm 2's similarity-seam spend, in its own currency. Reported beside the LLM tokens
+    rather than inside them, so a reader can see that one arm pays a second bill when the
+    seam is an embedding model (issue #104). Always zero while the seam is lexical."""
+    mean_embedding_calls: Mean
     mean_uncached_tokens_in: Mean
     """Input tokens billed at the full input rate. Reported beside the cache-read mean
     so a reader can see the split pricing needs, rather than one summed input number
@@ -532,6 +537,11 @@ def ablation_table(ledger: Path) -> list[AblationRow]:
         graded, episodes = computed[0], computed[1]
         invalid, success, mismatch, gaming = computed[2:6]
         tokens, uncached, cached, write, calls, wall = computed[6:]
+        # Computed here rather than added to `_rows`' result: that tuple already carries
+        # twelve positional values, and two more for a currency only arm 2 spends is the
+        # kind of thing that gets unpacked in the wrong order.
+        embedding = _mean(r.embedding_tokens for r in graded)
+        embedding_calls = _mean(r.embedding_calls for r in graded)
         rows.append(
             AblationRow(
                 arm=arm,
@@ -544,6 +554,8 @@ def ablation_table(ledger: Path) -> list[AblationRow]:
                 mismatch=mismatch,
                 spec_gaming=gaming,
                 mean_tokens=tokens,
+                mean_embedding_tokens=embedding,
+                mean_embedding_calls=embedding_calls,
                 mean_uncached_tokens_in=uncached,
                 mean_cached_tokens_in=cached,
                 mean_cache_write_tokens_in=write,
@@ -1050,6 +1062,10 @@ def _write_ablation_csv(path: Path, rows: list[AblationRow]) -> None:
         "spec_gaming_rate",
         "mean_tokens",
         "mean_tokens_n",
+        "mean_embedding_tokens",
+        "mean_embedding_tokens_n",
+        "mean_embedding_calls",
+        "mean_embedding_calls_n",
         "mean_uncached_tokens_in",
         "mean_uncached_tokens_in_n",
         "mean_cached_tokens_in",
@@ -1085,6 +1101,10 @@ def _write_ablation_csv(path: Path, rows: list[AblationRow]) -> None:
                 row.spec_gaming.value,
                 row.mean_tokens.value,
                 row.mean_tokens.n,
+                row.mean_embedding_tokens.value,
+                row.mean_embedding_tokens.n,
+                row.mean_embedding_calls.value,
+                row.mean_embedding_calls.n,
                 row.mean_uncached_tokens_in.value,
                 row.mean_uncached_tokens_in.n,
                 row.mean_cached_tokens_in.value,
@@ -1382,6 +1402,21 @@ def _summary(
             "  unranked (no success to divide by, so not compared): "
             f"{', '.join(a.value for a in pareto.unranked)}"
         )
+    lines.append(
+        "Similarity-seam currency (arm 2 only; never added to the LLM token counts, "
+        "because one arm pays it and the others do not):"
+    )
+    if not rows:
+        lines.append("  no cells in this ledger")
+    for row in rows:
+        if row.mean_embedding_tokens.value:
+            lines.append(
+                f"  {row.arm.value} {row.fault_type} occ={row.occurrence_index}:"
+                f" {_format_mean(row.mean_embedding_tokens, 'embedding tokens')}"
+                f" {_format_mean(row.mean_embedding_calls, 'seam calls')}"
+            )
+    if not any(row.mean_embedding_tokens.value for row in rows):
+        lines.append("  0: the seam is lexical and spends nothing, so no arm pays a second bill")
     lines.append(
         "Prompt prefixes the run sends (raw characters, shared by every arm -- the "
         "per-arm difference is transcript growth around the prefix, not the prefix):"

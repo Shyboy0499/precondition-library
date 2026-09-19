@@ -19,7 +19,11 @@ from precondition_library.library import (
 from precondition_library.program import Predicate, Program, ProgramStatus, Provenance
 from precondition_library.runtime.probes import evaluate_preconditions
 from precondition_library.signatures import StateFingerprint, TaskSignature
-from precondition_library.similarity import lexical_similarity
+from precondition_library.similarity import (
+    SimilarityUsage,
+    lexical_similarity,
+    similarity_usage,
+)
 
 INTENT = "reconcile local commits with upstream"
 
@@ -224,3 +228,36 @@ def test_similarity_returns_a_program_its_preconditions_reject(make_sandbox, tmp
     assert [item.program.id for item in matched] == ["a-similar"], (
         "arm 2 returned nothing: the arm is state-aware, so this is a different experiment"
     )
+
+
+# --- the usage wire on the seam (issue #104) ---------------------------------
+
+
+def test_the_lexical_seam_spends_nothing_and_does_not_report_usage() -> None:
+    """The shipped implementation is a plain function: there is nothing to report.
+
+    `similarity_usage` must therefore answer zero rather than raising or requiring the seam
+    to implement something. This is the state every row's `embedding_tokens` is 0 in.
+    """
+    assert similarity_usage(lexical_similarity) == SimilarityUsage()
+
+
+def test_a_seam_that_reports_usage_is_asked_for_it() -> None:
+    """An embedding model behind the seam implements `usage`, and is the only source of it."""
+
+    class _Seam:
+        def __init__(self) -> None:
+            self._tokens = 0
+
+        def __call__(self, query: str, candidate: str) -> float:
+            self._tokens += 3
+            return 0.5
+
+        def usage(self) -> SimilarityUsage:
+            return SimilarityUsage(tokens=self._tokens, calls=1)
+
+    seam = _Seam()
+    seam("a", "b")
+
+    assert similarity_usage(seam) == SimilarityUsage(tokens=3, calls=1)
+    assert similarity_usage(lexical_similarity) == SimilarityUsage()

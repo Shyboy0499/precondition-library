@@ -91,6 +91,21 @@ class EpisodeRecord(BaseModel):
 
     tokens_in: int
     tokens_out: int
+    embedding_tokens: int = 0
+    """Tokens arm 2's similarity seam spent, when it is an embedding model. **Its own
+    currency**: never added to `tokens_in` or `tokens_out`, because it is spent by one arm
+    and not the others, and folding it in would make arm 2's cost depend on a model the
+    other arms never call (issue #104).
+
+    Always 0 while the seam is lexical -- the shipped implementation spends nothing -- so a
+    non-zero value here is itself the signal that an embedding model is behind the seam.
+    An invalid row carries 0: it records the LLM spend it accrued, and the seam is not
+    reached.
+    """
+    embedding_calls: int = 0
+    """How many times the seam was called, so a reader can see whether embeddings are
+    recomputed per episode or reused. The token count says what it cost; this says whether
+    it had to pay again."""
     uncached_tokens_in: int = 0
     """Input tokens billed at the full input rate: the prompt minus what the cache
     served. Metered separately from `cached_tokens_in` because a cache hit is billed at
