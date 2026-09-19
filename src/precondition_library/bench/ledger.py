@@ -103,9 +103,17 @@ class EpisodeRecord(BaseModel):
     reached.
     """
     embedding_calls: int = 0
-    """How many times the seam was called, so a reader can see whether embeddings are
-    recomputed per episode or reused. The token count says what it cost; this says whether
-    it had to pay again."""
+    """Calls the seam reports making **to its own provider**, so a reader can see whether
+    embeddings are recomputed per episode or reused. The token count says what it cost; this
+    says whether it had to pay again.
+
+    Deliberately not "how many times the seam was asked for a score". Those differ exactly
+    when an implementation batches or caches -- it can be asked for a hundred scores and make
+    one call -- and only the implementation knows which. The invocation count is also mostly
+    a property of the *dispatch loop* (how many admitted candidates it scores) rather than of
+    the embedding currency, so it would say little about arm 2's cost while looking like it
+    did. A reader who wants that number wants the library's size, which the ledger already
+    records per episode."""
     uncached_tokens_in: int = 0
     """Input tokens billed at the full input rate: the prompt minus what the cache
     served. Metered separately from `cached_tokens_in` because a cache hit is billed at
