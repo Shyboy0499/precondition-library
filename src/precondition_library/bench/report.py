@@ -1416,7 +1416,7 @@ def _summary(
             lines.append(
                 f"  {row.arm.value} {row.fault_type} occ={row.occurrence_index}:"
                 f" {_format_mean(row.mean_embedding_tokens, 'embedding tokens')}"
-                f" {_format_mean(row.mean_embedding_calls, 'seam calls')}"
+                f" {_format_mean(row.mean_embedding_calls, 'embedding calls')}"
             )
     if not any(row.mean_embedding_tokens.value for row in rows):
         lines.append("  0: the seam is lexical and spends nothing, so no arm pays a second bill")
