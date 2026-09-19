@@ -368,6 +368,50 @@ def success_rate_wording(
     return wording, verdict
 
 
+class PromptPrefix(BaseModel):
+    """The raw character length of a system prompt the run sends, by phase.
+
+    **Raw** means characters, not tokens: it is a size of the text as written, and it
+    is deliberately not presented as a token count, which only the provider can give.
+    """
+
+    phase: str
+    chars: int
+    source: str
+
+
+def prompt_prefix_lengths() -> list[PromptPrefix]:
+    """The two prompt prefixes this repository sends, in raw characters.
+
+    Reported once each rather than per arm, and that is a finding rather than a
+    shortcut (issue #8, item 5): both prompts are module-level constants -- one in
+    `agents/react.py`, one derived in `agents/compile.py` -- and **all three arms send
+    the same ones**. A per-arm column would print the same number three times and imply
+    a difference that does not exist. What differs between the arms is how much
+    transcript accumulates around the prefix, which the per-episode input tokens carry,
+    not the prefix itself.
+
+    The compile prefix is measured with no variant ids named, which is the shortest form
+    it takes; naming an intent's declared variants makes it longer by their joined
+    length. It is also the only one of the two that is not a fixed constant.
+    """
+    from ..agents import compile as compile_agent
+    from ..agents import react
+
+    return [
+        PromptPrefix(
+            phase="learn (ReAct)",
+            chars=len(react.SYSTEM_PROMPT),
+            source="agents/react.py SYSTEM_PROMPT (fixed)",
+        ),
+        PromptPrefix(
+            phase="compile",
+            chars=len(compile_agent._system_prompt(None)),
+            source="agents/compile.py _system_prompt (grows by the named variant ids)",
+        ),
+    ]
+
+
 class ArmMismatch(BaseModel):
     """One arm's side of the matched comparison."""
 
@@ -1318,6 +1362,12 @@ def _summary(
             "  unranked (no success to divide by, so not compared): "
             f"{', '.join(a.value for a in pareto.unranked)}"
         )
+    lines.append(
+        "Prompt prefixes the run sends (raw characters, shared by every arm -- the "
+        "per-arm difference is transcript growth around the prefix, not the prefix):"
+    )
+    for prefix in prompt_prefix_lengths():
+        lines.append(f"  {prefix.phase}: {prefix.chars:,} chars -- {prefix.source}")
     lines.append(
         f"Success-rate equivalence (pre-registered TOST, margin +/-{EQUIVALENCE_MARGIN:.0%}, "
         f"alpha {TOST_ALPHA}; spec §7 item 10):"
