@@ -185,6 +185,51 @@ class ArmBreakEven(BaseModel):
     detail: str
 
 
+class ArmTriple(BaseModel):
+    """One arm's three numbers, each carrying its own denominator.
+
+    What spec §7 item 8 and Claim 1 promise: cost per success beside cost per
+    episode, because an arm that succeeds more often may legitimately spend more per
+    episode. Pooled over every graded episode of the arm, including the episodes that
+    failed -- dropping them would flatter amortization (§7 item 7), and each field
+    carries the count it was taken over so a reader can see how much is pooled.
+
+    The cell-level ablation table remains the detail; this is the summary a reader
+    compares arms on, and it is deliberately not a row of that table.
+    """
+
+    arm: Arm
+    graded_episodes: int
+    success: Rate
+    tokens_per_episode: Mean
+    tokens_per_success: Mean
+    """Total tokens over the arm's graded episodes, divided by how many of them reached
+    the expected state. `n` is that count of successes, so an arm with none reports
+    `value=None` with `n=0` -- 0/0 has no value, and 0.0 would read as free."""
+
+
+class ArmDominance(BaseModel):
+    """Which arms beat this one on all three numbers at once."""
+
+    arm: Arm
+    dominated_by: list[Arm]
+
+
+class ParetoFrontier(BaseModel):
+    """The triple's Pareto set: the arms nothing else beats on all three at once.
+
+    A dominates B when A's success rate is at least B's and both of A's cost figures
+    are at most B's, with at least one of the three strict. `unranked` holds arms with
+    no cost-per-success to compare -- they are excluded from dominance rather than
+    treated as best or worst, because silently assigning either would invent a
+    ranking the run does not support.
+    """
+
+    frontier: list[Arm]
+    dominated: list[ArmDominance]
+    unranked: list[Arm]
+
+
 class ArmMismatch(BaseModel):
     """One arm's side of the matched comparison."""
 
@@ -621,6 +666,178 @@ def _write_csv(path: Path, header: list[str], rows: list[list[object]]) -> None:
         writer.writerows([[_cell(value) for value in row] for row in rows])
 
 
+def arm_triples(ledger: Path) -> list[ArmTriple]:
+    """Success rate, tokens per episode, and tokens per success -- one row per arm.
+
+    Pooled over every graded episode, both roles. Success rate belongs in the triple
+    without the role split: it is the proportion of episodes the arm handled, and
+    restricting it to the replays would exclude exactly the learning pass that decides
+    whether an arm pays off. The role split stays visible in the cell table.
+    """
+    groups: dict[Arm, list[EpisodeRecord]] = {}
+    for record in _graded(read(ledger)):
+        groups.setdefault(record.arm, []).append(record)
+
+    triples: list[ArmTriple] = []
+    for arm in sorted(groups, key=lambda candidate: candidate.value):
+        records = groups[arm]
+        successes = [r for r in records if r.succeeded]
+        tokens = [r.tokens_in + r.tokens_out for r in records]
+        # `_mean` over the successes only cannot express this: it would be the mean
+        # cost of a successful episode, not the arm's cost divided by its successes
+        # (which is what "cost per success" means, and what makes a cheap arm that
+        # rarely succeeds look as bad as it is).
+        if successes:
+            per_success = Mean(n=len(successes), value=sum(tokens) / len(successes))
+        else:
+            per_success = Mean(n=0, value=None)
+        triples.append(
+            ArmTriple(
+                arm=arm,
+                graded_episodes=len(records),
+                success=Rate(numerator=len(successes), denominator=len(records)),
+                tokens_per_episode=_mean(tokens),
+                tokens_per_success=per_success,
+            )
+        )
+    return triples
+
+
+def pareto_frontier(triples: list[ArmTriple]) -> ParetoFrontier:
+    """Which arms nothing else beats on success, tokens per episode and per success.
+
+    The three are reported together because they trade off: an arm that spends fewer
+    tokens per episode by attempting less will lose on success rate, and one that
+    succeeds more by retrying will lose on cost. An arm is only credited with
+    dominating another if it is no worse on *all three*, so the frontier is the honest
+    summary of which arms a reader should still be choosing between.
+    """
+    ranked = [t for t in triples if t.tokens_per_success.value is not None]
+    unranked = [t.arm for t in triples if t.tokens_per_success.value is None]
+
+    def dominates(better: ArmTriple, worse: ArmTriple) -> bool:
+        assert better.success.value is not None and worse.success.value is not None
+        assert better.tokens_per_success.value is not None
+        assert worse.tokens_per_success.value is not None
+        assert better.tokens_per_episode.value is not None
+        assert worse.tokens_per_episode.value is not None
+        no_worse = (
+            better.success.value >= worse.success.value
+            and better.tokens_per_episode.value <= worse.tokens_per_episode.value
+            and better.tokens_per_success.value <= worse.tokens_per_success.value
+        )
+        strict = (
+            better.success.value > worse.success.value
+            or better.tokens_per_episode.value < worse.tokens_per_episode.value
+            or better.tokens_per_success.value < worse.tokens_per_success.value
+        )
+        return no_worse and strict
+
+    dominated = [
+        ArmDominance(
+            arm=candidate.arm,
+            dominated_by=[
+                other.arm
+                for other in ranked
+                if other.arm is not candidate.arm and dominates(other, candidate)
+            ],
+        )
+        for candidate in ranked
+    ]
+    return ParetoFrontier(
+        frontier=[d.arm for d in dominated if not d.dominated_by],
+        dominated=[d for d in dominated if d.dominated_by],
+        unranked=unranked,
+    )
+
+
+def _write_triple_csv(path: Path, triples: list[ArmTriple], pareto: ParetoFrontier) -> None:
+    on_frontier = set(pareto.frontier)
+    by_arm: dict[Arm, list[str]] = {}
+    for item in pareto.dominated:
+        by_arm[item.arm] = [dominator.value for dominator in item.dominated_by]
+    header = [
+        "arm",
+        "graded_episodes",
+        "success_numerator",
+        "success_denominator",
+        "success_rate",
+        "tokens_per_episode",
+        "tokens_per_episode_n",
+        "tokens_per_success",
+        "tokens_per_success_n",
+        "on_frontier",
+        "dominated_by",
+    ]
+    _write_csv(
+        path,
+        header,
+        [
+            [
+                triple.arm.value,
+                triple.graded_episodes,
+                triple.success.numerator,
+                triple.success.denominator,
+                triple.success.value,
+                triple.tokens_per_episode.value,
+                triple.tokens_per_episode.n,
+                triple.tokens_per_success.value,
+                triple.tokens_per_success.n,
+                triple.arm in on_frontier,
+                " ".join(by_arm.get(triple.arm, [])),
+            ]
+            for triple in triples
+        ],
+    )
+
+
+def _plot_pareto(triples: list[ArmTriple], pareto: ParetoFrontier, dest: Path) -> None:
+    """Two of the three axes are drawn, and the third is annotated on each point.
+
+    A three-metric frontier cannot be drawn faithfully on a plane: any projection
+    hides dominance that the third axis would have shown. So the plot does not claim
+    to be the frontier. It draws tokens per episode against success rate with the
+    frontier marked, and prints each arm's tokens per success beside its point; the
+    frontier itself is computed on all three and stated in the report text and the CSV.
+    """
+    plt = _pyplot()
+    figure, axes = plt.subplots(figsize=(7.0, 4.5))
+    for label, group, marker in (
+        ("on the frontier", [t for t in triples if t.arm in set(pareto.frontier)], "o"),
+        ("dominated", [t for t in triples if t.arm not in set(pareto.frontier)], "x"),
+    ):
+        if not group:
+            continue
+        axes.scatter(
+            [t.tokens_per_episode.value for t in group],
+            [t.success.value for t in group],
+            marker=marker,
+            s=60,
+            label=label,
+        )
+    for triple in triples:
+        per_success = triple.tokens_per_success.value
+        annotation = (
+            f"{triple.arm.value}\n{per_success:,.0f} tok/success"
+            if per_success is not None
+            else f"{triple.arm.value}\nno success"
+        )
+        axes.annotate(
+            annotation,
+            (triple.tokens_per_episode.value, triple.success.value),
+            textcoords="offset points",
+            xytext=(6, 6),
+            fontsize=8,
+        )
+    axes.set_xlabel("tokens per episode (lower is better)")
+    axes.set_ylabel("success rate (higher is better)")
+    axes.set_title("The triple: cost per episode vs success, cost per success annotated")
+    if triples:
+        axes.legend(title="Pareto")
+    figure.savefig(dest, dpi=150)
+    plt.close(figure)
+
+
 def _write_ablation_csv(path: Path, rows: list[AblationRow]) -> None:
     header = [
         "arm",
@@ -846,6 +1063,8 @@ def _summary(
     points: list[CostPoint],
     comparison: MismatchComparison,
     counts: dict[OccurrenceRole, int],
+    triples: list[ArmTriple],
+    pareto: ParetoFrontier,
 ) -> str:
     invalid = _overall_invalid(rows)
     lines = [
@@ -928,6 +1147,41 @@ def _summary(
         lines.append(f"  break-even: {finding.detail}")
     lines += [
         "",
+        "Arm triples (secondary; pooled over every graded episode of the arm, failed ones "
+        "included -- the cell table is the detail):",
+    ]
+    for triple in triples:
+        per_success = triple.tokens_per_success
+        rendered_success = (
+            "undefined (no episode reached the expected state)"
+            if per_success.value is None
+            else _format_mean(per_success, "tokens/success")
+        )
+        lines.append(
+            f"  {triple.arm.value} graded={triple.graded_episodes}"
+            f" success={_format_rate(triple.success)}"
+            f" {_format_mean(triple.tokens_per_episode, 'tokens/episode')}"
+            f" {rendered_success}"
+        )
+    lines.append(
+        "Pareto over the three (an arm is only dominated if it is no better on success "
+        "and no cheaper on both costs):"
+    )
+    if pareto.frontier:
+        lines.append(f"  on the frontier: {', '.join(a.value for a in pareto.frontier)}")
+    else:
+        lines.append("  on the frontier: none -- no arm has a cost per success to rank")
+    for item in pareto.dominated:
+        lines.append(
+            f"  dominated: {item.arm.value} by {', '.join(a.value for a in item.dominated_by)}"
+        )
+    if pareto.unranked:
+        lines.append(
+            "  unranked (no success to divide by, so not compared): "
+            f"{', '.join(a.value for a in pareto.unranked)}"
+        )
+    lines += [
+        "",
         f"Mismatch comparison (arm 2 vs arm 3, matched N={comparison.matched_n}, "
         "variant occurrences only -- the independent ones):",
     ]
@@ -956,9 +1210,10 @@ def _summary(
 def write_report(ledger: Path, dest: Path) -> Path:
     """Emit the tables and figures into `dest` for the README to embed.
 
-    Writes `ablation_table.csv`, `cost_curve.csv` and `mismatch_comparison.csv`
-    (the numbers, each rate beside its denominator), `cost_curve.png` and
-    `mismatch_comparison.png` (renderings of those numbers) and `report.txt`
+    Writes `ablation_table.csv`, `cost_curve.csv`, `mismatch_comparison.csv` and
+    `arm_triples.csv` (the numbers, each rate and each mean beside its denominator),
+    `cost_curve.png`, `mismatch_comparison.png` and `pareto.png` (renderings of those
+    numbers) and `report.txt`
     (the caveats, the invalid rate, the occurrences each figure used, and the
     plain statement that the primary pre-registered analysis is not here).
     Returns `dest`.
@@ -967,12 +1222,18 @@ def write_report(ledger: Path, dest: Path) -> Path:
     points = cost_curve(ledger)
     comparison = mismatch_comparison(ledger)
     counts = occurrence_counts(ledger)
+    triples = arm_triples(ledger)
+    pareto = pareto_frontier(triples)
 
     dest.mkdir(parents=True, exist_ok=True)
     _write_ablation_csv(dest / "ablation_table.csv", rows)
     _write_cost_csv(dest / "cost_curve.csv", points)
     _write_mismatch_csv(dest / "mismatch_comparison.csv", comparison)
+    _write_triple_csv(dest / "arm_triples.csv", triples, pareto)
     _plot_cost_curve(points, dest / "cost_curve.png")
     _plot_mismatch_comparison(comparison, dest / "mismatch_comparison.png")
-    (dest / "report.txt").write_text(_summary(rows, points, comparison, counts), encoding="utf-8")
+    _plot_pareto(triples, pareto, dest / "pareto.png")
+    (dest / "report.txt").write_text(
+        _summary(rows, points, comparison, counts, triples, pareto), encoding="utf-8"
+    )
     return dest

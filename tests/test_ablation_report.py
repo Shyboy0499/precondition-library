@@ -28,9 +28,11 @@ from precondition_library.bench.report import (
     Mean,
     Rate,
     ablation_table,
+    arm_triples,
     break_even,
     cost_curve,
     mismatch_comparison,
+    pareto_frontier,
     wilson_interval,
     write_report,
 )
@@ -786,3 +788,135 @@ def test_a_run_with_no_spec_gaming_says_zero_rather_than_nothing(tmp_path: Path)
 
     assert "Spec-gaming" in report
     assert "0/1" in report
+
+
+# --- the triple and the Pareto frontier (issue #8, item 6) -------------------
+
+
+def test_cost_per_success_is_the_arms_cost_over_its_successes(tmp_path: Path) -> None:
+    """Not the mean cost of a successful episode, which is a different number.
+
+    One success costing 100 and one failure costing 300: the arm spent 400 tokens to
+    buy one success, so cost per success is 400. Averaging the successful episodes
+    alone would report 100 and make an arm that fails half the time look cheapest.
+    """
+    ledger = _write(
+        tmp_path / "ledger.jsonl",
+        [
+            _record(arm=Arm.REACT, seed=1, tokens_in=100, ground_truth_ok=True),
+            _record(arm=Arm.REACT, seed=2, tokens_in=300, ground_truth_ok=False),
+        ],
+    )
+
+    (triple,) = arm_triples(ledger)
+
+    assert triple.graded_episodes == 2
+    assert triple.success == Rate(numerator=1, denominator=2)
+    assert triple.tokens_per_episode == Mean(n=2, value=200.0)
+    assert triple.tokens_per_success == Mean(n=1, value=400.0)
+
+
+def test_an_arm_with_no_success_has_no_cost_per_success(tmp_path: Path) -> None:
+    """0/0 has no value, and 0.0 would read as free rather than as unmeasured."""
+    ledger = _write(
+        tmp_path / "ledger.jsonl",
+        [_record(arm=Arm.REACT, seed=1, tokens_in=100, ground_truth_ok=False)],
+    )
+
+    (triple,) = arm_triples(ledger)
+
+    assert triple.tokens_per_success == Mean(n=0, value=None)
+    assert triple.success == Rate(numerator=0, denominator=1)
+
+
+def test_failed_episodes_stay_in_the_episode_denominator(tmp_path: Path) -> None:
+    """§7 item 7: dropping them would make amortization look better than it is."""
+    ledger = _write(
+        tmp_path / "ledger.jsonl",
+        [
+            _record(arm=Arm.REACT, seed=1, tokens_in=50, ground_truth_ok=True),
+            _record(arm=Arm.REACT, seed=2, tokens_in=150, ground_truth_ok=False),
+        ],
+    )
+
+    (triple,) = arm_triples(ledger)
+
+    assert triple.tokens_per_episode == Mean(n=2, value=100.0)
+
+
+def test_the_frontier_needs_all_three_to_be_no_worse(tmp_path: Path) -> None:
+    """Dominance is on the triple, so one axis being better is not enough.
+
+    `react` is cheaper per episode and per success and succeeds at least as often, so
+    it dominates `precondition`. `semantic` never succeeds, so it has no cost per
+    success to be ranked on and is reported unranked rather than as best or worst.
+    """
+    ledger = _write(
+        tmp_path / "ledger.jsonl",
+        [
+            _record(arm=Arm.REACT, seed=1, tokens_in=10, ground_truth_ok=True),
+            _record(arm=Arm.REACT, seed=2, tokens_in=10, ground_truth_ok=True),
+            _record(arm=Arm.PRECONDITION, seed=1, tokens_in=30, ground_truth_ok=True),
+            _record(arm=Arm.PRECONDITION, seed=2, tokens_in=30, ground_truth_ok=False),
+            _record(arm=Arm.SEMANTIC, seed=1, tokens_in=20, ground_truth_ok=False),
+        ],
+    )
+    triples = arm_triples(ledger)
+
+    pareto = pareto_frontier(triples)
+
+    assert pareto.frontier == [Arm.REACT]
+    assert [(d.arm, d.dominated_by) for d in pareto.dominated] == [(Arm.PRECONDITION, [Arm.REACT])]
+    assert pareto.unranked == [Arm.SEMANTIC]
+
+
+def test_a_trade_off_leaves_both_arms_on_the_frontier(tmp_path: Path) -> None:
+    """The case the triple exists for: cheaper but less successful is not dominated."""
+    ledger = _write(
+        tmp_path / "ledger.jsonl",
+        [
+            _record(arm=Arm.REACT, seed=1, tokens_in=10, ground_truth_ok=True),
+            _record(arm=Arm.REACT, seed=2, tokens_in=10, ground_truth_ok=True),
+            _record(arm=Arm.PRECONDITION, seed=1, tokens_in=1, ground_truth_ok=True),
+            _record(arm=Arm.PRECONDITION, seed=2, tokens_in=1, ground_truth_ok=False),
+        ],
+    )
+
+    pareto = pareto_frontier(arm_triples(ledger))
+
+    assert sorted(a.value for a in pareto.frontier) == ["precondition", "react"]
+    assert pareto.dominated == []
+
+
+def test_the_report_states_the_triple_and_emits_the_pareto(tmp_path: Path) -> None:
+    ledger = _write(
+        tmp_path / "ledger.jsonl",
+        [
+            _record(arm=Arm.REACT, seed=1, tokens_in=10, ground_truth_ok=True),
+            _record(arm=Arm.PRECONDITION, seed=1, tokens_in=30, ground_truth_ok=True),
+        ],
+    )
+
+    dest = write_report(ledger, tmp_path / "out")
+    report = (dest / "report.txt").read_text(encoding="utf-8")
+
+    assert "Arm triples" in report
+    assert "tokens/success" in report
+    assert "Pareto over the three" in report
+    assert "on the frontier" in report
+    csv = (dest / "arm_triples.csv").read_text(encoding="utf-8")
+    assert "tokens_per_success" in csv and "on_frontier" in csv
+    assert (dest / "pareto.png").exists()
+
+
+def test_the_report_says_when_nothing_is_rankable(tmp_path: Path) -> None:
+    """No success anywhere: the frontier is empty and the text must not claim one."""
+    ledger = _write(
+        tmp_path / "ledger.jsonl",
+        [_record(arm=Arm.REACT, seed=1, tokens_in=10, ground_truth_ok=False)],
+    )
+
+    report = (write_report(ledger, tmp_path / "out") / "report.txt").read_text(encoding="utf-8")
+
+    assert "on the frontier: none" in report
+    assert "unranked" in report
