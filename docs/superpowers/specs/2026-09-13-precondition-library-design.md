@@ -25,6 +25,7 @@
 | 15 | 2026-09-18 | **Figure 2 reports cumulative amortized cost with the break-even, not per-occurrence means (issue #8).** Claim 1 is about cost falling across occurrences, and a mean per occurrence is a snapshot: it says what one occurrence cost, not whether the compile has been repaid, so no crossover could be read off the figure the claim rests on. Figure 2 now plots the running amortized tokens and LLM calls per episode, with the break-even marked on the figure and stated in the report text, and §7's secondary-metrics list says so. `bench/report.py` computes the accumulation and reports why a crossing is not computable when it is not. No metric definition, denominator or reported number changes, the ledger schema is unchanged, and the analysis reported is the one rev 13 describes, read off an accumulating series rather than a per-occurrence one. **Logged before any eval data existed** — no eval episode has been run. |
 | 16 | 2026-09-18 | **Spec-gaming becomes its own recorded fact and its own column (issue #9).** §7's ledger gains `refs_intact`, the fact of whether a resolution left the recorded refs and upstream's history alone; a row that reached the expected state while that is false was spec-gamed, and the ablation table and report now count it separately from a resolution that simply failed. Recorded as a fact and derived, not stored as a verdict, for the reason §7 already gives for `misfired`/`succeeded`: a stored verdict could not sit beside `ground_truth_ok` without the two disagreeing. `null` means the check did not run and is never counted as gaming. No metric definition, denominator or reported number changes and no result is claimed — no episode has been run. |
 | 17 | 2026-09-18 | **The arm triple and its Pareto frontier are reported, making item 8's promise true (issue #8).** §7 item 8 and Claim 1 both require cost per success beside cost per episode, and the report stated only the latter. It now reports the triple — success rate, tokens per episode, tokens per success, each with the denominator it was taken over — pooled over every graded episode of the arm with the failures kept in the denominator per item 7, plus a Pareto frontier over the three so no arm is read on one axis alone (`arm_triples.csv`, `pareto.png`). Cost per success is the arm's total tokens over its successes, not the mean cost of a successful episode; the two differ whenever an arm fails, and the second would flatter an arm that fails often. An arm with no success has no cost per success and is reported unranked rather than assigned a place. No metric definition, denominator or reported number changes and no result is claimed — no episode has been run. |
+| 18 | 2026-09-18 | **A pre-registered TOST gates any "equal success rate" wording, and the verdict is reported (issue #8, item 8).** §7 gains principle 10: "equal" requires an equivalence test and "comparable" is the fallback, at a margin of ±10pp and α = 0.05 registered here before any data. `bench/report.py` runs it on arms 2 and 3's pooled success rates and prints the difference, the 90% interval, both one-sided p-values and which of three cases holds — equivalent; outside the margin; or too wide to decide, which is an underpowered run rather than a difference. The margin and alpha are named constants, so the choice is visible and dated rather than buried in a call, and the variance is Agresti–Coull-adjusted so a 0%/100% rate cannot produce a zero-width interval. **No live document currently claims an equal success rate** — Claim 1 already says an arm that succeeds more often may spend more, and defers to cost per success — so this closes the gap between that claim and its evidence before such a sentence can be written, rather than correcting one. No metric definition, denominator or reported number changes and no result is claimed; no episode has been run. |
 
 ---
 
@@ -676,6 +677,20 @@ after seeing results.
    `invalid` and reported as a rate. **An invalid rate above 10% makes the run
    suspect**, and it is re-run rather than analysed — infrastructure flakiness
    that removes episodes non-randomly is indistinguishable from a real effect.
+10. **"Equal success rate" requires an equivalence test; otherwise the text says
+   "comparable".** The words are not interchangeable: failing to detect a difference
+   is not evidence of none, and a run this size will usually fail to detect one. The
+   report runs a **TOST** on arms 2 and 3's pooled success rates at a
+   **pre-registered margin of ±10 proportion points and α = 0.05** — registered here,
+   before any data, because a margin chosen after seeing the interval can be widened
+   until equivalence passes. It reports the difference, the 90% interval, both
+   one-sided p-values, and which of three cases holds: equivalent within the margin;
+   outside the margin, so the arms differ by more than it; or too wide to decide,
+   which is an underpowered run and **not** a finding that the arms differ. The
+   verdict is produced by `bench/report.py` (`success_rate_wording`) rather than left
+   to whoever writes the prose, and its variance uses Agresti–Coull-adjusted
+   proportions, because the raw Wald variance is zero at a 0%/100% rate and would let
+   a single episode's zero-width interval pass as equivalence.
 
 #### The seed plan and the run invocation
 

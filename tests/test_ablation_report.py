@@ -24,6 +24,7 @@ from conftest import GIT_STATUS_AT_IMPORT, git_status_porcelain, make_record
 
 from precondition_library.bench.ledger import Arm, EpisodeRecord, OccurrenceRole, append
 from precondition_library.bench.report import (
+    EQUIVALENCE_MARGIN,
     SMALL_SAMPLE_N,
     Mean,
     Rate,
@@ -33,6 +34,8 @@ from precondition_library.bench.report import (
     cost_curve,
     mismatch_comparison,
     pareto_frontier,
+    success_rate_wording,
+    tost_equivalence,
     wilson_interval,
     write_report,
 )
@@ -920,3 +923,90 @@ def test_the_report_says_when_nothing_is_rankable(tmp_path: Path) -> None:
 
     assert "on the frontier: none" in report
     assert "unranked" in report
+
+
+# --- the pre-registered equivalence test (issue #8, item 8) ------------------
+
+
+def test_tost_declares_equivalence_when_the_interval_fits_the_margin() -> None:
+    """Two large, identical samples: the interval is inside the margin."""
+    verdict = tost_equivalence(
+        Rate(numerator=500, denominator=1000), Rate(numerator=505, denominator=1000)
+    )
+
+    assert verdict is not None
+    assert verdict.equivalent is True
+    assert verdict.margin == EQUIVALENCE_MARGIN
+    assert verdict.interval.low > -EQUIVALENCE_MARGIN
+    assert verdict.interval.high < EQUIVALENCE_MARGIN
+    assert "equivalent at this margin" in verdict.reason
+
+
+def test_tost_refuses_equivalence_when_the_interval_leaves_the_margin() -> None:
+    """A real difference: the interval lies wholly outside, which is not underpower."""
+    verdict = tost_equivalence(
+        Rate(numerator=900, denominator=1000), Rate(numerator=100, denominator=1000)
+    )
+
+    assert verdict is not None
+    assert verdict.equivalent is False
+    assert "not merely underpowered" in verdict.reason
+
+
+def test_tost_distinguishes_underpowered_from_different() -> None:
+    """The distinction the item turns on, and the one a bare "not equivalent" erases.
+
+    Two episodes each: the rates are close, but no interval this wide can fit inside
+    the margin, so the run cannot show equivalence. Saying "not equivalent" here would
+    read as evidence the arms differ, which two episodes cannot be.
+    """
+    verdict = tost_equivalence(Rate(numerator=1, denominator=2), Rate(numerator=1, denominator=2))
+
+    assert verdict is not None
+    assert verdict.equivalent is False
+    assert "underpowered to show equivalence" in verdict.reason
+    assert "not the same as showing the arms differ" in verdict.reason
+
+
+def test_tost_needs_two_rates() -> None:
+    """0/0 is not a rate, so there is nothing to compare."""
+    assert (
+        tost_equivalence(Rate(numerator=0, denominator=0), Rate(numerator=1, denominator=2)) is None
+    )
+
+
+def test_the_wording_follows_the_test_not_the_author() -> None:
+    """Spec §7 item 10: "equal" only where the test passes, else "comparable"."""
+    equal, equal_verdict = success_rate_wording(
+        Rate(numerator=500, denominator=1000), Rate(numerator=502, denominator=1000)
+    )
+    comparable, comparable_verdict = success_rate_wording(
+        Rate(numerator=1, denominator=2), Rate(numerator=1, denominator=2)
+    )
+
+    assert equal == "equal success rate"
+    assert equal_verdict is not None and equal_verdict.equivalent is True
+    assert comparable == "comparable success rate"
+    assert comparable_verdict is not None and comparable_verdict.equivalent is False
+
+
+def test_the_report_states_the_equivalence_verdict(tmp_path: Path) -> None:
+    ledger = _write(
+        tmp_path / "ledger.jsonl",
+        [_record(arm=Arm.SEMANTIC, seed=1), _record(arm=Arm.PRECONDITION, seed=1)],
+    )
+
+    report = (write_report(ledger, tmp_path / "out") / "report.txt").read_text(encoding="utf-8")
+
+    assert "Success-rate equivalence" in report
+    assert "margin +/-10%" in report
+    # Two episodes cannot show equivalence, so the report must not say "equal".
+    assert '"comparable success rate"' in report
+    assert "underpowered" in report
+
+
+def test_the_report_registers_the_margin_it_used(tmp_path: Path) -> None:
+    """An equivalence verdict without its margin and alpha says nothing."""
+    ledger = _write(tmp_path / "ledger.jsonl", [_record(arm=Arm.SEMANTIC, seed=1)])
+    report = (write_report(ledger, tmp_path / "out") / "report.txt").read_text(encoding="utf-8")
+    assert "alpha 0.05" in report
