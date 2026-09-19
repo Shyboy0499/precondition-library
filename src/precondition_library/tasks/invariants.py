@@ -8,7 +8,7 @@ the fault. The fault checkers each carry the clause that matters for their own s
 `lockfile_conflict` rejects a hand-resolved merge that drops a dependency), but
 those are per-fault. These two are general:
 
-* **Unrelated refs preserved.** Every ref under `refs/sandbox/` that existed when the
+* **Recorded state preserved.** Every ref under `refs/sandbox/` that existed when the
   episode started still resolves to the value it had. Those are where the injectors
   record ground truth, so they are also the proof the repository was not re-cloned or
   wiped: a fresh clone has no `refs/sandbox/` at all.
@@ -22,6 +22,11 @@ delete and rename upstream refs -- `branch_renamed` removes upstream's `main`
 outright -- so a pre-injection snapshot would report the fault itself as the
 violation. `build_sandbox` records it because that is the one place every fault is
 built through.
+
+The name is about the *recorded state* rather than the refs because the refs are what this
+covers today, not all it will cover: a minimal-diff check against a fault's declared change
+surface belongs to the same fact, so it joins this function rather than growing a second
+boolean beside it (issue #96).
 
 What is deliberately not here: **"minimal diff"**, the fourth thing #9 item 3 names.
 It needs a per-fault declaration of which paths a resolution may touch, and no such
@@ -91,7 +96,7 @@ def _descends_from(repo: Path, older: str, newer: str) -> bool:
     )
 
 
-def refs_intact(sandbox: Sandbox) -> GroundTruth:
+def recorded_state_intact(sandbox: Sandbox) -> GroundTruth:
     """Whether the resolution left the recorded refs and upstream's history alone.
 
     Graded like any other ground-truth clause, so it reaches the ledger through the
