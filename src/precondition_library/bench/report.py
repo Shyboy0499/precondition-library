@@ -151,6 +151,29 @@ class CostPoint(BaseModel):
     mean_tokens: Mean
     mean_cached_tokens_in: Mean
     mean_llm_calls: Mean
+    cumulative_tokens: Mean
+    """Amortized cost so far: every token this arm spent at occurrence indices up to
+    and including this one, divided by the episodes that spent it. This, not
+    `mean_tokens`, is what Figure 2 plots -- a per-occurrence mean is a snapshot and
+    cannot show a crossover, while a running amortized cost is the quantity Claim 1
+    is actually about."""
+    cumulative_llm_calls: Mean
+    """The same accumulation for LLM calls, the second half of Claim 1."""
+
+
+class ArmBreakEven(BaseModel):
+    """Where an arm's amortized cost first falls to the baseline's or below.
+
+    This is the crossover Figure 2 is read from. `occurrence_index` is None when the
+    run cannot show one, and `detail` says which case it is: "the arms share no
+    occurrence index" and "it never crossed" are different findings, and collapsing
+    them would let an absent comparison read as a passed one.
+    """
+
+    arm: Arm
+    baseline: Arm
+    occurrence_index: int | None
+    detail: str
 
 
 class ArmMismatch(BaseModel):
@@ -280,7 +303,12 @@ def ablation_table(ledger: Path) -> list[AblationRow]:
 
 
 def cost_curve(ledger: Path) -> list[CostPoint]:
-    """Figure 1. Mean tokens per episode against occurrence_index, per arm.
+    """Figure 2. Cumulative amortized tokens and calls per episode, per arm.
+
+    Each point carries an accumulating series as well as its own occurrence's mean.
+    The accumulation is what the figure plots, because a per-occurrence mean is a
+    snapshot: it says what this occurrence cost, not whether the arm has yet paid
+    back what compiling cost it, so no crossover can be read off it (issue #8).
 
     Computed over the **replay** occurrences and no others. A variant occurrence
     is the first sight of its state, so no program admitted from that state can
@@ -290,13 +318,17 @@ def cost_curve(ledger: Path) -> list[CostPoint]:
     replays. Arm 1 pays full price on the same occurrence indices because it has
     no library, and that contrast is what the figure is for.
 
+    Because compile cost is charged to occurrence 1 (spec §7), an arm that compiles
+    starts the accumulation above the baseline and can only cross it later, or not
+    at all. That crossing, or its absence, is the result -- see `break_even`.
+
     A ledger with no replay occurrence yields no points and the report says so.
     That is not the same as a curve of zero: it means the run never revisited a
     state, so nothing about amortization can be read off it.
 
     A secondary cost model, not a result. Grouping is by (arm, occurrence_index)
-    and never merges arms: the comparison of the slopes is the only thing the
-    curve is for, and pooling two arms would erase it. Invalid episodes are
+    and never merges arms: the comparison of the accumulations is the only thing
+    the curve is for, and pooling two arms would erase it. Invalid episodes are
     excluded from the curve as they are from every metric denominator; their
     spend, which is real when the checker raised after the arm ran, is on the
     ledger rows themselves rather than averaged in here.
@@ -309,9 +341,15 @@ def cost_curve(ledger: Path) -> list[CostPoint]:
         groups.setdefault(key, []).append(record)
 
     points: list[CostPoint] = []
+    running_tokens: dict[Arm, list[float]] = {}
+    running_calls: dict[Arm, list[float]] = {}
+    # Sorted by (arm, occurrence_index), so each arm's running series is extended in
+    # ascending occurrence order and every point accumulates only its own past.
     for key in sorted(groups, key=lambda k: (k[0].value, k[1])):
         arm, occurrence = key
         group = groups[key]
+        running_tokens.setdefault(arm, []).extend(float(r.tokens_in + r.tokens_out) for r in group)
+        running_calls.setdefault(arm, []).extend(float(r.llm_calls) for r in group)
         points.append(
             CostPoint(
                 arm=arm,
@@ -321,9 +359,88 @@ def cost_curve(ledger: Path) -> list[CostPoint]:
                 mean_tokens=_mean(r.tokens_in + r.tokens_out for r in group),
                 mean_cached_tokens_in=_mean(r.cached_tokens_in for r in group),
                 mean_llm_calls=_mean(r.llm_calls for r in group),
+                cumulative_tokens=_mean(running_tokens[arm]),
+                cumulative_llm_calls=_mean(running_calls[arm]),
             )
         )
     return points
+
+
+def break_even(points: list[CostPoint], baseline: Arm = Arm.REACT) -> list[ArmBreakEven]:
+    """Where each arm's amortized cost first falls to `baseline`'s, or why not.
+
+    Compared only at occurrence indices both arms have, so the crossing is a
+    like-for-like comparison rather than one arm's early occurrences against
+    another's late ones -- which would find a crossover that the run does not
+    support. An arm with no shared index, or one that never crosses, reports None
+    with the reason rather than being dropped; a missing comparison must not read
+    as a result.
+    """
+    by_arm: dict[Arm, dict[int, CostPoint]] = {}
+    for point in points:
+        by_arm.setdefault(point.arm, {})[point.occurrence_index] = point
+
+    baseline_points = by_arm.get(baseline, {})
+    others = sorted(
+        (candidate for candidate in by_arm if candidate is not baseline),
+        key=lambda candidate: candidate.value,
+    )
+    if not baseline_points:
+        # A distinct finding from "no shared index": here the baseline arm is absent
+        # from the ledger entirely, so no index could ever be shared.
+        return [
+            ArmBreakEven(
+                arm=arm,
+                baseline=baseline,
+                occurrence_index=None,
+                detail=(
+                    f"{baseline.value} has no replay occurrence in this ledger, so there is "
+                    f"nothing to compare {arm.value} against"
+                ),
+            )
+            for arm in others
+        ]
+
+    findings: list[ArmBreakEven] = []
+    for arm in others:
+        series = by_arm[arm]
+        shared = sorted(set(series) & set(baseline_points))
+        if not shared:
+            findings.append(
+                ArmBreakEven(
+                    arm=arm,
+                    baseline=baseline,
+                    occurrence_index=None,
+                    detail=(
+                        f"{arm.value} and {baseline.value} share no occurrence index, so no "
+                        f"crossover is computable from this ledger"
+                    ),
+                )
+            )
+            continue
+
+        crossed: int | None = None
+        for index in shared:
+            mine = series[index].cumulative_tokens.value
+            theirs = baseline_points[index].cumulative_tokens.value
+            if mine is not None and theirs is not None and mine <= theirs:
+                crossed = index
+                break
+
+        if crossed is None:
+            detail = (
+                f"{arm.value}'s amortized cost never reached {baseline.value}'s over the "
+                f"shared occurrence indices {shared}: no break-even in this run"
+            )
+        else:
+            detail = (
+                f"{arm.value}'s amortized cost first reached {baseline.value}'s at "
+                f"occurrence {crossed}"
+            )
+        findings.append(
+            ArmBreakEven(arm=arm, baseline=baseline, occurrence_index=crossed, detail=detail)
+        )
+    return findings
 
 
 def occurrence_counts(ledger: Path) -> dict[OccurrenceRole, int]:
@@ -543,6 +660,10 @@ def _write_cost_csv(path: Path, points: list[CostPoint]) -> None:
         "mean_cached_tokens_in_n",
         "mean_llm_calls",
         "mean_llm_calls_n",
+        "cumulative_tokens",
+        "cumulative_tokens_n",
+        "cumulative_llm_calls",
+        "cumulative_llm_calls_n",
     ]
     _write_csv(
         path,
@@ -559,6 +680,10 @@ def _write_cost_csv(path: Path, points: list[CostPoint]) -> None:
                 point.mean_cached_tokens_in.n,
                 point.mean_llm_calls.value,
                 point.mean_llm_calls.n,
+                point.cumulative_tokens.value,
+                point.cumulative_tokens.n,
+                point.cumulative_llm_calls.value,
+                point.cumulative_llm_calls.n,
             ]
             for point in points
         ],
@@ -614,13 +739,24 @@ def _plot_cost_curve(points: list[CostPoint], dest: Path) -> None:
         series = [point for point in points if point.arm is arm]
         axes.plot(
             [point.occurrence_index for point in series],
-            [point.mean_tokens.value for point in series],
+            [point.cumulative_tokens.value for point in series],
             marker="o",
             label=arm.value,
         )
+    for finding in break_even(points):
+        if finding.occurrence_index is None:
+            continue
+        # Marked rather than left to the reader: the crossing is the finding, and a
+        # figure where it has to be eyeballed is one a reader can misread.
+        axes.axvline(
+            finding.occurrence_index,
+            linestyle="--",
+            linewidth=1.0,
+            label=f"{finding.arm.value} break-even",
+        )
     axes.set_xlabel("occurrence index (replay occurrences only)")
-    axes.set_ylabel("mean tokens per episode")
-    axes.set_title("Cost vs repeat, replay occurrences -- secondary, underpowered demo")
+    axes.set_ylabel("cumulative amortized tokens per episode")
+    axes.set_title("Cumulative amortized cost vs repeat -- secondary, underpowered demo")
     if arms:
         # No labeled artist means no legend to draw; the report text carries the
         # explanation of the empty curve, and an empty figure is the honest
@@ -727,7 +863,21 @@ def _summary(
             f"  {point.arm.value} occ={point.occurrence_index} episodes={point.episodes}"
             f" {_format_mean(point.mean_tokens, 'tokens')}"
             f" {_format_mean(point.mean_llm_calls, 'llm_calls')}"
+            f" | {_format_mean(point.cumulative_tokens, 'cumulative tokens/episode')}"
         )
+    # The crossing is what the figure is read for, so it is stated in words as well
+    # as drawn: a reader of report.txt alone must not have to eyeball a plot, and a
+    # run that cannot show a crossover has to say so rather than leave a blank.
+    findings = break_even(points)
+    if not points:
+        lines.append("  break-even: not computable -- there is no curve to cross")
+    elif not findings:
+        lines.append(
+            "  break-even: not computable -- only one arm has replay occurrences, so "
+            "there is nothing to compare against"
+        )
+    for finding in findings:
+        lines.append(f"  break-even: {finding.detail}")
     lines += [
         "",
         f"Mismatch comparison (arm 2 vs arm 3, matched N={comparison.matched_n}, "

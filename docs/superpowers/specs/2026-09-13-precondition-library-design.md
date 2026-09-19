@@ -22,6 +22,7 @@
 | 12 | 2026-09-17 | **Two admission-gate corrections found by the smoke pass, not analysis changes.** (1) §6 now states a DECLARED condition before the two sides: a body parameter that no precondition's probe names is refused, because a precondition is how a program declares what it needs and the states it may fire in need not bind an undeclared one. The smoke pass produced three rows carrying `replay_failure_reason` from a `submodule` program whose body used `submodule_path` while its preconditions did not (issue #77). (2) The unrelated-fault negative class is corrected from "one fixed seed each" to one seed per distinct state its injector can select, read through `FaultSpec.variant_for_seed`; `diverged` is now built at seeds 0, 1 and 2 and `submodule_moved` at 0, 1 and 4, where the old class built each at seed 0 only, so a program could be rejected on one state and fire on another (issue #75). The faults that expose no seed-to-state mapping remain one state each, labelled as sampling. **No metric definition, denominator or number in this document changes** — no episode has been run, and the smoke pass claims no result. |
 | 13 | 2026-09-17 | **Pre-registration revision: occurrences are labelled by role, and the episode loop's independent observations are stated (issue #81).** A smoke pass reported zero replays because its seeds each select a different resolution, and a program admitted for one resolution correctly refuses the others — so the plan as written produced a flat cost curve *by construction*. §7 gains a required `occurrence_role` on every ledger row, declared from the injectors' own seed-to-resolution mapping and written by the runner: **variant** for the first sight of a resolution, **replay** for every later one. The cost curve is computed over the replays (where the accumulation is visible), the mismatch comparison over the variants (the only independent observations), and both figures name the occurrences they used. §7's "Design" resolves the choice the earlier text left open — held-out variants or relabelled replays — in favour of replays, **because the injectors do not vary branch names, file sets or conflict positions by seed**; widening them is issue #6. The eval set's arithmetic is now stated: each measurable fault declares three states, so 40 seeds yield **3 variant and 37 replay occurrences per family**, and the episode-level mismatch comparison has six independent observations rather than eighty. **Logged before any eval data existed** — no eval episode has been run, so no analysis was chosen after seeing results; the smoke pass that motivated it is excluded from every claim in §7, and no reported number changes. |
 | 14 | 2026-09-18 | **Portability corrections, not analysis changes (issue #87).** §7's invocation wrote its ledger to a hardcoded `/tmp/precondition-ledger.jsonl`, which is not a path that exists on Windows; it now uses `Path(tempfile.gettempdir())`, which keeps the same intent (the ledger stays outside the repository) without naming a platform. Recorded alongside four source and test defects a Windows verification pass found — a bare `bash` resolving to the WSL launcher, `shell=True` selecting `cmd.exe` for multi-line bodies, `shutil.rmtree` failing on git's read-only loose objects, and an import-time `git status` that stopped the suite being collected outside a git checkout. No metric definition, denominator or number in this document changes, and no result is claimed from that pass. |
+| 15 | 2026-09-18 | **Figure 2 reports cumulative amortized cost with the break-even, not per-occurrence means (issue #8).** Claim 1 is about cost falling across occurrences, and a mean per occurrence is a snapshot: it says what one occurrence cost, not whether the compile has been repaid, so no crossover could be read off the figure the claim rests on. Figure 2 now plots the running amortized tokens and LLM calls per episode, with the break-even marked on the figure and stated in the report text, and §7's secondary-metrics list says so. `bench/report.py` computes the accumulation and reports why a crossing is not computable when it is not. No metric definition, denominator or reported number changes, the ledger schema is unchanged, and the analysis reported is the one rev 13 describes, read off an accumulating series rather than a per-occurrence one. **Logged before any eval data existed** — no eval episode has been run. |
 
 ---
 
@@ -598,15 +599,21 @@ the variants, the cost curve over the replays (see "Figures").
 across acceptance thresholds; mismatch rate against coverage, Wilson intervals at
 each operating point, and the pre-registered coverage point marked.
 
-**Figure 2 — cost vs repeat (secondary).** Mean tokens and LLM calls per episode
-against `occurrence_index`, one line per arm, from the underpowered demo and
-**over its replay occurrences only**. A variant occurrence is the learning pass —
-no program admitted from a state the run had not yet seen can exist — so a curve
-that included the variants would average the cost of learning a state into the
-cost of replaying it. Arm 1 pays full price on the same occurrence indices,
-because it has no library, and that contrast is the comparison the figure exists
-for. Reported as a cost model, not as a contribution; the figure and its CSV name
-the occurrences used.
+**Figure 2 — cost vs repeat (secondary).** **Cumulative amortized** tokens and LLM
+calls per episode against `occurrence_index`, one line per arm, from the
+underpowered demo and **over its replay occurrences only**, with the break-even
+marked on the figure and stated in the report text. The accumulation is the
+figure's subject, not the per-occurrence mean: compile cost is charged to
+occurrence 1, so a compiled arm starts above the baseline and can only cross it
+later — or not at all — and a mean per occurrence is a snapshot that cannot show
+which. Where no crossing is computable, because the arms share no occurrence index
+or because one never crosses, the report says which of those it is rather than
+leaving a blank. A variant occurrence is the learning pass — no program admitted
+from a state the run had not yet seen can exist — so a curve that included the
+variants would average the cost of learning a state into the cost of replaying it.
+Arm 1 pays full price on the same occurrence indices, because it has no library,
+and that contrast is the comparison the figure exists for. Reported as a cost
+model, not as a contribution; the figure and its CSV name the occurrences used.
 
 **Figure 3 — the admission factor.** The 2×2 {dispatch: semantic|precondition} ×
 {admission: gated|ungated} comparison, which separates the negative-sandbox
@@ -630,8 +637,9 @@ after seeing results.
    every independence claim (see "Ledger").
 3. **Power statement:** required — the detectable effect size at the chosen pair
    count, coverage points, and alpha.
-4. **Secondary metrics:** tokens and LLM calls per episode by occurrence index
-   (the cost model); compile success rate; fallback rate; guard refusal rate. The
+4. **Secondary metrics:** tokens and LLM calls per episode by occurrence index,
+   accumulated into a running amortized cost with the break-even marked (the cost
+   model, Figure 2); compile success rate; fallback rate; guard refusal rate. The
    episode loop is labelled underpowered and excluded from the primary claim.
 5. **Tuning discipline:** arm 2's representation and similarity threshold are
    tuned on the tune set, disjoint from eval, and the value used is written into
