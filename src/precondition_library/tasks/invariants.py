@@ -28,16 +28,17 @@ covers today, not all it will cover: a minimal-diff check against a fault's decl
 surface belongs to the same fact, so it joins this function rather than growing a second
 boolean beside it (issue #96).
 
-What is deliberately not here: **"minimal diff"**, the fourth thing #9 item 3 names.
-It needs a per-fault declaration of which paths a resolution may touch, and no such
-declaration exists; inventing one here would be a guess about the task family rather
-than a check on it. Refs outside `refs/sandbox/` are also not pinned -- a correct
-resolution moves `refs/heads/*` and a fetch moves `refs/remotes/*` -- so a body that
-deletes an unrelated tag is not caught.
+**Minimal diff** joined the same fact rather than growing a second one: when the caller
+declares a fault's `change_surface`, the committed diff from the recorded base is checked
+against it. What is still not here: refs outside `refs/sandbox/` are not pinned -- a correct
+resolution moves `refs/heads/*` and a fetch moves `refs/remotes/*` -- so a body that deletes
+an unrelated tag is not caught, and an *uncommitted* change is invisible to a diff between
+two commits.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 
 from ..sandbox import Sandbox, run_git, store_blob
@@ -96,7 +97,7 @@ def _descends_from(repo: Path, older: str, newer: str) -> bool:
     )
 
 
-def recorded_state_intact(sandbox: Sandbox) -> GroundTruth:
+def recorded_state_intact(sandbox: Sandbox, *, surface: Sequence[str] | None = None) -> GroundTruth:
     """Whether the resolution left the recorded refs and upstream's history alone.
 
     Graded like any other ground-truth clause, so it reaches the ledger through the
@@ -139,6 +140,40 @@ def recorded_state_intact(sandbox: Sandbox) -> GroundTruth:
                 ),
             )
 
+    if surface is None:
+        # The caller declared no surface, so only the recorded state is checked. A sandbox
+        # built by hand has no fault to declare one for; the harness always passes it.
+        return GroundTruth(
+            ok=True,
+            detail=(
+                "every recorded ref still resolves and upstream's history only moved on "
+                "(no change surface was declared)"
+            ),
+        )
+
+    base = sandbox.recorded.get("base")
+    if base is None:
+        return GroundTruth(
+            ok=False,
+            detail=(
+                "a change surface was declared but no pre-injection base was recorded, so the "
+                "committed diff cannot be checked against it"
+            ),
+        )
+    changed = run_git(("diff", "--name-only", base, "HEAD"), cwd=sandbox.work, check=False)
+    outside = sorted(set(changed.stdout.split()) - set(surface))
+    if outside:
+        return GroundTruth(
+            ok=False,
+            detail=(
+                f"committed changes outside the declared change surface: {outside} "
+                f"(this fault allows {sorted(surface) or 'nothing'})"
+            ),
+        )
     return GroundTruth(
-        ok=True, detail="every recorded ref still resolves and upstream's history only moved on"
+        ok=True,
+        detail=(
+            "every recorded ref still resolves, upstream's history only moved on, and the "
+            f"committed diff stays inside {sorted(surface) or 'an empty surface'}"
+        ),
     )

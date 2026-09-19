@@ -32,7 +32,7 @@ from ...sandbox import (
     Sandbox,
     create_submodule_origin,
     git_out,
-    require_uninjected,
+    record_base,
     run_git,
     store_blob,
 )
@@ -167,6 +167,9 @@ INTENT = IntentSpec(
 
 class SubmoduleMovedFault(FaultSpec):
     name = "submodule_moved"
+    # The `.gitmodules` entry and the gitlink: removing the submodule deletes
+    # both, and the other states move the gitlink.
+    change_surface = (".gitmodules", SUBMODULE_PATH)
     description = "A submodule's recorded state no longer matches what upstream expects"
 
     def inject(self, seed: int, sandbox: Sandbox) -> None:
@@ -190,7 +193,7 @@ class SubmoduleMovedFault(FaultSpec):
         URL is a fixed function of the seed's sandbox root.
         """
         work = sandbox.work
-        require_uninjected(sandbox, fault="submodule_moved", ref=_PATH_REF)
+        record_base(sandbox, fault="submodule_moved")
 
         state = state_for_seed(seed)
 

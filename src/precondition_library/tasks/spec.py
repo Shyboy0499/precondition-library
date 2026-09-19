@@ -29,6 +29,24 @@ class FaultSpec:
 
     name: str
     description: str
+    change_surface: tuple[str, ...] = ()
+    """The repo-relative paths a *resolution* of this fault may add, modify or delete.
+
+    **Declared rather than derived from what the injector touched**, and the difference is
+    the repairs that legitimately write a path the injection did not name: a generated file
+    rewritten from its source is the ordinary case, and a derived surface would refuse it for
+    being outside the fault. Declaring costs a fault the obligation to say, which is why the
+    default is the *strictest* value.
+
+    Empty means **committed content must not change at all**. That is right for
+    `branch_renamed`: renaming a branch and re-pointing the tracking is a ref operation, so a
+    resolution that commits anything did something the fault did not ask for. A fault that
+    forgot to declare therefore fails its own gold resolution rather than passing on a
+    permissive default.
+
+    Checked by `tasks.invariants.recorded_state_intact` against the committed diff from the
+    recorded base, so it shares the one fact that already covers the recorded refs.
+    """
 
     def inject(self, seed: int, sandbox) -> None:
         """Mutate `sandbox` into the faulty state. Same seed, same state."""

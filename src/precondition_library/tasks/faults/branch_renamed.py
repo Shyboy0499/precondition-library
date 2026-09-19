@@ -58,6 +58,9 @@ def _config(work: Path, key: str) -> str | None:
 class BranchRenamedFault(FaultSpec):
     name = "branch_renamed"
     description = "Upstream's default branch was renamed and the fork still tracks the old name"
+    # Empty on purpose: the resolution is a ref operation, so any commit is
+    # something the fault did not ask for.
+    change_surface = ()
 
     def inject(self, seed: int, sandbox: Sandbox) -> None:
         """Rename upstream's default branch; leave the clone tracking the old name.
