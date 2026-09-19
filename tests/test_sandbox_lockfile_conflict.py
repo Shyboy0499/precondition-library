@@ -89,7 +89,7 @@ def _shas(box: Sandbox) -> tuple[str, str, str, str]:
         run_git(("rev-parse", "HEAD"), cwd=box.work).stdout.strip(),
         run_git(("rev-parse", "upstream/main"), cwd=box.work).stdout.strip(),
         run_git(("rev-parse", "refs/heads/main"), cwd=box.upstream).stdout.strip(),
-        run_git(("rev-parse", "refs/sandbox/lock-local-tip"), cwd=box.work).stdout.strip(),
+        box.recorded["local-tip"],
     )
 
 
