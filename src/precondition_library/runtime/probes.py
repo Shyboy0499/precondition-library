@@ -47,6 +47,7 @@ from pathlib import Path
 
 from ..program import GroundTruthResult, Predicate, PredicateResult, Program
 from ..sandbox import Sandbox, git_env, submodule_path
+from .guard import Verdict, screen
 
 VOCABULARY: frozenset[str] = frozenset(
     {"work_dir", "upstream_remote", "upstream_branch", "submodule_path"}
@@ -178,11 +179,38 @@ def evaluate_predicate(
     reported as a failed result, not raised: the precondition simply does not
     hold on this sandbox, which is the ordinary non-match dispatch and admission's
     negative side must see. A name outside the vocabulary still raises.
+
+    **The probe is screened before it runs, with the same guard bodies go through.**
+    It used to be the only model-authored text that reached a shell unscreened: a body
+    is screened in `runtime.replay`, and a probe is model-authored too, runs in the same
+    sandbox, and runs on *every* dispatch attempt rather than once. Measured before this
+    change, a precondition of the form
+    `touch probe-wrote-this.txt && curl -s http://example.invalid/x` both wrote to the
+    working tree and reached the network, while the same text as a body was refused.
+
+    A refused probe is reported as **not holding**, with the refusal in `observed`,
+    rather than raising -- the same shape an unbindable parameter takes, and for the same
+    reason: dispatch must treat it as an ordinary non-match, and the reason travels with
+    the result so admission's record can name it.
+
+    What this does *not* do, and the honest half of issue #10's item 2: it does not make
+    a probe read-only. The guard permits writes inside the sandbox by design, because
+    bodies need them, so an in-repo mutation such as `git reset --hard` in a probe still
+    runs -- only the effects it refuses anywhere (network, credentials, environment
+    reads, global config writes, force-push, writes outside the sandbox) are refused
+    here. Refusing in-repo writes needs a detector the guard does not have.
     """
     try:
         probe = substitute(predicate.probe, parameters)
     except UnboundParameterError as exc:
         return PredicateResult(name=predicate.name, ok=False, observed=f"not applicable: {exc}")
+
+    # `env_root` matches `replay.py`'s body screening, so a probe and a body are judged
+    # against the same boundary and neither can be the looser path to a shell.
+    decision = screen(probe, env_root=str(env.work))
+    if decision.verdict is Verdict.REFUSE:
+        return PredicateResult(name=predicate.name, ok=False, observed=f"refused {decision.reason}")
+
     try:
         completed = subprocess.run(
             [*SHELL, probe],

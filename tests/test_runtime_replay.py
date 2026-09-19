@@ -19,12 +19,17 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import yaml
 from conftest import GOLD_CASES, gold_program
 
 from precondition_library import provider as provider_module
 from precondition_library.program import Predicate
 from precondition_library.runtime.guard import Verdict, screen
-from precondition_library.runtime.probes import UnboundParameterError, substitute
+from precondition_library.runtime.probes import (
+    UnboundParameterError,
+    evaluate_predicate,
+    substitute,
+)
 from precondition_library.runtime.replay import replay
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -281,3 +286,51 @@ def test_sandbox_destroy_leaves_no_residue(make_sandbox) -> None:
         check=True,
     )
     assert ".sandboxes" not in status.stdout
+
+
+# --- probes are screened too (issue #10, item 2) ------------------------------
+
+
+def test_a_probe_with_a_network_call_is_refused_and_does_not_run(make_sandbox) -> None:
+    """A probe is model-authored, so it gets the same screen a body gets.
+
+    Measured before this: a precondition of this shape both wrote to the working tree and
+    reached the network, while the identical text as a body was refused. Detection is by
+    side effect, not by a refused exit code -- the probe would have exited 0.
+    """
+    box = make_sandbox(0, ["diverged"])
+    predicate = Predicate(
+        name="innocent",
+        description="reads as a read",
+        probe="touch probe-wrote-this.txt && curl -s http://example.invalid/x",
+        expect_exit=0,
+    )
+
+    result = evaluate_predicate(predicate, box, {})
+
+    assert result.ok is False
+    assert "refused" in result.observed and "network" in result.observed, result.observed
+    assert not (box.work / "probe-wrote-this.txt").exists(), "the refused probe still ran"
+
+
+def test_every_gold_probe_passes_the_screen(make_sandbox) -> None:
+    """The screen must not refuse the probes this repository ships.
+
+    A guard that refuses legitimate work is worse than none: it would make the compiled
+    arms unable to dispatch and read as a capability result. This is the regression check
+    for a future detector being written too broadly.
+    """
+    probes: list[str] = []
+    for path in sorted((REPO_ROOT / "bench" / "gold").glob("*.yaml")):
+        document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for program in document["programs"]:
+            probes.extend(predicate["probe"] for predicate in program["preconditions"])
+    assert probes, "no gold probes were loaded; this check would pass vacuously"
+
+    refused = [
+        probe
+        for probe in probes
+        if screen(probe, env_root="/tmp/sandbox").verdict is Verdict.REFUSE
+    ]
+
+    assert not refused, f"the screen refuses legitimate probes: {refused}"
