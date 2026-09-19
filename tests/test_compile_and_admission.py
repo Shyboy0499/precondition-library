@@ -191,7 +191,9 @@ def _reply_text(**overrides) -> str:
 
 
 def _completion(text: str) -> Completion:
-    return Completion(text=text, usage=TokenUsage(tokens_in=10, tokens_out=5), model="fake")
+    return Completion(
+        text=text, usage=TokenUsage(tokens_in=10, tokens_out=5, uncached_tokens_in=10), model="fake"
+    )
 
 
 def _signature(box: Sandbox) -> TaskSignature:

@@ -91,7 +91,20 @@ class EpisodeRecord(BaseModel):
 
     tokens_in: int
     tokens_out: int
+    uncached_tokens_in: int = 0
+    """Input tokens billed at the full input rate: the prompt minus what the cache
+    served. Metered separately from `cached_tokens_in` because a cache hit is billed at
+    a fraction of a miss, so one input number priced at one rate overstates any arm that
+    caches (issue #8). Defaults to 0 only so a record written before this field existed
+    still parses; a real row always carries it.
+    """
+    cache_write_tokens_in: int = 0
+    """Input tokens written to the prompt cache. Zero for DeepSeek, which bills no
+    separate write; present so the accounting is provider-complete (issue #8)."""
     cached_tokens_in: int = 0
+    """The *cache-read* component: input tokens the provider served from cache.
+    `tokens_in` is the total of all three plus output-adjacent nothing, and is never a
+    billing basis."""
     refs_intact: bool | None = None
     """Whether the resolution left the recorded refs and upstream's history alone.
 

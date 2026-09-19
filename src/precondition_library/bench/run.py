@@ -102,7 +102,9 @@ class _AccountingProvider:
         self._provider = provider
         self.tokens_in = 0
         self.tokens_out = 0
+        self.uncached_tokens_in = 0
         self.cached_tokens_in = 0
+        self.cache_write_tokens_in = 0
         self.llm_calls = 0
 
     def complete(
@@ -119,7 +121,9 @@ class _AccountingProvider:
                 continue
             self.tokens_in += completion.usage.tokens_in
             self.tokens_out += completion.usage.tokens_out
+            self.uncached_tokens_in += completion.usage.uncached_tokens_in
             self.cached_tokens_in += completion.usage.cached_tokens_in
+            self.cache_write_tokens_in += completion.usage.cache_write_tokens_in
             self.llm_calls += completion.llm_calls
             return completion
         raise AssertionError("unreachable: the loop returns or raises")
@@ -372,7 +376,9 @@ def run_episode(
             seed=seed,
             tokens_in=accounting.tokens_in,
             tokens_out=accounting.tokens_out,
+            uncached_tokens_in=accounting.uncached_tokens_in,
             cached_tokens_in=accounting.cached_tokens_in,
+            cache_write_tokens_in=accounting.cache_write_tokens_in,
             llm_calls=accounting.llm_calls,
             wall_clock_s=time.monotonic() - started,
             outcome=result.outcome,

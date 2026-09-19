@@ -54,7 +54,7 @@ def _completion(*, text: str = "", tool_calls: list[dict] | None = None) -> Comp
     return Completion(
         text=text,
         tool_calls=tool_calls or [],
-        usage=TokenUsage(tokens_in=10, tokens_out=5),
+        usage=TokenUsage(tokens_in=10, tokens_out=5, uncached_tokens_in=10),
         model="fake",
     )
 
