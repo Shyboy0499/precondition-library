@@ -9,11 +9,19 @@ consulting state (its AUC of 0.500 is an identity of the construction, not
 evidence about the phrasing distribution), and a structural pin -- including an
 equivalence-class test -- that stops an undeclared state-to-wording channel from
 silently restoring the original flaw.
+
+A fifth part is added here because it is the same channel seen from the other side:
+the *environment*. Everything above guards the task text, and issue #103 records that
+the injected state is written in plaintext into the clone the probes run in, so a
+precondition can read the resolution rather than diagnose it. That control is a strict
+`xfail` -- it pins the property we want, is visible in CI, and fails loudly the moment
+the leak is fixed, which forces the marker to be removed rather than lingering.
 """
 
 from __future__ import annotations
 
 import re
+import subprocess
 
 import pytest
 
@@ -24,6 +32,7 @@ from precondition_library.bench.textcontrol import (
     leakage_verdict,
     roc_auc,
 )
+from precondition_library.runtime.probes import SHELL
 from precondition_library.tasks.intent import IntentSpec, ResolutionVariant
 from precondition_library.tasks.registry import ambiguous_intents
 
@@ -342,3 +351,45 @@ def test_no_phrasing_names_a_resolution(state_grid) -> None:
             for text in texts:
                 named = sorted(i for i in ids if re.search(rf"\b{re.escape(i)}\b", text, re.I))
                 assert not named, f"{intent.name} [{name}] names {named}: {text!r}"
+
+
+# --- the environment half of the same channel (issue #103) --------------------
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "issue #103: the injected state is recorded in plaintext under refs/sandbox/ in "
+        "the clone the probes run in, so a precondition can read the answer instead of "
+        "diagnosing the fault. This pins the property we want; when #103 is fixed the "
+        "test will pass and this marker must be deleted."
+    ),
+)
+def test_the_environment_does_not_hand_a_probe_the_resolution(make_sandbox) -> None:
+    """The control above guards the request text. This is the environment.
+
+    `submodule_moved.inject` calls `store_blob(work, "refs/sandbox/submodule-state",
+    state)`, so the resolution label -- `init`, `repin` or `remove` -- is in the clone
+    the agent works in, and `runtime/probes.py` runs probes with `cwd=env.work`. A
+    precondition can therefore be exactly this probe. Admission cannot reject it: the
+    negative classes check states a program must *not* fire in, and this one fires in
+    precisely the state it is supposed to.
+
+    Written as a probe rather than as a file read because that is the path that matters:
+    what a compiled program may do is what a probe may do.
+    """
+    box = make_sandbox(0, ["submodule_moved"])
+
+    probe = subprocess.run(
+        [*SHELL, "git cat-file -p refs/sandbox/submodule-state"],
+        cwd=box.work,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert probe.returncode != 0, (
+        f"a probe read the injected state from the environment: {probe.stdout.strip()!r}. "
+        f"The framework should not be able to hand a precondition its answer (issue #103)."
+    )
