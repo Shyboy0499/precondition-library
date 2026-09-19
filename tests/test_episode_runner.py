@@ -1378,11 +1378,19 @@ def test_a_destructive_resolution_is_recorded_as_not_ground_truth(tmp_path, monk
         (row,) = read(out)
         return row
 
-    assert _run(tmp_path / "clean" / "ledger.jsonl").ground_truth_ok is True
+    clean = _run(tmp_path / "clean" / "ledger.jsonl")
+    assert clean.ground_truth_ok is True
+    assert clean.refs_intact is True, "the fact must be recorded, not only the verdict"
 
     with monkeypatch.context() as patched:
         patched.setattr(
             "precondition_library.bench.run.refs_intact",
             lambda box: GroundTruth(ok=False, detail="a recorded ref was destroyed"),
         )
-        assert _run(tmp_path / "destructive" / "ledger.jsonl").ground_truth_ok is False
+        destructive = _run(tmp_path / "destructive" / "ledger.jsonl")
+
+    assert destructive.ground_truth_ok is False
+    # The fact is what makes spec-gaming derivable in the report; without it the row
+    # is indistinguishable from a resolution that simply failed to repair the fault
+    # (issue #9, item 4).
+    assert destructive.refs_intact is False
