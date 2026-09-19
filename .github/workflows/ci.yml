@@ -43,3 +43,42 @@ jobs:
 
       - name: Tests
         run: uv run pytest -q
+
+  # Scoped Windows coverage (issue #89). Every defect in #87 passed on Linux and failed
+  # on Windows, and two of them failed *silently*: `shutil.rmtree` discarding an
+  # exception, and `shell=True` running only the first line of a multi-line body and
+  # returning 0. Neither is detectable from an ubuntu-latest run, and the tests that pin
+  # them assert code properties rather than Windows behaviour.
+  #
+  # Deliberately a subset, not the whole suite: #87 measured the full suite at 35m56s on
+  # Windows, because every probe spawns a fresh Git Bash process. This job runs the tests
+  # whose subject *is* portability or the sandbox, which is the smallest set that would
+  # have gone red for D1-D4.
+  #
+  # What this does NOT cover, so nobody reads a green tick as more than it is: the other
+  # ~40 test modules, the full-suite runtime, and anything outside the sandbox path --
+  # notably the CLI, packaging and long-path behaviour. Those remain unverified on
+  # Windows.
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Portability and sandbox tests
+        run: >-
+          uv run pytest -q -rs
+          tests/test_portability_assumptions.py
+          tests/test_sandbox_environment.py
+          tests/test_sandbox_diverged.py
+          tests/test_sandbox_submodule_moved.py
