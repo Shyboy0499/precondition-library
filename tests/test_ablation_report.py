@@ -34,6 +34,7 @@ from precondition_library.bench.report import (
     cost_curve,
     mismatch_comparison,
     pareto_frontier,
+    prompt_prefix_lengths,
     success_rate_wording,
     tost_equivalence,
     wilson_interval,
@@ -1010,3 +1011,50 @@ def test_the_report_registers_the_margin_it_used(tmp_path: Path) -> None:
     ledger = _write(tmp_path / "ledger.jsonl", [_record(arm=Arm.SEMANTIC, seed=1)])
     report = (write_report(ledger, tmp_path / "out") / "report.txt").read_text(encoding="utf-8")
     assert "alpha 0.05" in report
+
+
+# --- the raw prompt prefix (issue #8, item 5) --------------------------------
+
+
+def test_the_prefix_lengths_are_the_prompts_actually_sent() -> None:
+    """Measured from the constants, not restated as a number that can drift."""
+    from precondition_library.agents import compile as compile_agent
+    from precondition_library.agents import react
+
+    prefixes = {prefix.phase: prefix for prefix in prompt_prefix_lengths()}
+
+    assert prefixes["learn (ReAct)"].chars == len(react.SYSTEM_PROMPT)
+    assert prefixes["compile"].chars == len(compile_agent._system_prompt(None))
+    # Raw characters, so a positive length that is not a token count.
+    assert all(prefix.chars > 0 for prefix in prefixes.values())
+
+
+def test_the_compile_prefix_grows_when_variant_ids_are_named() -> None:
+    """The one of the two that is not a fixed constant, said in the report as such."""
+    from precondition_library.agents import compile as compile_agent
+
+    with_ids = len(compile_agent._system_prompt(["discard", "merge"]))
+
+    assert with_ids > len(compile_agent._system_prompt(None))
+
+
+def test_the_report_reports_the_prefix_once_not_per_arm(tmp_path: Path) -> None:
+    """A per-arm column would print one number three times and imply a difference.
+
+    All three arms send the same two prompts, so the report states them once and says
+    why; the arm-level difference is transcript growth, which the input tokens carry.
+    """
+    ledger = _write(
+        tmp_path / "ledger.jsonl",
+        [
+            _record(arm=Arm.REACT, seed=1),
+            _record(arm=Arm.SEMANTIC, seed=1),
+            _record(arm=Arm.PRECONDITION, seed=1),
+        ],
+    )
+
+    report = (write_report(ledger, tmp_path / "out") / "report.txt").read_text(encoding="utf-8")
+
+    assert "Prompt prefixes the run sends" in report
+    assert "shared by every arm" in report
+    assert report.count("learn (ReAct):") == 1
