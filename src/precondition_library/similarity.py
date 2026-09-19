@@ -23,6 +23,7 @@ parts of the experiment rather than a finding.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Protocol
 
 
@@ -68,3 +69,42 @@ def lexical_similarity(query: str, candidate: str) -> float:
     if not query_tokens or not candidate_tokens:
         return 0.0
     return len(query_tokens & candidate_tokens) / len(query_tokens | candidate_tokens)
+
+
+@dataclass(frozen=True)
+class SimilarityUsage:
+    """What a similarity implementation spent, in its **own** currency.
+
+    Zero for the lexical implementation, which spends nothing at all. An embedding model
+    behind the same Protocol reports its own tokens and calls here, and they are never
+    added to the LLM's `tokens_in`/`tokens_out`: a different currency at a different
+    price, spent by one arm and not the others, so folding them in would make arm 2's
+    cost depend on a model the other arms never call (issue #104).
+    """
+
+    tokens: int = 0
+    calls: int = 0
+
+
+class ReportsUsage(Protocol):
+    """A `Similarity` that can also say what it has spent. **Optional, by design.**
+
+    Deliberately not part of `Similarity`, so that seam stays a one-method callable:
+    `lexical_similarity` is a plain function and satisfies it unchanged, and a caller
+    that only needs scores never has to know usage exists. An embedding implementation
+    satisfies both.
+    """
+
+    def usage(self) -> SimilarityUsage: ...
+
+
+def similarity_usage(similarity: Similarity) -> SimilarityUsage:
+    """What `similarity` has spent so far, or zero when it does not report usage.
+
+    Zero rather than raising, because not reporting is the ordinary case: the shipped
+    implementation is a function and there is nothing for it to report. A caller measures
+    the difference across an episode to get that episode's spend, so the seam is expected
+    to accumulate rather than reset.
+    """
+    reporter = getattr(similarity, "usage", None)
+    return SimilarityUsage() if reporter is None else reporter()

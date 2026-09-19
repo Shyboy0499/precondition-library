@@ -50,6 +50,7 @@ from ..runtime.probes import evaluate_preconditions
 from ..runtime.replay import ReplayResult, replay
 from ..sandbox import Sandbox
 from ..signatures import StateFingerprint, TaskSignature
+from ..similarity import Similarity, lexical_similarity, similarity_usage
 from ..tasks.faults import FAULTS, build_sandbox
 from ..tasks.intent import IntentSpec, ResolutionVariant
 from ..tasks.invariants import refs_intact
@@ -199,12 +200,18 @@ def run_benchmark(
     out: Path,
     model: str,
     provider: Provider,
+    similarity: Similarity | None = None,
 ) -> Path:
     """Run every (arm, fault, occurrence) episode and write the ledger.
 
     Episodes within an arm run in occurrence order — the library must accumulate
     the way it would in use, so an arm cannot benefit from a program compiled
     against a later state. Returns the ledger path.
+
+    `similarity` is arm 2's seam, injected for the same reason `provider` is: knowing what
+    an embedding model costs means being able to run with one. It defaults to the lexical
+    implementation, which spends nothing, so every row's `embedding_tokens` stays 0 until a
+    model is behind the seam (issue #104).
 
     `seeds` supplies the seed for each occurrence, positionally: occurrence `k`
     runs against `seeds[k - 1]`, so the same seed reaches every arm and the
@@ -242,7 +249,11 @@ def run_benchmark(
     for arm in arms:
         library_root = out.parent / f"library-{arm.value}"
         _require_empty_library(library_root, arm)
-        library = Library(library_root, evaluate_preconditions=evaluate_preconditions)
+        library = Library(
+            library_root,
+            similarity=similarity if similarity is not None else lexical_similarity,
+            evaluate_preconditions=evaluate_preconditions,
+        )
         for occurrence in range(1, occurrences + 1):
             for fault_type in faults:
                 record = run_episode(
@@ -326,7 +337,11 @@ def run_episode(
         correct = intent.correct_variant(state)
         signature = TaskSignature(intent=request, fingerprint=state, target=str(box.work))
 
+        # Measured around the arm's run, so the row carries what this episode's dispatch
+        # spent through the seam rather than the library's lifetime total.
+        embedding_before = similarity_usage(library.similarity)
         result = _run_arm(arm, signature, box, library, fault_type, seed, occurrence, accounting)
+        embedding_after = similarity_usage(library.similarity)
         refs_ok: bool | None = None
         try:
             verdict = fault.check(box)
@@ -376,6 +391,8 @@ def run_episode(
             seed=seed,
             tokens_in=accounting.tokens_in,
             tokens_out=accounting.tokens_out,
+            embedding_tokens=embedding_after.tokens - embedding_before.tokens,
+            embedding_calls=embedding_after.calls - embedding_before.calls,
             uncached_tokens_in=accounting.uncached_tokens_in,
             cached_tokens_in=accounting.cached_tokens_in,
             cache_write_tokens_in=accounting.cache_write_tokens_in,

@@ -46,6 +46,7 @@ from precondition_library.program import (
 from precondition_library.provider import Completion, ProviderError, TokenUsage
 from precondition_library.runtime.probes import evaluate_preconditions
 from precondition_library.runtime.replay import replay
+from precondition_library.similarity import SimilarityUsage
 from precondition_library.tasks.faults.diverged import SPEC as DIVERGED
 from precondition_library.tasks.spec import GroundTruth
 
@@ -1396,3 +1397,61 @@ def test_a_destructive_resolution_is_recorded_as_not_ground_truth(tmp_path, monk
     # is indistinguishable from a resolution that simply failed to repair the fault
     # (issue #9, item 4).
     assert destructive.refs_intact is False
+
+
+# --- the embedding currency is separate from the LLM's (issue #104) -----------
+
+
+class _ReportingSeam:
+    """A similarity seam that reports a cost, standing in for an embedding model.
+
+    Scores 1.0 so the arm dispatches, and accumulates usage so the runner's
+    before/after measurement has something to see.
+    """
+
+    def __init__(self) -> None:
+        self._tokens = 0
+        self._calls = 0
+
+    def __call__(self, query: str, candidate: str) -> float:
+        self._tokens += 7
+        self._calls += 1
+        return 1.0
+
+    def usage(self) -> SimilarityUsage:
+        return SimilarityUsage(tokens=self._tokens, calls=self._calls)
+
+
+def test_an_embedding_seam_is_metered_separately_from_the_llm(tmp_path: Path) -> None:
+    """The invariant issue #104 asks for: two currencies, never added together.
+
+    A replay spends no LLM tokens, so `tokens_in == 0` on the second occurrence is the
+    existing claim. With a seam that reports a cost, `embedding_tokens > 0` on the *same*
+    row is the new one -- and the two together are the assertion that a second bill did not
+    get folded into the first. If the seam's spend were summed into `tokens_in`, the replay
+    would stop looking free, which is the accounting error this separates out.
+    """
+    seam = _ReportingSeam()
+    provider = FakeProvider(
+        *_resolves_merge(),
+        _completion(_reply_text(gold_program("merge")), tokens_in=100, tokens_out=40),
+    )
+    out = tmp_path / "ledger.jsonl"
+
+    run_benchmark(
+        arms=[Arm.SEMANTIC],
+        faults=["diverged"],
+        occurrences=2,
+        seeds=[VARIANT_SEED, REPLAY_SEED],
+        out=out,
+        model="fake",
+        provider=provider,
+        similarity=seam,
+    )
+
+    first, second = read(out)
+    assert first.embedding_tokens == 0, "the compile pass does not score candidates"
+    assert second.embedding_calls > 0, "the replay should have scored candidates"
+    assert second.embedding_tokens == 7 * second.embedding_calls
+    assert second.tokens_in == 0, "the embedding spend leaked into the LLM token count"
+    assert second.tokens_out == 0
