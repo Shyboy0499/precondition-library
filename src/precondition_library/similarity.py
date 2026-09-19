@@ -84,6 +84,9 @@ class SimilarityUsage:
 
     tokens: int = 0
     calls: int = 0
+    """Calls this implementation made to its provider -- **not** the number of times it was
+    asked for a score. A batching or caching implementation reports fewer, and it is the only
+    party that can say how many: the harness observes invocations, not provider traffic."""
 
 
 class ReportsUsage(Protocol):

@@ -261,3 +261,39 @@ def test_a_seam_that_reports_usage_is_asked_for_it() -> None:
 
     assert similarity_usage(seam) == SimilarityUsage(tokens=3, calls=1)
     assert similarity_usage(lexical_similarity) == SimilarityUsage()
+
+
+def test_embedding_calls_is_what_the_seam_reports_not_what_it_was_asked(make_sandbox) -> None:
+    """The settlement: the ledger carries provider traffic, which only the seam can count.
+
+    A caching implementation is asked for a score on every candidate and calls its provider
+    once. If the field meant invocations, the ledger would report the dispatch loop's work and
+    call it embedding cost; it means what was paid, so this seam's report of 1 must survive
+    even though it was asked three times.
+    """
+    from precondition_library.similarity import SimilarityUsage, similarity_usage
+
+    class _CachingSeam:
+        def __init__(self) -> None:
+            self._cache: dict[tuple[str, str], float] = {}
+            self._provider_calls = 0
+
+        def __call__(self, query: str, candidate: str) -> float:
+            key = (query, candidate)
+            if key not in self._cache:
+                self._cache[key] = 0.9
+                self._provider_calls += 1
+            return self._cache[key]
+
+        def usage(self) -> SimilarityUsage:
+            return SimilarityUsage(tokens=5 * self._provider_calls, calls=self._provider_calls)
+
+    seam = _CachingSeam()
+    for candidate in ("a", "b", "a"):  # three invocations, two distinct pairs
+        seam("q", candidate)
+
+    reported = similarity_usage(seam)
+
+    assert reported.calls == 2, "the provider traffic is what the seam reports"
+    assert reported.calls < 3, "three invocations but fewer provider calls is the whole point"
+    assert reported.tokens == 10
