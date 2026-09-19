@@ -21,6 +21,8 @@ cheat by re-deriving the state from the request.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 import precondition_library.sandbox as sandbox_module
@@ -317,3 +319,43 @@ def test_destroy_is_idempotent(make_sandbox) -> None:
     box.destroy()
     assert not root.exists()
     box.destroy()
+
+
+def test_the_checker_needs_the_selectors_the_harness_records(make_sandbox) -> None:
+    """A sandbox without a recorded selector must be refused, not guessed at.
+
+    The state is a *selector* -- it says which clause applies -- and it now travels on the
+    sandbox object rather than in the clone (issue #103). A caller that builds a `Sandbox`
+    by hand therefore has to say what it injected. Without this test the failure mode is
+    silent: someone would find that `check` raises on their hand-built sandbox and
+    "fix" it by reading the state back out of the clone, which is the leak.
+    """
+    box = make_sandbox(SEED_BY_STATE["remove"], ["submodule_moved"])
+    without_selector = replace(box, injected_state=None)
+
+    with pytest.raises(ValueError, match="needs the injected state"):
+        SPEC.check(without_selector)
+
+
+def test_the_selector_is_not_written_into_the_clone(make_sandbox) -> None:
+    """The other half: the harness holding it is only a fix if the clone does not.
+
+    Asserted negatively and by name, because the leak was a *plaintext label* rather than
+    a missing file: `refs/sandbox/submodule-state` must not resolve, while the path ref
+    the probes bind from must.
+    """
+    box = make_sandbox(SEED_BY_STATE["remove"], ["submodule_moved"])
+
+    assert box.injected_state == "remove"
+    assert (
+        run_git(
+            ("rev-parse", "--verify", "refs/sandbox/submodule-state"), cwd=box.work, check=False
+        ).returncode
+        != 0
+    ), "the resolution label is readable from the clone again"
+    assert (
+        run_git(
+            ("rev-parse", "--verify", "refs/sandbox/submodule-path"), cwd=box.work, check=False
+        ).returncode
+        == 0
+    ), "the probes bind {submodule_path} from this ref; it must stay"

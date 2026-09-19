@@ -279,6 +279,19 @@ class Sandbox:
     """Working clone the agent operates on."""
     upstream: Path
     """Bare repo standing in for a real upstream."""
+    injected_state: str | None = None
+    """Which state the injector selected, **when the harness knows it**.
+
+    Held on this object rather than recorded in the clone, and that is the point: an
+    injector that wrote the state name under `refs/sandbox/` put the answer inside the
+    environment the graded code reads, so a precondition could dispatch on it without
+    diagnosing anything (issue #103). Set by `tasks.faults.build_sandbox`, which is the
+    one place that knows both the seed and the fault.
+
+    `None` for a sandbox with no injected fault, or with more than one -- a single field
+    cannot name two states, and guessing a representative one would be worse than
+    saying nothing.
+    """
 
     def destroy(self) -> None:
         """Remove the sandbox from disk. Idempotent: a missing root is fine."""
