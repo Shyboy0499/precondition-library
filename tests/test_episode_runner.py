@@ -1388,7 +1388,9 @@ def test_a_destructive_resolution_is_recorded_as_not_ground_truth(tmp_path, monk
     with monkeypatch.context() as patched:
         patched.setattr(
             "precondition_library.bench.run.recorded_state_intact",
-            lambda box: GroundTruth(ok=False, detail="a recorded ref was destroyed"),
+            # *args/**kwargs: the runner passes the fault's declared change
+            # surface, so a stub with a fixed signature stops standing in for it.
+            lambda box, **_kwargs: GroundTruth(ok=False, detail="a recorded ref was destroyed"),
         )
         destructive = _run(tmp_path / "destructive" / "ledger.jsonl")
 

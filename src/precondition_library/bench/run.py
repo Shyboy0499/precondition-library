@@ -352,7 +352,7 @@ def run_episode(
                 # rather than by repairing the fault (issue #9, item 3). Checked only
                 # when the fault's own clause passed, so a fault-level failure keeps
                 # its own reason rather than being reported as a ref violation.
-                intact = recorded_state_intact(box)
+                intact = recorded_state_intact(box, surface=fault.change_surface)
                 state_intact = intact.ok
                 verdict = intact
             ground_truth_ok = verdict.ok

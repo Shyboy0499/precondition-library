@@ -141,6 +141,9 @@ INTENT = IntentSpec(
 class DivergedFault(FaultSpec):
     name = "diverged"
     description = "Local branch and upstream both have commits the other lacks"
+    # The two files the local and upstream sides both edit; a merge or a reset
+    # resolves the fault entirely inside them.
+    change_surface = ("app.py", "docs/readme.md")
 
     def inject(self, seed: int, sandbox: Sandbox) -> None:
         """Publish the upstream commits, then replay the local-only commits on top.

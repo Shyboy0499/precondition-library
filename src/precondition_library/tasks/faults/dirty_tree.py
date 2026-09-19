@@ -65,6 +65,9 @@ def injects_untracked(seed: int) -> bool:
 class DirtyTreeFault(FaultSpec):
     name = "dirty_tree"
     description = "Uncommitted local changes present while upstream has new commits"
+    # The upstream commit, the uncommitted tracked edit, and the untracked file a
+    # `clean -fd` destroys.
+    change_surface = (_UPSTREAM_FILE, _TRACKED_FILE, _UNTRACKED_PATH)
 
     def inject(self, seed: int, sandbox: Sandbox) -> None:
         """Publish one upstream commit, rewind local to base, then dirty the tree.

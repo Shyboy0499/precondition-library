@@ -145,6 +145,8 @@ def _edited_lock_text(seed: int, side: str) -> str:
 
 class LockfileConflictFault(FaultSpec):
     name = "lockfile_conflict"
+    # The lock-shaped file both sides edit and a correct regeneration rewrites.
+    change_surface = (LOCK_PATH,)
     description = "Upstream moved dependencies, conflicting inside a lock-shaped dependency file"
 
     def inject(self, seed: int, sandbox: Sandbox) -> None:
