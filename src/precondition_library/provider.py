@@ -13,7 +13,18 @@ from typing import Any, Protocol
 import httpx
 from pydantic import BaseModel, Field
 
-DEFAULT_MODEL = "deepseek-chat"
+DEFAULT_MODEL = "deepseek-flash"
+"""The model name the provider uses when the caller does not name one.
+
+Checked against the provider's own documentation rather than carried over: the
+`model` parameter is documented as `deepseek-flash` or `deepseek-v4-pro`, and the
+only legacy names the docs say are still accepted are `deepseek-v4-flash` and
+`deepseek-v4-flash-vision-exp`. The name this constant used to hold appears in
+neither list (issue #101). Flash rather than Pro because the eval compares arms
+against each other on token counts, not on a capability ceiling, and Pro is roughly
+four times the price -- so the choice is recorded here and remains the caller's to
+override.
+"""
 """The model the spec uses (design doc §5 provenance, §7 ledger `model`)."""
 
 DEFAULT_BASE_URL = "https://api.deepseek.com"
