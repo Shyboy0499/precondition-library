@@ -28,6 +28,7 @@ from precondition_library.bench.report import (
     Mean,
     Rate,
     ablation_table,
+    break_even,
     cost_curve,
     mismatch_comparison,
     wilson_interval,
@@ -557,3 +558,151 @@ def test_the_report_does_not_dirty_the_repository(tmp_path: Path) -> None:
     )
     assert git_status_porcelain() == GIT_STATUS_AT_IMPORT
     assert _bench_entries() == _BENCH_AT_IMPORT
+
+
+# --- cumulative amortized cost and the break-even (issue #8) ------------------
+
+
+def test_the_curve_accumulates_over_occurrences(tmp_path: Path) -> None:
+    """Each point carries the running amortized cost, not just its own mean.
+
+    A per-occurrence mean is a snapshot: it says what one occurrence cost, not
+    whether the arm has yet paid back its compile. The accumulation is the quantity
+    Claim 1 is about, and `n` grows with it so a reader can see what it averaged.
+    """
+    ledger = _write(
+        tmp_path / "ledger.jsonl",
+        [
+            _replay(arm=Arm.PRECONDITION, seed=1, occurrence_index=1, tokens_in=100),
+            _replay(arm=Arm.PRECONDITION, seed=2, occurrence_index=2, tokens_in=300),
+        ],
+    )
+
+    first, second = cost_curve(ledger)
+    assert first.mean_tokens == Mean(n=1, value=100.0)
+    assert first.cumulative_tokens == Mean(n=1, value=100.0)
+    assert second.mean_tokens == Mean(n=1, value=300.0)
+    # Not 300: occurrence 1 is still in the accumulation.
+    assert second.cumulative_tokens == Mean(n=2, value=200.0)
+    assert second.cumulative_tokens.value > first.cumulative_tokens.value
+
+
+def test_an_arm_that_gets_cheaper_reports_where_it_crosses(tmp_path: Path) -> None:
+    """The break-even, which the per-occurrence mean could not exhibit.
+
+    Arm 1's prompt grows with the transcript, so it gets dearer per occurrence,
+    while the compiled arm pays for compiling once and then replays. Their
+    per-occurrence means never cross here -- 500 against 100 at occurrence 1, then
+    1 against 200 at occurrence 2 -- which is why the accumulation is what the
+    figure plots.
+    """
+    ledger = _write(
+        tmp_path / "ledger.jsonl",
+        [
+            _replay(arm=Arm.REACT, seed=1, occurrence_index=1, tokens_in=100),
+            _replay(arm=Arm.REACT, seed=2, occurrence_index=2, tokens_in=200),
+            _replay(arm=Arm.REACT, seed=3, occurrence_index=3, tokens_in=300),
+            _replay(arm=Arm.PRECONDITION, seed=1, occurrence_index=1, tokens_in=500),
+            _replay(arm=Arm.PRECONDITION, seed=2, occurrence_index=2, tokens_in=1),
+            _replay(arm=Arm.PRECONDITION, seed=3, occurrence_index=3, tokens_in=1),
+        ],
+    )
+    points = cost_curve(ledger)
+
+    (finding,) = break_even(points)
+
+    assert finding.arm is Arm.PRECONDITION
+    assert finding.baseline is Arm.REACT
+    assert finding.occurrence_index == 3, finding.detail
+    # The two readings disagree, which is why the figure had to change: the
+    # per-occurrence means cross at occurrence 2, while the amortized cost -- the
+    # quantity Claim 1 is about -- crosses at 3, because the compile has to be
+    # digested first. Reporting the means would have claimed the earlier crossover.
+    by_key = {(p.arm, p.occurrence_index): p for p in points}
+    per_occurrence = [
+        index
+        for index in (1, 2, 3)
+        if by_key[(Arm.PRECONDITION, index)].mean_tokens.value
+        <= by_key[(Arm.REACT, index)].mean_tokens.value
+    ]
+    assert per_occurrence == [2, 3]
+
+
+def test_break_even_says_which_failure_it_is(tmp_path: Path) -> None:
+    """Two ways to have no crossing, and they must not read as each other.
+
+    "The arms never share an occurrence index" is a run that cannot be compared;
+    "it never crossed" is a comparison that came out against the arm. Collapsing
+    them into one None would let an absent comparison look like a finding.
+    """
+    no_overlap = _write(
+        tmp_path / "no-overlap.jsonl",
+        [
+            _replay(arm=Arm.REACT, seed=1, occurrence_index=1, tokens_in=10),
+            _replay(arm=Arm.PRECONDITION, seed=1, occurrence_index=2, tokens_in=1),
+        ],
+    )
+    (finding,) = break_even(cost_curve(no_overlap))
+    assert finding.occurrence_index is None
+    assert "share no occurrence index" in finding.detail
+
+    never = _write(
+        tmp_path / "never.jsonl",
+        [
+            _replay(arm=Arm.REACT, seed=1, occurrence_index=1, tokens_in=10),
+            _replay(arm=Arm.PRECONDITION, seed=1, occurrence_index=1, tokens_in=100),
+            _replay(arm=Arm.PRECONDITION, seed=2, occurrence_index=2, tokens_in=100),
+        ],
+    )
+    (finding,) = break_even(cost_curve(never))
+    assert finding.occurrence_index is None
+    assert "never reached" in finding.detail
+
+
+def test_break_even_says_when_the_baseline_arm_is_absent(tmp_path: Path) -> None:
+    """A missing baseline is its own finding, not "no shared index".
+
+    The distinction matters: with no arm 1 in the ledger, no occurrence index could
+    ever be shared, so reporting the shared-index case would point a reader at the
+    seeds rather than at the missing arm.
+    """
+    ledger = _write(
+        tmp_path / "ledger.jsonl",
+        [_replay(arm=Arm.PRECONDITION, seed=1, occurrence_index=1, tokens_in=10)],
+    )
+
+    (finding,) = break_even(cost_curve(ledger))
+    assert finding.occurrence_index is None
+    assert "react has no replay occurrence" in finding.detail
+
+
+def test_break_even_is_empty_when_only_the_baseline_has_occurrences(tmp_path: Path) -> None:
+    """Nothing to cross against, and no arm to report a crossing for."""
+    ledger = _write(
+        tmp_path / "ledger.jsonl",
+        [_replay(arm=Arm.REACT, seed=1, occurrence_index=1, tokens_in=10)],
+    )
+
+    assert break_even(cost_curve(ledger)) == []
+
+
+def test_the_report_states_the_break_even_in_words(tmp_path: Path) -> None:
+    """A reader of report.txt alone must not have to eyeball the figure."""
+    ledger = _write(
+        tmp_path / "ledger.jsonl",
+        [
+            _replay(arm=Arm.REACT, seed=1, occurrence_index=1, tokens_in=100),
+            _replay(arm=Arm.REACT, seed=2, occurrence_index=2, tokens_in=200),
+            # Arm 1 must have occurrence 3 as well, or the comparison stops at the
+            # last index the two arms share and there is no crossing to report.
+            _replay(arm=Arm.REACT, seed=3, occurrence_index=3, tokens_in=300),
+            _replay(arm=Arm.PRECONDITION, seed=1, occurrence_index=1, tokens_in=500),
+            _replay(arm=Arm.PRECONDITION, seed=2, occurrence_index=2, tokens_in=1),
+            _replay(arm=Arm.PRECONDITION, seed=3, occurrence_index=3, tokens_in=1),
+        ],
+    )
+
+    report = (write_report(ledger, tmp_path / "out") / "report.txt").read_text(encoding="utf-8")
+
+    assert "break-even: precondition's amortized cost first reached react's" in report
+    assert "cumulative tokens/episode" in report
