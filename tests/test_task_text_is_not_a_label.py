@@ -11,11 +11,11 @@ equivalence-class test -- that stops an undeclared state-to-wording channel from
 silently restoring the original flaw.
 
 A fifth part is added here because it is the same channel seen from the other side:
-the *environment*. Everything above guards the task text, and issue #103 records that
-the injected state is written in plaintext into the clone the probes run in, so a
-precondition can read the resolution rather than diagnose it. That control is a strict
-`xfail` -- it pins the property we want, is visible in CI, and fails loudly the moment
-the leak is fixed, which forces the marker to be removed rather than lingering.
+the *environment*. Everything above guards the task text; that control guards the clone.
+Issue #103 found the injected state written in plaintext under `refs/sandbox/`, where a
+precondition could read the resolution rather than diagnose it. It was pinned as a strict
+`xfail` so it could not be forgotten, and fixing the leak turned it into the assertion
+below -- which is why the marker is gone rather than lingering.
 """
 
 from __future__ import annotations
@@ -356,29 +356,22 @@ def test_no_phrasing_names_a_resolution(state_grid) -> None:
 # --- the environment half of the same channel (issue #103) --------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "issue #103: the injected state is recorded in plaintext under refs/sandbox/ in "
-        "the clone the probes run in, so a precondition can read the answer instead of "
-        "diagnosing the fault. This pins the property we want; when #103 is fixed the "
-        "test will pass and this marker must be deleted."
-    ),
-)
-def test_the_environment_does_not_hand_a_probe_the_resolution(make_sandbox) -> None:
+@pytest.mark.parametrize("seed", [0, 1, 4])
+def test_the_environment_does_not_hand_a_probe_the_resolution(seed, make_sandbox) -> None:
     """The control above guards the request text. This is the environment.
 
-    `submodule_moved.inject` calls `store_blob(work, "refs/sandbox/submodule-state",
-    state)`, so the resolution label -- `init`, `repin` or `remove` -- is in the clone
-    the agent works in, and `runtime/probes.py` runs probes with `cwd=env.work`. A
-    precondition can therefore be exactly this probe. Admission cannot reject it: the
-    negative classes check states a program must *not* fire in, and this one fires in
-    precisely the state it is supposed to.
+    `inject` used to call `store_blob(work, "refs/sandbox/submodule-state", state)`, so
+    the resolution label -- `init`, `repin` or `remove` -- sat in the clone the agent
+    works in, and `runtime/probes.py` runs probes with `cwd=env.work`. A precondition
+    could therefore be exactly this probe, and admission could not reject it: the negative
+    classes check states a program must *not* fire in, and this one fires in precisely the
+    state it is supposed to.
 
-    Written as a probe rather than as a file read because that is the path that matters:
-    what a compiled program may do is what a probe may do.
+    All three states are checked, because a fix that removed the label for one of them
+    would leave the others readable. Written as a probe rather than as a file read because
+    that is the path that matters: what a compiled program may do is what a probe may do.
     """
-    box = make_sandbox(0, ["submodule_moved"])
+    box = make_sandbox(seed, ["submodule_moved"])
 
     probe = subprocess.run(
         [*SHELL, "git cat-file -p refs/sandbox/submodule-state"],

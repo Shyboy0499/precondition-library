@@ -56,7 +56,6 @@ _STATE_SALT = "submodule_moved:inject"
 # the outcome without being handed the seed, and can still name the submodule's
 # path after a correct removal has emptied the `.gitmodules` entry that would
 # otherwise reveal it.
-_STATE_REF = "refs/sandbox/submodule-state"
 _PATH_REF = "refs/sandbox/submodule-path"
 
 # Local paths are a valid submodule URL, but git >= 2.38 refuses them for
@@ -191,7 +190,7 @@ class SubmoduleMovedFault(FaultSpec):
         URL is a fixed function of the seed's sandbox root.
         """
         work = sandbox.work
-        require_uninjected(sandbox, fault="submodule_moved", ref=_STATE_REF)
+        require_uninjected(sandbox, fault="submodule_moved", ref=_PATH_REF)
 
         state = state_for_seed(seed)
 
@@ -237,7 +236,10 @@ class SubmoduleMovedFault(FaultSpec):
             run_git(("reset", "--hard", pinned), cwd=work)
             self._sync_checkout(work)
 
-        store_blob(work, _STATE_REF, state)
+        # The path is recorded because the *probes* bind `{submodule_path}` from it, and
+        # a correct removal deletes the `.gitmodules` entry that would otherwise carry it.
+        # The state is deliberately not recorded: a label in the clone is what issue #103
+        # is about, and it now travels on the sandbox object instead.
         store_blob(work, _PATH_REF, SUBMODULE_PATH)
 
         # Leave the remote-tracking ref current so observe() can read it without
@@ -289,9 +291,17 @@ class SubmoduleMovedFault(FaultSpec):
     def check(self, sandbox: Sandbox) -> GroundTruth:
         """Grade the outcome per injected state, from git alone.
 
-        The injected state is read from `refs/sandbox/submodule-state`, which
-        `inject` records, so the checker is never told the seed and cannot derive
-        the answer from the request. Each state has one clause:
+        The state is a **selector**, taken from `sandbox.injected_state` -- the harness's
+        own record of what it injected -- rather than read out of the clone. It used to be
+        recorded under `refs/sandbox/submodule-state`, which put the answer inside the
+        environment the graded code reads: a precondition could be
+        `test "$(git cat-file -p refs/sandbox/submodule-state)" = "remove"`, and admission
+        could not reject it, because it fires in precisely the state it is supposed to
+        (issue #103).
+
+        Nothing is taken on trust by the move. The selector says *which* clause applies and
+        the clause is still read from the environment, so the checker still verifies rather
+        than believes. Each state has one clause:
 
           init    the submodule is initialised -- its working tree has a checkout.
           repin   the commit HEAD records for the submodule equals the one
@@ -306,8 +316,13 @@ class SubmoduleMovedFault(FaultSpec):
         succeed" check would not.
         """
         work = sandbox.work
-        state = git_out("cat-file", "-p", _STATE_REF, cwd=work)
-        path = git_out("cat-file", "-p", _PATH_REF, cwd=work)
+        state = sandbox.injected_state
+        if state is None:
+            raise ValueError(
+                "submodule_moved.check needs the injected state; build the sandbox through "
+                "tasks.faults.build_sandbox, which records it on the sandbox"
+            )
+        path = SUBMODULE_PATH
 
         if state == "init":
             if not _is_initialised(work, path):

@@ -6,6 +6,8 @@ asks "what faults exist". Adding a fault here extends every arm at once.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from ...sandbox import Sandbox, create
 from ..invariants import record_refs_at_start
 from ..spec import FaultSpec
@@ -55,6 +57,10 @@ def build_sandbox(seed: int, faults: list[str]) -> Sandbox:
     # After injection, not before: injectors legitimately delete and rename upstream
     # refs, so a pre-injection snapshot would call the fault itself a violation.
     record_refs_at_start(sandbox)
+    if len(faults) == 1:
+        # The selector a checker needs, kept in the harness's own object. Recording it
+        # in the clone instead is the leak issue #103 describes.
+        sandbox = replace(sandbox, injected_state=FAULTS[faults[0]].variant_for_seed(seed))
     return sandbox
 
 
