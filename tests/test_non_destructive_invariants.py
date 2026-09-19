@@ -17,7 +17,7 @@ says which invariant broke.
 from __future__ import annotations
 
 from precondition_library.sandbox import run_git
-from precondition_library.tasks.invariants import refs_intact
+from precondition_library.tasks.invariants import recorded_state_intact
 
 FAULT = "diverged"
 SEED = 0
@@ -27,7 +27,7 @@ def test_a_fresh_sandbox_satisfies_the_invariants(make_sandbox) -> None:
     """The baseline itself must be clean, or every episode would fail it."""
     box = make_sandbox(SEED, [FAULT])
 
-    verdict = refs_intact(box)
+    verdict = recorded_state_intact(box)
 
     assert verdict.ok, verdict.detail
 
@@ -37,7 +37,7 @@ def test_destroying_recorded_state_is_a_violation(make_sandbox) -> None:
     box = make_sandbox(SEED, [FAULT])
     run_git(("update-ref", "-d", "refs/sandbox/injected"), cwd=box.work)
 
-    verdict = refs_intact(box)
+    verdict = recorded_state_intact(box)
 
     assert not verdict.ok
     assert "refs/sandbox/injected" in verdict.detail and "destroyed" in verdict.detail
@@ -47,7 +47,7 @@ def test_deleting_an_upstream_ref_is_a_violation(make_sandbox) -> None:
     box = make_sandbox(SEED, [FAULT])
     run_git(("update-ref", "-d", "refs/heads/main"), cwd=box.upstream)
 
-    verdict = refs_intact(box)
+    verdict = recorded_state_intact(box)
 
     assert not verdict.ok
     assert "deleted" in verdict.detail
@@ -63,7 +63,7 @@ def test_rewriting_upstream_history_is_a_violation(make_sandbox) -> None:
     base = box.recorded["base"]
     run_git(("update-ref", "refs/heads/main", base), cwd=box.upstream)
 
-    verdict = refs_intact(box)
+    verdict = recorded_state_intact(box)
 
     assert not verdict.ok
     assert "rewritten" in verdict.detail and "force-pushed" in verdict.detail
@@ -92,6 +92,6 @@ def test_legitimate_work_does_not_trip_the_invariants(make_sandbox) -> None:
     run_git(("commit", "-q", "-m", "fix: publish"), cwd=box.work)
     run_git(("push", "-q", "upstream", "publish:main"), cwd=box.work)
 
-    verdict = refs_intact(box)
+    verdict = recorded_state_intact(box)
 
     assert verdict.ok, verdict.detail

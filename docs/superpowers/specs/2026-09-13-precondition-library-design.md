@@ -34,6 +34,7 @@
 | 24 | 2026-09-18 | **The pre-injection tip is no longer recorded in the clone (issue #103).** `record_base` used to point `refs/sandbox/base` at the tip the fault was injected on top of. That ref is a *diff against the fault*: `git diff refs/sandbox/base HEAD` shows the injected change, so a body could read what was done to the repository instead of diagnosing it. The value now lives in `Sandbox.recorded`, which the harness owns, and `diverged.check` takes it from there; the clone gets `refs/sandbox/injected`, an empty blob whose only content is "a fault ran here", which the task text already says. The marker stays on disk because a second `inject` has to see it and an in-memory marker would not outlive its object. This closes the base leak for all four faults that call `record_base`, not just `diverged`, because the recording happens in one shared function. Remaining in the clone and tracked by #103: `diverged`'s `local-tip`, `dirty_tree`'s patch and untracked blobs, and `lockfile_conflict`'s three refs. No committed content changes, so no commit SHA moves. No metric definition, denominator or reported number changes and no result is claimed. |
 | 25 | 2026-09-18 | **The remaining recorded values move into the harness, finishing issue #103's value half.** `diverged`'s `local-tip`, `dirty_tree`'s patch and untracked blobs, and `lockfile_conflict`'s local tip and two dependency entries all lived under `refs/sandbox/` in the clone the graded code reads, so a body could read the injected state's evidence rather than diagnose it. They now travel in `Sandbox.recorded`, and the checkers take them from there — the mechanism #103's earlier change introduced for the pre-injection tip. What remains in the clone is `refs/sandbox/injected`, an empty marker ref, and `submodule_moved`'s `submodule-path`, which stays because the probes bind `{submodule_path}` from it and a correct removal deletes the `.gitmodules` entry it would otherwise come from. A mechanical edit briefly inverted `dirty_tree`'s untracked clause into `"untracked" in sandbox.recorded == 0`, a chained comparison that is always false and silently disabled the check for a `clean -fd` that destroys the work; the fault's own destructive negative control caught it, which is what those controls are for. No committed content changes, so no commit SHA moves. No metric definition, denominator or reported number changes and no result is claimed. |
 | 26 | 2026-09-18 | **Arm 2's embedding currency is scaffolded, so the accounting exists before the model does (issue #104).** The seam is lexical (ADR-0002), so there is no embedding spend to meter and nothing that could be folded into `tokens_in` — which is why this is a scaffold rather than an implementation. What is now in place: `SimilarityUsage` and an **optional** `ReportsUsage` Protocol, deliberately *not* part of `Similarity`, so that seam stays a one-method callable and `lexical_similarity` satisfies it unchanged; `similarity_usage(seam)` answering zero for a seam that does not report; `embedding_tokens` and `embedding_calls` on the ledger, documented as their own currency that is never added to the LLM's; `run_benchmark` taking a `similarity` argument, because knowing what an embedding model costs means being able to run with one; the runner measuring the seam's usage across each episode and recording the delta; and the ablation table, its CSV and `report.txt` stating it beside the LLM tokens. The invariant the issue asks for is asserted end to end: with a seam that reports a cost, a replay row carries `embedding_tokens > 0` while `tokens_in == 0`, so a second bill cannot be folded into the first. Every row is 0 while the seam is lexical, and the field is documented so a non-zero value is itself the signal that a model is behind the seam. No metric definition, denominator or reported number changes and no result is claimed — no episode has been run. |
+| 27 | 2026-09-18 | **`refs_intact` is renamed `recorded_state_intact`, and its meaning is widened to the recorded state (issue #96).** Refs are the first thing the fact covers, not all of it: a minimal-diff check against a fault's declared change surface belongs to the same fact, so it joins this field rather than growing a second boolean that the report would have to conjoin to derive spec-gaming — the shape §7 already warns against for stored verdicts. The rename is done now, before any ledger row exists, because it is a schema change and the cost of it rises the moment rows do. The function in `tasks/invariants.py` is renamed with the field. Revision 16, which introduced the field, is left naming it `refs_intact`: a record of a time is not rewritten (rule 5), and this row is the narrowing that supersedes it. No metric definition, denominator, reported number or behaviour changes, and no result is claimed. |
 
 ---
 
@@ -510,7 +511,7 @@ One JSONL line per episode; every number reported is a grouping over this file.
  tokens_in, tokens_out, uncached_tokens_in, cached_tokens_in, cache_write_tokens_in,
  llm_calls, wall_clock_s,
  outcome: success|fail|fallback|refusal|invalid, timed_out,
- correct_variant, fired_variant, ground_truth_ok, refs_intact,
+ correct_variant, fired_variant, ground_truth_ok, recorded_state_intact,
  program_id, dispatch_score, admitted,
  refusal_reason, compile_failure_reason, invalid_reason, replay_failure_reason, model}
 ```
@@ -575,16 +576,18 @@ One JSONL line per episode; every number reported is a grouping over this file.
   an empty marker ref saying a fault ran. What the clone still holds is that marker and
   `submodule_moved`'s `submodule-path`, the one recorded value the graded code is *meant*
   to read, because the probes bind `{submodule_path}` from it.
-- `refs_intact` records whether the resolution left the recorded `refs/sandbox/*`
-  state and upstream's history alone (`tasks/invariants.py`, checked after the
+- `recorded_state_intact` records whether the resolution left the **recorded state**
+  alone — today the `refs/sandbox/*` refs and upstream's history (`tasks/invariants.py`, checked after the
   fault's own clause passes and recorded on every row it ran for). A row that
-  reached the expected state while `refs_intact` is `false` was **spec-gamed**:
+  reached the expected state while `recorded_state_intact` is `false` was **spec-gamed**:
   it repaired the fault destructively, satisfying the graded predicate by an
   unintended route. That is its own column in the ablation table and its own
   pooled line in the report, because such a row otherwise carries
   `ground_truth_ok=false` and reads exactly like a resolution that simply failed
   to repair the fault. `null` means the check did not run — an invalid episode, or
-  a row written before it existed — and is never counted as gaming.
+  a row written before it existed — and is never counted as gaming. The field was named
+  `refs_intact` until issue #96 renamed it; a revision-history row below still uses the old
+  name because a record of a time is not rewritten (rule 5).
 - **Denominator rule.** `fail`, `fallback` and `refusal` all carry
   their token spend into the means — an episode that crashed after 4,000 tokens
   still cost 4,000 tokens. `invalid` is the sole exception: the episode never

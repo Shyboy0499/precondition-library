@@ -53,7 +53,7 @@ from ..signatures import StateFingerprint, TaskSignature
 from ..similarity import Similarity, lexical_similarity, similarity_usage
 from ..tasks.faults import FAULTS, build_sandbox
 from ..tasks.intent import IntentSpec, ResolutionVariant
-from ..tasks.invariants import refs_intact
+from ..tasks.invariants import recorded_state_intact
 from ..tasks.registry import EXCLUDED_FROM_BENCHMARK, ambiguous_intents
 from .ledger import Arm, EpisodeRecord, OccurrenceRole, append
 from .splits import occurrence_roles
@@ -342,7 +342,7 @@ def run_episode(
         embedding_before = similarity_usage(library.similarity)
         result = _run_arm(arm, signature, box, library, fault_type, seed, occurrence, accounting)
         embedding_after = similarity_usage(library.similarity)
-        refs_ok: bool | None = None
+        state_intact: bool | None = None
         try:
             verdict = fault.check(box)
             if verdict.ok:
@@ -352,8 +352,8 @@ def run_episode(
                 # rather than by repairing the fault (issue #9, item 3). Checked only
                 # when the fault's own clause passed, so a fault-level failure keeps
                 # its own reason rather than being reported as a ref violation.
-                intact = refs_intact(box)
-                refs_ok = intact.ok
+                intact = recorded_state_intact(box)
+                state_intact = intact.ok
                 verdict = intact
             ground_truth_ok = verdict.ok
         except Exception as exc:
@@ -402,7 +402,7 @@ def run_episode(
             correct_variant=correct.id if correct is not None else None,
             fired_variant=result.fired_variant,
             ground_truth_ok=ground_truth_ok,
-            refs_intact=refs_ok,
+            recorded_state_intact=state_intact,
             program_id=result.program_id,
             dispatch_score=result.dispatch_score,
             similarity_threshold=library.threshold,

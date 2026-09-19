@@ -120,13 +120,19 @@ class EpisodeRecord(BaseModel):
     """The *cache-read* component: input tokens the provider served from cache.
     `tokens_in` is the total of all three plus output-adjacent nothing, and is never a
     billing basis."""
-    refs_intact: bool | None = None
-    """Whether the resolution left the recorded refs and upstream's history alone.
+    recorded_state_intact: bool | None = None
+    """Whether the resolution left the recorded state alone.
+
+    Named for the state rather than for the refs because refs are only the first thing it
+    covers: today it means the recorded `refs/sandbox/*` refs survived and upstream's
+    history was neither deleted nor rewritten, and a minimal-diff check against a fault's
+    declared change surface joins it under the same fact (issue #96). One field and one
+    derived verdict, rather than a second boolean the report would have to conjoin.
 
     `None` means not checked -- an invalid episode, or one predating the check. The
     *fact*, not a verdict: spec-gaming is derived from it (a row that reached the
-    expected state but destroyed recorded state on the way), because a stored verdict
-    could not sit beside `ground_truth_ok` without the two disagreeing (issue #9).
+    expected state while this is false), because a stored verdict could not sit beside
+    `ground_truth_ok` without the two disagreeing (issue #9).
     """
     llm_calls: int
     wall_clock_s: float

@@ -729,7 +729,7 @@ def test_spec_gaming_is_counted_from_the_recorded_fact(tmp_path: Path) -> None:
         tmp_path / "ledger.jsonl",
         [
             # Reached the expected state, but destroyed recorded state on the way.
-            _record(seed=1, ground_truth_ok=False, refs_intact=False),
+            _record(seed=1, ground_truth_ok=False, recorded_state_intact=False),
             # Reached it non-destructively.
             _record(seed=2),
             # Did not reach it at all: a plain failure, not gaming.
@@ -757,8 +757,8 @@ def test_a_row_whose_check_did_not_run_is_not_spec_gaming(tmp_path: Path) -> Non
     ledger = _write(
         tmp_path / "ledger.jsonl",
         [
-            _record(seed=1, ground_truth_ok=False, refs_intact=None),
-            _record(seed=2, ground_truth_ok=False, refs_intact=False),
+            _record(seed=1, ground_truth_ok=False, recorded_state_intact=None),
+            _record(seed=2, ground_truth_ok=False, recorded_state_intact=False),
         ],
     )
 
@@ -771,7 +771,7 @@ def test_the_report_states_the_spec_gaming_count(tmp_path: Path) -> None:
     ledger = _write(
         tmp_path / "ledger.jsonl",
         [
-            _record(seed=1, ground_truth_ok=False, refs_intact=False),
+            _record(seed=1, ground_truth_ok=False, recorded_state_intact=False),
             _record(seed=2),
         ],
     )
