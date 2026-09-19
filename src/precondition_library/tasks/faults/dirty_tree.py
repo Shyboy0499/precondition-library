@@ -23,7 +23,7 @@ measurement (issue #25).
 
 from __future__ import annotations
 
-from ...sandbox import Sandbox, git_out, record_base, run_git, store_blob, tip_contained
+from ...sandbox import Sandbox, git_out, record_base, run_git, tip_contained
 from ..intent import sample_index
 from ..spec import FaultSpec, GroundTruth
 
@@ -46,8 +46,6 @@ _UNTRACKED_TEXT = "scratch note, not committed yet\n"
 # Refs under refs/sandbox/ keep the injected state reachable by git itself, so
 # the checker stays git-only: the patch is a blob the working tree must still
 # contain, and the untracked ref exists only when a file was injected.
-_PATCH_REF = "refs/sandbox/dirty-patch"
-_UNTRACKED_REF = "refs/sandbox/dirty-untracked"
 
 
 def state_for_seed(seed: int) -> str:
@@ -98,12 +96,12 @@ class DirtyTreeFault(FaultSpec):
         # file in the half of the seed space that includes one.
         with (work / _TRACKED_FILE).open("a", encoding="utf-8") as handle:
             handle.write(_LOCAL_WORK)
-        store_blob(work, _PATCH_REF, run_git(("diff",), cwd=work).stdout)
+        sandbox.recorded["patch"] = run_git(("diff",), cwd=work).stdout
         if injects_untracked(seed):
             untracked = work / _UNTRACKED_PATH
             untracked.parent.mkdir(parents=True, exist_ok=True)
             untracked.write_text(_UNTRACKED_TEXT, encoding="utf-8")
-            store_blob(work, _UNTRACKED_REF, _UNTRACKED_TEXT)
+            sandbox.recorded["untracked"] = _UNTRACKED_TEXT
 
         # Leave the remote-tracking ref current so observe() can read it without
         # fetching (observe must not mutate the environment).
@@ -141,7 +139,7 @@ class DirtyTreeFault(FaultSpec):
                 detail=f"upstream tip {upstream_tip[:12]} is not contained in the local branch",
             )
 
-        patch = run_git(("cat-file", "-p", _PATCH_REF), cwd=work).stdout
+        patch = sandbox.recorded["patch"]
         if patch.strip():
             reverts = run_git(
                 ("apply", "--reverse", "--check", "-"), cwd=work, check=False, stdin=patch
@@ -152,13 +150,10 @@ class DirtyTreeFault(FaultSpec):
                     detail="uncommitted tracked changes are no longer in the tree (discarded)",
                 )
 
-        has_untracked = (
-            run_git(("rev-parse", "--verify", _UNTRACKED_REF), cwd=work, check=False).returncode
-            == 0
-        )
+        has_untracked = "untracked" in sandbox.recorded
         if has_untracked:
             # Not stripped: the checked file must match the stored bytes exactly.
-            expected = run_git(("cat-file", "-p", _UNTRACKED_REF), cwd=work).stdout
+            expected = sandbox.recorded["untracked"]
             untracked = work / _UNTRACKED_PATH
             if not untracked.exists() or untracked.read_text(encoding="utf-8") != expected:
                 return GroundTruth(

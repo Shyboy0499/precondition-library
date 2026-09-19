@@ -177,7 +177,7 @@ class DivergedFault(FaultSpec):
             _commit(work, "feat: local farewell")
 
         local_tip = git_out("rev-parse", "HEAD", cwd=work)
-        run_git(("update-ref", "refs/sandbox/local-tip", local_tip), cwd=work)
+        sandbox.recorded["local-tip"] = local_tip
         # Leave the remote-tracking ref current so observe() can read it without
         # fetching (observe must not mutate the environment).
         run_git(("fetch", "-q", "upstream"), cwd=work)
@@ -220,7 +220,7 @@ class DivergedFault(FaultSpec):
         # From the harness, not the clone: a base ref in the working repository is a
         # diff against the injected change (issue #103).
         base = sandbox.recorded["base"]
-        local_tip = git_out("rev-parse", "refs/sandbox/local-tip", cwd=work)
+        local_tip = sandbox.recorded["local-tip"]
         local_patch = run_git(("diff", base, local_tip), cwd=work).stdout
         if local_patch.strip():
             reverts = run_git(

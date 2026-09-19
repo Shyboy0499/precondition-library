@@ -36,7 +36,7 @@ measurement (issue #25).
 
 from __future__ import annotations
 
-from ...sandbox import Sandbox, git_out, record_base, run_git, store_blob, tip_contained
+from ...sandbox import Sandbox, git_out, record_base, run_git, tip_contained
 from ..intent import sample_index
 from ..spec import FaultSpec, GroundTruth
 
@@ -67,9 +67,6 @@ _VERSION_SALT = "lockfile_conflict:version"
 # Ground truth lives under refs/sandbox/, where a branch rewrite cannot drop it
 # and the checker can read it with `git cat-file` rather than re-deriving it
 # from a seed the checker is never given.
-_LOCAL_TIP_REF = "refs/sandbox/lock-local-tip"
-_LOCAL_DEPENDENCY_REF = "refs/sandbox/lock-local-dependency"
-_UPSTREAM_DEPENDENCY_REF = "refs/sandbox/lock-upstream-dependency"
 
 # A conflict marker starts a line: `<<<<<<<`, `=======` (separator), `>>>>>>>`
 # (end) or `|||||||` (diff3 base).
@@ -177,7 +174,7 @@ class LockfileConflictFault(FaultSpec):
         run_git(("add", "-A"), cwd=work)
         run_git(("commit", "-q", "-m", "feat: add local dependency"), cwd=work)
         local_tip = git_out("rev-parse", "HEAD", cwd=work)
-        run_git(("update-ref", _LOCAL_TIP_REF, local_tip), cwd=work)
+        sandbox.recorded["local-tip"] = local_tip
 
         # Upstream's edit, built from the same ancestor and published.
         run_git(("reset", "--hard", common), cwd=work)
@@ -187,9 +184,9 @@ class LockfileConflictFault(FaultSpec):
         run_git(("push", "-q", "upstream", "main"), cwd=work)
 
         # Back to the local branch, and record the ground truth the checker uses.
-        run_git(("reset", "--hard", _LOCAL_TIP_REF), cwd=work)
-        store_blob(work, _LOCAL_DEPENDENCY_REF, local_dependency_for_seed(seed))
-        store_blob(work, _UPSTREAM_DEPENDENCY_REF, upstream_dependency_for_seed(seed))
+        run_git(("reset", "--hard", local_tip), cwd=work)
+        sandbox.recorded["local-dependency"] = local_dependency_for_seed(seed)
+        sandbox.recorded["upstream-dependency"] = upstream_dependency_for_seed(seed)
 
         # Leave the remote-tracking ref current so observe() can read it without
         # fetching (observe must not mutate the environment).
@@ -236,8 +233,8 @@ class LockfileConflictFault(FaultSpec):
             return GroundTruth(ok=False, detail=f"{LOCK_PATH} is missing after the sync")
         text = lock.read_text(encoding="utf-8")
 
-        local_entry = git_out("cat-file", "-p", _LOCAL_DEPENDENCY_REF, cwd=work)
-        upstream_entry = git_out("cat-file", "-p", _UPSTREAM_DEPENDENCY_REF, cwd=work)
+        local_entry = sandbox.recorded["local-dependency"]
+        upstream_entry = sandbox.recorded["upstream-dependency"]
         if local_entry not in text:
             return GroundTruth(
                 ok=False,

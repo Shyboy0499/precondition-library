@@ -35,12 +35,12 @@ def test_a_fresh_sandbox_satisfies_the_invariants(make_sandbox) -> None:
 def test_destroying_recorded_state_is_a_violation(make_sandbox) -> None:
     """`refs/sandbox/` is where ground truth lives; losing it is the re-clone case."""
     box = make_sandbox(SEED, [FAULT])
-    run_git(("update-ref", "-d", "refs/sandbox/local-tip"), cwd=box.work)
+    run_git(("update-ref", "-d", "refs/sandbox/injected"), cwd=box.work)
 
     verdict = refs_intact(box)
 
     assert not verdict.ok
-    assert "refs/sandbox/local-tip" in verdict.detail and "destroyed" in verdict.detail
+    assert "refs/sandbox/injected" in verdict.detail and "destroyed" in verdict.detail
 
 
 def test_deleting_an_upstream_ref_is_a_violation(make_sandbox) -> None:
