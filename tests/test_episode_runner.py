@@ -962,6 +962,7 @@ def test_an_unrunnable_episode_is_recorded_as_invalid(tmp_path: Path, monkeypatc
     assert record.succeeded is False
     assert "sandbox failure" in (record.invalid_reason or "")
     assert record.refusal_reason is None, "an infrastructure failure is not a guard refusal"
+    assert record.change_surface is None, "no sandbox means the surface check never ran (#96)"
 
 
 # --- the row records what the episode ran against ----------------------------
@@ -1060,6 +1061,10 @@ def test_an_invalid_row_after_the_arm_ran_carries_the_spend(tmp_path, monkeypatc
     assert record.llm_calls == 3, "the solve ran before the checker raised"
     assert record.tokens_in == 30
     assert record.tokens_out == 15
+    assert record.change_surface is None, (
+        "the checker raised before the surface was applied, so the row must not claim one "
+        "(issue #96)"
+    )
 
 
 # --- demotion rests on a postcondition miss, not a runtime mishap ------------
@@ -1399,6 +1404,9 @@ def test_a_destructive_resolution_is_recorded_as_not_ground_truth(tmp_path, monk
     # is indistinguishable from a resolution that simply failed to repair the fault
     # (issue #9, item 4).
     assert destructive.recorded_state_intact is False
+    # The surface was applied even though the check returned false, so the row carries it:
+    # what is recorded is that the check ran with this surface, not that it passed (#96).
+    assert destructive.change_surface == DIVERGED.change_surface
 
 
 # --- the embedding currency is separate from the LLM's (issue #104) -----------
@@ -1457,3 +1465,58 @@ def test_an_embedding_seam_is_metered_separately_from_the_llm(tmp_path: Path) ->
     assert second.embedding_tokens == 7 * second.embedding_calls
     assert second.tokens_in == 0, "the embedding spend leaked into the LLM token count"
     assert second.tokens_out == 0
+
+
+# --- the applied change surface reaches the ledger (issue #96) ---------------
+
+
+def test_a_row_that_ran_the_check_carries_the_surface_it_applied(tmp_path: Path) -> None:
+    """The applied surface is recorded, so spec-gaming is auditable rather than re-derivable.
+
+    The replay resolves the fault, so the fault's own clause passes and the runner checks the
+    committed diff against the declaration. The row must carry the declaration the check
+    actually used -- `diverged`'s -- instead of leaving a reader to read it out of the
+    injector, which is the checklist item this closes. Recorded per episode and not read from
+    the registry at report time, because the derived verdict depends on this surface.
+    """
+    library = _library_with_admitted(tmp_path / "lib", _discard_program())
+
+    record = run_episode(
+        Arm.PRECONDITION,
+        "diverged",
+        DISCARD_SEED,
+        1,
+        role=OccurrenceRole.VARIANT,
+        provider=FakeProvider(raises=AssertionError("a replay must not call the model")),
+        library=library,
+        model="fake",
+    )
+
+    assert record.recorded_state_intact is True
+    assert record.change_surface == DIVERGED.change_surface
+    assert record.change_surface == ("app.py", "docs/readme.md")
+
+
+def test_a_row_whose_fault_check_failed_carries_no_surface(tmp_path: Path) -> None:
+    """The surface check runs only after the fault's own clause passes (issue #96).
+
+    A row must not claim a surface was applied when it was not. The agent declares itself
+    finished without touching the sandbox, so `diverged.check` fails and
+    `recorded_state_intact` is never called: the surface stays `None` -- the not-applied
+    value the report must not read as evidence about the declaration.
+    """
+    record = run_episode(
+        Arm.REACT,
+        "diverged",
+        DISCARD_SEED,
+        1,
+        role=OccurrenceRole.VARIANT,
+        provider=FakeProvider(_finish()),
+        library=Library(tmp_path / "lib"),
+        model="fake",
+    )
+
+    assert record.outcome is EpisodeOutcome.SUCCESS, "the agent declared itself finished"
+    assert record.ground_truth_ok is False, "but the fault was not repaired"
+    assert record.recorded_state_intact is None
+    assert record.change_surface is None

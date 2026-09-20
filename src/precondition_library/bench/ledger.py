@@ -142,6 +142,31 @@ class EpisodeRecord(BaseModel):
     expected state while this is false), because a stored verdict could not sit beside
     `ground_truth_ok` without the two disagreeing (issue #9).
     """
+    change_surface: tuple[str, ...] | None = None
+    """The paths this episode's resolution was allowed to touch, **as applied** (issue #96).
+
+    The fault's declared surface is passed to `recorded_state_intact`, which checks the
+    committed diff from the recorded base against it, and the declaration that was actually
+    used is written here. Recorded per episode rather than read from the fault registry at
+    report time because the derived spec-gaming verdict rests on the surface that was
+    applied: regenerating a report from an older ledger while reading today's declaration
+    would print a surface that run never used, which is exactly the class of drift the
+    ledger exists to prevent.
+
+    `None` and `()` are different facts, and the difference is why the field is optional:
+
+    * `None` -- the check was **not applied**. The episode was invalid, or the fault's own
+      clause failed before the surface was reached (the check runs only once the fault
+      check passes, so a failing fault keeps its own reason instead), or the row predates
+      this field. A `None` row is not evidence about any declaration.
+    * `()` -- the check **was applied and the declaration was empty**. That is not a missing
+      value but the *strictest* one: for a fault like `branch_renamed` whose resolution is a
+      ref operation, it says committed content must not change at all. Collapsing it into
+      `None` would turn a deliberate "no path may change" into "nobody looked".
+
+    Mirrors `tasks.invariants.recorded_state_intact`'s `surface` argument, which uses the
+    same `None`-means-not-declared convention.
+    """
     llm_calls: int
     wall_clock_s: float
 

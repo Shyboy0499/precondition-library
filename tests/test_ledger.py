@@ -90,3 +90,33 @@ def test_guard_refusals_and_compile_failures_are_separate_fields(tmp_path: Path)
     refusals = [row for row in stored if row.refusal_reason is not None]
     assert len(refusals) / len(stored) == pytest.approx(1 / 3)
     assert [row.outcome for row in refusals] == [EpisodeOutcome.REFUSAL]
+
+
+def test_the_change_surface_round_trips_and_none_differs_from_empty(tmp_path: Path) -> None:
+    """`None` is "not applied"; `()` is "applied, and nothing may change" (issue #96).
+
+    The two are different facts and the ledger has to keep them apart across a write and a
+    read. An empty surface that was applied is the *strictest* declaration a fault can make
+    -- `branch_renamed` declares it -- while `None` means no surface was ever handed to the
+    check. A round trip that collapsed either into the other would turn a deliberate "no
+    committed change" into "nobody looked", or the reverse.
+    """
+    path = tmp_path / "ledger.jsonl"
+    applied = _record(seed=1, change_surface=("app.py", "docs/readme.md"))
+    empty = _record(seed=2, change_surface=())
+    unchecked = _record(seed=3, change_surface=None)
+    for record in (applied, empty, unchecked):
+        append(path, record)
+
+    stored = read(path)
+
+    assert [row.change_surface for row in stored] == [
+        ("app.py", "docs/readme.md"),
+        (),
+        None,
+    ]
+    assert stored[0].change_surface == ("app.py", "docs/readme.md")
+    assert stored[1].change_surface == ()
+    assert stored[1].change_surface is not None, "an applied empty surface is not a missing one"
+    assert stored[2].change_surface is None
+    assert stored == [applied, empty, unchecked]
