@@ -7,13 +7,26 @@ semantic scorer should do well precisely where probes have no advantage -- which
 already names as the open risk that could kill the claim. So the question is measured before the
 seam is swapped, not after.
 
-**What this measures, and what it does not.** Each pair is crossed with each of its intent's
-declared resolutions, the scorer scores the pair's request text against that resolution's
-`rationale`, and the AUC asks how often a correct resolution scores above an incorrect one. That
-answers *is this fault family separable by meaning* -- the constructive question -- and it is
-**not** the dispatch AUC the benchmark reports, which scores compiled program texts. A scorer can
-separate rationales and still fail on programs; the reverse is possible too. Read the number as
-evidence about whether a swap is worth trying, not as a result.
+**WARNING: the candidate text here is the wrong one, and the figure it reports is not the
+baseline.** This module crosses each pair with its intent's declared resolutions and scores the
+request against each resolution's **`rationale`** -- the intent designer's explanation. A dispatcher
+compares against `_program_text(program)`: a program's `intent` plus its predicate descriptions.
+Those are different texts, and they give opposite conclusions on the shipped scorer:
+
+    request vs rationale : AUC 0.6755   <- what this module reports
+    request vs program   : AUC 0.4778   <- what arm 2 actually does, and it is below chance
+
+The rationales are more mutually distinct (mean pairwise token overlap 0.155) than the artifact
+texts (0.312), so this module flatters the scorer by ~0.2 AUC. **Do not quote its number as the
+baseline.** Issue #116 carries the finding, the cause -- `program.intent` is the intent *name*, a
+constant across a fault's resolutions, and unweighted Jaccard is dominated by the shared
+boilerplate -- and the fix. It also withdraws the conclusion drawn from this number, that a semantic
+scorer has little headroom here: on the corrected evidence the scorer has almost no signal, so the
+case for an embedding model is stronger rather than weaker.
+
+What the module is still good for: comparing scorers **against each other** on one fixed set of
+candidate texts, which is the reason it takes a mapping and not one scorer. Its cross-scorer
+comparison is sound; its absolute value is not a dispatch measurement.
 
 **Informational, never gated.** Like the text control's informed boundary, this reports a number
 rather than asserting a threshold. A threshold on a proxy measurement would turn an exploratory
