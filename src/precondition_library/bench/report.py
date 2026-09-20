@@ -453,6 +453,45 @@ class MismatchComparison(BaseModel):
     note: str
 
 
+class AppliedSurface(BaseModel):
+    """One change surface that rows of a fault actually applied (issue #96)."""
+
+    surface: tuple[str, ...]
+    episodes: int
+    """Rows that applied exactly this surface. Empty is a real value here, not a
+    placeholder: an empty declaration that was applied is the strictest one."""
+
+
+class FaultSurface(BaseModel):
+    """What one fault's rows claimed a resolution needed, read from the ledger (#96).
+
+    Derived from the recorded `change_surface` field, never from `FaultSpec.change_surface`,
+    because spec-gaming is derived from `recorded_state_intact(..., surface=...)`: the verdict
+    a row carries depends on the surface that was *applied*. A report regenerated from an
+    older ledger that read the current registry would print a declaration that run never
+    used -- the drift this repository's rules about records exist to prevent.
+
+    `surfaces` holds only the non-`None` applied values. A `None` row means the check did
+    not run (an invalid episode, or a fault-level failure before the surface was reached), so
+    it is no evidence about the declaration and cannot create a disagreement by itself.
+    """
+
+    fault_type: str
+    episodes: int
+    """Every row for this fault, applied or not -- the denominator `applied` is read
+    against, so a fault no row checked stays visible rather than absent."""
+    applied: int
+    """Rows whose resolution was checked against a declared surface. These are the rows
+    the report's surface section is based on."""
+    surfaces: list[AppliedSurface]
+    """The distinct applied surfaces, sorted, each with its row count. Empty when no row
+    applied one."""
+    disagreement: bool
+    """True when two or more *different* non-`None` surfaces were applied by rows of this
+    fault: a real inconsistency in the run, named in the report rather than resolved by
+    silently picking one. A `None` row is not evidence and cannot set this."""
+
+
 def wilson_interval(successes: int, n: int, z: float = Z_95) -> Interval | None:
     """The Wilson score interval for a binomial proportion. None when n == 0.
 
@@ -720,6 +759,50 @@ def occurrence_counts(ledger: Path) -> dict[OccurrenceRole, int]:
     for record in _graded(read(ledger)):
         counts[record.occurrence_role] += 1
     return counts
+
+
+def change_surfaces(ledger: Path) -> list[FaultSurface]:
+    """The change surface each fault's rows applied, per fault, from the ledger (#96).
+
+    Grouped by fault over every row, invalid ones included: they carry no surface, so they
+    contribute to `episodes` -- the denominator -- and never to `applied`. Surfaces are
+    sorted so the report is deterministic, and a fault whose rows applied two different
+    non-`None` surfaces is flagged rather than having one chosen for it, because that is
+    the run disagreeing with itself and the reader has to be told which ways it disagreed.
+
+    The registry is deliberately not consulted. Reading `FaultSpec.change_surface` here
+    would be cheaper and would make the section describe today's declaration instead of the
+    surface this run graded against -- the two differ the moment the declaration changes,
+    and spec-gaming is derived from the second.
+    """
+    groups: dict[str, list[EpisodeRecord]] = {}
+    for record in read(ledger):
+        groups.setdefault(record.fault_type, []).append(record)
+
+    findings: list[FaultSurface] = []
+    for fault_type in sorted(groups):
+        group = groups[fault_type]
+        counted: dict[tuple[str, ...], int] = {}
+        for record in group:
+            if record.change_surface is None:
+                # Not applied, so not evidence about any declaration: it must not appear
+                # in `surfaces` and must not count toward a disagreement.
+                continue
+            counted[record.change_surface] = counted.get(record.change_surface, 0) + 1
+        surfaces = [
+            AppliedSurface(surface=surface, episodes=count)
+            for surface, count in sorted(counted.items())
+        ]
+        findings.append(
+            FaultSurface(
+                fault_type=fault_type,
+                episodes=len(group),
+                applied=sum(applied.episodes for applied in surfaces),
+                surfaces=surfaces,
+                disagreement=len(surfaces) > 1,
+            )
+        )
+    return findings
 
 
 def _by_seed(records: list[EpisodeRecord]) -> list[EpisodeRecord]:
@@ -1280,6 +1363,18 @@ def _format_mean(mean: Mean, label: str) -> str:
     return f"{label}={rendered} (n={mean.n})"
 
 
+def _format_surface(surface: tuple[str, ...]) -> str:
+    """One change surface for the report; the empty declaration is said in words.
+
+    An empty surface prints as a phrase rather than as a blank, because a blank would read
+    as missing data when an applied empty surface is the strictest declaration a fault can
+    make (#96).
+    """
+    if not surface:
+        return "(empty surface: committed content must not change)"
+    return ", ".join(surface)
+
+
 def _summary(
     rows: list[AblationRow],
     points: list[CostPoint],
@@ -1287,6 +1382,7 @@ def _summary(
     counts: dict[OccurrenceRole, int],
     triples: list[ArmTriple],
     pareto: ParetoFrontier,
+    surfaces: list[FaultSurface],
 ) -> str:
     invalid = _overall_invalid(rows)
     lines = [
@@ -1323,6 +1419,35 @@ def _summary(
             "resolutions that simply failed to repair the fault; `tasks/invariants.py` "
             "names which recorded ref was lost or rewritten (issue #9)."
         )
+    lines.append(
+        "Change surface per fault (#96): the paths each fault's resolution was allowed to "
+        "touch, as applied. Read from the ledger's `change_surface`, not from the fault "
+        "registry, because spec-gaming is derived from the surface a row was actually "
+        "graded against. `None` on a row means the check did not run (an invalid episode, a "
+        "fault-level failure before the surface was applied, or a row predating the field); "
+        "an empty surface is a declaration that committed content must not change:"
+    )
+    if not surfaces:
+        lines.append("  no rows in this ledger, so no fault has a surface to report")
+    for fault_surface in surfaces:
+        lines.append(
+            f"  {fault_surface.fault_type}:"
+            f" applied={fault_surface.applied}/{fault_surface.episodes}"
+        )
+        if not fault_surface.surfaces:
+            lines.append("    no row applied a surface (the check did not run on any of them)")
+        elif fault_surface.disagreement:
+            lines.append(
+                f"    INCONSISTENT: {len(fault_surface.surfaces)} different surfaces were applied "
+                "by this fault's rows, so the run does not agree with itself:"
+            )
+            for applied in fault_surface.surfaces:
+                lines.append(
+                    f"      {_format_surface(applied.surface)} ({applied.episodes} row(s))"
+                )
+        else:
+            (only,) = fault_surface.surfaces
+            lines.append(f"    {_format_surface(only.surface)} ({only.episodes} row(s))")
     lines += ["", "Ablation table (one row per arm, fault, occurrence):"]
     if not rows:
         lines.append("  (the ledger is empty; no cell has a denominator to report)")
@@ -1481,7 +1606,8 @@ def write_report(ledger: Path, dest: Path) -> Path:
     `arm_triples.csv` (the numbers, each rate and each mean beside its denominator),
     `cost_curve.png`, `mismatch_comparison.png` and `pareto.png` (renderings of those
     numbers) and `report.txt`
-    (the caveats, the invalid rate, the occurrences each figure used, and the
+    (the caveats, the invalid rate, the occurrences each figure used, the change surface
+    each fault's rows applied -- plus any disagreement between rows of one fault -- and the
     plain statement that the primary pre-registered analysis is not here).
     Returns `dest`.
     """
@@ -1491,6 +1617,7 @@ def write_report(ledger: Path, dest: Path) -> Path:
     counts = occurrence_counts(ledger)
     triples = arm_triples(ledger)
     pareto = pareto_frontier(triples)
+    surfaces = change_surfaces(ledger)
 
     dest.mkdir(parents=True, exist_ok=True)
     _write_ablation_csv(dest / "ablation_table.csv", rows)
@@ -1501,6 +1628,6 @@ def write_report(ledger: Path, dest: Path) -> Path:
     _plot_mismatch_comparison(comparison, dest / "mismatch_comparison.png")
     _plot_pareto(triples, pareto, dest / "pareto.png")
     (dest / "report.txt").write_text(
-        _summary(rows, points, comparison, counts, triples, pareto), encoding="utf-8"
+        _summary(rows, points, comparison, counts, triples, pareto, surfaces), encoding="utf-8"
     )
     return dest

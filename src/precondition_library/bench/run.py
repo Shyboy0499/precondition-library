@@ -313,6 +313,10 @@ def run_episode(
     # dispatched against, and the compile below may add to it afterwards.
     library_hash = library.library_hash()
     box: Sandbox | None = None
+    # The surface `recorded_state_intact` was actually handed, or `None` while it has
+    # not run. Set from the declaration only once the call returns, so a row can never
+    # claim a surface was applied when the fault's own clause failed first (issue #96).
+    applied_surface: tuple[str, ...] | None = None
     try:
         try:
             box = build_sandbox(seed, [fault_type])
@@ -331,6 +335,7 @@ def run_episode(
                 accounting=accounting,
                 library_hash=library_hash,
                 threshold=library.threshold,
+                change_surface=applied_surface,
             )
 
         request = fault.task_text(seed)
@@ -353,6 +358,7 @@ def run_episode(
                 # when the fault's own clause passed, so a fault-level failure keeps
                 # its own reason rather than being reported as a ref violation.
                 intact = recorded_state_intact(box, surface=fault.change_surface)
+                applied_surface = fault.change_surface
                 state_intact = intact.ok
                 verdict = intact
             ground_truth_ok = verdict.ok
@@ -370,6 +376,7 @@ def run_episode(
                 accounting=accounting,
                 library_hash=library_hash,
                 threshold=library.threshold,
+                change_surface=applied_surface,
             )
 
         # Grading is done with this sandbox, so it is safe to release it now.
@@ -403,6 +410,7 @@ def run_episode(
             fired_variant=result.fired_variant,
             ground_truth_ok=ground_truth_ok,
             recorded_state_intact=state_intact,
+            change_surface=applied_surface,
             program_id=result.program_id,
             dispatch_score=result.dispatch_score,
             similarity_threshold=library.threshold,
@@ -793,6 +801,7 @@ def _invalid_record(
     accounting: _AccountingProvider,
     library_hash: str,
     threshold: float,
+    change_surface: tuple[str, ...] | None = None,
 ) -> EpisodeRecord:
     """The row for an episode that could not run.
 
@@ -804,6 +813,15 @@ def _invalid_record(
     (spec §7, item 9: invalid episodes are "excluded from denominators but never
     hidden"). It is recorded so it appears in the denominator's own invalid rate
     rather than vanishing.
+
+    `change_surface` is the surface `recorded_state_intact` was actually handed, and
+    it defaults to `None` because that is the honest value for the invalid rows this
+    helper records: the sandbox never built, or grading raised before the surface check
+    completed. It is a parameter rather than the fault's declaration because an invalid
+    row must not claim a surface was applied when it was not (issue #96); a caller that
+    invalidates an episode *after* the surface was applied passes it through instead.
+    `()` is kept distinct from `None` here exactly as it is on `EpisodeRecord`: an empty
+    surface that was applied is the strictest declaration, not a missing one.
 
     The reason goes to `invalid_reason`, not `refusal_reason`: a sandbox that
     would not build is not a guard refusal, and putting it in the refusal field
@@ -830,6 +848,7 @@ def _invalid_record(
         outcome=EpisodeOutcome.INVALID,
         correct_variant=None,
         ground_truth_ok=None,
+        change_surface=change_surface,
         similarity_threshold=threshold,
         library_hash=library_hash,
         invalid_reason=reason,

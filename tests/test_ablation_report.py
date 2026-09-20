@@ -26,11 +26,13 @@ from precondition_library.bench.ledger import Arm, EpisodeRecord, OccurrenceRole
 from precondition_library.bench.report import (
     EQUIVALENCE_MARGIN,
     SMALL_SAMPLE_N,
+    AppliedSurface,
     Mean,
     Rate,
     ablation_table,
     arm_triples,
     break_even,
+    change_surfaces,
     cost_curve,
     mismatch_comparison,
     pareto_frontier,
@@ -1114,3 +1116,142 @@ def test_the_report_warns_that_the_total_is_not_a_billing_basis(tmp_path: Path) 
     assert "NOT a billing basis" in report
     csv = (dest / "ablation_table.csv").read_text(encoding="utf-8")
     assert "mean_uncached_tokens_in" in csv and "mean_cache_write_tokens_in" in csv
+
+
+# --- the change surface per fault (issue #96) --------------------------------
+
+
+def test_the_report_lists_each_faults_applied_change_surface(tmp_path: Path) -> None:
+    """What each fault claimed it needed, from the ledger's applied surfaces (#96).
+
+    `branch_renamed` declares the empty surface, and an applied empty surface is a real
+    value: the report must print it as the strictest declaration rather than as a blank, and
+    each fault's line must carry the count of rows it was read from.
+    """
+    ledger = _write(
+        tmp_path / "ledger.jsonl",
+        [
+            _record(fault_type="diverged", seed=1, change_surface=("app.py", "docs/readme.md")),
+            _record(fault_type="diverged", seed=2, change_surface=("app.py", "docs/readme.md")),
+            # An applied empty surface: the fault's own declaration, not a missing value.
+            _record(fault_type="branch_renamed", seed=1, change_surface=()),
+        ],
+    )
+
+    findings = change_surfaces(ledger)
+
+    assert [finding.fault_type for finding in findings] == ["branch_renamed", "diverged"]
+    branch, diverged = findings
+    assert branch.applied == 1 and branch.episodes == 1
+    assert branch.surfaces == [AppliedSurface(surface=(), episodes=1)]
+    assert branch.disagreement is False
+    assert diverged.applied == 2 and diverged.episodes == 2
+    assert diverged.surfaces == [AppliedSurface(surface=("app.py", "docs/readme.md"), episodes=2)]
+    assert diverged.disagreement is False
+
+    report = (write_report(ledger, tmp_path / "out") / "report.txt").read_text(encoding="utf-8")
+    assert "Change surface per fault" in report
+    assert "  branch_renamed: applied=1/1" in report
+    assert "(empty surface: committed content must not change) (1 row(s))" in report
+    assert "  diverged: applied=2/2" in report
+    assert "app.py, docs/readme.md (2 row(s))" in report
+
+
+def test_two_different_surfaces_for_one_fault_are_named_not_chosen(tmp_path: Path) -> None:
+    """A run that applied two surfaces to one fault disagrees with itself, and says so.
+
+    The report must not pick one: the derived spec-gaming verdict of a row depends on the
+    surface that row was graded against, so silently printing either surface would describe
+    rows it did not decide. The count beside each surface is how a reader sees which rows
+    went which way.
+    """
+    ledger = _write(
+        tmp_path / "ledger.jsonl",
+        [
+            _record(seed=1, change_surface=("app.py",)),
+            _record(seed=2, change_surface=("app.py", "docs/readme.md")),
+            _record(seed=3, change_surface=("app.py", "docs/readme.md")),
+        ],
+    )
+
+    (finding,) = change_surfaces(ledger)
+
+    assert finding.disagreement is True
+    assert finding.applied == 3 and finding.episodes == 3
+    assert finding.surfaces == [
+        AppliedSurface(surface=("app.py",), episodes=1),
+        AppliedSurface(surface=("app.py", "docs/readme.md"), episodes=2),
+    ]
+
+    report = (write_report(ledger, tmp_path / "out") / "report.txt").read_text(encoding="utf-8")
+    assert "INCONSISTENT" in report
+    assert "2 different surfaces" in report
+    assert "app.py (1 row(s))" in report
+    assert "app.py, docs/readme.md (2 row(s))" in report
+
+
+def test_a_none_row_does_not_create_a_phantom_disagreement(tmp_path: Path) -> None:
+    """`None` is "not applied", so it is no evidence about any declaration (#96).
+
+    One applied surface beside unchecked rows is one surface, not a disagreement. A report
+    that treated `None` as a surface would flag every run containing an invalid row, which
+    is why the field is optional rather than empty-by-default.
+    """
+    ledger = _write(
+        tmp_path / "ledger.jsonl",
+        [
+            _record(seed=1, change_surface=("app.py",)),
+            _record(seed=2, change_surface=None),
+            _record(
+                seed=3,
+                outcome=EpisodeOutcome.INVALID,
+                correct_variant=None,
+                ground_truth_ok=None,
+                change_surface=None,
+            ),
+        ],
+    )
+
+    (finding,) = change_surfaces(ledger)
+
+    assert finding.disagreement is False
+    assert finding.surfaces == [AppliedSurface(surface=("app.py",), episodes=1)]
+    assert finding.applied == 1
+    assert finding.episodes == 3
+
+    report = (write_report(ledger, tmp_path / "out") / "report.txt").read_text(encoding="utf-8")
+    assert "INCONSISTENT" not in report
+    assert "  diverged: applied=1/3" in report
+
+
+def test_a_fault_no_row_checked_is_shown_with_its_denominator(tmp_path: Path) -> None:
+    """A fault whose rows all failed before the surface is visible, not silently absent."""
+    ledger = _write(tmp_path / "ledger.jsonl", [_record(seed=1)])
+
+    (finding,) = change_surfaces(ledger)
+    assert finding.applied == 0 and finding.episodes == 1
+    assert finding.surfaces == [] and finding.disagreement is False
+
+    report = (write_report(ledger, tmp_path / "out") / "report.txt").read_text(encoding="utf-8")
+    assert "  diverged: applied=0/1" in report
+    assert "no row applied a surface (the check did not run on any of them)" in report
+
+
+def test_the_section_comes_from_the_ledger_not_the_registry(tmp_path: Path) -> None:
+    """A surface the registry does not declare must print, because the run applied it.
+
+    This is the decision the ledger field exists for (#96): spec-gaming is derived from the
+    surface a row was graded against, so a report regenerated from an older ledger has to
+    describe that surface even when today's declaration has moved. `diverged` declares
+    `app.py` and `docs/readme.md`; the row below applied a different one, which is what the
+    old ledger would hold -- and the report must say so rather than reading the registry.
+    """
+    ledger = _write(
+        tmp_path / "ledger.jsonl",
+        [_record(fault_type="diverged", seed=1, change_surface=("only-in-ledger.txt",))],
+    )
+
+    report = (write_report(ledger, tmp_path / "out") / "report.txt").read_text(encoding="utf-8")
+
+    assert "only-in-ledger.txt" in report
+    assert "app.py" not in report, "the registry's declaration must not be substituted"
