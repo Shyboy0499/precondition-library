@@ -10,7 +10,7 @@ commit message is not a record.
 | --- | --- | --- |
 | [ADR-0001](ADR-0001-reframe-after-prior-art.md) | accepted | Re-center the project on the open measurement. Claim 1 dropped as prior art; Claim 2 narrowed to its empirical form; the primary metric moved to matched dispatch coverage. |
 | [ADR-0002](ADR-0002-similarity-dispatch-is-lexical.md) | accepted | Run arm 2 as deterministic lexical text similarity behind a `Similarity` seam, with an embedding model as the intended replacement. The claim compares preconditions against *text* similarity, not embeddings. |
-| [ADR-0003](ADR-0003-arm2-baseline-scope.md) | proposed | Quote arm 2's baseline per intent over the whole ambiguous subset (pooled AUC 0.5722 and strict top-1 23/48; 0.4778–0.7264 across the two intents) and keep the lexical seam: IDF weighting and dropping the constant `intent` both fail to improve strict top-1, which is what dispatch acts on. |
+| [ADR-0003](ADR-0003-arm2-baseline-scope.md) | accepted | Quote arm 2's baseline per intent over the whole ambiguous subset (pooled AUC 0.5722 and strict top-1 23/48; 0.4778–0.7264 across the two intents) and keep the lexical seam: IDF weighting and dropping the constant `intent` both fail to improve strict top-1, which is what dispatch acts on. |
 
 ## When to write one
 

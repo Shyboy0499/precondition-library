@@ -1,6 +1,6 @@
 # ADR-0003 — Quote arm 2's baseline per intent over the whole ambiguous subset, and keep the lexical seam
 
-- **Status:** proposed
+- **Status:** accepted (2026-09-20, as written)
 - **Date:** 2026-09-18
 - **Supersedes:** nothing (corrects the measurement recorded in spec revisions 31 and 32)
 - **Deciders:** repository owner
