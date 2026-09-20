@@ -127,12 +127,12 @@ DECLARED_STUBS: dict[str, str] = {
 
 
 def _is_skip_decorator(decorator: ast.expr) -> bool:
-    """True for a `pytest.mark.skip(...)` decorator, in either call or bare form."""
+    """True for a `pytest.mark.skip(...)` or `pytest.mark.skipif(...)` decorator, in call form."""
     call = decorator if isinstance(decorator, ast.Call) else None
     target: ast.expr = call.func if call is not None else decorator
     return (
         isinstance(target, ast.Attribute)
-        and target.attr == "skip"
+        and target.attr in {"skip", "skipif"}
         and isinstance(target.value, ast.Attribute)
         and target.value.attr == "mark"
     )
@@ -150,8 +150,11 @@ def _skip_reason(decorator: ast.expr) -> str:
 def skips() -> dict[str, str]:
     """{file::function: reason} for every test carrying a skip decorator.
 
-    Decorators only. `pytest.skip()` called inside a body is invisible here, which
-    is a real gap -- which is why the declared set is asserted rather than a count.
+    `pytest.mark.skip` and `pytest.mark.skipif` both count: a conditional skip is still a
+    claim that something could not run, and leaving `skipif` outside the inventory would let
+    a test quietly stop running as soon as a dependency disappeared. Only decorators are seen
+    -- `pytest.skip()` called inside a body is invisible here, which is a real gap -- which is
+    why the declared set is asserted rather than a count.
     """
     found: dict[str, str] = {}
     for path in sorted(TESTS.rglob("test_*.py")):
@@ -183,6 +186,18 @@ DECLARED_SKIPS: dict[str, str] = {
     # Two functions, each parametrised over every fault: ten skips in the report.
     "test_checkers_against_gold.py::test_checker_accepts_gold_solution": "#9",
     "test_checkers_against_gold.py::test_checker_rejects_untouched_sandbox": "#9",
+    # Arm 2's embedding seam (#104) is real code, but the model is an optional extra and CI
+    # installs neither the package nor a model cache. These skip only where the scorer cannot
+    # load; locally, with `uv sync --extra dev --extra embedding` and the pinned revision
+    # cached, they run. Declared as skips so that a disappearing dependency is visible in this
+    # inventory rather than reported as a silent pass.
+    "test_embedding_similarity.py::test_the_embedding_scorer_satisfies_both_protocols": "#104",
+    "test_embedding_similarity.py::test_the_paraphrase_beats_the_lexical_proxy": "#104",
+    "test_embedding_similarity.py::test_identical_texts_score_exactly_one": "#104",
+    "test_embedding_similarity.py::test_every_score_stays_in_the_unit_interval": "#104",
+    "test_embedding_similarity.py::test_usage_counts_encode_calls_and_charges_no_tokens": "#104",
+    "test_embedding_similarity.py::test_repeated_scoring_is_bit_exact_any_order": "#104",
+    "test_embedding_similarity.py::test_the_embedding_is_measured_against_lexical": "#104",
 }
 
 

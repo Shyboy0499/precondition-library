@@ -24,6 +24,13 @@ dev = [
     "pandas>=2.2",
     "matplotlib>=3.9",
 ]
+# Arm 2's optional embedding scorer (#104). A separate extra rather than a core
+# dependency: the shipped seam is lexical (ADR-0003), so an install that never fills
+# the seam must not pull torch and a model download. `uv sync --extra dev --extra
+# embedding` adds exactly this; plain `uv sync --extra dev` still leaves it out.
+embedding = [
+    "sentence-transformers>=6.1",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/precondition_library"]
@@ -51,4 +58,13 @@ no_implicit_optional = true
 # ignorable import to `yaml` keeps the stub gap visible and out of the way.
 [[tool.mypy.overrides]]
 module = ["yaml"]
+ignore_missing_imports = true
+
+# sentence-transformers is arm 2's optional embedding extra (#104), not a core
+# dependency, so CI -- which installs only `--extra dev` -- has no stubs for it.
+# The import is lazy (inside `_load_model`) so a missing package is never an
+# ImportError at import time, but mypy still has to resolve the name; this override
+# is what keeps `mypy src` green without the extra, for the same reason as `yaml`.
+[[tool.mypy.overrides]]
+module = ["sentence_transformers", "sentence_transformers.*"]
 ignore_missing_imports = true
