@@ -88,6 +88,27 @@ def rationale_candidates(intent: IntentSpec) -> dict[str, str]:
     return {variant.id: variant.rationale for variant in intent.variants}
 
 
+def _require_one_intent(pairs: Sequence[LabelledPair]) -> None:
+    """Refuse a crossing that spans intents, because `candidates` cannot describe more than one.
+
+    `candidates` is a `variant -> text` mapping with no intent attached, and variant ids are unique
+    only *within* an intent. Handing these functions pairs from two intents therefore crosses each
+    pair with resolutions that are not its own, and it reports a plausible number rather than
+    failing: measured on the ambiguous subset, the merged mapping gave AUC 0.6980 and top-1 18/48,
+    against the correct 0.5722 and 23/48 for the same scorer and pairs. Pooling across intents is
+    legitimate, but it has to pool *per-intent crossings*, which is what `compare_scorers` does.
+    """
+    intents = {pair.intent for pair in pairs}
+    if len(intents) > 1:
+        raise ValueError(
+            f"pairs span {len(intents)} intents ({sorted(intents)}), but one candidate mapping "
+            f"cannot describe more than one: variant ids are unique only within an intent, so this "
+            f"would score each pair against another intent's resolutions and return a number "
+            f"instead of failing. Score each intent separately and pool the crossings, as "
+            f"`compare_scorers` does."
+        )
+
+
 def discrimination_scores(
     pairs: Sequence[LabelledPair],
     candidates: Mapping[str, str],
@@ -99,6 +120,7 @@ def discrimination_scores(
     resolution, so every crossing of it is negative and a scorer that always ranks something highly
     is caught by them rather than passing on the positive pairs alone.
     """
+    _require_one_intent(pairs)
     scores: list[float] = []
     positives: list[bool] = []
     for pair in pairs:
@@ -118,6 +140,15 @@ class ScorerDiscrimination:
     `None` rather than 0.0 so an uninformative probe cannot be read as a measured zero."""
     pairs: int
     comparisons: int
+    decided: int
+    """Pairs where the correct resolution scored strictly highest, pooled over the intents -- the
+    argmax dispatch actually takes, and therefore the operative number. Reported beside the AUC
+    because the two can disagree: IDF weighting over these texts raises the AUC while lowering
+    this (ADR-0003)."""
+    decidable: int
+    """Pairs that have a correct resolution, so `decided` has a denominator. The negative pairs
+    are in `pairs` and not here: no resolution is right for them, so there is no decision to get
+    right."""
 
 
 def discrimination_auc(
@@ -144,6 +175,7 @@ def top1_accuracy(
     tie is not a decision: three candidates whose texts share a constant prefix score identically,
     and counting ties as wins would report a coin flip as 100%.
     """
+    _require_one_intent(pairs)
     decided = 0
     total = 0
     for pair in pairs:
@@ -179,6 +211,8 @@ def compare_scorers(
         scores: list[float] = []
         positives: list[bool] = []
         pairs_seen = 0
+        decided = 0
+        decidable = 0
         for intent in ambiguous_intents():
             if intent.name not in candidates_by_intent:
                 raise ValueError(
@@ -193,6 +227,9 @@ def compare_scorers(
             found_scores, found_positives = discrimination_scores(pairs, candidates, scorer)
             scores.extend(found_scores)
             positives.extend(found_positives)
+            intent_decided, intent_decidable = top1_accuracy(pairs, candidates, scorer)
+            decided += intent_decided
+            decidable += intent_decidable
         auc = roc_auc(scores, positives) if positives and not all(positives) else None
         findings.append(
             ScorerDiscrimination(
@@ -200,6 +237,8 @@ def compare_scorers(
                 auc=auc,
                 pairs=pairs_seen,
                 comparisons=len(scores),
+                decided=decided,
+                decidable=decidable,
             )
         )
     return findings

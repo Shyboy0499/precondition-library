@@ -19,6 +19,9 @@ looks like. Everything else here runs the real thing.
 
 from __future__ import annotations
 
+import math
+from collections.abc import Callable
+
 import pytest
 from conftest import gold_programs
 
@@ -35,7 +38,7 @@ from precondition_library.bench.similarity_probe import (
 from precondition_library.bench.textcontrol import roc_auc
 from precondition_library.library import _program_text
 from precondition_library.program import Program
-from precondition_library.similarity import lexical_similarity
+from precondition_library.similarity import Similarity, lexical_similarity, tokenize
 from precondition_library.tasks.registry import ambiguous_intents
 from precondition_library.tasks.state_grid import STATE_GRID
 
@@ -228,3 +231,166 @@ def test_the_gold_programs_are_real_programs_with_variants() -> None:
     assert len(PROGRAMS) == len(INTENT.variants)
     assert {program.variant for program in PROGRAMS} == {variant.id for variant in INTENT.variants}
     assert all(isinstance(program, Program) for program in PROGRAMS)
+
+
+# --- the ambiguous subset, which is what the baseline has to be quoted over ----
+
+
+def _all_intent_candidates() -> dict[str, dict[str, str]]:
+    return {
+        intent.name: program_text_candidates(gold_programs(intent.name))
+        for intent in ambiguous_intents()
+    }
+
+
+def test_the_pooled_baseline_is_per_intent_crossings_added_up() -> None:
+    """The whole-subset baseline, and the reason it is not one intent's number.
+
+    Measured after this probe's own first figures turned out to have been taken on
+    `sync_fork_with_upstream` alone and quoted as the family's: the two intents differ by 0.25 AUC,
+    so a single number taken from one of them describes neither. Pooling is only valid over
+    per-intent crossings, which is what `compare_scorers` does and what the guard in
+    `_require_one_intent` refuses to fake with one merged mapping.
+    """
+    by_intent = _all_intent_candidates()
+    findings = {f.scorer: f for f in compare_scorers({"lexical": lexical_similarity}, by_intent)}
+
+    per_intent = {}
+    for intent in ambiguous_intents():
+        pairs = labelled_pairs(intent, list(STATE_GRID[intent.name].values()), list(PROBE_SEEDS))
+        decided, decidable = top1_accuracy(pairs, by_intent[intent.name], lexical_similarity)
+        per_intent[intent.name] = (pairs, decided, decidable)
+
+    found = findings["lexical"]
+    print("\n  shipped lexical scorer on the gold artifact, by intent:")
+    for name, (pairs, decided, decidable) in per_intent.items():
+        auc = discrimination_auc(pairs, by_intent[name], lexical_similarity)
+        print(
+            f"    {name:28s} AUC={auc:.4f} top-1 {decided}/{decidable} ({decided / decidable:.0%})"
+        )
+    print(
+        f"    {'BOTH (the ambiguous subset)':28s} AUC={found.auc:.4f}"
+        f" top-1 {found.decided}/{found.decidable} ({found.decided / found.decidable:.0%}),"
+        f" chance for 3 candidates = 33%"
+    )
+
+    assert found.decided == sum(decided for _, decided, _ in per_intent.values())
+    assert found.decidable == sum(decidable for _, _, decidable in per_intent.values())
+    assert found.pairs == sum(len(pairs) for pairs, _, _ in per_intent.values())
+    assert found.decidable < found.pairs, "the negative pairs belong in `pairs`, not `decidable`"
+    assert found.auc is not None and 0.0 <= found.auc <= 1.0
+
+
+def test_crossing_two_intents_is_refused_rather_than_scored() -> None:
+    """One candidate mapping cannot describe two intents, and the mistake must not return a number.
+
+    Variant ids are unique only within an intent, so merging two intents' candidates and scoring
+    all their pairs against the merged mapping crosses each pair with resolutions that are not its
+    own. It does not fail -- it returns a plausible figure (0.6980 and 18/48 where the per-intent
+    crossings give 0.5722 and 23/48), which is how it reached a draft of this scope. Refusing is
+    the only safe answer, because the caller's intent cannot be recovered from the mapping.
+    """
+    by_intent = _all_intent_candidates()
+    names = [intent.name for intent in ambiguous_intents()]
+    merged = {
+        variant: text for candidates in by_intent.values() for variant, text in candidates.items()
+    }
+    both_pairs = [
+        pair
+        for intent in ambiguous_intents()
+        for pair in labelled_pairs(
+            intent, list(STATE_GRID[intent.name].values()), list(PROBE_SEEDS)
+        )
+    ]
+
+    for call in (
+        lambda: discrimination_scores(both_pairs, merged, lexical_similarity),
+        lambda: discrimination_auc(both_pairs, merged, lexical_similarity),
+        lambda: top1_accuracy(both_pairs, merged, lexical_similarity),
+    ):
+        with pytest.raises(ValueError) as caught:
+            call()
+        for name in names:
+            assert name in str(caught.value)
+
+
+def test_the_weighting_alternatives_do_not_fix_the_argmax() -> None:
+    """IDF weighting reorders slightly and picks *fewer* right answers, so it is not the fix.
+
+    The reason it cannot be adopted anyway is structural: IDF needs a corpus, and arm 2's seam is
+    a two-argument `(query, candidate) -> float` with nowhere to put one. `compare_scorers` takes
+    such a scorer, so this measures the alternatives in its own loop instead -- the corpus is each
+    intent's own candidate texts, which is the only corpus dispatch has at scoring time.
+
+    Both alternatives are built from the project's own `tokenize`, so the comparison is about the
+    weighting and not about a second tokenisation.
+    """
+    by_intent = _all_intent_candidates()
+
+    def idf_of(texts: list[str]) -> dict[str, float]:
+        document_frequency: dict[str, int] = {}
+        for text in texts:
+            for token in set(tokenize(text)):
+                document_frequency[token] = document_frequency.get(token, 0) + 1
+        return {token: math.log(len(texts) / count) for token, count in document_frequency.items()}
+
+    def weighted(idf: dict[str, float], *, cosine: bool) -> Similarity:
+        def score(query: str, candidate: str) -> float:
+            query_tokens, candidate_tokens = set(tokenize(query)), set(tokenize(candidate))
+            if not query_tokens or not candidate_tokens:
+                return 0.0
+            shared = query_tokens & candidate_tokens
+            if cosine:
+                left = math.sqrt(sum(idf.get(t, 0.0) ** 2 for t in query_tokens))
+                right = math.sqrt(sum(idf.get(t, 0.0) ** 2 for t in candidate_tokens))
+                # Every token on one side occurring in all three candidates leaves no weighted
+                # evidence to normalise by, which is the same situation as an empty text.
+                if not left or not right:
+                    return 0.0
+                return sum(idf.get(t, 0.0) ** 2 for t in shared) / (left * right)
+            union = sum(idf.get(t, 0.0) for t in query_tokens | candidate_tokens)
+            return sum(idf.get(t, 0.0) for t in shared) / union if union else 0.0
+
+        return score
+
+    def measure(scorer_for: Callable[[dict[str, float]], Similarity]) -> tuple[float, int, int]:
+        scores: list[float] = []
+        positives: list[bool] = []
+        decided = decidable = 0
+        for name, candidates in by_intent.items():
+            pairs = labelled_pairs(
+                next(i for i in ambiguous_intents() if i.name == name),
+                list(STATE_GRID[name].values()),
+                list(PROBE_SEEDS),
+            )
+            scorer = scorer_for(idf_of(list(candidates.values())))
+            for pair in pairs:
+                for variant_id, text in candidates.items():
+                    scores.append(scorer(pair.task_text, text))
+                    positives.append(pair.correct_variant == variant_id)
+                if pair.correct_variant is not None:
+                    decidable += 1
+                    ranked = sorted(
+                        ((scorer(pair.task_text, t), v) for v, t in candidates.items()),
+                        reverse=True,
+                    )
+                    if ranked[0][0] > ranked[1][0] and ranked[0][1] == pair.correct_variant:
+                        decided += 1
+        return roc_auc(scores, positives), decided, decidable
+
+    shipped = measure(lambda _idf: lexical_similarity)
+    jaccard = measure(lambda idf: weighted(idf, cosine=False))
+    cosine = measure(lambda idf: weighted(idf, cosine=True))
+
+    print("\n  shipped artifact text, over the whole ambiguous subset:")
+    for label, (auc, decided, decidable) in (
+        ("lexical Jaccard (shipped)", shipped),
+        ("IDF-weighted Jaccard", jaccard),
+        ("IDF-weighted cosine", cosine),
+    ):
+        print(f"    {label:26s} AUC={auc:.4f} top-1 {decided}/{decidable}")
+
+    assert shipped[1] >= jaccard[1] and shipped[1] >= cosine[1], (
+        "IDF was rejected because it lowers the argmax accuracy; if it now raises it, the "
+        "rejection needs re-measuring rather than this assertion removing"
+    )
