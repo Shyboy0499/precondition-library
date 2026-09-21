@@ -1,5 +1,7 @@
 # Hand-written resolutions for the `restore_submodule_state` intent.
-# See the header of sync_fork_with_upstream.yaml for why these are hand-written.
+# See the header of sync_fork_with_upstream.yaml for why these are hand-written,
+# and for why descriptions state the applicability condition in request
+# vocabulary rather than naming a resolution.
 programs:
   - id: submodule-init
     intent: restore_submodule_state
@@ -7,16 +9,16 @@ programs:
     parameters: [work_dir, upstream_remote, upstream_branch, submodule_path]
     preconditions:
       - name: upstream_still_tracks_it
-        description: Upstream's tree still contains the submodule path.
+        description: Upstream's tree still contains the nested repository at this path.
         probe: 'test -n "$(git ls-tree {upstream_remote}/{upstream_branch} -- {submodule_path})"'
       - name: submodule_not_initialised
-        description: The submodule directory has never been initialised in this clone.
+        description: This clone has not initialised the nested checkout, so it has no working tree here.
         probe: 'test -z "$(git submodule status -- {submodule_path} | grep -v "^-")"'
     body: |
       git submodule update --init -- {submodule_path}
     postconditions:
       - name: submodule_initialised
-        description: No submodule is left uninitialised.
+        description: The nested checkout now exists and is initialised.
         probe: 'test -z "$(git submodule status | grep "^-")"'
     provenance:
       compiled_from_task: hand-written gold resolution for benchmarking
@@ -32,13 +34,13 @@ programs:
     parameters: [work_dir, upstream_remote, upstream_branch, submodule_path]
     preconditions:
       - name: submodule_initialised
-        description: The submodule directory exists and has a checkout.
+        description: The nested checkout already exists and is initialised in this clone.
         probe: 'test -n "$(git submodule status -- {submodule_path} | grep -v "^-")"'
       - name: upstream_still_tracks_it
-        description: Upstream's tree still contains the submodule path.
+        description: Upstream's tree still contains the nested repository at this path.
         probe: 'test -n "$(git ls-tree {upstream_remote}/{upstream_branch} -- {submodule_path})"'
       - name: pin_drifted
-        description: The recorded submodule commit differs from the one upstream pins.
+        description: The commit recorded for the nested checkout is not the commit upstream pins.
         probe: 'test -n "$(git diff --name-only {upstream_remote}/{upstream_branch} HEAD -- {submodule_path})"'
     body: |
       git fetch {upstream_remote}
@@ -46,7 +48,7 @@ programs:
       git commit -q -m "chore: repin nested library to upstream"
     postconditions:
       - name: pinned_to_upstream
-        description: The recorded submodule commit is no longer drifted from upstream.
+        description: The commit recorded for the nested checkout now equals the commit upstream pins.
         probe: 'test -z "$(git diff --name-only {upstream_remote}/{upstream_branch} HEAD -- {submodule_path})"'
     provenance:
       compiled_from_task: hand-written gold resolution for benchmarking
@@ -62,7 +64,7 @@ programs:
     parameters: [work_dir, upstream_remote, upstream_branch, submodule_path]
     preconditions:
       - name: upstream_dropped_it
-        description: Upstream's tree no longer contains the submodule path.
+        description: Upstream's tree no longer contains the nested repository at all.
         probe: 'test -z "$(git ls-tree {upstream_remote}/{upstream_branch} -- {submodule_path})"'
     body: |
       git rm --cached -- {submodule_path}
@@ -71,7 +73,7 @@ programs:
       git commit -q -m "chore: drop nested library reference"
     postconditions:
       - name: no_longer_declared
-        description: The submodule is no longer declared in the tree.
+        description: The nested repository is no longer declared in the project's tree.
         probe: 'test -z "$(git ls-files --stage -- {submodule_path})"'
     provenance:
       compiled_from_task: hand-written gold resolution for benchmarking

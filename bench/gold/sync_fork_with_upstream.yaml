@@ -8,6 +8,11 @@
 # Preconditions are probes, so they must agree with the intent's decision rule
 # (decided_by in tasks/faults/diverged.py). They are written independently --
 # agreeing by construction would defeat the point of having a check.
+#
+# Descriptions state the *applicability condition* -- the state each predicate
+# reads -- in the vocabulary a request would use, because that is the text arm 2
+# compares a request against (`library._program_text`). They deliberately do not
+# name a resolution label and do not copy a request's informed wording.
 programs:
   - id: sync-fork-empty-local-commits
     intent: sync_fork_with_upstream
@@ -15,17 +20,17 @@ programs:
     parameters: [work_dir, upstream_remote, upstream_branch]
     preconditions:
       - name: has_local_only_commits
-        description: The local branch is ahead of upstream.
+        description: The local branch is ahead of upstream, carrying commits upstream does not have.
         probe: 'test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0'
       - name: local_commits_change_nothing
-        description: The local-only commits touch no files, so they carry no work.
+        description: The local commits change nothing, so the branch can be set to upstream without losing any work.
         probe: 'test -z "$(git diff --name-only {upstream_remote}/{upstream_branch}...HEAD)"'
     body: |
       git fetch {upstream_remote}
       git reset --hard {upstream_remote}/{upstream_branch}
     postconditions:
       - name: matches_upstream
-        description: The local branch is exactly upstream's commit.
+        description: The local branch is now exactly the commit upstream has.
         probe: 'test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"'
     provenance:
       compiled_from_task: hand-written gold resolution for benchmarking
@@ -41,13 +46,13 @@ programs:
     parameters: [work_dir, upstream_remote, upstream_branch]
     preconditions:
       - name: has_local_only_commits
-        description: The local branch is ahead of upstream.
+        description: The local branch is ahead of upstream, carrying commits upstream does not have.
         probe: 'test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0'
       - name: local_commits_change_files
-        description: The local-only commits do change files.
+        description: The local commits do change files.
         probe: 'test -n "$(git diff --name-only {upstream_remote}/{upstream_branch}...HEAD)"'
       - name: local_and_upstream_files_disjoint
-        description: No file was changed by both sides, so replaying local commits cannot conflict.
+        description: No file the local commits change was also changed upstream, so replaying them onto upstream cannot conflict.
         probe: 'test -z "$(comm -12 <(git diff --name-only {upstream_remote}/{upstream_branch}...HEAD | sort) <(git diff --name-only HEAD...{upstream_remote}/{upstream_branch} | sort))"'
     body: |
       git fetch {upstream_remote}
@@ -73,17 +78,18 @@ programs:
     parameters: [work_dir, upstream_remote, upstream_branch]
     preconditions:
       - name: has_local_only_commits
-        description: The local branch is ahead of upstream.
+        description: The local branch is ahead of upstream, carrying commits upstream does not have.
         probe: 'test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0'
       - name: upstream_touched_a_local_file
-        description: At least one file both sides changed, so rewriting local history would risk losing a resolution.
+        description: At least one file was changed on both sides, so replaying the local commits would risk losing a change already made.
         probe: 'test -n "$(comm -12 <(git diff --name-only {upstream_remote}/{upstream_branch}...HEAD | sort) <(git diff --name-only HEAD...{upstream_remote}/{upstream_branch} | sort))"'
+      # Without this the overlap rule also matches a single shared file whose right
+      # resolution is not this one; tightened after the admission gate caught this
+      # program on the lockfile-conflict sandbox. The reason lives in this comment
+      # rather than in the description because a description is arm 2's comparison
+      # text: process history there would be scored as if it were meaning.
       - name: local_work_beyond_the_overlap
-        description: >-
-          The local-only commits change a file upstream did not, so there is local
-          work to preserve. Without this the overlap rule also matches a single
-          shared file whose right resolution is not a merge; tightened after the
-          admission gate caught this program on the lockfile-conflict sandbox.
+        description: The local commits also change a file upstream did not, so there is local work that has to be preserved.
         probe: 'test -n "$(comm -23 <(git diff --name-only {upstream_remote}/{upstream_branch}...HEAD | sort) <(git diff --name-only HEAD...{upstream_remote}/{upstream_branch} | sort))"'
     body: |
       git fetch {upstream_remote}
@@ -93,7 +99,7 @@ programs:
         description: Upstream's tip is reachable from the local branch.
         probe: 'git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD'
       - name: local_commits_survived
-        description: The pre-merge local tip is still reachable, so no work was discarded.
+        description: The commit the local branch pointed at before is still reachable, so no local work was lost.
         probe: 'git rev-parse --verify HEAD~1 >/dev/null 2>&1'
     provenance:
       compiled_from_task: hand-written gold resolution for benchmarking

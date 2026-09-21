@@ -10,24 +10,30 @@ seam is swapped, not after.
 The candidate text is the one a dispatcher actually scores. `program_text_candidates` calls
 `library._program_text` -- the same text arm 2 compares against -- rather than restating it, so the
 probe cannot come to measure a different text than the one it is about. On the shipped
-`lexical_similarity`, over the ambiguous intents' state grids:
+`lexical_similarity`, over the ambiguous subset -- the committed gold programs crossed with the
+probe's seeds -- the pooled figure is:
 
-    AUC 0.4778, strict top-1 9/24 pairs (chance for 3 candidates is 0.33)
+    AUC 0.5340, strict top-1 23/48 (chance for 3 candidates is 0.33)
 
-At or below chance, and that is issue #116's finding: the shipped scorer has almost no signal on
-this fault family. `program.intent` is the intent *name* -- a constant across a fault's
-resolutions -- and unweighted Jaccard over token sets is dominated by the boilerplate every
-resolution shares, so a correct and an incorrect resolution score alike. It also withdraws the
-conclusion drawn from the earlier figure, that a semantic scorer has little headroom here: on this
-evidence the case for swapping an embedding model into the seam is stronger, not weaker.
+with the two intents far apart (`restore_submodule_state` 0.6299 and 12-of-24, against
+`sync_fork_with_upstream` 0.4965 and 11-of-24), so the pooled number describes neither of them
+(ADR-0003). Those figures are printed by `tests/test_similarity_probe.py -q -s -k pooled_baseline`;
+this docstring is the convenience and that test is the measurement, so a change to the artifact
+text moves the numbers there first. On `sync_fork_with_upstream` the arm is at chance, and that is
+issue #116's finding: the shipped scorer has almost no signal on this fault family. `program.intent`
+is the intent *name* -- a constant across a fault's resolutions -- and unweighted Jaccard over token
+sets is dominated by the boilerplate every resolution shares, so a correct and an incorrect
+resolution score alike. It also withdraws the conclusion drawn from the earlier figure, that a
+semantic scorer has little headroom here: on this evidence the case for swapping an embedding model
+into the seam is stronger, not weaker.
 
 The first version of this module scored the request against each resolution's **`rationale`**
-instead. Rationales are more mutually distinct (mean pairwise token overlap 0.155) than the
-artifact texts (0.312), so it reported AUC 0.6755 -- a figure that flatters the scorer by ~0.2 and
-supports the opposite conclusion. `rationale_candidates` keeps that source reachable as a
-**diagnostic**, and `test_the_two_candidate_sources_disagree` fails if the two stop differing, so
-the substitution cannot be repeated quietly. Anything reported as the baseline must come from
-`program_text_candidates`. The record of the defect is in issue #116 and spec revision 31.
+instead. Rationales are more mutually distinct than the artifact texts, so it reported AUC 0.6755 --
+a figure that flatters the scorer and supports the opposite conclusion. `rationale_candidates` keeps
+that source reachable as a **diagnostic**, and `test_the_two_candidate_sources_disagree` fails if
+the two stop differing, so the substitution cannot be repeated quietly. Anything reported as the
+baseline must come from `program_text_candidates`. The record of the defect is in issue #116 and
+spec revision 31.
 
 What the module is best for: comparing scorers **against each other** on one fixed set of candidate
 texts, which is why it takes a mapping and not one scorer.
@@ -82,7 +88,8 @@ def rationale_candidates(intent: IntentSpec) -> dict[str, str]:
     Kept because the two sources disagreeing is itself worth seeing -- see
     `test_the_two_candidate_sources_disagree` -- but a rationale is the intent designer's
     explanation, not the text a dispatcher compares, and it is more mutually distinct than the
-    artifact (mean pairwise token overlap 0.155 against 0.312). Anything reported as the baseline
+    artifact (a figure `test_the_candidate_texts_pairwise_similarity_is_reported` prints for the
+    artifact; the diagnostic prints the rationale's beside it). Anything reported as the baseline
     must come from `program_text_candidates`.
     """
     return {variant.id: variant.rationale for variant in intent.variants}
@@ -95,7 +102,7 @@ def _require_one_intent(pairs: Sequence[LabelledPair]) -> None:
     only *within* an intent. Handing these functions pairs from two intents therefore crosses each
     pair with resolutions that are not its own, and it reports a plausible number rather than
     failing: measured on the ambiguous subset, the merged mapping gave AUC 0.6980 and top-1 18/48,
-    against the correct 0.5722 and 23/48 for the same scorer and pairs. Pooling across intents is
+    against the correct 0.5340 and 23/48 for the same scorer and pairs. Pooling across intents is
     legitimate, but it has to pool *per-intent crossings*, which is what `compare_scorers` does.
     """
     intents = {pair.intent for pair in pairs}

@@ -23,6 +23,7 @@ If the embedding is worse, the printed table says so; it is not hidden by an abs
 from __future__ import annotations
 
 import importlib.util
+import itertools
 from collections.abc import Mapping
 
 import pytest
@@ -285,6 +286,48 @@ def test_repeated_scoring_is_bit_exact_any_order(scorer: EmbeddingSimilarity) ->
 
 
 # --- the measurement: embedding against the shipped lexical scorer ------------
+
+
+@pytest.mark.skipif(
+    _MODEL_MISSING is not None,
+    reason="the `embedding` extra or the pinned model cache is unavailable here and the "
+    "tests run offline; CI has neither, so the real scorer cannot load (#104)",
+)
+def test_the_candidate_texts_are_near_interchangeable_to_the_embedding(
+    scorer: EmbeddingSimilarity,
+) -> None:
+    """How alike the candidates are, read by the semantic scorer -- the cause, printed.
+
+    The companion of `test_the_candidate_texts_pairwise_similarity_is_reported` in
+    `tests/test_similarity_probe.py`, on the same texts and the same pairs. Cosine is read
+    back out of the seam by inverting its affine map (`2 * score - 1`) so the figure is the
+    raw cosine the finding quotes rather than the mapped `[0, 1]` score: the map is strictly
+    increasing and rank-preserving, but its values sit above the midpoint and would not be
+    comparable with the lexical column without the inverse.
+
+    Printed, never gated: a threshold on an exploratory figure would make it a claim. What is
+    asserted is that every intent has the two candidates a comparison needs and that the
+    recovered cosines are real cosines in `[-1, 1]`.
+    """
+    by_intent = _candidates_by_intent()
+
+    print("\n  candidate-vs-candidate mean pairwise similarity, by intent:")
+    cosines: dict[str, float] = {}
+    for intent in ambiguous_intents():
+        texts = list(by_intent[intent.name].values())
+        pairs = list(itertools.combinations(texts, 2))
+        lexical = sum(lexical_similarity(*pair) for pair in pairs) / len(pairs)
+        cosines[intent.name] = sum(2.0 * scorer(*pair) - 1.0 for pair in pairs) / len(pairs)
+        seam = sum(scorer(*pair) for pair in pairs) / len(pairs)
+        print(
+            f"    {intent.name:28s} lexical={lexical:.4f} "
+            f"embedding_cosine={cosines[intent.name]:.4f} (seam score {seam:.4f}) "
+            f"over {len(pairs)} pairs"
+        )
+
+    assert set(cosines) == {intent.name for intent in ambiguous_intents()}
+    assert all(len(by_intent[name]) >= 2 for name in cosines)
+    assert all(-1.0 <= value <= 1.0 for value in cosines.values())
 
 
 @pytest.mark.skipif(
