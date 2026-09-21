@@ -23,7 +23,7 @@ is deliberate and its consequences are real:
 - Unrelated texts land above 0.5, not near 0.0, because cosine centres on 0 and this model scores
   even unrelated short English texts with a positive cosine. Measured by
   `test_every_score_stays_in_the_unit_interval` on the probe's `sync_fork_with_upstream` requests
-  against both intents' gold artifact texts: every score fell in `[0.5587, 0.8538]`, so the used
+  against both intents' gold artifact texts: every score fell in `[0.5417, 0.8609]`, so the used
   band is narrow and the nominal midpoint separates nothing on this corpus. A caller reading a raw
   score as "fraction of overlap" would misread it, and a threshold has to be tuned inside that band
   rather than assumed at 0.5; the docstring is where that is said rather than left for a plot to

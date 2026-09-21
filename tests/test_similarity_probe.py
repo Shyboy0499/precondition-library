@@ -9,8 +9,9 @@ what the scorer returned rather than from the pairs.
 gold programs, `library._program_text` and the shipped `lexical_similarity`, with no stand-ins, and
 they assert the two candidate sources **disagree**. That disagreement is what the probe's first
 version missed -- it measured each resolution's `rationale` rather than the artifact a dispatcher
-scores, and reported 0.70 where the real figure is 0.48. A test asserting the sources differ would
-have caught it on the day, so one exists now.
+scores, and reported 0.70 where the artifact scores about 0.50 (the artifact's figure moves when the
+gold descriptions do, which is why the printed test below is the measurement). A test asserting the
+sources differ would have caught it on the day, so one exists now.
 
 The two synthetic scorers below are controls, not stand-ins for project code: the seam is a
 `Protocol` the project injects by design, and a constant is the only way to show what the floor
@@ -19,6 +20,7 @@ looks like. Everything else here runs the real thing.
 
 from __future__ import annotations
 
+import itertools
 import math
 from collections.abc import Callable
 
@@ -247,9 +249,9 @@ def test_the_pooled_baseline_is_per_intent_crossings_added_up() -> None:
     """The whole-subset baseline, and the reason it is not one intent's number.
 
     Measured after this probe's own first figures turned out to have been taken on
-    `sync_fork_with_upstream` alone and quoted as the family's: the two intents differ by 0.25 AUC,
-    so a single number taken from one of them describes neither. Pooling is only valid over
-    per-intent crossings, which is what `compare_scorers` does and what the guard in
+    `sync_fork_with_upstream` alone and quoted as the family's: the two intents differ by more
+    than 0.13 AUC, so a single number taken from one of them describes neither. Pooling is only
+    valid over per-intent crossings, which is what `compare_scorers` does and what the guard in
     `_require_one_intent` refuses to fake with one merged mapping.
     """
     by_intent = _all_intent_candidates()
@@ -281,13 +283,45 @@ def test_the_pooled_baseline_is_per_intent_crossings_added_up() -> None:
     assert found.auc is not None and 0.0 <= found.auc <= 1.0
 
 
+def test_the_candidate_texts_pairwise_similarity_is_reported() -> None:
+    """How near-interchangeable the three candidates of an intent are -- the cause, printed.
+
+    This is the manipulation check for a rewrite of the gold descriptions: making each
+    program's `_program_text` state what distinguishes it should *lower* this number, and
+    if it does not, the texts are still interchangeable whatever changed. It is reported
+    rather than gated, because it is an exploratory figure and a threshold would make it a
+    claim (ADR-0003 rejected exactly that for the probe's numbers).
+
+    What is asserted is only that the measurement is well formed: every intent contributes
+    at least the two candidates a comparison needs, and every mean is a similarity in
+    `[0, 1]`. The embedding's reading of the same texts lives in
+    `tests/test_embedding_similarity.py`, which needs the pinned model.
+    """
+    by_intent = _all_intent_candidates()
+
+    print("\n  candidate-vs-candidate mean pairwise similarity (lexical Jaccard):")
+    means: dict[str, float] = {}
+    for intent in ambiguous_intents():
+        texts = list(by_intent[intent.name].values())
+        pairs = list(itertools.combinations(texts, 2))
+        means[intent.name] = sum(lexical_similarity(*pair) for pair in pairs) / len(pairs)
+        print(
+            f"    {intent.name:28s} {means[intent.name]:.4f} over {len(pairs)} pairs "
+            f"({len(texts)} candidates)"
+        )
+
+    assert set(means) == {intent.name for intent in ambiguous_intents()}
+    assert all(len(by_intent[name]) >= 2 for name in means)
+    assert all(0.0 <= value <= 1.0 for value in means.values())
+
+
 def test_crossing_two_intents_is_refused_rather_than_scored() -> None:
     """One candidate mapping cannot describe two intents, and the mistake must not return a number.
 
     Variant ids are unique only within an intent, so merging two intents' candidates and scoring
     all their pairs against the merged mapping crosses each pair with resolutions that are not its
     own. It does not fail -- it returns a plausible figure (0.6980 and 18/48 where the per-intent
-    crossings give 0.5722 and 23/48), which is how it reached a draft of this scope. Refusing is
+    crossings give 0.5340 and 23/48), which is how it reached a draft of this scope. Refusing is
     the only safe answer, because the caller's intent cannot be recovered from the mapping.
     """
     by_intent = _all_intent_candidates()

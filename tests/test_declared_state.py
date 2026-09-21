@@ -197,6 +197,10 @@ DECLARED_SKIPS: dict[str, str] = {
     "test_embedding_similarity.py::test_every_score_stays_in_the_unit_interval": "#104",
     "test_embedding_similarity.py::test_usage_counts_encode_calls_and_charges_no_tokens": "#104",
     "test_embedding_similarity.py::test_repeated_scoring_is_bit_exact_any_order": "#104",
+    (
+        "test_embedding_similarity.py::"
+        "test_the_candidate_texts_are_near_interchangeable_to_the_embedding"
+    ): "#104",
     "test_embedding_similarity.py::test_the_embedding_is_measured_against_lexical": "#104",
 }
 

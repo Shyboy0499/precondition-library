@@ -8,6 +8,8 @@ mean nothing.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from conftest import gold_programs
 
@@ -67,6 +69,33 @@ def test_gold_provenance_says_hand_written(intent: str) -> None:
     for program in gold_programs(intent):
         assert "hand-written" in program.provenance.compiled_from_task
         assert program.provenance.compiler_version == "human"
+
+
+@pytest.mark.parametrize("intent", ambiguous_intents(), ids=lambda spec: spec.name)
+def test_no_gold_description_names_a_resolution(intent) -> None:
+    """A description is arm 2's comparison text, so it must not carry the answer's label.
+
+    `library._program_text` excludes `variant` for exactly this reason: a program found by
+    the name of the answer is the leak `test_no_phrasing_names_a_resolution` forbids on the
+    request side, and a description that names the label puts it back. The `merge` program's
+    `local_work_beyond_the_overlap` description read "...whose right resolution is not a
+    merge..." before this guard existed, and nothing caught it: the phrasing test checks the
+    request distribution only. Matching whole words, as that test does, so a description may
+    still say "initialised" without tripping the `init` variant id.
+    """
+    ids = [variant.id for variant in intent.variants]
+
+    for program in gold_programs(intent.name):
+        for predicate in [*program.preconditions, *program.postconditions]:
+            named = sorted(
+                variant_id
+                for variant_id in ids
+                if re.search(rf"\b{re.escape(variant_id)}\b", predicate.description, re.I)
+            )
+            assert not named, (
+                f"{program.id} {predicate.name} names {named}: {predicate.description!r}; "
+                f"a description states the applicability condition, not the resolution"
+            )
 
 
 @pytest.mark.parametrize("intent", ambiguous_intents(), ids=lambda spec: spec.name)
