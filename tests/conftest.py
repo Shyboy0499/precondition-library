@@ -8,6 +8,7 @@ has to be catchable, and it can only be caught by states that require refusal.
 
 from __future__ import annotations
 
+import math
 import os
 import subprocess
 from pathlib import Path
@@ -28,6 +29,18 @@ from precondition_library.tasks.state_grid import STATE_GRID, declared_state
 
 ROOT = Path(__file__).resolve().parents[1]
 GOLD_DIR = ROOT / "bench" / "gold"
+
+
+def percent(part: int, whole: int) -> str:
+    """A whole-number percentage, rounded half up.
+
+    `:.0%` rounds 62.5% to 62% (round-half-even), while the probe's informed baseline is 15/24 and
+    is quoted as 63% in ADR-0004 and the design spec. This keeps the printed tables and the prose
+    the same number instead of leaving a reader to notice the difference.
+    """
+    if whole <= 0:
+        raise ValueError("a percentage needs a positive denominator")
+    return f"{math.floor(100 * part / whole + 0.5)}%"
 
 
 def git_status_porcelain() -> str | None:
