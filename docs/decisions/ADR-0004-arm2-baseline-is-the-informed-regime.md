@@ -1,6 +1,6 @@
 # ADR-0004 — Quote arm 2's baseline on the informed request regime, and stop pooling it with the uninformed tripwire
 
-- **Status:** proposed
+- **Status:** accepted (2026-09-20, as written)
 - **Date:** 2026-09-21
 - **Supersedes:** nothing (narrows the baseline scope of ADR-0003, which stays accepted as a record)
 - **Deciders:** repository owner
