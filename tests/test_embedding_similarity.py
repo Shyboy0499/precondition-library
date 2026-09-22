@@ -15,9 +15,11 @@ report.
 are the seam's promises: a `[0, 1]` score, 1 for identical text, bit-exact repeats, and an honest
 usage report. The discrimination figures are **printed, not gated** -- a threshold on an
 exploratory probe number would turn it into a claim (CONTRIBUTING rule 1), and ADR-0003 rejected
-exactly that. What *is* asserted about the measurement is that it is well formed and that both
-scorers saw the same pairs, because a comparison whose denominators differ is not a comparison.
-If the embedding is worse, the printed table says so; it is not hidden by an absent assertion.
+exactly that. They are reported per request regime, informed first as the baseline and uninformed
+beside it as the plumbing tripwire; the two are never pooled (ADR-0004). What *is* asserted about
+the measurement is that it is well formed and that both scorers saw the same pairs within each
+regime, because a comparison whose denominators differ is not a comparison. If the embedding is
+worse, the printed table says so; it is not hidden by an absent assertion.
 """
 
 from __future__ import annotations
@@ -27,7 +29,7 @@ import itertools
 from collections.abc import Mapping
 
 import pytest
-from conftest import gold_programs
+from conftest import gold_programs, percent
 
 from precondition_library.bench.embedding_similarity import (
     MODEL_ID,
@@ -38,6 +40,8 @@ from precondition_library.bench.embedding_similarity import (
 from precondition_library.bench.pairs import LabelledPair, labelled_pairs
 from precondition_library.bench.similarity_probe import (
     PROBE_SEEDS,
+    REGIMES,
+    Regime,
     compare_scorers,
     discrimination_auc,
     program_text_candidates,
@@ -109,18 +113,25 @@ def _candidates_by_intent() -> dict[str, dict[str, str]]:
 def _intent_figures(
     scorer: Similarity,
     candidates_by_intent: Mapping[str, Mapping[str, str]],
+    regime: Regime,
 ) -> dict[str, tuple[float | None, int, int]]:
-    """`{intent: (AUC, strict top-1, decidable)}` for one scorer, per intent.
+    """`{intent: (AUC, strict top-1, decidable)}` for one scorer, per intent, in one regime.
 
     ADR-0003 requires the per-intent breakdown beside any pooled figure, so this is
-    the shape the table is printed in.
+    the shape the table is printed in. The regime is required for the same reason the
+    probe's single-mapping functions require it: the informed channel is the baseline
+    and the uninformed one is the plumbing tripwire, and the two are never pooled.
     """
     figures: dict[str, tuple[float | None, int, int]] = {}
     for intent in ambiguous_intents():
         pairs = _pairs_for(intent.name)
         candidates = candidates_by_intent[intent.name]
-        decided, decidable = top1_accuracy(pairs, candidates, scorer)
-        figures[intent.name] = (discrimination_auc(pairs, candidates, scorer), decided, decidable)
+        decided, decidable = top1_accuracy(pairs, candidates, scorer, regime=regime)
+        figures[intent.name] = (
+            discrimination_auc(pairs, candidates, scorer, regime=regime),
+            decided,
+            decidable,
+        )
     return figures
 
 
@@ -338,53 +349,65 @@ def test_the_candidate_texts_are_near_interchangeable_to_the_embedding(
 def test_the_embedding_is_measured_against_lexical(
     scorer: EmbeddingSimilarity,
 ) -> None:
-    """The comparison #104 exists to produce, over the whole ambiguous subset.
+    """The comparison #104 exists to produce, split by request regime.
 
     Run with `-s` to see it:
 
         .venv/bin/python -m pytest tests/test_embedding_similarity.py -s -q \\
             -k measured_against_lexical
 
-    Pooled figures come from `compare_scorers`, which is the probe's own comparison and pools
-    per-intent crossings; the per-intent table beside them is ADR-0003's requirement, because the
-    two ambiguous intents differ enough that the pooled number describes neither. The figures are
-    printed and **not gated** -- gating an exploratory figure would make it a claim -- and the
-    lexical row is the ADR-0003 baseline re-measured on the same run, so the two rows are
-    comparable rather than quoted from different occasions.
+    Figures come from `compare_scorers`, which is the probe's own comparison: one row per (regime,
+    scorer), informed first because it is the headline baseline, and the uninformed row beside it as
+    the plumbing tripwire. The two regimes are never pooled -- averaging the informed boundary with
+    a channel that is chance by construction describes neither (ADR-0004). The per-intent table
+    beside them is ADR-0003's requirement, because the two ambiguous intents differ enough that the
+    pooled-over-intents number does not describe either. The figures are printed and **not gated**
+    -- gating an exploratory figure would make it a claim -- and the lexical row is the ADR-0003
+    baseline re-measured on the same run, so the two rows are comparable rather than quoted from
+    different occasions. These are hand-written gold programs on probe seeds 0-3, **not** the
+    pre-registered split.
     """
     by_intent = _candidates_by_intent()
     before = scorer.usage()
 
     findings = {
-        finding.scorer: finding
+        (finding.regime, finding.scorer): finding
         for finding in compare_scorers(
             {"embedding": scorer, "lexical": lexical_similarity}, by_intent
         )
     }
 
-    print("\n  arm 2's seam on the ambiguous subset, pooled (`compare_scorers`):")
-    for name in ("lexical", "embedding"):
-        found = findings[name]
-        auc = "None" if found.auc is None else f"{found.auc:.4f}"
-        print(
-            f"    {name:10s} AUC={auc} strict top-1 {found.decided}/{found.decidable} "
-            f"({found.decided / found.decidable:.0%}) across {found.pairs} pairs, "
-            f"{found.comparisons} crossings"
-        )
+    print("\n  arm 2's seam on the ambiguous subset, per regime (`compare_scorers`):")
+    print("  (hand-written gold programs, probe seeds 0-3; NOT the pre-registered split)")
+    for regime in REGIMES:
+        for name in ("lexical", "embedding"):
+            found = findings[(regime, name)]
+            auc = "None" if found.auc is None else f"{found.auc:.4f}"
+            print(
+                f"    {regime:11s} {name:10s} AUC={auc} strict top-1 "
+                f"{found.decided}/{found.decidable} ({percent(found.decided, found.decidable)}) "
+                f"across {found.pairs} pairs, {found.comparisons} crossings"
+            )
 
     print("  by intent (ADR-0003 requires the breakdown beside any pooled figure):")
     per_scorer = {
-        "lexical": _intent_figures(lexical_similarity, by_intent),
-        "embedding": _intent_figures(scorer, by_intent),
-    }
-    for intent in ambiguous_intents():
-        for name in ("lexical", "embedding"):
-            auc, decided, decidable = per_scorer[name][intent.name]
-            rendered = "None" if auc is None else f"{auc:.4f}"
-            print(
-                f"    {intent.name:28s} {name:10s} AUC={rendered} "
-                f"top-1 {decided}/{decidable} ({decided / decidable:.0%})"
+        regime: {
+            name: _intent_figures(
+                lexical_similarity if name == "lexical" else scorer, by_intent, regime
             )
+            for name in ("lexical", "embedding")
+        }
+        for regime in REGIMES
+    }
+    for regime in REGIMES:
+        for intent in ambiguous_intents():
+            for name in ("lexical", "embedding"):
+                auc, decided, decidable = per_scorer[regime][name][intent.name]
+                rendered = "None" if auc is None else f"{auc:.4f}"
+                print(
+                    f"    {regime:11s} {intent.name:28s} {name:10s} AUC={rendered} "
+                    f"top-1 {decided}/{decidable} ({percent(decided, decidable)})"
+                )
 
     after = scorer.usage()
     print(
@@ -392,18 +415,28 @@ def test_the_embedding_is_measured_against_lexical(
         f"tokens={after.tokens - before.tokens} calls={after.calls - before.calls}"
     )
 
-    lexical, embedding = findings["lexical"], findings["embedding"]
-    for found in (lexical, embedding):
-        assert found.auc is not None and 0.0 <= found.auc <= 1.0
-        assert 0 <= found.decided <= found.decidable < found.pairs, (
-            "decidable is a strict subset of pairs: the negative pairs have no correct resolution"
+    for regime in REGIMES:
+        lexical, embedding = findings[(regime, "lexical")], findings[(regime, "embedding")]
+        for found in (lexical, embedding):
+            assert found.auc is not None and 0.0 <= found.auc <= 1.0
+            assert 0 <= found.decided <= found.decidable <= found.pairs, (
+                "decidable cannot exceed pairs: the negative pairs have no correct resolution"
+            )
+        assert lexical.pairs == embedding.pairs
+        assert lexical.comparisons == embedding.comparisons
+        assert lexical.decidable == embedding.decidable, (
+            "the two scorers must be compared on the same decisions, or the comparison is not one"
         )
 
-    assert lexical.pairs == embedding.pairs
-    assert lexical.comparisons == embedding.comparisons
-    assert lexical.decidable == embedding.decidable, (
-        "the two scorers must be compared on the same decisions, or the comparison is not one"
+    informed = findings[("informed", "lexical")]
+    uninformed = findings[("uninformed", "lexical")]
+    assert informed.decidable == informed.pairs, (
+        "informed wording exists only where a resolution does, so the informed regime has no "
+        "negatives and the negative pairs are the uninformed tripwire"
     )
-    for name in per_scorer:
-        for auc, decided, decidable in per_scorer[name].values():
-            assert (auc is None or 0.0 <= auc <= 1.0) and 0 <= decided <= decidable
+    assert uninformed.decidable < uninformed.pairs
+
+    for regime in REGIMES:
+        for figures in per_scorer[regime].values():
+            for auc, decided, decidable in figures.values():
+                assert (auc is None or 0.0 <= auc <= 1.0) and 0 <= decided <= decidable
