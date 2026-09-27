@@ -202,8 +202,12 @@ def test_same_seed_same_state(fault_type: str, make_sandbox) -> None:
 
 @pytest.mark.parametrize("fault_type", ALL_FAULTS)
 def test_injected_states_are_distinguishable(fault_type: str, make_sandbox) -> None:
-    """Different seeds must produce genuinely different states, not the same
-    state with a different task text.
+    """Two seeds that select **different states** must produce genuinely different
+    repositories, not the same state with a different task text.
+
+    The qualifier is load-bearing (#86): seeds that select the *same* resolution
+    build byte-identical environments, so "different seeds differ" is false in
+    general and this test asserts it only for the pairs below.
 
     Two seeds per fault are fixed in `DISTINGUISHING_SEEDS`; the test compares
     `_seed_signal` (the fault-specific observable below) and the whole
