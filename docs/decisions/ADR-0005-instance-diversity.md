@@ -1,6 +1,6 @@
 # ADR-0005 — Parameterise each injected state along declared axes, and key independence on instance identity
 
-- **Status:** proposed
+- **Status:** accepted (2026-09-20, as written)
 - **Date:** 2026-09-27
 - **Supersedes:** nothing (narrows the injector design and the `occurrence_role` rule recorded in spec §7 / revision 13; ADR-0001–0004 stand)
 - **Deciders:** repository owner
