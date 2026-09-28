@@ -30,6 +30,7 @@ from precondition_library.bench.report import (
     Mean,
     Rate,
     ablation_table,
+    achieved_instances,
     arm_triples,
     break_even,
     change_surfaces,
@@ -43,6 +44,7 @@ from precondition_library.bench.report import (
     write_report,
 )
 from precondition_library.program import EpisodeOutcome
+from precondition_library.tasks.faults import FAULTS
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -1255,3 +1257,43 @@ def test_the_section_comes_from_the_ledger_not_the_registry(tmp_path: Path) -> N
 
     assert "only-in-ledger.txt" in report
     assert "app.py" not in report, "the registry's declaration must not be substituted"
+
+
+def test_achieved_instances_counts_environments_not_seeds(tmp_path: Path) -> None:
+    """ADR-0005 decision 8: the report's count is environments, not seed rows.
+
+    Three ledger rows on `diverged`/`merge`, two of which draw the same instance:
+    three seeds, two independent environments. A report that counted seeds would
+    print 3, which is the number a reader would take for power.
+    """
+    spec = FAULTS["diverged"]
+    first = next(seed for seed in range(256) if spec.variant_for_seed(seed) == "merge")
+    repeat = next(
+        seed
+        for seed in range(256)
+        if seed != first and spec.instance_for_seed(seed) == spec.instance_for_seed(first)
+    )
+    other = next(
+        seed
+        for seed in range(256)
+        if spec.variant_for_seed(seed) == "merge"
+        and spec.instance_for_seed(seed) != spec.instance_for_seed(first)
+    )
+    ledger = _write(
+        tmp_path / "ledger.jsonl",
+        [
+            _record(seed=first, correct_variant="merge"),
+            _record(seed=repeat, correct_variant="merge"),
+            _record(seed=other, correct_variant="merge"),
+        ],
+    )
+
+    found = achieved_instances(ledger)
+
+    assert [(item.fault_type, item.resolution) for item in found] == [("diverged", "merge")]
+    assert found[0].seeds == 3, "three distinct seeds reached the resolution"
+    assert found[0].instances == 2, "two of them draw one environment, so there are two"
+
+    report = (write_report(ledger, tmp_path / "out") / "report.txt").read_text(encoding="utf-8")
+    assert "Achieved instance count per resolution" in report
+    assert "  diverged/merge: 2 instance(s) over 3 seed(s)" in report

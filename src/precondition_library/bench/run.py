@@ -8,14 +8,17 @@ than repetitions of one scripted scenario. The seed varies across occurrences
 and the fault type stays fixed, which is the experimental design in one line.
 
 Repeats are also the difficulty, and the runner has to be honest about it. A
-fault's injector declares only a handful of states, so a later occurrence can
-select a state an earlier one already injected -- and a program admitted from
-that earlier episode will be offered for it. That occurrence is a genuine repeat
-of the same state and a *dependent* observation of the same experiment, so the
+fault's injector draws a small environment per seed, so a later occurrence can
+draw the same **instance** an earlier one already built -- and a program admitted
+from that earlier episode will be offered for it. That occurrence is a genuine
+repeat of the same environment and a *dependent* observation of the same
+experiment, so the
 runner labels every row with the role the plan gives it (`bench.splits`) rather
 than leaving the report to infer independence from the occurrence index. Both
 things are wanted: the recurrence is what makes amortization visible, and the
-label is what keeps it out of an independence claim.
+label is what keeps it out of an independence claim. Since ADR-0005 the key is
+the instance and not the resolution, so a seed that draws a *new* environment of
+an already-seen resolution is an independent observation rather than a replay.
 
 Each arm builds its library from empty and sees the same faults in the same
 order, so the arms cannot differ by luck of scheduling.
@@ -219,8 +222,9 @@ def run_benchmark(
     `model` because the provider owns its credentials and this repository reads
     no environment variables; `model` is the identifier recorded on every row.
 
-    Each occurrence's role -- variant the first time a resolution is seen, replay
-    every later time -- is read from the plan (`bench.splits.occurrence_roles`)
+    Each occurrence's role -- variant the first time an instance is seen, replay
+    only on a genuine repeat of one (ADR-0005) -- is read from the plan
+    (`bench.splits.occurrence_roles`)
     and written onto the row, so the report can group by it instead of inferring
     it. The roles depend only on the seed sequence and the fault, never on the
     arm, so they are computed once and shared; a reader can therefore reproduce
@@ -290,7 +294,7 @@ def run_episode(
 
     `role` is required and never defaulted: only the caller that owns the whole
     seed sequence can know whether this occurrence is the first sight of its
-    state, and a default would silently label a repeat as an independent
+    instance, and a default would silently label a repeat as an independent
     observation -- the one error the field exists to prevent. `run_benchmark`
     reads it from the plan; a caller running one episode in isolation labels it
     explicitly.

@@ -45,6 +45,7 @@
 | 35 | 2026-09-21 | **The gold programs' predicate descriptions are rewritten to state the applicability condition in request vocabulary, and the rewrite does not rescue arm 2 (issue #104).** #104's finding was that an intent's three candidate texts collapse together for a semantic scorer, so the experiment was to rewrite each `description` — the text `library._program_text` feeds arm 2 — to say what *state* the program is for, using words a request would use, without naming a resolution and without copying a request's wording. The rewrite also closes a leak: `sync-fork-overlapping-merge`'s `local_work_beyond_the_overlap` description read "...whose right resolution is not a **merge**...", naming the label `_program_text` excludes `variant` to keep out; `tests/test_gold_programs.py::test_no_gold_description_names_a_resolution` now guards that, and the admission-gate history that description carried moved to a YAML comment so it is not scored as meaning. Only `description` values changed; `probe`, `body`, `parameters`, `variant`, `intent` and `provenance` are byte-identical, and `test_the_gold_resolution_stays_inside_its_declared_surface` replays the same resolutions. Re-measured on the committed gold and the probe's seeds: pooled lexical is **AUC 0.5340, strict top-1 23/48** (was 0.5722 / 23/48) and the embedding **AUC 0.5252, strict top-1 20/48** (was 0.5571 / 19/48); per intent, lexical `restore_submodule_state` **0.6299 / 12-of-24** and `sync_fork_with_upstream` **0.4965 / 11-of-24**, embedding **0.5556 / 12-of-24** and **0.5062 / 8-of-24**. Candidate-vs-candidate mean embedding cosine **rose**, to **0.8909** on `restore_submodule_state` and **0.8932** on `sync_fork_with_upstream` (was 0.8718 / 0.8215). So separating the descriptions did **not** raise the metric dispatch acts on, and made the candidates no less interchangeable to the embedding: the collision is a property of three resolutions that describe nearby states in one domain, not of vague wording. The figures are printed by `tests/test_similarity_probe.py -s -k 'pooled_baseline or candidate_texts'` and `tests/test_embedding_similarity.py -s -k candidate_texts`. No benchmark metric, denominator or reported number changes — the probe measures arm 2's representation and is not the primary metric — and no result is claimed. |
 | 36 | 2026-09-21 | **The probe's discrimination figure was pooled across two request regimes; measured per regime the informed baseline is AUC 0.6172 and strict top-1 15/24 (63%), and the pooled number is withdrawn as a baseline (issue #104).** Every `LabelledPair` records the channel its text arrived through, and `bench/textcontrol.py` states the consequence: the uninformed channel's sampler never consults state, so its AUC is **0.5000 for any classifier and any phrasing list** — a property of the construction, not a measurement — while informed wording nearly gives the resolution away, so a high score there is the boundary condition and the genuine measurement. Revisions 30 onward scored both channels together, so ADR-0003's accepted baseline (**0.5722 / 23-of-48**, re-measured **0.5340 / 23-of-48** in revision 35) and this spec's live figures were pooled numbers that described neither regime. Re-measured with the committed code — hand-written gold on the probe's seeds 0–3, which are **not** the pre-registered split: **informed, both intents** lexical **AUC 0.6172, strict top-1 15/24 (63%)**, per intent `restore_submodule_state` **0.8125 / 8-of-12** and `sync_fork_with_upstream` **0.6007 / 7-of-12**; **uninformed, both intents** lexical **AUC 0.5000, strict top-1 8/24 (33%)**, chance by construction. The 8 negative pairs belong to the uninformed regime, where they are the plumbing tripwire rather than baseline material; the informed regime has no negatives, because informed wording exists only where a resolution does. The embedding scorer re-measured on the same split: informed **AUC 0.5859, strict top-1 12/24 (50%)** (per intent **0.6389 / 8-of-12** and **0.5729 / 4-of-12**), uninformed **0.5000 / 8-of-24**. So the corrected baseline is **stronger** — 63% where ADR-0003 recorded 48% — which is the direction that makes the claim harder to support, and the embedding does not improve the informed top-1. The probe now takes a required `regime` on its single-mapping functions, `compare_scorers` returns one row per regime, and there is no pooled mode, so the defect cannot return through a default; ADR-0004 (proposed) records the correction and re-derives ADR-0003's baseline decision, which stays accepted as a record. The figures are printed by `tests/test_similarity_probe.py -s -k informed_baseline` and `tests/test_embedding_similarity.py -s -k measured_against_lexical`. No benchmark metric, denominator or reported number changes — the probe measures arm 2's representation and is not the primary metric — and no result is claimed. |
 | 37 | 2026-09-27 | **The injectors' instance diversity is measured, and a proposed ADR scopes the fix (issue #86).** Measured over every seed the plan uses (smoke `0,1,2,4`, tune `1000–1015`, eval `2000–2039`; 60 seeds) with real sandboxes: the two measurable faults offer **3 content-distinct environments each — 6 across the family — one per resolution**, and seeds selecting one resolution are byte-identical **including commit SHAs** (`.venv/bin/python -m precondition_library.bench.instance_diversity`). #86's "6 independent observations" is confirmed; its "differing only in commit SHAs" is corrected in the stronger direction — they differ in nothing. The three excluded faults do vary content by seed (`dirty_tree` 2 environments, `branch_renamed` 4, `lockfile_conflict` 56 on the same seeds) but stay outside the comparison because their single fixed sentence is the label (issue #25). **Live corrections:** §10's determinism block said "different seeds -> genuinely different instances", which the measurement refutes for same-resolution seeds and is corrected in place; §7 records the measured instance count and names the proposed direction. ADR-0005 (proposed) decides the approach — parameterise each state shape along declared axes drawn per seed, key occurrence roles on instance identity rather than resolution, restate the seed plan in terms of independent environments, exclude a fault that cannot diversify rather than pad it, and carry the achieved instance count in the report. **This revision scopes the work and changes no injector behaviour**: `tests/test_instance_diversity.py` pins the property as a strict `xfail` naming #86, which fails today and whose marker is deleted by the change that lands it. No benchmark metric, denominator or reported number changes, and no result is claimed. |
+| 38 | 2026-09-27 | **ADR-0005 is landed: each measurable fault's state shapes are parameterised along declared Tier 1 axes drawn per seed, independence is keyed on instance identity, and the seed plan's arithmetic is restated (issue #86).** `diverged` and `submodule_moved` now draw, per seed, the file bodies each side writes, the local commit count (1–3) and subjects, and the conflict hunk position; `FaultSpec.instance_for_seed` returns the resolution plus the drawn values, `build_sandbox` records it on the `Sandbox`, and `build_sandbox` re-derives the resolution from the observed `StateFingerprint` and raises if it is not the one `variant_for_seed` declared (the guard is tested firing on a deliberately bad draw). `bench.splits.occurrence_roles` marks an occurrence `variant` the first time an **instance** is seen and `replay` only on a genuine repeat of one; `FaultSpec.variant_for_seed` keeps its meaning. Measured over the 60 plan seeds with real sandboxes (`.venv/bin/python -m precondition_library.bench.instance_diversity`): **61 distinct environments, up from 6** — `diverged` `discard` 23, `merge` 14, `rebase` 8; `submodule_moved` `init` 5, `remove` 6, `repin` 5 — and distinct instance identities build distinct environments; the 40-seed eval set alone builds 47 of them (see §7 for the eval per-resolution table). Every resolution clears the owner's target of 4, and `submodule_moved` reaches it on the nested repo's content alone, so the approved "cannot diversify" exclusion is not applied. The smoke set's four seeds now draw four distinct instances, so it carries **no replay**; the cost curve's replays live in the tune (1 and 9) and eval (8 and 25) sets. `bench.report` carries the achieved instance count per resolution (`achieved_instances`). **Live corrections:** §7's seed-plan table and its "three, not forty" arithmetic are replaced by the measured per-resolution counts and the restated underpower note (a 95% Wilson half-width of about ±18.6pp at the owner's target N=24 and ±14.7pp at the 47 achieved, against the ±10pp equivalence margin's ~94); §7's Design and §12's unit-of-analysis row move from the fault seed/family to the environment; §10's determinism block is corrected in place. The strict `xfail` in `tests/test_instance_diversity.py` is deleted and the test passes for the real reason — two same-resolution seeds now build different file-body signatures — with a sibling test that builds four real environments per resolution. **Logged before any eval pass** — no eval episode has been run, so no analysis was chosen after seeing results; the instance counts are derived from the declared draw and from real sandboxes, and no benchmark metric, denominator or reported result is claimed. |
 
 ---
 
@@ -528,14 +529,17 @@ One JSONL line per episode; every number reported is a grouping over this file.
 
 - `occurrence_index` — 1 for the first time this fault type is seen, 2 for the
   second, and so on. Grouping by it produces the headline curve.
-- `occurrence_role` — `variant` for the first occurrence of a resolution of this
-  fault, `replay` for every later one. Declared by `bench/splits.py` from the
-  injector's own seed-to-resolution mapping and written onto every row by
+- `occurrence_role` — `variant` for the first occurrence of an **instance** of
+  this fault, `replay` only on a genuine repeat of one (ADR-0005; before it the
+  key was the resolution, which made same-resolution seeds — byte-identical
+  environments — one observation counted many times). Declared by
+  `bench/splits.py` from the injector's own seed-to-instance mapping and written
+  onto every row by
   `bench/run.py`; required, with no default. **The two analyses need different
   occurrences.** The cost curve is only meaningful on the replays, because a
-  variant is the first sight of a state and no program can have been admitted
-  from it yet — the curve bends exactly where a state recurs. The mismatch
-  comparison is only meaningful on the variants, because a replay's state was
+  variant is the first sight of an instance and no program can have been admitted
+  from it yet — the curve bends exactly where an instance recurs. The mismatch
+  comparison is only meaningful on the variants, because a replay's instance was
   introduced by an earlier occurrence and the program that answers it was
   admitted there, so counting a replay counts one observation twice. It records
   the plan's role and not what happened: a row labelled `replay` may still have
@@ -664,18 +668,20 @@ earlier draft stated the nominal figure as though it could run.
 
 Seeds are split into disjoint admit / tune / eval sets and every arm is routed
 through the same (fault, seed) pairs, so the comparison is paired rather than
-between-populations. The unit of analysis is the fault seed, not the episode:
-occurrences 2-4 were to be **held-out variants** of a fault (different branch
-names, file sets, conflict positions, submodule states), or relabelled
-"replays" and excluded from independence claims. **The replay branch is the one
-this design takes, because the injectors do not vary those things by seed** (see
-the revision history, row 13, and issue #6, which owns widening them): a fault's
-`INJECTED_STATES` declares three states and everything else about the injected
-environment is fixed, so an occurrence whose resolution has already been seen is
-a repeat of that state rather than a held-out instance of it. So an occurrence is
-a **variant** the first time its resolution is seen and a **replay** every later
-time, and the two are used by different analyses — the mismatch comparison over
-the variants, the cost curve over the replays (see "Figures").
+between-populations. The unit of analysis is the **environment** — a resolution
+together with the drawn Tier 1 axis values, the instance identity
+`FaultSpec.instance_for_seed` names — not the seed and not the episode. An
+occurrence is a **variant** the first time its *instance* is seen and a **replay**
+only on a genuine repeat of one (ADR-0005; before it the key was the resolution,
+because same-resolution seeds built byte-identical environments). The two roles
+feed different analyses — the mismatch comparison over the variants, the cost
+curve over the replays (see "Figures"). Since ADR-0005 the injectors draw each
+state shape's file bodies, local commit count and subjects, and conflict hunk
+positions per seed, and `build_sandbox` refuses a draw whose observed resolution
+is not the one declared — so a new seed is usually a new environment, and a
+mislabelled one cannot enter the comparison. The axes beyond Tier 1 (file names,
+submodule paths, branch names) remain issue #6's, because they need probe and body
+parameter binding first.
 
 ### Figures
 
@@ -778,56 +784,62 @@ tune   1000-1015   16 seeds  calibrate arm 2's similarity threshold (item 5)
 eval   2000-2039   40 seeds  the reported numbers
 ```
 
-Each of those seeds is an *occurrence*, and occurrences split by role
-(`bench/splits.py`'s `occurrence_roles`, written onto every ledger row):
+Each of those seeds is an *occurrence*, and occurrences split by role on the
+**instance identity** (`bench/splits.py`'s `occurrence_roles`, written onto every
+ledger row; ADR-0005 decision 5):
 
-| set | seeds | variant occurrences per family | replay occurrences per family |
-| --- | --- | --- | --- |
-| smoke | 0, 1, 2, 4 | 3 | 1 |
-| tune | 1000-1015 | 3 | 13 |
-| eval | 2000-2039 | 3 | 37 |
+| set | seeds | fault | variant occurrences (distinct instances) | replay occurrences |
+| --- | --- | --- | --- | --- |
+| smoke | 0, 1, 2, 4 | `diverged` | 4 | 0 |
+| smoke | 0, 1, 2, 4 | `submodule_moved` | 4 | 0 |
+| tune | 1000-1015 | `diverged` | 15 | 1 |
+| tune | 1000-1015 | `submodule_moved` | 7 | 9 |
+| eval | 2000-2039 | `diverged` | 32 | 8 |
+| eval | 2000-2039 | `submodule_moved` | 15 | 25 |
 
-**Three, not forty, is the number the independent observations come to**, and it
-is the injector grid that fixes it. Only the two fault families with an ambiguous
-intent are measurable (`registry.ambiguous_intents()`); the other three are
-excluded from any dispatch measurement, named in `EXCLUDED_FROM_BENCHMARK`. Each
-measurable fault's injector declares exactly three states, and a program is
-admitted for the resolution of one of them, so a seed set of any length yields at
-most three variant occurrences per family — six episodes across the two families.
-Everything after the first sight of a state is a replay: a real repeat of the
-run's own earlier state, which is what the cost curve is read from and what no
-independence claim may be read from. **A larger seed set does not change the
-count**; it buys replay occurrences, not power.
+**The independent observations are the distinct instances, and the counts are
+measured, not inferred from the grid.** Each measurable fault now draws each state
+shape's content per seed along declared Tier 1 axes — file bodies, local commit
+count and subjects, and conflict hunk positions — so a set's variant occurrences
+are exactly the distinct **instances** its seeds build. The per-resolution
+breakdown the report carries (`bench.report.achieved_instances`) is:
 
-**The count is measured, not inferred from the grid alone.** Built as real
-sandboxes over every seed above, each measurable fault's three resolutions each
-have exactly **one** environment — **3 content-distinct environments per family,
-6 across the two** — and seeds that select one resolution are byte-identical,
-commit SHAs included (issue #86; reproduce with
-`.venv/bin/python -m precondition_library.bench.instance_diversity`). The 40-seed
-eval set therefore supports six environments, which is the underpower arithmetic
-below and why no interval can be attached to Claim 2 at that N. Widening it is the
-injector work #86 owns, scoped — not implemented — by ADR-0005 (proposed).
+| fault | resolution | instances in the eval set |
+| --- | --- | ---: |
+| `diverged` | `discard` | 18 |
+| `diverged` | `merge` | 8 |
+| `diverged` | `rebase` | 6 |
+| `submodule_moved` | `init` | 5 |
+| `submodule_moved` | `remove` | 5 |
+| `submodule_moved` | `repin` | 5 |
 
-**The eval set is therefore not merely underpowered for the episode-level
-mismatch comparison — the episode loop cannot support it at any seed count.** The
-previous statement here said eighty decisions could not put a usable Wilson
-interval around a mismatch difference; the honest arithmetic is that only six of
-those eighty are independent observations, and an interval over six is wider
-still. The pre-registered primary comparison is unaffected, because
-it is not computed from the episode loop: it is the pair-level one over labelled
-(state, program) pairs (item 1), where the state grid is crossed with seeds, no
-library accumulates between pairs, and the pair count is chosen for power rather
-than for what a run can pay for (issue #5). The episode loop's own comparative
-figure stays reported, labelled underpowered, with its variant N shown.
+The 40-seed eval set therefore builds **47 independent environments**, up from 6,
+and every resolution clears the owner's target of 4. The counts come from
+`FaultSpec.instance_for_seed` over the plan's seeds; reproduce the real-sandbox
+measurement, including that distinct identities are distinct environments, with
+`.venv/bin/python -m precondition_library.bench.instance_diversity`.
+
+**The episode-level mismatch comparison is still underpowered, for a different
+reason.** No interval could be attached at 6 environments. At the owner's target
+of 24 the 95% Wilson half-width on a proportion near 0.5 is about **±18.6pp**, and
+at the 47 actually achieved about **±14.7pp** — both still wider than the
+pre-registered ±10pp equivalence margin, which needs roughly **94** environments.
+So the episode loop can now carry a real interval where it could carry none, and
+it is still not enough to decide equivalence. The pre-registered primary
+comparison is unaffected, because it is not computed from the episode loop: it is
+the pair-level one over labelled (state, program) pairs (item 1), where the state
+grid is crossed with seeds, no library accumulates between pairs, and the pair
+count is chosen for power rather than for what a run can pay for (issue #5). The
+episode loop's own comparative figure stays reported, labelled underpowered, with
+its instance N shown.
 
 **What more episodes would buy.** Replay occurrences for the cost curve, and
-only that: the 40-seed eval set is sized for a repeat structure long enough to
-show whether a compiled arm's cost falls and the baseline's does not, not for the
-comparison. Independent observations are bought by **more states**, not more
-seeds — the injector work issue #6 owns (held-out variants with new branch names,
-file sets, conflict positions, submodule states) — or by the pair-level harness,
-which crosses states with seeds and is not budget-bound.
+increasingly few new instances: the instance count is bounded by the declared draw
+space and grows sublinearly with the seed count, so a larger seed set buys mostly
+repeats. Independent observations are bought by more *draw space* — the held-out
+axes issue #6 still owns (file names, submodule paths, branch names; Tier 2, which
+need probe and body parameter binding) — or by the pair-level harness, which
+crosses states with seeds and is not budget-bound.
 
 A run is invoked like this. The ledger goes outside the repository; the API key
 comes from the caller's environment and is never read by this repository
@@ -932,11 +944,14 @@ GOLD FIRST      hand-written solutions must satisfy the fault checkers before
                 them.
 DETERMINISM     same seed -> byte-identical faulted environment; the regression
                 that would show up as variance between arms. Different seeds
-                -> different instances ONLY where they select different
-                resolutions: measured over the 60 pre-registration seeds, seeds
-                that select one resolution are byte-identical, commit SHAs
-                included (issue #86). Two seeds on one resolution are one
-                environment, not two.
+                -> different instances when they draw different Tier 1 axis
+                values, and the same instance only on a genuine repeat: measured
+                over the 60 pre-registration seeds after ADR-0005, distinct
+                `instance_for_seed` identities build distinct environments (issue
+                #86), and `build_sandbox` refuses a draw whose observed resolution
+                is not the declared one. Before ADR-0005, seeds selecting one
+                resolution were byte-identical, commit SHAs included; they are not
+                any more.
 TEXT CONTROL    a bag-of-words classifier trained on the request text alone
                 reports the informed/uninformed split. The uninformed regime
                 cannot carry the resolution by construction (the sampler never
@@ -1019,7 +1034,7 @@ claim.
 | **reframe after review (2026-09-13, ADR-0001)** | re-center on the open measurement: the dispatch comparison becomes the spine, the agent becomes its harness, Claim 1 is dropped as a contribution | **keep the agent central and merely rewrite the prose** — preserves the original vision, but the headline becomes "a modern instance of a classical mechanism" and invites "MACROPS for git chores"; the measurement is the only thing here that is actually open |
 | | | **abandon the project** — the narrow gap is real and unmeasured and the engineering is already scaffolded; abandonment would be a reaction to losing a claim, not to losing the question |
 | primary metric location | dispatch-level benchmark at matched coverage | episode-level paired mismatch difference — degenerate as designed: one fixed task sentence per fault made the task text the ground-truth label, so the control arm could not mis-fire by construction |
-| unit of analysis | the fault seed/family, with held-out variant occurrences | treating each episode as an independent sample — pseudo-replication that inflates N and leaks the admitted instance into evaluation |
+| unit of analysis (2026-09-27, ADR-0005) | the **environment** — a resolution plus its drawn Tier 1 axis values, the `instance_for_seed` identity — with a variant occurrence the first sight of each instance | treating each episode as an independent sample — pseudo-replication that inflates N and leaks the admitted instance into evaluation; and keying on the resolution (the rule before ADR-0005), which counted one environment many times because same-resolution seeds were byte-identical |
 | citation policy | every citation checked against the source by the author before publication — a hygiene pass, not independent review | trusting a research agent's prior-art sweep — it produced five wrong attributions and one false negative claim about a repository in the author's own ecosystem |
 
 ### Open risks

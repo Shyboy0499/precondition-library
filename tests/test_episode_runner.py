@@ -53,19 +53,24 @@ from precondition_library.tasks.spec import GroundTruth
 ROOT = Path(__file__).resolve().parents[1]
 COMMITTED_LIBRARY = ROOT / "library"
 
-# `diverged.state_for_seed`: 1 and 3 both inject `empty_local_commits`, whose
-# resolution is `discard`. Two occurrences of one fault sharing a state is what
-# lets occurrence 2 replay the program occurrence 1 compiled.
+# `diverged`: seeds 1 and 28 both inject `empty_local_commits` **and draw the same
+# instance** (`discard/content=1/commits=3/hunk=after_greet`), whose resolution is
+# `discard`. Under ADR-0005 the role keys on the instance, so seed 28 really is a
+# replay of seed 1 and the replay-path tests below exercise what they claim. Two
+# seeds on *different* instances of one resolution would both be variants.
 DISCARD_SEED = 1
-SECOND_DISCARD_SEED = 3
+SECOND_DISCARD_SEED = 28
 
-# The same relation inside the *declared* plan: `SMOKE_SEEDS`' first and last
-# seeds both inject `diverged`'s `overlapping_files`, whose resolution is
-# `merge`. The plan therefore calls the first a variant and the second a replay
-# (`bench.splits.occurrence_roles`), which is what the end-to-end test below
-# exercises -- a state the plan declares recurring, not one this file picked.
-VARIANT_SEED = SMOKE_SEEDS[0]
-REPLAY_SEED = SMOKE_SEEDS[-1]
+# The same relation inside the *declared* plan: seeds 0 (smoke) and 1013 (tune)
+# both inject `diverged`'s `overlapping_files` state and draw the same instance
+# (`merge/content=2/commits=1/hunk=after_greet`), so the plan calls the first a
+# variant and the second a replay (`bench.splits.occurrence_roles`), which is what
+# the end-to-end tests below exercise -- a state the plan declares recurring, not
+# one this file picked. Before ADR-0005 the pair was `SMOKE_SEEDS[0]` and
+# `SMOKE_SEEDS[-1]` (resolution-keyed); those two now draw different instances and
+# are both variants, so the genuine repeat is this pair.
+VARIANT_SEED = 0
+REPLAY_SEED = 1013
 
 _PROVENANCE = Provenance(
     compiled_from_task="episode-runner test fixture",
@@ -404,9 +409,9 @@ def test_a_program_admitted_on_a_variant_fires_on_its_replay_occurrence(
 ) -> None:
     """The property the whole cost curve rests on, on the plan's own seed pair.
 
-    `SMOKE_SEEDS[0]` and `SMOKE_SEEDS[-1]` both inject `diverged`'s
-    `overlapping_files` state, so the plan calls the first a variant and the
-    second a replay. Run as a two-occurrence plan, the model solves and compiles
+    `VARIANT_SEED` and `REPLAY_SEED` both inject `diverged`'s `overlapping_files`
+    state and draw the **same instance**, so the plan calls the first a variant and
+    the second a replay. Run as a two-occurrence plan, the model solves and compiles
     the first, the program clears admission, and the second -- same state, a
     different seed, a library that grew in between -- is dispatched to it with no
     LLM call at all. Without this the curve cannot bend, whatever the plan says.
@@ -464,19 +469,19 @@ def test_the_runner_labels_every_occurrence_with_the_plan_s_role(
     The expected sequences are written out rather than only compared against
     `occurrence_roles`, because the runner *calls* that function -- a test that
     compared output to its own input would pass even if both regressed together.
-    A report left to infer the role from `occurrence_index` would get `diverged`
-    occurrence 4 wrong (it is a replay) and `submodule_moved` occurrence 3 wrong
-    (it is a replay too); those are the facts asserted here.
+    Under ADR-0005 the role keys on the drawn **instance**, not the resolution, and
+    the smoke set's four seeds draw four distinct instances for both faults: every
+    smoke occurrence is a variant, and the set no longer contains a replay. A report
+    left to infer the role from `occurrence_index` would still get `diverged`
+    occurrence 4 and `submodule_moved` occurrence 3 wrong; those are the facts
+    asserted here.
     """
     variant = OccurrenceRole.VARIANT
-    replay = OccurrenceRole.REPLAY
     expected = {
-        # Seeds 0, 1, 2, 4: merge, discard, rebase, and seed 4 repeats seed 0's
-        # `overlapping_files`, so the last occurrence is a replay.
-        "diverged": [variant, variant, variant, replay],
-        # Seeds 0, 1, 2, 4: remove, repin, repin, init -- seed 2 repeats seed 1's
-        # `repin`, so the *third* occurrence is the replay here.
-        "submodule_moved": [variant, variant, replay, variant],
+        # Seeds 0, 1, 2, 4 each draw a distinct instance of a distinct (or repeat)
+        # resolution: no two smoke seeds land on one instance after ADR-0005.
+        "diverged": [variant, variant, variant, variant],
+        "submodule_moved": [variant, variant, variant, variant],
     }
 
     def _no_sandbox(seed: int, faults: list[str]):
