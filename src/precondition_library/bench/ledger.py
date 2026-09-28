@@ -32,13 +32,14 @@ class Arm(StrEnum):
 class OccurrenceRole(StrEnum):
     """What an occurrence is for, which is not how it turned out.
 
-    A **variant** occurrence is the first sight of a resolution of its fault:
-    nothing in the arm's library was admitted from that state, so the episode is
-    an independent observation. A **replay** occurrence is a later sight of a
-    resolution already seen: the state recurs, so a program admitted earlier may
-    answer the episode for nothing -- the amortization the cost curve exists to
-    show -- and the observation is therefore dependent on the episode that
-    admitted that program.
+    A **variant** occurrence is the first sight of an **instance** of its fault --
+    a resolution together with the injector's drawn Tier 1 axis values (ADR-0005):
+    nothing in the arm's library was admitted from that environment, so the
+    episode is an independent observation. A **replay** occurrence is a genuine
+    repeat of an instance already seen: the environment recurs, so a program
+    admitted earlier may answer the episode for nothing -- the amortization the
+    cost curve exists to show -- and the observation is therefore dependent on the
+    episode that admitted that program.
 
     Declared by `bench.splits`, which owns the rule and the seed sets, and
     written onto every row by `bench.run`. It lives here because it is a field's
@@ -63,18 +64,18 @@ class EpisodeRecord(BaseModel):
     Occurrence order is not the same thing as independence, which is what
     `occurrence_role` records."""
     occurrence_role: OccurrenceRole
-    """Whether this occurrence is the first sight of its state or a later one.
+    """Whether this occurrence is the first sight of its instance or a later one.
 
     Required, with no default, because a missing role silently reads as a
     variant and a variant is the role that may be counted as an independent
     observation: a default would make the report claim independence the plan
     does not provide, which is the one mistake this field exists to prevent.
 
-    **Why the distinction is here at all.** A fault's injector declares a small
-    number of states, and a program is admitted for the resolution of one of
-    them. The first occurrence of a state therefore has no program that could
-    answer it -- its cost is the learning pass -- while every later occurrence of
-    the same state can be answered by that program for nothing. The two
+    **Why the distinction is here at all.** A fault's injector draws a small
+    environment per seed, and a program is admitted for the resolution of one of
+    them. The first occurrence of an instance therefore has no program that could
+    answer it -- its cost is the learning pass -- while a genuine repeat of the
+    same instance can be answered by that program for nothing. The two
     occurrences are the same experiment only in appearance: the first is
     independent, the second is a repeat that also *depends* on the first. A
     reader who does not know this will compute the cost curve over the first
@@ -84,8 +85,8 @@ class EpisodeRecord(BaseModel):
     variants.
 
     It records the plan's role, not what happened. A row labelled `replay` may
-    still have paid full price, because no program was admitted for its state or
-    the one that fired was refused; `llm_calls`, `outcome` and `fired_variant`
+    still have paid full price, because no program was admitted for its instance
+    or the one that fired was refused; `llm_calls`, `outcome` and `fired_variant`
     are where what actually happened is recorded."""
     seed: int
 

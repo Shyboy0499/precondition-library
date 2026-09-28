@@ -29,9 +29,10 @@ that a difference in commit SHAs alone is not
 a new environment, so a signature that changed only when a SHA did would let
 cosmetic variation pass as diversity. `environment_manifest` adds every ref and
 object id, and `sha_instances` counts by it, so the two comparisons can be
-reported together: for the measurable faults today they agree at 1, which is the
-statement that same-resolution seeds are byte-identical *including* their commit
-SHAs.
+reported together: two sandboxes equal on content but different once refs are
+compared differ by commit metadata alone. Since ADR-0005 the two counts are equal
+per resolution for the measurable faults, because the drawn axes change committed
+content -- the environments differ in more than their SHAs.
 
 **The axes are descriptive, not part of the digest.** `environment_axes` records
 the axes issue #86 names -- file names, file counts, commit counts, conflict
@@ -46,12 +47,19 @@ structural axis #86 names fixed -- without this axis the table would say "nothin
 varies" about a fault whose content does.
 
 **Read-only with respect to the injectors.** This module builds and destroys
-sandboxes and changes nothing about how a fault is injected: #86 is scoped, not
-implemented. Run it with
+sandboxes and changes nothing about how a fault is injected. It was written to
+measure #86's finding before the fix existed; ADR-0005 has since parameterised
+each state shape along declared Tier 1 axes and drawn one value per axis per seed,
+so the counts below are now multi-digit rather than 1. It remains the measurement
+of record for the achieved instance count -- the report's `achieved_instances`
+reads the same `instance_for_seed` identities, and this module checks them against
+real environments, including that distinct identities are distinct environments.
+Run it with
 
     .venv/bin/python -m precondition_library.bench.instance_diversity
 
-and it prints the table the ADR-0005 context is measured from.
+and it prints the table the ADR-0005 context measured from and the achieved counts
+after the fix.
 """
 
 from __future__ import annotations

@@ -1,27 +1,34 @@
 """Two seeds that select the same resolution must build different environments.
 
-Issue #86's property, pinned directly. It is **false today**, and the failing case
-is the issue's own measurement: `diverged` seeds 0 and 4 both resolve to `merge`,
-and the two sandboxes are byte-identical. The injectors select among three
-hand-authored state shapes per measurable fault and the seed chooses *which*
-shape, not the shape's content; because the sandbox pins author and committer
-dates and identities, not even the commit SHAs differ. So a new seed that lands
-on an already-seen resolution is not a new environment.
+Issue #86's property, pinned directly. It was **false** before ADR-0005 landed:
+the injectors selected among three hand-authored state shapes per measurable fault
+and the seed chose *which* shape, not the shape's content, so `diverged` seeds 0
+and 4 both resolved to `merge` and built byte-identical environments -- not even
+the commit SHAs differed, because the sandbox pins author and committer dates and
+identities. A new seed that landed on an already-seen resolution was therefore not
+a new environment.
 
-The test builds two real sandboxes per resolution -- `tasks.faults.build_sandbox`,
-never a mock -- and asserts their content signatures differ. The signature is the
-working tree's file bodies, names and counts, the conflict positions, the
-submodule paths and the branch wiring, and it excludes commit SHAs on purpose: a
-difference in SHAs alone is not a new environment (#86), so the pin must not be
-satisfiable by re-stamping commits.
+The change that lands #86 parameterises each state shape along declared Tier 1
+axes (`file body content`, `local commit count and subject`, `conflict hunk
+position`) and draws one value per axis from the seed, so same-resolution seeds
+now differ in content. This module keeps the direct pin:
 
-**Why `xfail(strict=True)` is the honest vehicle.** The property does not hold
-yet, and a test that fails cannot merge. The strict marker lets CI carry the
-failing case without hiding it: a fix that gives the injectors diversity makes the
-body pass, pytest reports it as an unexpected pass, and strict turns that into a
-failure -- which is the reminder to delete this marker. The test therefore flips
-to a real, unmarked pass in the change that lands #86, and cannot quietly become
-a passing test whose marker nobody removed.
+* `test_same_resolution_seeds_build_different_environments` builds two real
+  sandboxes per resolution -- `tasks.faults.build_sandbox`, never a mock -- and
+  asserts their content signatures differ.
+* `test_every_resolution_reaches_four_real_environments` builds four real
+  sandboxes per resolution, one per distinct drawn instance identity, and asserts
+  they are four real environments. That is the owner's approved target (4 per
+  resolution, 24 across the two measurable faults) measured from sandboxes rather
+  than from the drawn identity alone.
+
+The signature is the working tree's file bodies, names and counts, the conflict
+positions, the submodule paths and the branch wiring, and it excludes commit SHAs
+on purpose: a difference in SHAs alone is not a new environment (#86), so the pin
+must not be satisfiable by re-stamping commits. The sandbox's
+`test_instance_diversity` sibling check that identity maps one-to-one onto the
+signature -- distinct `instance_for_seed` values build distinct real environments
+-- is the `bench/instance_diversity.py` measurement, run over all 60 plan seeds.
 
 Only the two faults whose intent is ambiguous are covered, because they are the
 only ones with a resolution to be the same or different. The three faults in
@@ -45,6 +52,14 @@ from precondition_library.tasks.registry import ambiguous_intents
 PLAN_SEEDS: tuple[int, ...] = (*SMOKE_SEEDS, *TUNE_SEEDS, *EVAL_SEEDS)
 
 MEASURABLE_FAULTS: tuple[str, ...] = tuple(sorted(intent.fault for intent in ambiguous_intents()))
+
+TARGET_INSTANCES_PER_RESOLUTION = 4
+"""The owner's approved target: four independent instances per resolution.
+
+ADR-0005 fixes the approach and leaves the count to "whatever the declared draw
+yields"; the target is the number the work is judged against (4 x 6 resolutions =
+24 environments, up from 6).
+"""
 
 
 def _same_resolution_cases() -> list[tuple[str, str, int, int]]:
@@ -71,6 +86,31 @@ def _same_resolution_cases() -> list[tuple[str, str, int, int]]:
 CASES = _same_resolution_cases()
 CASE_IDS = [f"{fault}-{resolution}-{a}-{b}" for fault, resolution, a, b in CASES]
 
+RESOLUTIONS: list[tuple[str, str]] = sorted(
+    {(fault, resolution) for fault, resolution, _, _ in CASES}
+)
+RESOLUTION_IDS = [f"{fault}-{resolution}" for fault, resolution in RESOLUTIONS]
+
+
+def _first_seed_per_instance(fault: str, resolution: str, count: int) -> list[int]:
+    """The first `count` plan seeds that draw distinct instance identities.
+
+    One seed per distinct `instance_for_seed` value, in plan order, so the seeds
+    returned are the plan's own and no two of them claim the same instance. A
+    resolution with fewer than `count` distinct instances returns fewer, and the
+    test that calls this fails on the shortfall rather than silently building a
+    smaller sample.
+    """
+    spec = FAULTS[fault]
+    chosen: dict[str, int] = {}
+    for seed in PLAN_SEEDS:
+        if spec.variant_for_seed(seed) != resolution:
+            continue
+        chosen.setdefault(spec.instance_for_seed(seed), seed)
+        if len(chosen) == count:
+            break
+    return list(chosen.values())
+
 
 def test_every_measurable_resolution_has_two_plan_seeds() -> None:
     """The pin is only meaningful if each resolution is actually selected twice.
@@ -90,14 +130,6 @@ def test_every_measurable_resolution_has_two_plan_seeds() -> None:
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "issue #86: the injectors vary which state a seed selects, not the state's "
-        "content, so two seeds selecting one resolution build byte-identical "
-        "environments. Delete this marker in the change that adds instance diversity."
-    ),
-)
 @pytest.mark.parametrize(("fault", "resolution", "seed_a", "seed_b"), CASES, ids=CASE_IDS)
 def test_same_resolution_seeds_build_different_environments(
     fault: str, resolution: str, seed_a: int, seed_b: int, make_sandbox
@@ -111,10 +143,77 @@ def test_same_resolution_seeds_build_different_environments(
     variation pass as diversity. The property is what the mismatch comparison's
     unit of analysis needs: a second observation of a resolution has to be a second
     environment, or it is the same observation counted twice.
+
+    This passed as a strict `xfail` before the axis draw landed; the marker was
+    deleted in the change that made it pass, and it passes for the real reason --
+    the two drawn instances have different file-body signatures -- not because the
+    comparison was loosened.
     """
     first = make_sandbox(seed_a, [fault])
     second = make_sandbox(seed_b, [fault])
     assert instance_signature(first) != instance_signature(second), (
         f"{fault}/{resolution}: seeds {seed_a} and {seed_b} select the same "
         f"resolution and built identical environments (issue #86)"
+    )
+
+
+@pytest.mark.parametrize(
+    ("fault", "resolution"),
+    RESOLUTIONS,
+    ids=RESOLUTION_IDS,
+)
+def test_declared_axes_are_the_axes_actually_drawn(fault: str, resolution: str) -> None:
+    """The per-resolution axis declaration must be real, not prose (ADR-0005 §2).
+
+    Every declared axis must take at least two values over the plan seeds that
+    select the resolution -- an axis declared but never drawn is decoration -- and
+    the draw must move no axis the resolution did not declare, since an undeclared
+    axis is one whose safety nobody checked. The values must also come from the
+    declared pool, so the declaration and the injector cannot drift apart.
+    """
+    spec = FAULTS[fault]
+    seeds = [seed for seed in PLAN_SEEDS if spec.variant_for_seed(seed) == resolution]
+    declared = spec.axes_for_resolution(resolution)
+    assert declared, f"{fault}/{resolution}: no axis declared, so nothing can vary"
+    for axis, pool in declared.items():
+        assert len(pool) >= 2, f"{fault}/{resolution}: axis {axis!r} has a single value"
+        values = {spec.drawn_axes_for_seed(seed)[axis] for seed in seeds}
+        assert values <= set(pool), (
+            f"{fault}/{resolution}: axis {axis!r} drew {sorted(values - set(pool))}, "
+            f"which is outside its declared pool {sorted(pool)}"
+        )
+        assert len(values) >= 2, (
+            f"{fault}/{resolution}: declared axis {axis!r} never varies over the "
+            f"{len(seeds)} plan seed(s) that select the resolution"
+        )
+    assert set(spec.drawn_axes_for_seed(seeds[0])) == set(declared), (
+        f"{fault}/{resolution}: the draw moves an axis the resolution did not declare"
+    )
+
+
+@pytest.mark.parametrize(
+    ("fault", "resolution"),
+    RESOLUTIONS,
+    ids=RESOLUTION_IDS,
+)
+def test_every_resolution_reaches_four_real_environments(
+    fault: str, resolution: str, make_sandbox
+) -> None:
+    """Every resolution must reach the approved target of four real environments.
+
+    Real sandboxes, one per distinct drawn instance identity, compared by
+    `instance_signature`. This is what ADR-0005's "the count is measured and
+    reported" means for the target: the drawn identity says how many instances the
+    seeds *claim*, and this says how many the sandboxes *are*. A draw that changed
+    an identity without changing the environment would fail here.
+    """
+    seeds = _first_seed_per_instance(fault, resolution, TARGET_INSTANCES_PER_RESOLUTION)
+    assert len(seeds) == TARGET_INSTANCES_PER_RESOLUTION, (
+        f"{fault}/{resolution}: the plan seeds draw {len(seeds)} distinct instance "
+        f"identit(ies), fewer than the target of {TARGET_INSTANCES_PER_RESOLUTION}"
+    )
+    signatures = {instance_signature(make_sandbox(seed, [fault])) for seed in seeds}
+    assert len(signatures) == TARGET_INSTANCES_PER_RESOLUTION, (
+        f"{fault}/{resolution}: {len(seeds)} distinct instance identities built "
+        f"{len(signatures)} distinct environments, so the draw is not a real draw"
     )

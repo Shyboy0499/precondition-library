@@ -26,6 +26,8 @@ request sentence; those are the excluded ones.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 
 from ...sandbox import (
@@ -37,7 +39,7 @@ from ...sandbox import (
     store_blob,
 )
 from ...signatures import StateFingerprint
-from ..intent import IntentSpec, ResolutionVariant, sample_index
+from ..intent import IntentSpec, ResolutionVariant, draw_index, sample_index
 from ..spec import FaultSpec, GroundTruth
 
 # The path the submodule lives at, and the directory inside the sandbox root that
@@ -52,6 +54,108 @@ ORIGIN_DIRNAME = "submodule-origin"
 INJECTED_STATES = ("init", "repin", "remove")
 _STATE_SALT = "submodule_moved:inject"
 
+
+# --- Tier 1 instance axes (ADR-0005) -----------------------------------------
+#
+# The one safe Tier 1 axis here is the *content* of the nested repository. Every
+# predicate this fault decides on -- upstream still references the submodule, the
+# clone initialised it, the recorded pin matches upstream -- is invariant under
+# what the submodule's files contain, so varying that content changes the
+# environment without touching the label.
+#
+# The content is visible in three different places, which is why it is enough for
+# this fault even though the clone does not always check the submodule out:
+#
+#   init    the checkout is absent, but upstream's tree still records the gitlink
+#           whose commit is the origin's first commit, and its diff against the
+#           base names that commit -- both vary with the content.
+#   repin   the clone is checked out at the pinned (first) commit, so the working
+#           tree body varies; upstream records the grown commit.
+#   remove  upstream has dropped the reference, and the clone is checked out at
+#           the pinned commit, so the working tree body varies.
+#
+# Not drawn: the submodule path or the parent repo's file names (Tier 2 -- they
+# need probe/body parameter binding and are out of scope here), file counts
+# (Tier 3), and commit SHAs/dates on their own (cosmetic: #86 and ADR-0005 refuse
+# a SHA-only difference as a new environment).
+@dataclass(frozen=True)
+class _LibraryContent:
+    """One drawn content value: the nested repo's first and grown file bodies."""
+
+    initial: str
+    grown: str
+
+
+_LIBRARY_CONTENTS: tuple[_LibraryContent, ...] = (
+    _LibraryContent("VERSION = 1\n", "VERSION = 2\n"),
+    _LibraryContent("VERSION = 10\n", "VERSION = 11\n"),
+    _LibraryContent(
+        "VERSION = 100\n\nRELEASED = False\n",
+        "VERSION = 101\n\nRELEASED = False\n",
+    ),
+    _LibraryContent('VERSION = 7\n\nNAME = "libcore"\n', 'VERSION = 8\n\nNAME = "libcore"\n'),
+    _LibraryContent("VERSION = 3\n\nSTABLE = True\n", "VERSION = 4\n\nSTABLE = True\n"),
+    _LibraryContent("VERSION = 42\n\nSTABLE = False\n", "VERSION = 43\n\nSTABLE = False\n"),
+)
+
+AXES: Mapping[str, tuple[str, ...]] = {
+    "library_content": tuple(str(index) for index in range(len(_LIBRARY_CONTENTS))),
+}
+"""The Tier 1 axis this fault draws, with the values it may take."""
+
+AXES_BY_RESOLUTION: Mapping[str, tuple[str, ...]] = {
+    "init": ("library_content",),
+    "repin": ("library_content",),
+    "remove": ("library_content",),
+}
+"""Which axes each resolution may vary along.
+
+The same single axis for all three: the nested repo's content leaves every
+submodule predicate invariant, so it is safe everywhere, and the load-bearing
+facts (initialised, still referenced, pin equal) are never drawn.
+"""
+
+
+@dataclass(frozen=True)
+class Draw:
+    """Everything one seed's instance draw decides, for `inject` and identity."""
+
+    state: str
+    content: int
+
+    @property
+    def identity(self) -> str:
+        """The stable instance identity: resolution plus the drawn axis value."""
+        return f"submodule_moved/{self.state}/content={self.content}"
+
+    @property
+    def axes(self) -> Mapping[str, str]:
+        """The drawn value for each declared axis, by axis name."""
+        return {"library_content": str(self.content)}
+
+
+def state_for_seed(seed: int) -> str:
+    """Which of the three live states this seed injects. Deterministic.
+
+    One definition shared by `inject` and the tests, so a test cannot disagree
+    with the injected environment.
+    """
+    return INJECTED_STATES[sample_index(seed, _STATE_SALT, len(INJECTED_STATES))]
+
+
+def draw_for_seed(seed: int) -> Draw:
+    """The Tier 1 draw for `seed`: the state shape and the nested repo's content.
+
+    Shared by `inject`, `instance_for_seed` and the tests, so the built
+    environment and the recorded identity cannot disagree. The content axis goes
+    through `draw_index` with its own salt, independent of the state selection.
+    """
+    return Draw(
+        state=state_for_seed(seed),
+        content=draw_index(seed, "submodule_moved", "library_content", len(_LIBRARY_CONTENTS)),
+    )
+
+
 # Ground truth the checker reads, recorded under refs/sandbox/ so `check` grades
 # the outcome without being handed the seed, and can still name the submodule's
 # path after a correct removal has emptied the `.gitmodules` entry that would
@@ -63,15 +167,6 @@ _PATH_REF = "refs/sandbox/submodule-path"
 # per-repo config is changed and the pinned environment stays what `run_git`
 # defines.
 _FILE_PROTOCOL = ("-c", "protocol.file.allow=always")
-
-
-def state_for_seed(seed: int) -> str:
-    """Which of the three live states this seed injects. Deterministic.
-
-    One definition shared by `inject` and the tests, so a test cannot disagree
-    with the injected environment.
-    """
-    return INJECTED_STATES[sample_index(seed, _STATE_SALT, len(INJECTED_STATES))]
 
 
 def _pin(repo: Path, rev: str, path: str) -> str:
@@ -190,17 +285,21 @@ class SubmoduleMovedFault(FaultSpec):
 
         Deterministic in the seed: `sample_index` chooses the state, the origin
         and the clone are committed under the pinned environment, and the local
-        URL is a fixed function of the seed's sandbox root.
+        URL is a fixed function of the seed's sandbox root. The nested repo's
+        content is drawn per seed (Tier 1, ADR-0005), so two seeds that select one
+        state build different environments without moving a predicate.
         """
         work = sandbox.work
         record_base(sandbox, fault="submodule_moved")
 
-        state = state_for_seed(seed)
+        draw = draw_for_seed(seed)
+        state = draw.state
+        content = _LIBRARY_CONTENTS[draw.content]
 
         # The third repository: the submodule's origin. Its first commit is what
         # both sides start pinned to.
         origin = create_submodule_origin(sandbox.root, ORIGIN_DIRNAME)
-        (origin / "lib.py").write_text("VERSION = 1\n", encoding="utf-8")
+        (origin / "lib.py").write_text(content.initial, encoding="utf-8")
         run_git(("add", "-A"), cwd=origin)
         run_git(("commit", "-q", "-m", "feat: initial library"), cwd=origin)
 
@@ -223,7 +322,7 @@ class SubmoduleMovedFault(FaultSpec):
         run_git(("push", "-q", "upstream", "main"), cwd=work)
 
         # The origin moves on: a second commit for a pin to drift to.
-        (origin / "lib.py").write_text("VERSION = 2\n", encoding="utf-8")
+        (origin / "lib.py").write_text(content.grown, encoding="utf-8")
         run_git(("add", "-A"), cwd=origin)
         run_git(("commit", "-q", "-m", "feat: library grows"), cwd=origin)
         grown = git_out("rev-parse", "HEAD", cwd=origin)
@@ -290,6 +389,31 @@ class SubmoduleMovedFault(FaultSpec):
         name/variant-id agreement rather than leaving it assumed.
         """
         return state_for_seed(seed)
+
+    def instance_for_seed(self, seed: int) -> str:
+        """The instance identity this seed builds, from the same draw `inject` uses.
+
+        Resolution plus the drawn Tier 1 axis value (ADR-0005 decision 4), so
+        `bench.splits` keys independence on the environment rather than on the
+        resolution and only a genuine repeat of one instance is a replay.
+        """
+        return draw_for_seed(seed).identity
+
+    def axes_for_resolution(self, resolution: str) -> Mapping[str, tuple[str, ...]]:
+        """The axes `resolution` may vary along, with their value pools.
+
+        The declaration ADR-0005 decision 2 requires, and the answer here is one
+        axis for every resolution: the nested repo's content is invariant under
+        all three predicates. Raises for an undeclared resolution so a typo cannot
+        read as "no axes".
+        """
+        if resolution not in AXES_BY_RESOLUTION:
+            raise KeyError(f"submodule_moved declares no resolution {resolution!r}")
+        return {name: AXES[name] for name in AXES_BY_RESOLUTION[resolution]}
+
+    def drawn_axes_for_seed(self, seed: int) -> Mapping[str, str]:
+        """The drawn value of each declared axis at `seed` (ADR-0005 decision 2)."""
+        return draw_for_seed(seed).axes
 
     def check(self, sandbox: Sandbox) -> GroundTruth:
         """Grade the outcome per injected state, from git alone.

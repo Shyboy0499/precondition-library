@@ -51,6 +51,20 @@ def sample_index(seed: int, salt: str, n: int) -> int:
     return int(digest, 16) % n
 
 
+def draw_index(seed: int, fault: str, axis: str, n: int) -> int:
+    """A deterministic index in [0, n) for one axis of one fault's instance draw.
+
+    The salt names both the fault and the axis, so two axes of one fault -- or the
+    same axis of two faults -- cannot accidentally share a draw. It is deliberately
+    not the salt the injector uses to choose *which state* a seed injects
+    (`diverged:inject`, `submodule_moved:inject`): which resolution a seed makes
+    correct must stay a function of the seed alone, not of which instance it drew,
+    or the two would stop being independent and the build-time invariant in
+    `tasks.faults.build_sandbox` could pass by construction (ADR-0005).
+    """
+    return sample_index(seed, f"{fault}:axis:{axis}", n)
+
+
 @dataclass(frozen=True)
 class ResolutionVariant:
     """One correct way to resolve an intent, and the states it is correct in."""

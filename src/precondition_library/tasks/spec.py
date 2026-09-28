@@ -13,6 +13,7 @@ ablation depends on all three:
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 
@@ -83,3 +84,46 @@ class FaultSpec:
         returns None; admission then builds no same-intent sandboxes for it.
         """
         return None
+
+    def instance_for_seed(self, seed: int) -> str | None:
+        """The instance identity this fault's injector builds at `seed`, if any.
+
+        `variant_for_seed` answers *which resolution is correct*; this answers
+        *which environment within that resolution* the seed builds -- the
+        resolution plus the drawn Tier 1 axis values, as a stable string. The
+        mismatch comparison's unit of analysis is the environment, so independence
+        is keyed on this and not on the resolution (ADR-0005 decision 4): two seeds
+        that select one resolution but draw different axis values are two
+        independent environments, and only a genuine repeat of one instance is a
+        replay.
+
+        It must be a pure function of `seed` that shares its draw with `inject` --
+        the `state_for_seed` pattern -- or `bench.splits` would label a row from a
+        draw the environment was not built from. A fault with no ambiguous intent
+        draws no instance and returns None. A fault that declares a resolution but
+        returns None here is a programming error rather than a fallback:
+        `occurrence_roles` refuses it rather than silently keying independence on
+        the resolution, which is the defect ADR-0005 removes.
+        """
+        return None
+
+    def axes_for_resolution(self, resolution: str) -> Mapping[str, tuple[str, ...]]:
+        """Which axes a resolution may vary along, with each axis's value pool.
+
+        ADR-0005 decision 2 requires the implementation to state this per fault and
+        per resolution: an axis appears only when that resolution's `decided_by`
+        predicate is invariant under it, and a state shape that cannot vary a safe
+        axis declares none rather than pretending to. A fault with no drawn axes
+        returns an empty mapping.
+        """
+        return {}
+
+    def drawn_axes_for_seed(self, seed: int) -> Mapping[str, str]:
+        """The value each declared axis takes at `seed`, by axis name.
+
+        The read side of the declaration `axes_for_resolution` states: a test can
+        check that every declared axis really varies over the seeds that select a
+        resolution, and that the draw moves no axis the resolution did not declare.
+        A fault with no drawn axes returns an empty mapping.
+        """
+        return {}

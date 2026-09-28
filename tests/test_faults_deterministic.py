@@ -27,10 +27,16 @@ from pathlib import Path
 
 import pytest
 
+import precondition_library.sandbox as sandbox_module
 from precondition_library.sandbox import Sandbox, run_git
 from precondition_library.signatures import StateFingerprint
 from precondition_library.tasks import ALL_FAULTS
-from precondition_library.tasks.faults import FAULTS, lockfile_conflict
+from precondition_library.tasks.faults import (
+    FAULTS,
+    build_sandbox,
+    declared_resolution_matches,
+    lockfile_conflict,
+)
 from precondition_library.tasks.registry import INTENTS, ambiguous_intents
 
 FAULTS_WITH_INTENTS: list[str] = sorted(intent.fault for intent in INTENTS.values())
@@ -248,3 +254,72 @@ def test_injected_states_are_distinguishable(fault_type: str, make_sandbox) -> N
     assert _observable_state(first) != _observable_state(second), (
         f"{fault_type}: seeds {seed_a} and {seed_b} produced identical repositories"
     )
+
+
+# --- the resolution-preserving build invariant (ADR-0005 decision 3) ---------
+#
+# The axis draw is only safe if a draw that moves a predicate is refused rather
+# than fed into the comparison as a mislabelled environment. The guard is
+# `declared_resolution_matches`, called by `tasks.faults.build_sandbox` after
+# injection. It is tested in both directions: it accepts the real builds (every
+# sandbox the rest of this file builds goes through it), and it fires on a
+# deliberately bad draw -- first directly on a real mismatched pair, then at the
+# call site through a fault whose declaration lies.
+
+
+def _seed_for(fault: str, resolution: str) -> int:
+    """The first seed in 0..63 whose injector selects `resolution`."""
+    spec = FAULTS[fault]
+    return next(seed for seed in range(64) if spec.variant_for_seed(seed) == resolution)
+
+
+def test_the_invariant_refuses_a_real_environment_under_the_wrong_resolution(
+    make_sandbox,
+) -> None:
+    """A real `discard` environment labelled as the `merge` seed must be refused.
+
+    Real sandbox, real observed fingerprint, no mock: the environment is built at
+    a seed that selects `discard`, and the guard is then asked to accept it as the
+    seed `build_sandbox` would have declared `merge` for. The two disagree, so a
+    guard that did not fire would be no guard at all.
+    """
+    discard_seed = _seed_for("diverged", "discard")
+    merge_seed = _seed_for("diverged", "merge")
+    box = make_sandbox(discard_seed, ["diverged"])
+
+    with pytest.raises(ValueError) as raised:
+        declared_resolution_matches("diverged", merge_seed, box)
+
+    message = str(raised.value)
+    assert "'discard'" in message, "the refusal must name the resolution actually built"
+    assert "'merge'" in message, "the refusal must name the resolution that was declared"
+    assert "seed" in message, "the refusal must name the seed whose draw is bad"
+
+
+def test_build_sandbox_refuses_a_declaration_that_disagrees_with_its_injector(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """The invariant is wired into the build, not merely available to a caller.
+
+    A fault that injects a genuine state but *declares* a different resolution is
+    exactly the bad draw the guard exists for -- it is what a wrong axis
+    declaration would look like. `build_sandbox` must refuse it rather than return
+    a mislabelled sandbox, so an injector defect cannot bypass the check.
+    """
+    real = FAULTS["diverged"]
+
+    class _LyingDeclaration(type(real)):  # type: ignore[misc]
+        """A real `diverged` injector whose seed-to-resolution map is wrong."""
+
+        def variant_for_seed(self, seed: int) -> str:
+            declared = super().variant_for_seed(seed)
+            return "merge" if declared != "merge" else "discard"
+
+    discard_seed = _seed_for("diverged", "discard")
+    # Keep the residue of the refused build inside pytest's tmp dir rather than
+    # `.sandboxes/`, since `build_sandbox` does not clean up after a refusal.
+    monkeypatch.setattr(sandbox_module, "_SANDBOX_DIR", tmp_path)
+    monkeypatch.setitem(FAULTS, "diverged", _LyingDeclaration())
+
+    with pytest.raises(ValueError, match="flipped the label"):
+        build_sandbox(discard_seed, ["diverged"])

@@ -18,13 +18,13 @@ excludes the demo from the primary claim. So the two figures built here are:
 
 * a **cost model** -- mean tokens and LLM calls per episode against
   `occurrence_index`, one series per arm, over the **replay** occurrences: the
-  later sightings of a state, which are the only occurrences where a library
+  later sightings of an instance, which are the only occurrences where a library
   could have had something to answer with, and therefore the only place the
   curve can bend. Secondary, and reported as a cost model rather than as a
   result; the token curve is not the finding.
 * an **episode-level arm 2 vs arm 3 mismatch comparison at matched N** -- the
   demo's comparative number, reported with a Wilson interval over the **variant**
-  occurrences: the first sight of each state, the only independent observations
+  occurrences: the first sight of each instance, the only independent observations
   in the ledger. Not the pre-registered claim, and its note says so in the
   output.
 
@@ -443,7 +443,7 @@ class MismatchComparison(BaseModel):
 
     Computed over the variant occurrences, and `occurrence_role` says so on the
     model rather than only in the prose: the independent observations are the
-    first sightings of a state, not every episode the run happened to record.
+    first sightings of an instance, not every episode the run happened to record.
     """
 
     occurrence_role: OccurrenceRole
@@ -490,6 +490,64 @@ class FaultSurface(BaseModel):
     """True when two or more *different* non-`None` surfaces were applied by rows of this
     fault: a real inconsistency in the run, named in the report rather than resolved by
     silently picking one. A `None` row is not evidence and cannot set this."""
+
+
+class AchievedInstance(BaseModel):
+    """One (fault, resolution) cell's independent environments (ADR-0005 decision 8).
+
+    The number of independent observations a resolution's seeds support is the
+    number of distinct **instances** they build, not the number of seeds. Carried
+    per resolution so a reader cannot take a larger seed count for more power:
+    three hundred seeds that draw one instance are one observation.
+    """
+
+    fault_type: str
+    resolution: str
+    seeds: int
+    """Distinct seeds this run gave the resolution."""
+    instances: int
+    """Distinct instance identities those seeds build (`instance_for_seed`)."""
+
+
+def achieved_instances(ledger: Path) -> list[AchievedInstance]:
+    """Per (fault, resolution), the independent environments this run's seeds build.
+
+    ADR-0005 decision 8. The ledger supplies *which* seeds ran -- it is the record
+    of the run -- and `FaultSpec.instance_for_seed` supplies each seed's instance
+    identity, so the count is the environment count and not the seed count. Grouped
+    by the resolution the ledger recorded (`correct_variant`), not by re-deriving
+    it from today's injector, so a report regenerated from an older ledger groups
+    on the label that run actually used.
+
+    Rows with no recorded resolution (an invalid episode, or a fault with no
+    ambiguous intent) are skipped: they are no evidence about an environment. A
+    ledger with no measurable rows yields an empty list and the report says so.
+    """
+    from ..tasks.faults import FAULTS
+
+    instances: dict[tuple[str, str], set[str]] = {}
+    seeds: dict[tuple[str, str], set[int]] = {}
+    for record in read(ledger):
+        if record.correct_variant is None:
+            continue
+        spec = FAULTS.get(record.fault_type)
+        if spec is None:
+            continue
+        instance = spec.instance_for_seed(record.seed)
+        if instance is None:
+            continue
+        key = (record.fault_type, record.correct_variant)
+        instances.setdefault(key, set()).add(instance)
+        seeds.setdefault(key, set()).add(record.seed)
+    return [
+        AchievedInstance(
+            fault_type=fault_type,
+            resolution=resolution,
+            seeds=len(seeds[(fault_type, resolution)]),
+            instances=len(instances[(fault_type, resolution)]),
+        )
+        for (fault_type, resolution) in sorted(instances)
+    ]
 
 
 def wilson_interval(successes: int, n: int, z: float = Z_95) -> Interval | None:
@@ -617,7 +675,7 @@ def cost_curve(ledger: Path) -> list[CostPoint]:
     back what compiling cost it, so no crossover can be read off it (issue #8).
 
     Computed over the **replay** occurrences and no others. A variant occurrence
-    is the first sight of its state, so no program admitted from that state can
+    is the first sight of its instance, so no program admitted from that state can
     exist yet and the episode pays the full price of solving it: the learning
     pass, not the amortized one. The curve is the accumulation's effect, and it
     can only bend on occurrences the library could answer -- which is exactly the
@@ -864,7 +922,7 @@ def _comparison_note(
         "Episode-level demo, not the pre-registered analysis: the primary metric is "
         "mismatch vs coverage at matched coverage over labelled dispatch pairs (spec "
         "§7), the episode loop is underpowered, and it is excluded from that claim.",
-        "Computed over the variant occurrences only -- the first sight of each state, "
+        "Computed over the variant occurrences only -- the first sight of each instance, "
         "which are the independent observations. Replay occurrences are excluded "
         f"({replays_excluded} graded row(s) in this ledger): a replay's state was "
         "introduced by an earlier occurrence and the program answering it was admitted "
@@ -1383,6 +1441,7 @@ def _summary(
     triples: list[ArmTriple],
     pareto: ParetoFrontier,
     surfaces: list[FaultSurface],
+    instances: list[AchievedInstance],
 ) -> str:
     invalid = _overall_invalid(rows)
     lines = [
@@ -1399,8 +1458,9 @@ def _summary(
         f"{OccurrenceRole.VARIANT.value}={counts[OccurrenceRole.VARIANT]} "
         f"{OccurrenceRole.REPLAY.value}={counts[OccurrenceRole.REPLAY]}. A variant is the "
         "first sight of",
-        "a state and is the only kind of independent observation; a replay revisits a state an",
-        "earlier occurrence introduced. The cost curve uses the replays, the mismatch comparison",
+        "an instance (a resolution plus its drawn axis values) and is the only kind of "
+        "independent observation; a replay is a genuine repeat of one. The cost curve uses "
+        "the replays, the mismatch comparison",
         "the variants, and each figure says so below. `bench.splits` declares the roles.",
     ]
     if invalid.value is not None and invalid.value > INVALID_RATE_ALARM:
@@ -1448,6 +1508,19 @@ def _summary(
         else:
             (only,) = fault_surface.surfaces
             lines.append(f"    {_format_surface(only.surface)} ({only.episodes} row(s))")
+    lines.append(
+        "Achieved instance count per resolution (ADR-0005 decision 8): the independent "
+        "environments the run's seeds actually build, read from `instance_for_seed`. "
+        "This is the number the comparison's power depends on, and it is not the seed "
+        "count -- more seeds that draw one instance buy replays, not independence:"
+    )
+    if not instances:
+        lines.append("  no measurable row in this ledger, so no resolution has an instance count")
+    for achieved in instances:
+        lines.append(
+            f"  {achieved.fault_type}/{achieved.resolution}:"
+            f" {achieved.instances} instance(s) over {achieved.seeds} seed(s)"
+        )
     lines += ["", "Ablation table (one row per arm, fault, occurrence):"]
     if not rows:
         lines.append("  (the ledger is empty; no cell has a denominator to report)")
@@ -1618,6 +1691,7 @@ def write_report(ledger: Path, dest: Path) -> Path:
     triples = arm_triples(ledger)
     pareto = pareto_frontier(triples)
     surfaces = change_surfaces(ledger)
+    instances = achieved_instances(ledger)
 
     dest.mkdir(parents=True, exist_ok=True)
     _write_ablation_csv(dest / "ablation_table.csv", rows)
@@ -1628,6 +1702,7 @@ def write_report(ledger: Path, dest: Path) -> Path:
     _plot_mismatch_comparison(comparison, dest / "mismatch_comparison.png")
     _plot_pareto(triples, pareto, dest / "pareto.png")
     (dest / "report.txt").write_text(
-        _summary(rows, points, comparison, counts, triples, pareto, surfaces), encoding="utf-8"
+        _summary(rows, points, comparison, counts, triples, pareto, surfaces, instances),
+        encoding="utf-8",
     )
     return dest

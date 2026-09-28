@@ -37,13 +37,20 @@ SETS = {
 
 MEASURABLE_FAULTS = sorted(intent.fault for intent in ambiguous_intents())
 
-#: (variant occurrences, replay occurrences) per family, as each set's docstring
-#: claims. Three variants is not a choice: it is the number of states the
-#: injectors declare, and it is the same for every set however long the set is.
+#: (variant occurrences, replay occurrences) per (set, fault), as the plan's own
+#: arithmetic now stands after ADR-0005 keyed the role on **instance identity**.
+#: A variant is the first sight of an *instance*, not of a resolution, so the
+#: counts are no longer three per family: the axis draw makes most seeds a new
+#: environment. The smoke set's four seeds all draw distinct instances, so it has
+#: no replay left -- the honest cost of the change, recorded here rather than
+#: hidden; tune and eval keep enough replays for the cost curve.
 DECLARED_ROLE_COUNTS = {
-    "smoke": (3, 1),
-    "tune": (3, 13),
-    "eval": (3, 37),
+    ("smoke", "diverged"): (4, 0),
+    ("smoke", "submodule_moved"): (4, 0),
+    ("tune", "diverged"): (15, 1),
+    ("tune", "submodule_moved"): (7, 9),
+    ("eval", "diverged"): (32, 8),
+    ("eval", "submodule_moved"): (15, 25),
 }
 
 
@@ -118,82 +125,112 @@ def test_declared_order_does_not_depend_on_process_hash_seed() -> None:
 @pytest.mark.parametrize("name", sorted(SETS))
 @pytest.mark.parametrize("fault", MEASURABLE_FAULTS)
 def test_declared_role_counts_are_the_plan_s_arithmetic(name: str, fault: str) -> None:
-    """Each set's variant/replay split, as its docstring states it.
+    """Each set's variant/replay split, as the plan's own arithmetic states it.
 
     This is the number the report's independence claim depends on, so it is
-    asserted rather than described. The variant count is three for every set --
-    the injector's declared states -- and a set of any length has the rest as
-    replays; a set whose variant count grew would mean a fault gained a state,
-    and a set whose replay count grew without the variant count changing is the
-    only kind of growth that is free of an independence claim.
+    asserted rather than described. ADR-0005 keyed the role on **instance
+    identity**, so a variant is the first sight of an *instance* and the counts
+    differ by set and by fault -- they are no longer "three per family". The
+    smoke set draws four distinct instances over its four seeds and so has no
+    replay; tune and eval do, which is what the cost curve needs.
     """
     roles = occurrence_roles(SETS[name], fault)
     variants = roles.count(OccurrenceRole.VARIANT)
     replays = roles.count(OccurrenceRole.REPLAY)
-    assert (variants, replays) == DECLARED_ROLE_COUNTS[name], (
+    assert (variants, replays) == DECLARED_ROLE_COUNTS[(name, fault)], (
         f"{name}/{fault}: the set splits {variants} variant(s) and {replays} replay(s), "
-        f"but its docstring declares {DECLARED_ROLE_COUNTS[name]}; update the docstring "
-        f"and this table together, or the report's arithmetic is unstated"
+        f"but the plan declares {DECLARED_ROLE_COUNTS[(name, fault)]}; update the "
+        f"docstring and this table together, or the report's arithmetic is unstated"
     )
     assert variants + replays == len(SETS[name]), "every occurrence gets exactly one role"
 
 
 @pytest.mark.parametrize("name", sorted(SETS))
 @pytest.mark.parametrize("fault", MEASURABLE_FAULTS)
-def test_every_variant_is_the_first_sight_of_its_resolution(name: str, fault: str) -> None:
-    """The rule, not a restatement of it: a variant introduces its resolution.
+def test_every_variant_is_the_first_sight_of_its_instance(name: str, fault: str) -> None:
+    """The rule, not a restatement of it: a variant introduces its instance.
 
     A role assigned by position rather than by what the injector will do would
     still pass a count check, so the mapping between the two is asserted: the
-    variant occurrences are exactly the first occurrence of each resolution.
+    variant occurrences are exactly the first occurrence of each *instance*
+    identity (ADR-0005 decision 5), not of each resolution.
     """
     spec = FAULTS[fault]
     roles = occurrence_roles(SETS[name], fault)
-    resolutions = [spec.variant_for_seed(seed) for seed in SETS[name]]
+    instances = [spec.instance_for_seed(seed) for seed in SETS[name]]
     first_sight = []
     seen: set[str | None] = set()
-    for resolution in resolutions:
+    for instance in instances:
         first_sight.append(
-            OccurrenceRole.VARIANT if resolution not in seen else OccurrenceRole.REPLAY
+            OccurrenceRole.VARIANT if instance not in seen else OccurrenceRole.REPLAY
         )
-        seen.add(resolution)
+        seen.add(instance)
     assert list(roles) == first_sight
-    assert {r for role, r in zip(roles, resolutions) if role is OccurrenceRole.VARIANT} == set(
-        resolutions
-    ), "every declared resolution must be introduced by a variant occurrence"
+    assert {r for role, r in zip(roles, instances) if role is OccurrenceRole.VARIANT} == set(
+        instances
+    ), "every declared instance must be introduced by a variant occurrence"
 
 
 @pytest.mark.parametrize("name", sorted(SETS))
 @pytest.mark.parametrize("fault", MEASURABLE_FAULTS)
 def test_a_set_long_enough_to_repeat_has_a_replay(name: str, fault: str) -> None:
-    """The cost curve can only bend on a replay, so a runnable set needs one.
+    """The cost curve can only bend on a replay, so a set it is read from needs one.
 
-    A set that never revisits a state produces a flat curve by construction, and
-    a flat curve reads like a result rather than like a plan that could not show
-    amortization (issue #81).
+    A set that never revisits an instance produces a flat curve by construction,
+    and a flat curve reads like a result rather than like a plan that could not
+    show amortization (issue #81). The smoke set is the exception and says so:
+    its four seeds draw four distinct instances after ADR-0005, so it has no
+    replay and is a wiring check rather than a source of a cost curve.
     """
-    assert OccurrenceRole.REPLAY in occurrence_roles(SETS[name], fault), (
-        f"{name}/{fault} never revisits a state, so no program can ever be replayed in it"
-    )
+    roles = occurrence_roles(SETS[name], fault)
+    if name == "smoke":
+        assert OccurrenceRole.REPLAY not in roles, (
+            f"smoke/{fault} now revisits an instance; if that is deliberate, update "
+            f"the plan's arithmetic and this exception"
+        )
+    else:
+        assert OccurrenceRole.REPLAY in roles, (
+            f"{name}/{fault} never revisits an instance, so no program can ever be replayed in it"
+        )
 
 
 @pytest.mark.parametrize("fault", MEASURABLE_FAULTS)
-def test_the_role_keys_on_the_resolution_not_on_the_seed(fault: str) -> None:
-    """Two different seeds selecting one state: the second is still a replay.
+def test_the_role_keys_on_the_instance_not_on_the_resolution(fault: str) -> None:
+    """One resolution, two instances: both occurrences are independent variants.
 
-    This is the rule's whole point. A plan that called a new *seed* independent
-    would count the same state's program twice, and `diverged`'s seeds 0 and 4
-    (both `overlapping_files`) are the case that made the distinction necessary.
+    This is the rule's whole point after ADR-0005. Before it, a second seed
+    selecting one resolution was labelled a replay because the two environments
+    were identical; now the axis draw makes it a new environment, so calling it a
+    replay would discard a real independent observation. `diverged`'s seeds 0 and
+    4 (both `overlapping_files`) are the case that made the distinction
+    necessary, and they now draw different instances.
     """
     spec = FAULTS[fault]
-    first = next(seed for seed in range(64) if spec.variant_for_seed(seed) is not None)
+    first = next(seed for seed in range(256) if spec.variant_for_seed(seed) is not None)
     resolution = spec.variant_for_seed(first)
+    first_instance = spec.instance_for_seed(first)
     second = next(
-        seed for seed in range(64) if seed != first and spec.variant_for_seed(seed) == resolution
+        seed
+        for seed in range(256)
+        if seed != first
+        and spec.variant_for_seed(seed) == resolution
+        and spec.instance_for_seed(seed) != first_instance
     )
     roles = occurrence_roles([first, second], fault)
-    assert list(roles) == [OccurrenceRole.VARIANT, OccurrenceRole.REPLAY]
-    assert first != second, "the replay is a different seed, not a repeated one"
+    assert list(roles) == [OccurrenceRole.VARIANT, OccurrenceRole.VARIANT], (
+        "two seeds on different instances of one resolution are two independent "
+        "environments, not a variant and a replay"
+    )
+    # The converse: two seeds on one instance really are a variant and a replay.
+    repeat = next(
+        seed
+        for seed in range(256)
+        if seed != first and spec.instance_for_seed(seed) == first_instance
+    )
+    assert list(occurrence_roles([first, repeat], fault)) == [
+        OccurrenceRole.VARIANT,
+        OccurrenceRole.REPLAY,
+    ]
 
 
 def test_a_fault_with_no_resolution_mapping_is_refused() -> None:

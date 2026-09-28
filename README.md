@@ -296,9 +296,12 @@ places, both checked:
   fails when the declaration and the code disagree.
 - **What is outstanding.** The
   [issue tracker](https://github.com/Shyboy0499/precondition-library/issues). The
-  detail lives there, not here: #4, #5 and #6 gate the primary comparison
-  (arm admission against one frozen library, the dispatch-level harness and
-  coverage sweep, and the fault seed as the unit of analysis); #7, #8, #9 and #10
+  detail lives there, not here: #4 and #5 gate the primary comparison (arm
+  admission against one frozen library, and the dispatch-level harness and
+  coverage sweep); #6 owns the held-out axes beyond Tier 1 (file names, submodule
+  paths, branch names), which need probe and body parameter binding first — the
+  unit of analysis is now the environment ADR-0005 parameterised, not the fault
+  seed; #7, #8, #9 and #10
   are the control baselines, cost ledger, ground-truth decoupling and safety
   hardening behind them. Which faults are still excluded from dispatch
   measurement is declared in code, not here: `tasks/registry.py`'s
@@ -378,16 +381,22 @@ demonstrated end to end against a real model.
   mis-fires against zero is a *signal in the predicted direction* at n=5 fires
   per arm — not evidence. It is recorded because it is the honest state of the
   evidence, and a reader should know it exists.
-- **Not every occurrence above is an independent observation** (issue #81). By
-  the roles `bench/splits.py` now derives, occurrences 5–8 are all replays (the
-  smoke seeds are run twice, so they revisit occurrences 1–4's states with the
-  library those occurrences built), and two first-pass occurrences are replays
-  too: seed 2 re-injects `repin` for `submodule_moved` (occurrence 3) and seed 4
-  re-injects `overlapping_files` for `diverged` (occurrence 4). So the
-  independent observations in the eight occurrences are 3 per family, not 8. The
-  cost curve is computed over the replays — the accumulation is the effect being
-  shown — and the mismatch comparison would be computed over the variants, which
-  is why it cannot be read off this pass as a finding.
+- **Not every occurrence above is an independent observation** (issue #81). Under
+  the role rule `bench/splits.py` used when this pass ran — keyed on the
+  **resolution**, as row 13 of the spec's revision history records — occurrences
+  5–8 are all replays (the smoke seeds are run twice, so they revisit occurrences
+  1–4's states with the library those occurrences built), and two first-pass
+  occurrences are replays too: seed 2 re-injects `repin` for `submodule_moved`
+  (occurrence 3) and seed 4 re-injects `overlapping_files` for `diverged`
+  (occurrence 4). So the independent observations in that pass's eight occurrences
+  are 3 per family, not 8; the cost curve is computed over the replays and the
+  mismatch comparison over the variants, which is why it cannot be read off this
+  pass as a finding. **ADR-0005 has since changed the rule**, because it found
+  those same-resolution seeds build byte-identical environments: an occurrence is
+  now a replay only on a genuine repeat of one *instance*, and the current
+  injectors draw a distinct instance at every smoke seed. The numbers above are
+  the record of that earlier pass under the code that produced it, not a
+  prediction of what a run on the current injectors yields.
 - **The cache figure is a confound, not a result.** Across the pass 864,098
   tokens were spent over 407 calls in 687s, and 73% of the input tokens were
   cache hits, so the baseline's real marginal cost is lower than the raw token
@@ -436,14 +445,15 @@ before anything runs:
   chosen after seeing scores is not a split. Changing a seed there is a
   pre-registration revision (CONTRIBUTING rule 8), not a config tweak.
 - **Every occurrence carries a role, and the two figures use different ones.**
-  `bench/splits.py` also derives, from the injector's own seed-to-resolution
-  mapping, which occurrences are **variants** (the first sight of a resolution —
-  the independent observations) and which are **replays** (later sights of one —
+  `bench/splits.py` derives, from the injector's own seed-to-instance mapping,
+  which occurrences are **variants** (the first sight of an instance — the
+  independent observations) and which are **replays** (a genuine repeat of one —
   what the cost curve is read from). `bench/run.py` writes the role onto every
   ledger row; `bench/report.py` computes the cost curve over the replays and the
-  mismatch comparison over the variants, and says so in each figure. The
-  arithmetic for the eval set is in the spec's §7: three variant occurrences per
-  fault family, not forty.
+  mismatch comparison over the variants, says so in each figure, and carries the
+  achieved instance count per resolution. The arithmetic for the eval set is in
+  the spec's §7: 32 and 15 variant occurrences (47 distinct environments across
+  the two faults), not forty seeds.
 - **The API key is the caller's.** `provider.py` reads no environment variables
   and no files; `DeepSeekProvider` takes the key at construction, and the spec's §7
   example is what passes `DEEPSEEK_API_KEY` into it. That is a deliberate boundary,

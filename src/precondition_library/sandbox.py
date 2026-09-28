@@ -292,6 +292,19 @@ class Sandbox:
     cannot name two states, and guessing a representative one would be worse than
     saying nothing.
     """
+    instance: str | None = None
+    """The instance identity the injector built, **when the harness knows it**.
+
+    `injected_state` names the state shape; this names the environment within it --
+    the resolution plus the drawn Tier 1 axis values (ADR-0005 decision 4). Held
+    here beside `injected_state` for the same reason: it is harness-owned, it is
+    what independence is keyed on, and it must not sit in the clone where graded
+    code could read which draw produced the state. Set by
+    `tasks.faults.build_sandbox` from the same draw `inject` used.
+
+    `None` whenever `injected_state` is `None` (no fault, or more than one).
+    """
+
     recorded: dict[str, str] = field(default_factory=dict)
     """Values the injectors need the checkers to have, held **here** rather than in the clone.
 
