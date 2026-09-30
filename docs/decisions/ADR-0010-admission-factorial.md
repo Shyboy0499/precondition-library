@@ -1,6 +1,6 @@
 # ADR-0010 — Run the admission factor as one compile gated twice, with "ungated" meaning positive-only
 
-- **Status:** proposed
+- **Status:** accepted (2026-09-30, as written)
 - **Date:** 2026-09-30
 - **Supersedes:** nothing (implements issue #4's 2×2 and arm 3-prime on ADR-0009's frozen library)
 - **Deciders:** repository owner
