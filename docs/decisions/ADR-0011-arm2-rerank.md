@@ -1,6 +1,6 @@
 # ADR-0011 — Give arm 2 an optional top-k rerank through a second `Similarity` seam, thresholded on the reranker's score
 
-- **Status:** proposed
+- **Status:** accepted (2026-09-30, as written)
 - **Date:** 2026-09-30
 - **Supersedes:** nothing (implements issue #4's "top-k rerank before selection"; ADR-0002's lexical default stands)
 - **Deciders:** repository owner
