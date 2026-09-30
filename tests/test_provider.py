@@ -195,6 +195,23 @@ def test_the_three_components_account_for_the_reported_total() -> None:
     )
 
 
+def test_the_request_pins_temperature_zero_by_default() -> None:
+    """Issue #6: temperature is pinned, and 0 unless the caller overrides it."""
+    transport, calls = _capturing()
+    completion = _provider(transport).complete(system="s", messages=[])
+    assert json.loads(calls[0].content)["temperature"] == 0.0
+    assert completion.temperature == 0.0
+
+
+def test_an_overridden_temperature_is_sent_and_reported() -> None:
+    """The completion reports what was *sent*, so the ledger records the call's value."""
+    transport, calls = _capturing()
+    provider = DeepSeekProvider(api_key="test-key", transport=transport, temperature=0.7)
+    completion = provider.complete(system="s", messages=[])
+    assert json.loads(calls[0].content)["temperature"] == 0.7
+    assert completion.temperature == 0.7
+
+
 def test_response_model_is_reported_when_the_body_names_it() -> None:
     """Model drift is a ledger confound, so the body's identifier wins over config."""
     transport, _ = _capturing(_ok_body(model="deepseek-chat-0913"))

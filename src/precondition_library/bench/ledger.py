@@ -250,6 +250,13 @@ class EpisodeRecord(BaseModel):
     mid-experiment silently invalidates a comparison, so it is recorded per
     episode and a version change invalidates the affected run."""
 
+    temperature: float | None = None
+    """The sampling temperature the episode's model calls were sent with (issue #6),
+    read from the completions themselves rather than from run configuration, so it is
+    what the calls used. `None` when no call reported one: a replay, which consults no
+    model, or a provider that does not expose it. Defaulted so a ledger written before
+    the field existed still reads."""
+
     @property
     def misfired(self) -> bool:
         """A program fired that was not the ground-truth resolution.

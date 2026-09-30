@@ -27,6 +27,22 @@ override.
 """
 """The model the spec uses (design doc §5 provenance, §7 ledger `model`)."""
 
+DEFAULT_TEMPERATURE = 0.0
+"""The sampling temperature sent on every call unless the caller overrides it.
+
+Zero because the arms are compared on what they spend and whether they succeed, and
+sampling noise in the agent loop is variance the comparison does not want (issue #6
+asks for temperature 0, pinned and recorded per episode). The provider reports the
+value it sent on each `Completion`, so the ledger records what the call used rather
+than what a configuration claimed.
+
+**Whether the endpoint honours it has not been verified against a live call** (none
+has been made; see tests/test_provider.py). An OpenAI-compatible endpoint accepts the
+field, but a reasoning model may ignore sampling parameters without an error, and
+temperature 0 is not a determinism guarantee on any hosted model. What is recorded is
+the value sent, which is what this code can know.
+"""
+
 DEFAULT_BASE_URL = "https://api.deepseek.com"
 """DeepSeek's OpenAI-compatible base. The chat-completions path is appended."""
 
@@ -80,6 +96,10 @@ class Completion(BaseModel):
     usage: TokenUsage
     model: str
     llm_calls: int = 1
+    temperature: float | None = None
+    """The sampling temperature the provider **sent** for this call, or `None` when the
+    provider does not report one. A request parameter, not a response field: it is
+    what this client asked for, which the endpoint is not known to echo back."""
 
 
 class ProviderError(RuntimeError):
@@ -137,8 +157,10 @@ class DeepSeekProvider:
         model: str = DEFAULT_MODEL,
         base_url: str | None = None,
         transport: httpx.BaseTransport | None = None,
+        temperature: float = DEFAULT_TEMPERATURE,
     ) -> None:
         self._model = model
+        self._temperature = temperature
         self._client = httpx.Client(
             base_url=(base_url or DEFAULT_BASE_URL).rstrip("/"),
             headers={
@@ -154,6 +176,7 @@ class DeepSeekProvider:
         payload: dict[str, Any] = {
             "model": self._model,
             "messages": [{"role": "system", "content": system}, *messages],
+            "temperature": self._temperature,
         }
         if tools is not None:
             payload["tools"] = tools
@@ -231,4 +254,5 @@ class DeepSeekProvider:
                 cache_write_tokens_in=cache_write,
             ),
             model=body.get("model") or self._model,
+            temperature=self._temperature,
         )

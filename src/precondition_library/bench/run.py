@@ -100,6 +100,11 @@ class _AccountingProvider:
     sum of the responses that actually returned usage. A failed request's token
     spend is unknown to us, and inventing a value would be worse than the gap —
     the count of calls is the part that is knowable, so it is the part recorded.
+
+    The sampling temperature is read off the completions the same way, so the row
+    records what the calls were sent with. An episode whose calls report different
+    temperatures raises rather than recording one of them: a single value would then
+    misdescribe the episode, and a mid-episode change is a configuration defect.
     """
 
     def __init__(self, provider: Provider) -> None:
@@ -110,6 +115,7 @@ class _AccountingProvider:
         self.cached_tokens_in = 0
         self.cache_write_tokens_in = 0
         self.llm_calls = 0
+        self.temperature: float | None = None
 
     def complete(
         self, *, system: str, messages: list[dict], tools: list[dict] | None = None
@@ -129,8 +135,20 @@ class _AccountingProvider:
             self.cached_tokens_in += completion.usage.cached_tokens_in
             self.cache_write_tokens_in += completion.usage.cache_write_tokens_in
             self.llm_calls += completion.llm_calls
+            self._record_temperature(completion.temperature)
             return completion
         raise AssertionError("unreachable: the loop returns or raises")
+
+    def _record_temperature(self, temperature: float | None) -> None:
+        """Keep the episode's one temperature, or raise if its calls disagree."""
+        if temperature is None:
+            return
+        if self.temperature is not None and self.temperature != temperature:
+            raise ValueError(
+                f"one episode's model calls reported temperatures {self.temperature} and "
+                f"{temperature}; the ledger records one value per episode (issue #6)"
+            )
+        self.temperature = temperature
 
 
 def _is_retryable(error: ProviderError) -> bool:
@@ -408,6 +426,7 @@ def run_episode(
             cached_tokens_in=accounting.cached_tokens_in,
             cache_write_tokens_in=accounting.cache_write_tokens_in,
             llm_calls=accounting.llm_calls,
+            temperature=accounting.temperature,
             wall_clock_s=time.monotonic() - started,
             outcome=result.outcome,
             correct_variant=correct.id if correct is not None else None,
@@ -848,6 +867,7 @@ def _invalid_record(
         tokens_out=accounting.tokens_out,
         cached_tokens_in=accounting.cached_tokens_in,
         llm_calls=accounting.llm_calls,
+        temperature=accounting.temperature,
         wall_clock_s=time.monotonic() - started,
         outcome=EpisodeOutcome.INVALID,
         correct_variant=None,
