@@ -89,6 +89,12 @@ class EpisodeRecord(BaseModel):
     or the one that fired was refused; `llm_calls`, `outcome` and `fired_variant`
     are where what actually happened is recorded."""
     seed: int
+    replicate: int = 1
+    """Which whole-run replicate the row belongs to (issue #6, ADR-0012). Replicates re-run
+    the same plan from scratch, so rows that share (arm, fault, seed) across replicates are
+    **repeats of one instance** -- a measure of the arm's run-to-run variation, never extra
+    independent observations. The analysis clusters on the instance for that reason
+    (`bench.report.cluster_bootstrap`)."""
 
     tokens_in: int
     tokens_out: int
