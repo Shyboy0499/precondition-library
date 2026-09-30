@@ -39,6 +39,7 @@ probe, so every precondition evaluates false while the run looks complete.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import shutil
@@ -46,7 +47,7 @@ import subprocess
 from pathlib import Path
 
 from ..program import GroundTruthResult, Predicate, PredicateResult, Program
-from ..sandbox import Sandbox, git_env, submodule_path
+from ..sandbox import Sandbox, git_env, run_git, submodule_path
 from .guard import Verdict, screen
 
 VOCABULARY: frozenset[str] = frozenset(
@@ -209,8 +210,15 @@ def evaluate_predicate(
     # against the same boundary and neither can be the looser path to a shell.
     decision = screen(probe, env_root=str(env.work))
     if decision.verdict is Verdict.REFUSE:
-        return PredicateResult(name=predicate.name, ok=False, observed=f"refused {decision.reason}")
+        return PredicateResult(
+            name=predicate.name, ok=False, observed=f"refused {decision.reason}", refused=True
+        )
 
+    # A probe must be read-only (issue #10): the guard permits writes inside the sandbox
+    # because bodies need them, so a probe such as `git reset --hard` would otherwise run
+    # and corrupt the state every later probe, and the episode, observe. The sandbox is
+    # snapshotted around the probe, and a probe that changed it is refused.
+    before = sandbox_state(env)
     try:
         completed = subprocess.run(
             [*SHELL, probe],
@@ -228,10 +236,25 @@ def evaluate_predicate(
             timeout=timeout_s,
         )
     except subprocess.TimeoutExpired:
+        changed = _changed_parts(before, sandbox_state(env))
         return PredicateResult(
             name=predicate.name,
             ok=False,
-            observed=f"timed out after {timeout_s:g}s",
+            observed=f"timed out after {timeout_s:g}s"
+            + (f"; and it changed the sandbox ({', '.join(changed)})" if changed else ""),
+            refused=bool(changed),
+        )
+
+    changed = _changed_parts(before, sandbox_state(env))
+    if changed:
+        return PredicateResult(
+            name=predicate.name,
+            ok=False,
+            observed=(
+                f"refused: the probe changed the sandbox ({', '.join(changed)}); a precondition "
+                f"or postcondition must only read, or it corrupts every later observation"
+            ),
+            refused=True,
         )
 
     ok = completed.returncode == predicate.expect_exit
@@ -244,6 +267,59 @@ def evaluate_predicate(
     elif not ok:
         observed += f"; stdout={_excerpt(completed.stdout)!r} stderr={_excerpt(completed.stderr)!r}"
     return PredicateResult(name=predicate.name, ok=ok, observed=observed)
+
+
+def sandbox_state(env: Sandbox) -> dict[str, str]:
+    """A digest of everything a read-only probe must leave untouched, part by part.
+
+    Parts, so a refusal can name what changed: the working tree's files outside any `.git`
+    (path, executable bit and content, symlinks by target), the index as
+    `git ls-files --stage`, the clone's `.git/config`, HEAD, and every ref of the clone and
+    of the upstream repository. `.git/index` itself is not hashed byte for byte: read-only
+    commands such as `git status` legitimately rewrite its stat cache, and hashing it would
+    refuse every probe that asked for status.
+    """
+    tree = hashlib.sha256()
+    for directory, subdirs, files in os.walk(env.work):
+        subdirs[:] = sorted(name for name in subdirs if name != ".git")
+        for name in sorted(files):
+            if name == ".git":
+                continue
+            path = Path(directory) / name
+            relative = path.relative_to(env.work).as_posix()
+            tree.update(relative.encode("utf-8") + b"\0")
+            if path.is_symlink():
+                tree.update(b"link:" + os.readlink(path).encode("utf-8") + b"\0")
+                continue
+            tree.update(b"x" if os.access(path, os.X_OK) else b"-")
+            tree.update(hashlib.sha256(path.read_bytes()).digest())
+
+    def git(args: tuple[str, ...], cwd: Path) -> str:
+        return run_git(args, cwd=cwd, check=False).stdout
+
+    config = env.work / ".git" / "config"
+    # Read, not asked for: `.git/HEAD` names the checked-out ref (whose commit is in
+    # "refs") or holds a detached commit itself, so the file is the whole of HEAD and
+    # costs no subprocess -- this digest runs twice per probe.
+    head_file = env.work / ".git" / "HEAD"
+    head = head_file.read_text(encoding="utf-8") if head_file.is_file() else ""
+    refs_format = ("for-each-ref", "--format=%(refname) %(objectname)")
+    parts = {
+        "working tree": tree.hexdigest(),
+        "index": git(("ls-files", "--stage"), env.work),
+        "config": config.read_text(encoding="utf-8") if config.is_file() else "",
+        "HEAD": head,
+        "refs": git(refs_format, env.work),
+    }
+    if env.upstream.exists():
+        parts["upstream refs"] = git(refs_format, env.upstream)
+    return {
+        name: hashlib.sha256(value.encode("utf-8")).hexdigest() for name, value in parts.items()
+    }
+
+
+def _changed_parts(before: dict[str, str], after: dict[str, str]) -> list[str]:
+    return [name for name in before if before[name] != after.get(name)]
 
 
 def bindings(env: Sandbox) -> dict[str, str]:

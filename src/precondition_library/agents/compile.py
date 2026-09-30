@@ -517,14 +517,29 @@ def _preconditions_accept(
     sandbox is built, evaluated and destroyed. A `KeyError` is returned rather
     than raised because a placeholder outside the vocabulary is a compile defect
     -- a rejection to record, not a crash that loses the episode's information.
+
+    Evaluation is `runtime.probes.evaluate_preconditions`, which is also what arm 3's
+    matcher calls, so admission and dispatch cannot disagree about what "the
+    preconditions held" means.
+
+    A **refused** precondition is an error here too, not a "no" (issue #10). A refused
+    probe reports as not holding, so without this a program whose probe the guard
+    refuses, or whose probe changes the sandbox, would reject every negative sandbox
+    and pass the negative side as a program that simply never fires. The refusal is a
+    defect in the program, and admission names it.
     """
     box = build_sandbox(seed, faults)
     try:
-        return _preconditions_hold(program, box), None
+        result = evaluate_preconditions(program, box)
     except KeyError as exc:
         return False, str(exc)
     finally:
         box.destroy()
+    refused = [predicate for predicate in result.predicates if predicate.refused]
+    if refused:
+        first = refused[0]
+        return False, f"precondition {first.name!r} was refused: {first.observed}"
+    return result.ok, None
 
 
 def _sibling_seeds(
@@ -618,17 +633,6 @@ def _declared_variant_ids(fault_name: str) -> set[str] | None:
     """
     intent = next((item for item in ambiguous_intents() if item.fault == fault_name), None)
     return None if intent is None else {variant.id for variant in intent.variants}
-
-
-def _preconditions_hold(program: Program, env: Sandbox) -> bool:
-    """Whether every precondition accepts `env`. Runs probes only, no model.
-
-    Delegates to `runtime.probes.evaluate_preconditions`, which is also what arm
-    3's matcher calls, so admission and dispatch cannot disagree about what "the
-    preconditions held" means. Only the boolean is used here; the `detail` and
-    per-predicate results belong to a dispatch rejection.
-    """
-    return evaluate_preconditions(program, env).ok
 
 
 def _parse_document(text: str) -> dict[str, Any] | None:
