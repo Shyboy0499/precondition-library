@@ -22,8 +22,10 @@ and reports, per group:
 **What "distinct environment" means here, stated so it can be checked.** Two
 sandboxes are compared by `instance_signature`, a canonical text of the axes
 below -- file *bodies* (sha256 of every working-tree file except `.git`), the
-upstream tree's paths and blob ids, file names, file counts, commit counts,
-conflict positions, submodule paths, branch names and branch tracking. Ref names
+upstream tree's paths and blob ids (a gitlink expanded into the blobs of the
+nested commit it names, so no commit id enters; ADR-0006), file names, file
+counts, commit counts, conflict positions, submodule paths, branch names and
+branch tracking. Ref names
 and object ids are deliberately **not** in the signature: issue #86's point is
 that a difference in commit SHAs alone is not
 a new environment, so a signature that changed only when a SHA did would let
@@ -191,6 +193,33 @@ def _branch_tracking(box: Sandbox) -> tuple[str, ...]:
     return tuple([f"HEAD {head}", *[line for line in sorted(out.splitlines()) if line]])
 
 
+def _gitlink_content(box: Sandbox, path: str, commit: str) -> tuple[str, ...]:
+    """The nested tree a gitlink at `path` points at, as `<path>/<file>` blob lines.
+
+    A gitlink's object id is a **commit** id of another repository, so on its own it
+    is exactly the SHA-level identity #86 refuses as a new environment. Expanding it
+    into the nested commit's blobs makes the axis say what content the link names:
+    two gitlinks that name the same content read as equal whatever their commits,
+    and `submodule_moved/init`'s instances are witnessed by the nested bytes a correct
+    resolution materialises (ADR-0006), not inferred by following the pointer.
+
+    The commit is looked up where a sandbox keeps nested repositories: the clone's
+    module gitdir, then the fault's local origin. One that resolves in neither keeps
+    its raw commit line, marked, so an unresolvable link is visible in the signature
+    rather than silently dropped from it.
+    """
+    for repo in (box.work / ".git" / "modules" / path, box.root / "submodule-origin"):
+        if not repo.is_dir():
+            continue
+        listed = run_git(("ls-tree", "-r", commit), cwd=repo, check=False)
+        if listed.returncode == 0:
+            return tuple(
+                f"gitlink {path} -> {meta}\t{path}/{name}"
+                for meta, name in (line.split("\t", 1) for line in listed.stdout.splitlines())
+            )
+    return (f"gitlink {path} -> unresolved commit {commit}",)
+
+
 def _upstream_tree(box: Sandbox) -> tuple[str, ...]:
     """`git ls-tree -r HEAD` in the upstream repo: its paths and blob object ids.
 
@@ -198,9 +227,21 @@ def _upstream_tree(box: Sandbox) -> tuple[str, ...]:
     not necessarily contain it -- `diverged` resets the clone to the base before
     the local commits, so upstream's edit exists only here -- and a blob object id
     encodes content, so this axis is content rather than commit-SHA cosmetics.
+    A gitlink entry is the exception, since its id is a nested commit's, so it is
+    replaced by the nested content it points at (`_gitlink_content`).
     """
     out = run_git(("ls-tree", "-r", "HEAD"), cwd=box.upstream, check=False).stdout
-    return tuple(sorted(line for line in out.splitlines() if line))
+    lines: list[str] = []
+    for line in out.splitlines():
+        if not line:
+            continue
+        meta, path = line.split("\t", 1)
+        mode, _, object_id = meta.split()
+        if mode == "160000":
+            lines.extend(_gitlink_content(box, path, object_id))
+        else:
+            lines.append(line)
+    return tuple(sorted(lines))
 
 
 def environment_axes(box: Sandbox) -> dict[str, tuple[str, ...]]:

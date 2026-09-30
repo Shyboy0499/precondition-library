@@ -44,7 +44,7 @@ from collections import defaultdict
 
 import pytest
 
-from precondition_library.bench.instance_diversity import instance_signature
+from precondition_library.bench.instance_diversity import environment_axes, instance_signature
 from precondition_library.bench.splits import EVAL_SEEDS, SMOKE_SEEDS, TUNE_SEEDS
 from precondition_library.tasks.faults import FAULTS
 from precondition_library.tasks.registry import ambiguous_intents
@@ -217,3 +217,36 @@ def test_every_resolution_reaches_four_real_environments(
         f"{fault}/{resolution}: {len(seeds)} distinct instance identities built "
         f"{len(signatures)} distinct environments, so the draw is not a real draw"
     )
+
+
+@pytest.mark.parametrize(
+    "resolution",
+    sorted(resolution for fault, resolution in RESOLUTIONS if fault == "submodule_moved"),
+)
+def test_gitlinks_are_compared_by_the_content_they_name(resolution: str, make_sandbox) -> None:
+    """A gitlink enters the signature as nested blobs, never as a nested commit id.
+
+    `submodule_moved/init`'s instances differ only behind the upstream gitlink, and
+    a gitlink's object id is a commit id -- the SHA-level identity #86 refuses as a
+    new environment. ADR-0006 counts those instances because the link names
+    different content, so the signature has to witness that content: every gitlink
+    is expanded into the nested commit's blob lines, none is left unresolved, and
+    two distinct instances still differ once no commit id is in the comparison.
+    """
+    seeds = _first_seed_per_instance("submodule_moved", resolution, 2)
+    trees = [
+        environment_axes(make_sandbox(seed, ["submodule_moved"]))["upstream tree"] for seed in seeds
+    ]
+    for seed, tree in zip(seeds, trees, strict=True):
+        assert not [line for line in tree if line.startswith("160000 ")], (
+            f"seed {seed}: a gitlink's commit id is still in the signature"
+        )
+        assert not [line for line in tree if "unresolved" in line], (
+            f"seed {seed}: a gitlink could not be resolved to nested content"
+        )
+    if resolution == "init":
+        nested = [{line for line in tree if line.startswith("gitlink ")} for tree in trees]
+        assert all(nested) and nested[0] != nested[1], (
+            f"init seeds {seeds}: the nested content behind the gitlink does not differ, "
+            f"so the instances would be distinct by commit id alone"
+        )
