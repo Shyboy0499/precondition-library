@@ -1,6 +1,6 @@
 # ADR-0007 — Require arm 2 to clear chance by its Wilson lower bound before it counts as the baseline
 
-- **Status:** proposed
+- **Status:** accepted (2026-09-30, as written)
 - **Date:** 2026-09-30
 - **Supersedes:** nothing (adds spec §7 item 11; ADR-0003 and ADR-0004 stand)
 - **Deciders:** repository owner

@@ -1,6 +1,6 @@
 # ADR-0008 — Sweep arm 2, hold arm 3 as one operating point, and count mismatch per fire
 
-- **Status:** proposed
+- **Status:** accepted (2026-09-30, as written)
 - **Date:** 2026-09-30
 - **Supersedes:** nothing (narrows spec §7 item 1 and Figure 1, which said both dispatchers sweep a threshold; ADR-0001's matched-coverage primary metric stands)
 - **Deciders:** repository owner
