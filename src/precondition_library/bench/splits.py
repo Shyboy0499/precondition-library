@@ -158,9 +158,12 @@ draw space, not the seed count.
 
 The episode-level mismatch comparison can now carry a wider-but-real interval
 rather than none at all, but it is still underpowered for the pre-registered
-+/-10pp equivalence margin: a 95% Wilson interval on a proportion near 0.5 is
-about +/-18.6pp at N=24 and +/-13.7pp at N=47, against the ~94 environments the
-margin needs. The pre-registered primary comparison is unaffected and lives
++/-10pp equivalence margin. One arm's 95% Wilson interval near 0.5 is about
++/-18.6pp at N=24 and +/-13.7pp at N=47; the margin, though, is applied by a TOST
+to the *difference* of two arms' rates at a 90% interval, whose half-width at 47
+per arm and a shared 50% rate is about +/-16.5pp, and +/-10pp first becomes
+passable at 133 per arm (`bench.report.tost_equivalence`; ADR-0006, which keeps
+the margin). The pre-registered primary comparison is unaffected and lives
 elsewhere: it is the pair-level one over labelled (state, program) pairs (spec
 section 7, item 1; issue #5), where the state grid is crossed with seeds and no
 library accumulates between pairs, and the pair count is chosen for power.
