@@ -1,6 +1,6 @@
 # ADR-0012 — Repeat the plan as whole-run replicates, and take seed-level uncertainty from an instance-clustered bootstrap instead of a mixed model
 
-- **Status:** proposed
+- **Status:** accepted (2026-09-30, as written)
 - **Date:** 2026-09-30
 - **Supersedes:** nothing (narrows issue #6's "mixed model keyed on fault seed" to a cluster bootstrap; ADR-0005's unit of analysis stands)
 - **Deciders:** repository owner
