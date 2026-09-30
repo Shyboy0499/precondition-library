@@ -32,6 +32,7 @@ would corrupt the ledger's denominator.
 from __future__ import annotations
 
 import json
+from enum import StrEnum
 from typing import Any
 
 import yaml
@@ -195,6 +196,20 @@ mapping fails loudly instead of searching forever.
 """
 
 
+class AdmissionGate(StrEnum):
+    """Which admission gate a program was judged by -- the 2x2's admission factor.
+
+    `TWO_SIDED` is the gate Claim 3 is about: postconditions hold on a faulted sandbox
+    **and** the preconditions reject every negative sandbox. `POSITIVE_ONLY` is spec
+    §3's "otherwise identical positive-only gate": the same pre-sandbox contract checks
+    and the same positive side, with the negative sandboxes -- and only they -- left
+    out, so the factor isolates the negative-sandbox criterion (issue #4, ADR-0010).
+    """
+
+    TWO_SIDED = "two_sided"
+    POSITIVE_ONLY = "positive_only"
+
+
 class CompileResult(BaseModel):
     """The outcome of one compile, including its cost whether or not it parsed.
 
@@ -313,8 +328,19 @@ def compile_program(
     return CompileResult(ok=True, program=program, warnings=warnings, usage=completion.usage)
 
 
-def admit(program: Program, fault: FaultSpec | str, *, seeds: list[int]) -> tuple[bool, str]:
-    """Two-sided admission gate.
+def admit(
+    program: Program,
+    fault: FaultSpec | str,
+    *,
+    seeds: list[int],
+    gate: AdmissionGate = AdmissionGate.TWO_SIDED,
+) -> tuple[bool, str]:
+    """Two-sided admission gate, or its positive-only counterpart (`gate`).
+
+    `AdmissionGate.POSITIVE_ONLY` stops after the positive side: every check before it
+    runs identically, and only the three negative-sandbox classes below are skipped.
+    It exists for the 2x2 factorial's ungated arm (spec §3, Claim 3), never as a
+    shortcut, and its reason says the negative side was not checked.
 
     Positive side: the program must fix the fault on fresh sandboxes. Each seed
     in `seeds` builds a sandbox injected with `fault`, the body is replayed, and
@@ -417,6 +443,13 @@ def admit(program: Program, fault: FaultSpec | str, *, seeds: list[int]) -> tupl
         if not result.ok:
             detail = result.reason or "the replay did not satisfy its contract"
             return False, f"positive side failed on {name} seed {seed}: {detail}"
+
+    if gate is AdmissionGate.POSITIVE_ONLY:
+        return True, (
+            f"admitted under the positive-only gate: postconditions held on {len(seeds)} "
+            f"freshly faulted sandbox(es); the negative sandboxes were not checked (the "
+            f"2x2's ungated arm, Claim 3)"
+        )
 
     accepted, error = _preconditions_accept(program, _CLEAN_SEED, [])
     if error is not None:

@@ -1049,6 +1049,77 @@ def mismatch_comparison(ledger: Path) -> MismatchComparison:
     )
 
 
+class FactorialCell(BaseModel):
+    """One cell of the {dispatch} x {admission} 2x2 (Figure 3, issue #4, ADR-0010)."""
+
+    arm: Arm
+    admission_gate: str
+    library_hash: str | None
+    """The one frozen library this cell dispatched against; a cell is one library."""
+    episodes: int
+    """Graded variant episodes, the independent observations (ADR-0005)."""
+    coverage: Rate
+    """Fires over episodes."""
+    mismatch: Rate
+    """Wrong fires over fires -- per fire, as ADR-0008 defines mismatch."""
+
+
+def admission_factorial(ledger: Path) -> list[FactorialCell]:
+    """Figure 3: dispatch x admission, one cell per (arm, gate), over variant episodes.
+
+    Separates the negative-sandbox criterion (Claim 3, the admission factor) from
+    predicate dispatch (Claim 2, the dispatch factor). The rows come from frozen runs
+    against the two libraries `bench.build_library` gates from one compile; a cell
+    refuses rows it cannot interpret rather than pooling them:
+
+    * a dispatch-arm row with no `admission_gate` -- a frozen library without a build
+      manifest -- is an unknown gate, not a guess at one;
+    * a gate whose rows span more than one `library_hash` is not one library, so the
+      two dispatch arms in it did not face the same programs: per-arm online
+      libraries, or two builds mixed into one ledger.
+    """
+    rows = [
+        record
+        for record in _graded(read(ledger))
+        if record.arm in (Arm.SEMANTIC, Arm.PRECONDITION)
+        and record.occurrence_role is OccurrenceRole.VARIANT
+    ]
+    unknown = [record for record in rows if record.admission_gate is None]
+    if unknown:
+        raise ValueError(
+            f"{len(unknown)} dispatch row(s) have no admission gate; a frozen library needs "
+            f"its build manifest for its rows to enter the admission factorial"
+        )
+    cells: list[FactorialCell] = []
+    for gate in sorted({record.admission_gate for record in rows if record.admission_gate}):
+        in_gate = [record for record in rows if record.admission_gate == gate]
+        hashes = {record.library_hash for record in in_gate}
+        if len(hashes) > 1:
+            raise ValueError(
+                f"the {gate!r} rows span {len(hashes)} libraries; each admission condition "
+                f"must be one frozen library that both dispatch arms ran against (issue #4)"
+            )
+        for arm in (Arm.SEMANTIC, Arm.PRECONDITION):
+            cell = [record for record in in_gate if record.arm is arm]
+            if not cell:
+                continue
+            fires = [record for record in cell if record.fired_variant is not None]
+            cells.append(
+                FactorialCell(
+                    arm=arm,
+                    admission_gate=gate,
+                    library_hash=next(iter(hashes)),
+                    episodes=len(cell),
+                    coverage=Rate(numerator=len(fires), denominator=len(cell)),
+                    mismatch=Rate(
+                        numerator=sum(record.misfired for record in fires),
+                        denominator=len(fires),
+                    ),
+                )
+            )
+    return cells
+
+
 def _overall_invalid(rows: list[AblationRow]) -> Rate:
     return Rate(
         numerator=sum(row.invalid.numerator for row in rows),

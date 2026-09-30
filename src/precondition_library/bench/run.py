@@ -38,12 +38,13 @@ Two rules from the design decide the code below, and both are easy to break by
 
 from __future__ import annotations
 
+import json
 import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..agents.compile import admit, compile_program
+from ..agents.compile import AdmissionGate, admit, compile_program
 from ..agents.dispatch import Dispatch, dispatch_preconditions, dispatch_semantic
 from ..agents.react import solve
 from ..library import Library, ProgramIdCollisionError
@@ -279,8 +280,10 @@ def run_benchmark(
 
     scorer = similarity if similarity is not None else lexical_similarity
     frozen_hash: str | None = None
+    gate: AdmissionGate | None = AdmissionGate.TWO_SIDED
     if frozen_library is not None:
         frozen_hash = _require_frozen_library(frozen_library)
+        gate = read_admission_gate(frozen_library)
 
     for arm in arms:
         if frozen_library is not None:
@@ -305,6 +308,7 @@ def run_benchmark(
                     library=library,
                     model=model,
                     frozen=frozen_library is not None,
+                    admission_gate=gate,
                 )
                 append(out, record)
 
@@ -328,6 +332,7 @@ def run_episode(
     library: Library,
     model: str,
     frozen: bool = False,
+    admission_gate: AdmissionGate | None = AdmissionGate.TWO_SIDED,
 ) -> EpisodeRecord:
     """One episode: build a sandbox, let the arm act, check ground truth, record.
 
@@ -473,6 +478,9 @@ def run_episode(
             dispatch_score=result.dispatch_score,
             similarity_threshold=library.threshold,
             library_hash=library_hash,
+            admission_gate=None
+            if arm is Arm.REACT or admission_gate is None
+            else admission_gate.value,
             admitted=result.admitted,
             refusal_reason=result.refusal_reason,
             compile_failure_reason=result.compile_failure_reason,
@@ -807,6 +815,20 @@ def _require_measurable(faults: list[str]) -> None:
     """Refuse a request naming an unmeasurable fault, before any episode runs."""
     for fault_type in faults:
         _intent_for(fault_type)
+
+
+MANIFEST = "build.json"
+"""The file in a built root that says which admission gate built it
+(`bench.build_library`). Not a program, so it changes neither `load_all` nor
+`library_hash`; the runner reads it to label every row with its gate."""
+
+
+def read_admission_gate(root: Path) -> AdmissionGate | None:
+    """The gate a built root was admitted under, or `None` for a root with no manifest."""
+    manifest = root / MANIFEST
+    if not manifest.exists():
+        return None
+    return AdmissionGate(json.loads(manifest.read_text(encoding="utf-8"))["admission_gate"])
 
 
 def _require_frozen_library(root: Path) -> str:

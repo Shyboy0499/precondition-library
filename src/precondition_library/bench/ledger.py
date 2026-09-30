@@ -207,6 +207,13 @@ class EpisodeRecord(BaseModel):
     confounded with a library difference. Recording the digest per row makes that
     confound visible rather than silent; removing it is a harness change tracked
     separately (issue #4)."""
+    admission_gate: str | None = None
+    """The admission gate the dispatched library's programs passed -- the 2x2's admission
+    factor (issue #4, ADR-0010): `two_sided` or `positive_only`. The online mode always
+    admits two-sided; a frozen library states its gate in its build manifest, and a
+    frozen library without one records `None`, an unknown gate the factorial refuses.
+    `None` for arm 1, which has no library."""
+
     admitted: bool | None = None
     refusal_reason: str | None = None
     """Why the guard refused the generated body. Set only when `outcome` is
