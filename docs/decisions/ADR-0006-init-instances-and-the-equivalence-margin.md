@@ -1,6 +1,6 @@
 # ADR-0006 — Count `init`'s instances by the content their gitlink names, and keep the ±10pp margin with its power stated as a TOST
 
-- **Status:** proposed
+- **Status:** accepted (2026-09-30, as written)
 - **Date:** 2026-09-30
 - **Supersedes:** nothing (settles the two questions issue #86 left to the owner after ADR-0005 landed; ADR-0005 stands)
 - **Deciders:** repository owner
