@@ -115,6 +115,11 @@ class PredicateResult(BaseModel):
     name: str
     ok: bool
     observed: str = ""
+    refused: bool = False
+    """The probe was refused rather than evaluated -- by the guard, or because running it
+    changed the sandbox (issue #10). A refused probe is reported as not holding, which is
+    the shape dispatch needs; this flag keeps the two apart so a refusal can be counted
+    instead of reading as an ordinary non-match."""
 
 
 class GroundTruthResult(BaseModel):
@@ -123,6 +128,11 @@ class GroundTruthResult(BaseModel):
     ok: bool
     detail: str = ""
     predicates: list[PredicateResult] = Field(default_factory=list)
+
+    @property
+    def refusals(self) -> int:
+        """How many of the predicates were refused rather than evaluated."""
+        return sum(result.refused for result in self.predicates)
 
 
 class EpisodeOutcome(StrEnum):

@@ -82,3 +82,4 @@ jobs:
           tests/test_sandbox_environment.py
           tests/test_sandbox_diverged.py
           tests/test_sandbox_submodule_moved.py
+          tests/test_read_only_probes.py
