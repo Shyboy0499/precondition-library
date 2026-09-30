@@ -1,6 +1,6 @@
 # ADR-0009 — Build one library from the admit set, and dispatch every arm against it without writing to it
 
-- **Status:** proposed
+- **Status:** accepted (2026-09-30, as written)
 - **Date:** 2026-09-30
 - **Supersedes:** nothing (implements issue #4's central item; narrows spec §8's demotion and quarantine to the online mode)
 - **Deciders:** repository owner
