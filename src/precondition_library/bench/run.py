@@ -43,6 +43,7 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from ..agents.compile import AdmissionGate, admit, compile_program
 from ..agents.dispatch import Dispatch, dispatch_preconditions, dispatch_semantic
@@ -225,6 +226,7 @@ def run_benchmark(
     similarity: Similarity | None = None,
     frozen_library: Path | None = None,
     reranker: Similarity | None = None,
+    replicate: int = 1,
 ) -> Path:
     """Run every (arm, fault, occurrence) episode and write the ledger.
 
@@ -316,6 +318,7 @@ def run_benchmark(
                     model=model,
                     frozen=frozen_library is not None,
                     admission_gate=gate,
+                    replicate=replicate,
                 )
                 append(out, record)
 
@@ -340,6 +343,7 @@ def run_episode(
     model: str,
     frozen: bool = False,
     admission_gate: AdmissionGate | None = AdmissionGate.TWO_SIDED,
+    replicate: int = 1,
 ) -> EpisodeRecord:
     """One episode: build a sandbox, let the arm act, check ground truth, record.
 
@@ -405,6 +409,7 @@ def run_episode(
                 threshold=library.threshold,
                 rerank_k=_rerank_k(library),
                 change_surface=applied_surface,
+                replicate=replicate,
             )
 
         request = fault.task_text(seed)
@@ -450,6 +455,7 @@ def run_episode(
                 threshold=library.threshold,
                 rerank_k=_rerank_k(library),
                 change_surface=applied_surface,
+                replicate=replicate,
             )
 
         # Grading is done with this sandbox, so it is safe to release it now.
@@ -470,6 +476,7 @@ def run_episode(
             occurrence_index=occurrence,
             occurrence_role=role,
             seed=seed,
+            replicate=replicate,
             tokens_in=accounting.tokens_in,
             tokens_out=accounting.tokens_out,
             embedding_tokens=embedding_after.tokens - embedding_before.tokens,
@@ -867,6 +874,37 @@ def read_admission_gate(root: Path) -> AdmissionGate | None:
     return AdmissionGate(json.loads(manifest.read_text(encoding="utf-8"))["admission_gate"])
 
 
+DEFAULT_REPLICATES = 3
+"""Whole-run replicates per plan: issue #6's k >= 3 repeats per (fault, seed, arm)."""
+
+
+def run_replicates(
+    *, out_dir: Path, replicates: int = DEFAULT_REPLICATES, **run_kwargs: Any
+) -> list[Path]:
+    """Run the whole benchmark `replicates` times, each from scratch (issue #6, ADR-0012).
+
+    Replicate `r` writes `out_dir/replicate-r/ledger.jsonl`, and in the online mode grows
+    its per-arm libraries beside that ledger, so no replicate starts from another's
+    programs: every replicate is the same plan run again, and the spread between them is
+    the arms' run-to-run variation. A frozen library is shared -- it is read-only, so
+    sharing it is the point. Returns the ledger paths in replicate order.
+
+    Rows from different replicates of one (arm, fault, seed) are repeats of one instance,
+    not new observations, and the analysis clusters on the instance for that reason
+    (`bench.report.cluster_bootstrap`).
+    """
+    if replicates < 1:
+        raise ValueError(f"replicates must be at least 1, got {replicates}")
+    if "out" in run_kwargs or "replicate" in run_kwargs:
+        raise ValueError("run_replicates sets each replicate's `out` and `replicate` itself")
+    ledgers: list[Path] = []
+    for replicate in range(1, replicates + 1):
+        ledger = out_dir / f"replicate-{replicate}" / "ledger.jsonl"
+        ledger.parent.mkdir(parents=True, exist_ok=True)
+        ledgers.append(run_benchmark(out=ledger, replicate=replicate, **run_kwargs))
+    return ledgers
+
+
 def _require_frozen_library(root: Path) -> str:
     """The frozen library's hash, or a refusal when there is nothing to dispatch.
 
@@ -940,6 +978,7 @@ def _invalid_record(
     library_program_ids: list[str] | None = None,
     rerank_k: int | None = None,
     change_surface: tuple[str, ...] | None = None,
+    replicate: int = 1,
 ) -> EpisodeRecord:
     """The row for an episode that could not run.
 
@@ -978,6 +1017,7 @@ def _invalid_record(
         occurrence_index=occurrence,
         occurrence_role=role,
         seed=seed,
+        replicate=replicate,
         tokens_in=accounting.tokens_in,
         tokens_out=accounting.tokens_out,
         cached_tokens_in=accounting.cached_tokens_in,
