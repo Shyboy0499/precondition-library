@@ -5,6 +5,11 @@ build output — it is the artifact the project is about, and its git history is
 part of the evidence: a program appearing, a program being demoted after it
 mis-fired, a precondition being tightened after a negative sandbox caught it.
 
+**How it is filled.** The comparison's library is built once from the admit set by
+`bench.build_library` (issue #4, ADR-0009) and then dispatched against by every arm,
+read-only, through `run_benchmark(frozen_library=...)`. The build needs a model, so
+until it has been run this directory holds no program.
+
 Layout, one directory per program:
 
 ```

@@ -222,6 +222,7 @@ def run_benchmark(
     model: str,
     provider: Provider,
     similarity: Similarity | None = None,
+    frozen_library: Path | None = None,
 ) -> Path:
     """Run every (arm, fault, occurrence) episode and write the ledger.
 
@@ -248,6 +249,14 @@ def run_benchmark(
     arm, so they are computed once and shared; a reader can therefore reproduce
     the labelling from the ledger's `seed` and `fault_type` alone.
 
+    **Two library modes** (issue #4, ADR-0009). By default each arm grows its own
+    library from empty, compiling on fallback -- the online mode the cost curve
+    (Claim 1) is about. With `frozen_library`, every arm dispatches against that one
+    already-built directory (`bench.build_library`) and nothing is written to it, so
+    the arms differ in their dispatch function alone and every row carries the same
+    `library_hash`. The hash is re-read after the last episode and a change raises:
+    a comparison whose shared artifact moved under it is not the comparison run.
+
     Only faults with a registered, ambiguous intent are measurable. A fault in
     `EXCLUDED_FROM_BENCHMARK`, or one with no intent at all, raises before any
     episode runs: silently skipping it would make the run's denominator a
@@ -268,14 +277,22 @@ def run_benchmark(
     # plan. `seeds[:occurrences]` because the extra seeds, if any, are never run.
     roles = {fault_type: occurrence_roles(seeds[:occurrences], fault_type) for fault_type in faults}
 
+    scorer = similarity if similarity is not None else lexical_similarity
+    frozen_hash: str | None = None
+    if frozen_library is not None:
+        frozen_hash = _require_frozen_library(frozen_library)
+
     for arm in arms:
-        library_root = out.parent / f"library-{arm.value}"
-        _require_empty_library(library_root, arm)
-        library = Library(
-            library_root,
-            similarity=similarity if similarity is not None else lexical_similarity,
-            evaluate_preconditions=evaluate_preconditions,
-        )
+        if frozen_library is not None:
+            library = Library(
+                frozen_library, similarity=scorer, evaluate_preconditions=evaluate_preconditions
+            )
+        else:
+            library_root = out.parent / f"library-{arm.value}"
+            _require_empty_library(library_root, arm)
+            library = Library(
+                library_root, similarity=scorer, evaluate_preconditions=evaluate_preconditions
+            )
         for occurrence in range(1, occurrences + 1):
             for fault_type in faults:
                 record = run_episode(
@@ -287,8 +304,16 @@ def run_benchmark(
                     provider=provider,
                     library=library,
                     model=model,
+                    frozen=frozen_library is not None,
                 )
                 append(out, record)
+
+    if frozen_library is not None and Library(frozen_library).library_hash() != frozen_hash:
+        raise RuntimeError(
+            f"the frozen library at {frozen_library} changed during the run; every arm must "
+            f"dispatch against one unchanged artifact (issue #4), so this ledger is not that "
+            f"comparison"
+        )
     return out
 
 
@@ -302,6 +327,7 @@ def run_episode(
     provider: Provider,
     library: Library,
     model: str,
+    frozen: bool = False,
 ) -> EpisodeRecord:
     """One episode: build a sandbox, let the arm act, check ground truth, record.
 
@@ -326,6 +352,12 @@ def run_episode(
     `library` is unused by arm 1 (it has no library) and required anyway, so the
     three arms share one call shape rather than one arm having a different
     signature.
+
+    `frozen=True` dispatches against `library` without ever writing to it (issue #4,
+    ADR-0009): a fallback is not compiled, a failed fire is not demoted and a wrong
+    fire is not counted toward quarantine. The row still records the fire, the
+    misfire and the fallback's cost; only the library's evolution is withheld, so
+    every arm dispatching against one frozen artifact sees the same files.
     """
     intent = _intent_for(fault_type)
     fault = FAULTS[fault_type]
@@ -367,7 +399,9 @@ def run_episode(
         # Measured around the arm's run, so the row carries what this episode's dispatch
         # spent through the seam rather than the library's lifetime total.
         embedding_before = similarity_usage(library.similarity)
-        result = _run_arm(arm, signature, box, library, fault_type, seed, occurrence, accounting)
+        result = _run_arm(
+            arm, signature, box, library, fault_type, seed, occurrence, accounting, frozen=frozen
+        )
         embedding_after = similarity_usage(library.similarity)
         state_intact: bool | None = None
         try:
@@ -406,10 +440,11 @@ def run_episode(
         # them is this episode's own (seed, fault) pair; leaving the box alive
         # would let admission's `build_sandbox` replace it under the checker.
         box.destroy()
-        _learn_from_solution(
-            result, signature, box, library, fault_type, seed, occurrence, accounting
-        )
-        _record_mismatch(result, library, correct, fault_type, seed, occurrence)
+        if not frozen:
+            _learn_from_solution(
+                result, signature, box, library, fault_type, seed, occurrence, accounting
+            )
+            _record_mismatch(result, library, correct, fault_type, seed, occurrence)
 
         return EpisodeRecord(
             arm=arm,
@@ -459,6 +494,8 @@ def _run_arm(
     seed: int,
     occurrence: int,
     accounting: _AccountingProvider,
+    *,
+    frozen: bool = False,
 ) -> _ArmResult:
     """The one arm-specific decision. Everything downstream is shared.
 
@@ -529,14 +566,16 @@ def _run_arm(
         )
 
     fired_variant = None if replayed.refused else fired.variant
-    if _is_genuine_miss(replayed):
+    if _is_genuine_miss(replayed) and not frozen:
         # §8: a fire that could not work is demoted, and the fallback is charged
         # to this episode. That is a body whose postconditions failed, and also a
         # body that never ran because this environment cannot bind a parameter it
         # names (issue #76) -- the program fired on a state it cannot serve, which
         # is the same "too permissive to be correct" defect. Anything else -- a
         # guard refusal, a timeout -- is a runtime outcome rather than evidence
-        # the program is wrong, so the program is left as it was.
+        # the program is wrong, so the program is left as it was. A frozen library
+        # is never demoted: the row records the failed fire, and the artifact every
+        # arm shares stays what it was (ADR-0009).
         library.set_status(
             fired.id, ProgramStatus.DEMOTED, episode_id=_episode_id(fault_type, seed, occurrence)
         )
@@ -768,6 +807,22 @@ def _require_measurable(faults: list[str]) -> None:
     """Refuse a request naming an unmeasurable fault, before any episode runs."""
     for fault_type in faults:
         _intent_for(fault_type)
+
+
+def _require_frozen_library(root: Path) -> str:
+    """The frozen library's hash, or a refusal when there is nothing to dispatch.
+
+    A missing directory or one with no `admitted` program would make every dispatch a
+    fallback, and the run would read as two arms that never fire rather than as a
+    library that was never built.
+    """
+    library = Library(root)
+    if not any(p.status is ProgramStatus.ADMITTED for p in library.load_all()):
+        raise ValueError(
+            f"the frozen library at {root} holds no admitted program; build it first with "
+            f"bench.build_library, or run without frozen_library to grow one per arm"
+        )
+    return library.library_hash()
 
 
 def _require_empty_library(root: Path, arm: Arm) -> None:
