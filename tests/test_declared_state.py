@@ -202,6 +202,9 @@ DECLARED_SKIPS: dict[str, str] = {
         "test_the_candidate_texts_are_near_interchangeable_to_the_embedding"
     ): "#104",
     "test_embedding_similarity.py::test_the_embedding_is_measured_against_lexical": "#104",
+    # RLIMIT_FSIZE exists only on POSIX. Windows' equivalent, job objects, is not
+    # implemented; the process-group kill that shares the module does run there.
+    "test_process_confinement.py::test_a_write_past_the_file_size_limit_fails": "#10",
 }
 
 

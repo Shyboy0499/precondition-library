@@ -43,11 +43,11 @@ import hashlib
 import os
 import re
 import shutil
-import subprocess
 from pathlib import Path
 
 from ..program import GroundTruthResult, Predicate, PredicateResult, Program
 from ..sandbox import Sandbox, git_env, run_git, submodule_path
+from .confine import run_confined
 from .guard import Verdict, screen
 
 VOCABULARY: frozenset[str] = frozenset(
@@ -219,23 +219,13 @@ def evaluate_predicate(
     # and corrupt the state every later probe, and the episode, observe. The sandbox is
     # snapshotted around the probe, and a probe that changed it is refused.
     before = sandbox_state(env)
-    try:
-        completed = subprocess.run(
-            [*SHELL, probe],
-            cwd=env.work,
-            capture_output=True,
-            text=True,
-            # Explicit, because the default is the machine locale. On a non-UTF-8
-            # console a decode failure kills the reader thread and leaves
-            # `stdout` as `None`, which then raises a confusing `AttributeError`
-            # in `_excerpt` -- naming neither the encoding nor the probe.
-            # `errors="replace"` keeps the excerpt readable instead.
-            encoding="utf-8",
-            errors="replace",
-            env=git_env(home=env.root),
-            timeout=timeout_s,
-        )
-    except subprocess.TimeoutExpired:
+    # Its own process group, killed whole on timeout, under the POSIX limits
+    # (`runtime.confine`, issue #10). Output is decoded as UTF-8 with replacement there,
+    # because the machine locale could otherwise turn `stdout` into `None`.
+    completed = run_confined(
+        [*SHELL, probe], cwd=env.work, env=git_env(home=env.root), timeout_s=timeout_s
+    )
+    if completed.timed_out:
         changed = _changed_parts(before, sandbox_state(env))
         return PredicateResult(
             name=predicate.name,
