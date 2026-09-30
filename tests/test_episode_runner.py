@@ -33,7 +33,12 @@ import yaml
 from conftest import GIT_STATUS_AT_IMPORT, FakeProvider, git_status_porcelain, gold_program
 
 from precondition_library.bench.ledger import Arm, EpisodeRecord, OccurrenceRole, read
-from precondition_library.bench.run import _program_id, run_benchmark, run_episode
+from precondition_library.bench.run import (
+    _AccountingProvider,
+    _program_id,
+    run_benchmark,
+    run_episode,
+)
 from precondition_library.bench.splits import SMOKE_SEEDS, occurrence_roles
 from precondition_library.library import Library
 from precondition_library.program import (
@@ -274,6 +279,7 @@ def test_a_replay_episode_spends_nothing(arm: Arm, tmp_path: Path) -> None:
     assert record.tokens_in == 0
     assert record.tokens_out == 0
     assert record.cached_tokens_in == 0
+    assert record.temperature is None, "no model ran, so no temperature was used"
     assert record.outcome is EpisodeOutcome.SUCCESS
     assert record.fired_variant == "discard"
     assert record.correct_variant == "discard"
@@ -321,6 +327,39 @@ def test_solving_and_compiling_is_charged_to_the_episode(tmp_path: Path) -> None
     assert "discard, merge, rebase" in provider.calls[-1]["system"], (
         "the runner must tell the compiler which variant ids this intent declares"
     )
+
+
+def test_the_row_records_the_temperature_the_calls_were_sent_with(tmp_path: Path) -> None:
+    """Issue #6: the row's temperature is read off the completions, not configured."""
+    turns = [
+        turn.model_copy(update={"temperature": 0.0})
+        for turn in (*_resolves_discard(), _completion(_MALFORMED_REPLY))
+    ]
+    record = run_episode(
+        Arm.PRECONDITION,
+        "diverged",
+        DISCARD_SEED,
+        1,
+        role=OccurrenceRole.VARIANT,
+        provider=FakeProvider(*turns),
+        library=Library(tmp_path / "lib", evaluate_preconditions=evaluate_preconditions),
+        model="fake",
+    )
+    assert record.llm_calls == 4
+    assert record.temperature == 0.0
+
+
+def test_an_episode_whose_calls_disagree_on_temperature_is_refused() -> None:
+    """One value per row: a mid-episode change raises rather than recording either."""
+    accounting = _AccountingProvider(
+        FakeProvider(
+            _completion("a").model_copy(update={"temperature": 0.0}),
+            _completion("b").model_copy(update={"temperature": 0.7}),
+        )
+    )
+    accounting.complete(system="s", messages=[])
+    with pytest.raises(ValueError, match="temperatures 0.0 and 0.7"):
+        accounting.complete(system="s", messages=[])
 
 
 def test_a_guard_refusal_is_not_a_compile_failure(tmp_path: Path) -> None:
