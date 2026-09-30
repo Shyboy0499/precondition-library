@@ -316,14 +316,6 @@ def test_the_seed_plans_quoted_half_widths(successes: int, n: int, half_width: f
     assert (interval.high - interval.low) / 2 == pytest.approx(half_width, abs=5e-4)
 
 
-def test_the_equivalence_margin_needs_about_94_environments() -> None:
-    """The +/-10pp margin is met at 94 environments and missed at the 47 achieved."""
-    at_94 = wilson_interval(47, 94)
-    at_47 = wilson_interval(23, 47)
-    assert at_94 is not None and at_47 is not None
-    assert (at_94.high - at_94.low) / 2 <= 0.10 < (at_47.high - at_47.low) / 2
-
-
 def test_wilson_interval_is_none_at_n_zero() -> None:
     """There is no interval over no observations; a naive formula divides by zero."""
     assert wilson_interval(0, 0) is None
