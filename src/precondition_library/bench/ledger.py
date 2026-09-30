@@ -209,10 +209,17 @@ class EpisodeRecord(BaseModel):
     library_hash: str | None = None
     """The digest of the arm's library as this episode found it (`Library.library_hash`).
 
-    Each arm grows its own library, so an arm-2-versus-arm-3 difference is
-    confounded with a library difference. Recording the digest per row makes that
-    confound visible rather than silent; removing it is a harness change tracked
-    separately (issue #4)."""
+    In the online mode each arm grows its own library, so an arm-2-versus-arm-3
+    difference there is confounded with a library difference, and the digest makes
+    that visible. In the frozen mode (ADR-0009) every arm dispatches against one
+    library, and every row of the run carries the same digest (issue #4)."""
+
+    library_program_ids: list[str] | None = None
+    """Every program id in the library as this episode found it, sorted -- the programs
+    `library_hash` covers, named (issue #4). Every status is listed, not only `admitted`:
+    the digest covers them all, and a candidate or quarantined program is part of the
+    artifact even though it cannot fire. `None` on a row written before the field
+    existed."""
     admission_gate: str | None = None
     """The admission gate the dispatched library's programs passed -- the 2x2's admission
     factor (issue #4, ADR-0010): `two_sided` or `positive_only`. The online mode always
