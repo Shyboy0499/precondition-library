@@ -200,6 +200,12 @@ class EpisodeRecord(BaseModel):
     pre-registration has the threshold calibrated on the held-out tune set, and a
     reader can see from the ledger alone whether that calibration happened rather
     than inferring it from the code's default."""
+
+    rerank_k: int | None = None
+    """How many first-stage candidates arm 2's reranker rescored, or `None` when the
+    library ran without one (ADR-0011). Recorded beside `similarity_threshold` because,
+    with a reranker, the threshold judges the reranker's score, so a row cannot be read
+    without knowing which stage the number came from."""
     library_hash: str | None = None
     """The digest of the arm's library as this episode found it (`Library.library_hash`).
 
