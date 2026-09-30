@@ -316,6 +316,52 @@ def test_the_seed_plans_quoted_half_widths(successes: int, n: int, half_width: f
     assert (interval.high - interval.low) / 2 == pytest.approx(half_width, abs=5e-4)
 
 
+def _tost_half_width(successes: int, n: int) -> float:
+    """The TOST interval's half-width when both arms observe `successes` of `n`."""
+    rate = Rate(numerator=successes, denominator=n)
+    verdict = tost_equivalence(rate, rate)
+    assert verdict is not None
+    return (verdict.interval.high - verdict.interval.low) / 2
+
+
+@pytest.mark.parametrize(
+    ("successes", "n", "half_width"),
+    [
+        # The owner's instance target, per arm, at a shared 50% rate.
+        (12, 24, 0.225),
+        # The eval set's achieved environments, per arm (ADR-0006's table).
+        (24, 47, 0.165),
+        (38, 47, 0.134),
+        (42, 47, 0.110),
+    ],
+)
+def test_the_margins_quoted_tost_half_widths(successes: int, n: int, half_width: float) -> None:
+    """The TOST figures spec section 7, `bench.splits` and ADR-0006 quote.
+
+    The margin is applied to a *difference* of two rates at a 90% interval, so its
+    power is not a single rate's Wilson half-width; these pin the figures that are.
+    """
+    assert _tost_half_width(successes, n) == pytest.approx(half_width, abs=5e-4)
+
+
+def test_the_margin_first_becomes_passable_at_133_per_arm() -> None:
+    """At a shared 50% rate +/-10pp fails at 132 per arm and passes at 133.
+
+    The most favourable case: identical observed rates. The 47 achieved are far
+    short of it, which is why the expected verdict is "comparable" (ADR-0006).
+    """
+    assert EQUIVALENCE_MARGIN == 0.10
+    at_132 = tost_equivalence(
+        Rate(numerator=66, denominator=132), Rate(numerator=66, denominator=132)
+    )
+    at_133 = tost_equivalence(
+        Rate(numerator=66, denominator=133), Rate(numerator=66, denominator=133)
+    )
+    assert at_132 is not None and at_133 is not None
+    assert not at_132.equivalent
+    assert at_133.equivalent
+
+
 def test_wilson_interval_is_none_at_n_zero() -> None:
     """There is no interval over no observations; a naive formula divides by zero."""
     assert wilson_interval(0, 0) is None
