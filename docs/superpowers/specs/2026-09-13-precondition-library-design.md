@@ -57,6 +57,7 @@
 | 47 | 2026-09-30 | **Every row names the programs its library held (issue #4).** #4 asks that every ledger row record `library_hash` "and list the program_ids present"; the digest was recorded (#64), the list was not. `EpisodeRecord.library_program_ids` is every program id in the library as the episode found it, sorted -- every status, because the digest covers every status -- and `Library.program_ids()` produces it. It is written on normal and invalid rows alike. The `library_hash` field's docstring still said each arm grows its own library and that removing the confound was tracked separately; since ADR-0009 the frozen mode removes it, and the docstring now says so. The field is additive and defaulted; no metric changes, no eval episode has been run, and no result is claimed. |
 | 48 | 2026-09-30 | **The plan runs as whole-run replicates, and seed-level uncertainty comes from an instance-clustered bootstrap instead of a mixed model (issue #6, ADR-0012).** #6 asks for k >= 3 repeats per (fault, seed, arm) and a mixed model with seed as a random effect; neither existed. The owner chose whole-run replicates -- `run_replicates` re-runs the plan from scratch per replicate, with its own ledger and, online, its own libraries, because a back-to-back repeat in one run would replay the first one's program -- and a cluster bootstrap over instances instead of a fitted model, because the repository takes no statistics dependency and a GLMM is unstable at 47 instances. Rows record `replicate`; `cluster_bootstrap` gives arm 2 minus arm 3 per-fire mismatch (ADR-0008) with a seeded 95% percentile interval over 2000 resamples of whole instances, over graded variant rows, skipping and counting resamples in which an arm fired nothing. **Live correction:** §7 item 2 still named the unit of analysis "the fault seed/family"; since ADR-0005 it is the environment, and the item now says so and names the replicates and the bootstrap. Of #6's other items, the seed split, the pairing, the pinned dates, recorded model and temperature (#133) are done, and "occurrences 2-4 as held-out variants, or relabelled replays and excluded" is met by its second branch (`occurrence_roles`); a clean rerun reproducing eval numbers needs an eval run. No eval episode has been run, and no result is claimed. |
 | 49 | 2026-09-30 | **Probes must only read: one that changes the sandbox is refused, counted, and fails admission (issue #10).** #10 asks for preconditions that are "pure read-only probes"; since #108 they were screened by the guard, but the guard permits writes inside the sandbox because bodies need them, so a probe such as `git reset --hard` ran and corrupted what every later probe and the episode observed. `evaluate_predicate` now snapshots the sandbox before and after each probe (working-tree files by content, the index as `git ls-files --stage`, `.git/config`, `.git/HEAD`, and the refs of the clone and the upstream; not `.git/index`'s bytes, which `git status` legitimately rewrites) and refuses a probe that changed any part, naming it. `PredicateResult.refused` flags both a guard refusal and a mutation, and `GroundTruthResult.refusals` counts them, so a refusal no longer reads as an ordinary non-match. Admission's negative side treats a refused precondition as a defect, closing the hole where a refused probe rejected every negative sandbox and passed as a program that never fires. §9's threat table gains the row. The snapshot costs about 11 ms (three git calls), twice per probe; the Linux suite's wall clock rose from about 3.6 to 4.8 minutes. **Not done (#10):** the precondition vocabulary and breadth cap, argv templates, process isolation, and the injection suite. No eval episode has been run, and no result is claimed. |
+| 50 | 2026-09-30 | **Bodies and probes run in their own process group, killed whole on timeout, under POSIX resource limits (issue #10).** #10 asks that replay run "as an unprivileged user with no network, ulimits, a disk quota, and the process group killed on timeout". `subprocess.run(timeout=...)` killed only the shell, so work it had backgrounded outlived the timeout; measured, a background writer fired after the timeout and wrote its marker. `runtime.confine.run_confined` starts each command in a new session (POSIX) or process group (Windows) and kills the group on expiry (`killpg`; `taskkill /T /F`), and on POSIX sets `RLIMIT_FSIZE` to 256 MiB and `RLIMIT_CORE` to 0. Replay and probes both go through it. §9's structural protections and residual risk are updated. **Not done:** an unprivileged user, network isolation and a disk quota need privilege a process cannot give itself; Windows has no resource limits (job objects not implemented); a body that calls `setsid` escapes the group. No eval episode has been run, and no result is claimed. |
 
 ---
 
@@ -989,7 +990,12 @@ noted.
 
 - Phase 1 never points a replay at a real repository. Admission, benchmarking,
   and replay all run on disposable sandboxes.
-- The replay timeout bounds damage from a hung or looping body.
+- The replay timeout bounds damage from a hung or looping body, and it bounds the
+  **whole process group**: every body and probe runs in its own group (a new session
+  on POSIX, a new process group on Windows), and on expiry the group is killed, so
+  work a body put in the background cannot outlive it (`runtime.confine`, issue #10).
+  On POSIX the command also runs with a per-file size limit (256 MiB) and core dumps
+  off.
 - `runtime/replay.py` cannot reach `provider` (enforced by test), so a replay
   cannot be talked into asking for help.
 
@@ -999,8 +1005,11 @@ not kernel-enforced. It is textual and environmental: the guard refuses
 recognisable network tools and URLs in the body, and the environment allowlist
 with a redirected `HOME` keeps ambient credentials out, but neither stops an
 endpoint assembled at run time (the guard's "What the guard cannot see"). There
-is no `sandbox-exec` here; kernel-enforced isolation is issue #10's territory
-and is not implemented. Running compiled programs against real repositories
+is no `sandbox-exec` here; kernel-enforced isolation — a separate unprivileged
+user, network isolation, a real disk quota — needs privilege a process cannot give
+itself, is issue #10's territory, and is not implemented. A body that calls `setsid`
+leaves its process group and escapes the group kill, and Windows gets the group kill
+but no resource limits. Running compiled programs against real repositories
 requires human review of each program and is explicitly out of scope; the guard
 is a seatbelt, not a sandbox boundary.
 

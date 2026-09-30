@@ -26,12 +26,11 @@ distinguishable.
 
 from __future__ import annotations
 
-import subprocess
-
 from pydantic import BaseModel
 
 from ..program import GroundTruthResult, Program
 from ..sandbox import Sandbox, git_env
+from .confine import run_confined
 from .guard import Verdict, screen
 from .probes import SHELL, UnboundParameterError, bindings, evaluate_predicates, substitute
 
@@ -59,15 +58,6 @@ class ReplayResult(BaseModel):
     reason: str = ""
     """Why `ok` is false: a refusal, an unbound body parameter, a timeout, a
     non-zero exit, or failed postconditions. Empty when `ok`."""
-
-
-def _text(value: str | bytes | None) -> str:
-    """The partial output a killed process left behind, as text."""
-    if value is None:
-        return ""
-    if isinstance(value, bytes):
-        return value.decode("utf-8", "replace")
-    return value
 
 
 def check_postconditions(program: Program, env: Sandbox) -> GroundTruthResult:
@@ -126,28 +116,13 @@ def replay(program: Program, env: Sandbox, *, timeout_s: float = 60.0) -> Replay
     # paths; this only makes one class of miss harmless.
     run_env = git_env(home=env.root)
 
-    timed_out = False
-    try:
-        completed = subprocess.run(
-            [*SHELL, body],
-            cwd=env.work,
-            capture_output=True,
-            text=True,
-            # Same reason as `probes.evaluate_predicate`: decode explicitly rather
-            # than with the machine locale, and keep undecodable bytes readable
-            # instead of letting the reader thread turn `stdout` into `None`.
-            encoding="utf-8",
-            errors="replace",
-            env=run_env,
-            timeout=timeout_s,
-        )
-        exit_code = completed.returncode
-        stdout, stderr = completed.stdout, completed.stderr
-    except subprocess.TimeoutExpired as expired:
-        timed_out = True
-        exit_code = -1
-        stdout = _text(expired.stdout)
-        stderr = _text(expired.stderr)
+    # Its own process group, killed whole on timeout, under the POSIX limits
+    # (`runtime.confine`, issue #10): a body that backgrounds work cannot leave it
+    # running after the timeout that was meant to stop it.
+    confined = run_confined([*SHELL, body], cwd=env.work, env=run_env, timeout_s=timeout_s)
+    timed_out = confined.timed_out
+    exit_code = -1 if confined.returncode is None else confined.returncode
+    stdout, stderr = confined.stdout, confined.stderr
 
     # Unconditional: the body ran, so its result is evidence even if it failed.
     postconditions = check_postconditions(program, env)
