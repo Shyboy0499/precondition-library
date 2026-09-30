@@ -159,7 +159,7 @@ draw space, not the seed count.
 The episode-level mismatch comparison can now carry a wider-but-real interval
 rather than none at all, but it is still underpowered for the pre-registered
 +/-10pp equivalence margin: a 95% Wilson interval on a proportion near 0.5 is
-about +/-18.6pp at N=24 and +/-14.7pp at N=47, against the ~94 environments the
+about +/-18.6pp at N=24 and +/-13.7pp at N=47, against the ~94 environments the
 margin needs. The pre-registered primary comparison is unaffected and lives
 elsewhere: it is the pair-level one over labelled (state, program) pairs (spec
 section 7, item 1; issue #5), where the state grid is crossed with seeds and no
