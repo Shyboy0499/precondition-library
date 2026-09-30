@@ -20,6 +20,11 @@ of building is recorded and never mixed into the comparison's rows. Their `arm` 
 `precondition` only because an arm has to be named: against an empty library both
 dispatch arms fall straight back to solving, so the two are identical here.
 
+**The admission factor's second library** (ADR-0010). With `positive_only_root`, every
+compiled program is gated a second time with `AdmissionGate.POSITIVE_ONLY` into another
+root, so the 2x2's two libraries come from one compile. Each root gets a `build.json`
+naming its gate; the runner reads it to label rows.
+
 Building needs a model: the solves and compiles are LLM calls. This module takes the
 `provider` as the runner does and reads no environment, so it runs wherever a key is
 configured; `tests/test_build_library.py` exercises it with a scripted provider.
@@ -27,18 +32,20 @@ configured; `tests/test_build_library.py` exercises it with a scripted provider.
 
 from __future__ import annotations
 
+import json
 import shutil
 import tempfile
 from pathlib import Path
 
 from pydantic import BaseModel
 
+from ..agents.compile import AdmissionGate, admit
 from ..library import Library
-from ..program import ProgramStatus
+from ..program import Program, ProgramStatus
 from ..provider import Provider
 from ..runtime.probes import evaluate_preconditions
 from .ledger import Arm, append
-from .run import _require_measurable, run_episode
+from .run import MANIFEST, _require_measurable, run_episode
 from .splits import SMOKE_SEEDS, occurrence_roles
 
 _BUILD_ARM = Arm.PRECONDITION
@@ -56,12 +63,16 @@ class BuiltProgram(BaseModel):
 
 
 class BuildReport(BaseModel):
-    """What the build put in the frozen library, and the hash every arm will record."""
+    """What the build put in one frozen library, and the hash every arm will record."""
 
     root: Path
     ledger: Path
+    gate: AdmissionGate
     programs: list[BuiltProgram]
     library_hash: str
+    positive_only: BuildReport | None = None
+    """The same compiled programs gated positive-only, when a second root was asked for:
+    the 2x2's ungated library (ADR-0010)."""
 
     @property
     def admitted(self) -> int:
@@ -76,6 +87,7 @@ def build_library(
     provider: Provider,
     model: str,
     seeds: tuple[int, ...] = SMOKE_SEEDS,
+    positive_only_root: Path | None = None,
 ) -> BuildReport:
     """Solve, compile and gate every `(fault, seed)` into one frozen library at `root`.
 
@@ -84,17 +96,27 @@ def build_library(
     are left alone, so the committed `library/` -- whose README documents the
     directory -- can be the root. The build rows go to `ledger`, which must differ
     from the comparison's.
+
+    `positive_only_root` builds the 2x2's second library in the same pass (ADR-0010):
+    each compiled program is gated a second time with `AdmissionGate.POSITIVE_ONLY` and
+    stored there. **Compiled once, gated twice**, so the two libraries hold the same
+    programs and differ only in which the gate admitted -- two compiles would let a
+    model's run-to-run variation into the admission factor.
     """
     _require_measurable(faults)
-    existing = Library(root).load_all()
-    if existing:
-        raise ValueError(
-            f"{root} already holds {len(existing)} program(s); a frozen library is built once "
-            f"into a directory with none, so its contents are exactly this build's"
-        )
-    root.mkdir(parents=True, exist_ok=True)
+    for target in (root, positive_only_root):
+        if target is None:
+            continue
+        existing = Library(target).load_all()
+        if existing:
+            raise ValueError(
+                f"{target} already holds {len(existing)} program(s); a frozen library is built "
+                f"once into a directory with none, so its contents are exactly this build's"
+            )
+        target.mkdir(parents=True, exist_ok=True)
 
     built: list[BuiltProgram] = []
+    ungated: list[BuiltProgram] = []
     for fault in faults:
         roles = occurrence_roles(list(seeds), fault)
         for occurrence, seed in enumerate(seeds, start=1):
@@ -121,7 +143,51 @@ def build_library(
                             admitted=program.status is ProgramStatus.ADMITTED,
                         )
                     )
+                    if positive_only_root is not None:
+                        ungated.append(
+                            _gate_positive_only(program, fault, seed, positive_only_root)
+                        )
 
+    _write_manifest(root, AdmissionGate.TWO_SIDED, faults, seeds)
+    second: BuildReport | None = None
+    if positive_only_root is not None:
+        _write_manifest(positive_only_root, AdmissionGate.POSITIVE_ONLY, faults, seeds)
+        second = BuildReport(
+            root=positive_only_root,
+            ledger=ledger,
+            gate=AdmissionGate.POSITIVE_ONLY,
+            programs=ungated,
+            library_hash=Library(positive_only_root).library_hash(),
+        )
     return BuildReport(
-        root=root, ledger=ledger, programs=built, library_hash=Library(root).library_hash()
+        root=root,
+        ledger=ledger,
+        gate=AdmissionGate.TWO_SIDED,
+        programs=built,
+        library_hash=Library(root).library_hash(),
+        positive_only=second,
     )
+
+
+def _gate_positive_only(program: Program, fault: str, seed: int, root: Path) -> BuiltProgram:
+    """Store the compiled program as a candidate in `root` and gate it positive-only.
+
+    The candidate is the compiled program itself -- the two-sided gate only ever changed
+    its status -- so resetting the status recovers exactly what the compile produced.
+    """
+    candidate = program.model_copy(update={"status": ProgramStatus.CANDIDATE})
+    library = Library(root)
+    library.add(candidate)
+    admitted, _ = admit(candidate, fault, seeds=[seed], gate=AdmissionGate.POSITIVE_ONLY)
+    if admitted:
+        library.set_status(
+            candidate.id, ProgramStatus.ADMITTED, episode_id=candidate.provenance.episode_id
+        )
+    return BuiltProgram(fault=fault, seed=seed, program_id=candidate.id, admitted=admitted)
+
+
+def _write_manifest(
+    root: Path, gate: AdmissionGate, faults: list[str], seeds: tuple[int, ...]
+) -> None:
+    manifest = {"admission_gate": gate.value, "faults": faults, "seeds": list(seeds)}
+    (root / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
