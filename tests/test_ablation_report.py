@@ -31,6 +31,7 @@ from precondition_library.bench.report import (
     Rate,
     ablation_table,
     achieved_instances,
+    arm2_baseline_floor,
     arm_triples,
     break_even,
     change_surfaces,
@@ -360,6 +361,45 @@ def test_the_margin_first_becomes_passable_at_133_per_arm() -> None:
     assert at_132 is not None and at_133 is not None
     assert not at_132.equivalent
     assert at_133.equivalent
+
+
+# --- arm 2's baseline floor (spec §7 item 11, ADR-0007) ---------------------
+
+
+@pytest.mark.parametrize(
+    ("decided", "decidable", "usable"),
+    [
+        # At 24 decidable pairs the floor falls between 12 and 13.
+        (12, 24, False),
+        (13, 24, True),
+        # One pair above chance is not above chance: the lower bound is what is judged.
+        (9, 24, False),
+        # Exactly chance, as the uninformed regime is by construction.
+        (8, 24, False),
+    ],
+)
+def test_the_floor_judges_the_lower_bound_not_the_point_estimate(
+    decided: int, decidable: int, usable: bool
+) -> None:
+    floor = arm2_baseline_floor(decided, decidable)
+    assert floor.usable is usable
+    assert floor.chance == pytest.approx(1 / 3)
+    assert floor.lower_bound is not None
+    assert (floor.lower_bound > floor.chance) is usable
+    assert f"{decided}/{decidable}" in floor.reason
+
+
+def test_the_floor_refuses_to_call_nothing_a_baseline() -> None:
+    """No decidable pair is no measurement, so it is not a usable baseline."""
+    floor = arm2_baseline_floor(0, 0)
+    assert floor.usable is False
+    assert floor.lower_bound is None
+
+
+def test_the_floor_rejects_a_single_candidate() -> None:
+    """With one candidate there is no decision, so chance is undefined rather than 1."""
+    with pytest.raises(ValueError):
+        arm2_baseline_floor(3, 5, candidates=1)
 
 
 def test_wilson_interval_is_none_at_n_zero() -> None:

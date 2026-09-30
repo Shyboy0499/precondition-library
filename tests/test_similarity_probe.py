@@ -47,7 +47,9 @@ from precondition_library.bench.similarity_probe import (
     rationale_candidates,
     regime_of,
     top1_accuracy,
+    tune_baseline,
 )
+from precondition_library.bench.splits import TUNE_SEEDS
 from precondition_library.bench.textcontrol import roc_auc
 from precondition_library.library import _program_text
 from precondition_library.program import Program
@@ -546,3 +548,36 @@ def test_the_weighting_alternatives_do_not_fix_the_argmax() -> None:
             f"IDF was rejected because it lowers the argmax accuracy on the {regime} regime; if it "
             f"now raises it, the rejection needs re-measuring rather than this assertion removing"
         )
+
+
+# --- the tune-set baseline the floor judges (spec §7 item 11) ---------------------
+
+
+def test_the_tune_baseline_is_the_informed_regime_on_the_tune_seeds() -> None:
+    """What `arm2_baseline_floor` judges: informed pairs, tune seeds, and nothing pooled.
+
+    Pinned against `compare_scorers` run by hand with the same arguments, so the helper
+    cannot quietly measure the probe seeds or fold the uninformed tripwire in. The gold
+    figure is printed as context only: it is hand-written gold, not the library the eval
+    dispatches with, so it is **not** the pre-registered measurement.
+    """
+    candidates = _all_intent_candidates()
+    row = tune_baseline(candidates, lexical_similarity)
+    (expected,) = compare_scorers(
+        {"arm2": lexical_similarity}, candidates, seeds=TUNE_SEEDS, regimes=("informed",)
+    )
+    assert row == expected
+    assert row.regime == "informed"
+    assert row.decidable == row.pairs, "the informed regime has no negative pairs"
+    print(
+        f"\n  gold on the tune seeds (context, not the gate): strict top-1 "
+        f"{row.decided}/{row.decidable} ({percent(row.decided, row.decidable)}), AUC {row.auc:.4f}"
+    )
+
+
+def test_the_tune_baseline_refuses_an_intent_without_candidates() -> None:
+    """An empty library would score 0 of every pair and read as a baseline below the floor."""
+    candidates = _all_intent_candidates()
+    candidates["restore_submodule_state"] = {}
+    with pytest.raises(ValueError, match="restore_submodule_state"):
+        tune_baseline(candidates, lexical_similarity)

@@ -55,9 +55,13 @@ helps is measured on the same regime split in `tests/test_embedding_similarity.p
 What the module is best for: comparing scorers **against each other** on one fixed set of candidate
 texts within one regime, which is why it takes a mapping and not one scorer.
 
-**Informational, never gated.** Like the text control's informed boundary, this reports a number
-rather than asserting a threshold. A threshold on a proxy measurement would turn an exploratory
-figure into a claim, which is the failure this repository keeps a rule about.
+**Informational, never gated -- except the tune-set baseline.** Like the text control's informed
+boundary, the probe reports a number rather than asserting a threshold. A threshold on a proxy
+measurement would turn an exploratory figure into a claim, which is the failure this repository
+keeps a rule about. The one exception is `tune_baseline`: arm 2's strict top-1 on the tune seeds,
+against the library the eval dispatches with, is the comparison's own baseline, and spec §7 item 11
+pre-registers a floor on it (`bench.report.arm2_baseline_floor`, ADR-0007). Figures on
+`PROBE_SEEDS` and hand-written gold are never judged by that floor.
 """
 
 from __future__ import annotations
@@ -73,6 +77,7 @@ from ..tasks.intent import IntentSpec
 from ..tasks.registry import ambiguous_intents
 from ..tasks.state_grid import STATE_GRID
 from .pairs import LabelledPair, labelled_pairs
+from .splits import TUNE_SEEDS
 from .textcontrol import roc_auc
 
 PROBE_SEEDS: tuple[int, ...] = (0, 1, 2, 3)
@@ -332,3 +337,37 @@ def compare_scorers(
                 )
             )
     return findings
+
+
+def tune_baseline(
+    candidates_by_intent: Mapping[str, Mapping[str, str]], scorer: Similarity
+) -> ScorerDiscrimination:
+    """Arm 2's informed-regime discrimination on the **tune** seeds: what the floor judges.
+
+    Spec §7 item 11 (ADR-0007, issue #116): before any eval episode, arm 2's strict top-1 is
+    measured here -- on `bench.splits.TUNE_SEEDS`, where arm 2's representation and threshold
+    are tuned (item 5), and against the candidate texts of the library the eval will dispatch
+    with -- and `bench.report.arm2_baseline_floor` decides whether it is a usable baseline.
+    Informed regime only, because that is the baseline (ADR-0004); the uninformed channel is
+    chance by construction and would drag any scorer to the floor.
+
+    This is the one number here that is gated, and it is gated because it is not exploratory:
+    it is the pre-registered measurement of the comparison's own baseline. `PROBE_SEEDS` and
+    hand-written gold stay informational.
+
+    Raises when an intent has fewer than two candidate texts. An empty library would otherwise
+    score 0 of every decidable pair and read as a baseline that failed the floor, when there
+    was no baseline to measure.
+    """
+    for intent in ambiguous_intents():
+        found = candidates_by_intent.get(intent.name, {})
+        if len(found) < 2:
+            raise ValueError(
+                f"intent {intent.name!r} has {len(found)} candidate text(s); the tune baseline "
+                f"needs the eval library's programs for every ambiguous intent, or its top-1 "
+                f"measures an empty library rather than arm 2"
+            )
+    (row,) = compare_scorers(
+        {"arm2": scorer}, candidates_by_intent, seeds=TUNE_SEEDS, regimes=("informed",)
+    )
+    return row
