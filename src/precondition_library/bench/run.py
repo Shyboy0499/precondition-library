@@ -378,6 +378,7 @@ def run_episode(
     # Read the digest before the arm runs: it describes the library the episode
     # dispatched against, and the compile below may add to it afterwards.
     library_hash = library.library_hash()
+    library_program_ids = library.program_ids()
     box: Sandbox | None = None
     # The surface `recorded_state_intact` was actually handed, or `None` while it has
     # not run. Set from the declaration only once the call returns, so a row can never
@@ -400,6 +401,7 @@ def run_episode(
                 str(exc),
                 accounting=accounting,
                 library_hash=library_hash,
+                library_program_ids=library_program_ids,
                 threshold=library.threshold,
                 rerank_k=_rerank_k(library),
                 change_surface=applied_surface,
@@ -444,6 +446,7 @@ def run_episode(
                 str(exc),
                 accounting=accounting,
                 library_hash=library_hash,
+                library_program_ids=library_program_ids,
                 threshold=library.threshold,
                 rerank_k=_rerank_k(library),
                 change_surface=applied_surface,
@@ -488,6 +491,7 @@ def run_episode(
             similarity_threshold=library.threshold,
             rerank_k=_rerank_k(library),
             library_hash=library_hash,
+            library_program_ids=library_program_ids,
             admission_gate=None
             if arm is Arm.REACT or admission_gate is None
             else admission_gate.value,
@@ -933,6 +937,7 @@ def _invalid_record(
     accounting: _AccountingProvider,
     library_hash: str,
     threshold: float,
+    library_program_ids: list[str] | None = None,
     rerank_k: int | None = None,
     change_surface: tuple[str, ...] | None = None,
 ) -> EpisodeRecord:
@@ -986,6 +991,7 @@ def _invalid_record(
         similarity_threshold=threshold,
         rerank_k=rerank_k,
         library_hash=library_hash,
+        library_program_ids=library_program_ids,
         invalid_reason=reason,
         model=model,
     )

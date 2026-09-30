@@ -442,6 +442,10 @@ class Library:
                 count += 1
         return count
 
+    def program_ids(self) -> list[str]:
+        """Every stored program's id, sorted: what `library_hash` covers, by name."""
+        return [program.id for program in self.load_all()]
+
     def library_hash(self) -> str:
         """A stable sha256 over every stored program's content.
 
