@@ -54,7 +54,7 @@ from ..runtime.probes import evaluate_preconditions
 from ..runtime.replay import ReplayResult, replay
 from ..sandbox import Sandbox
 from ..signatures import StateFingerprint, TaskSignature
-from ..similarity import Similarity, lexical_similarity, similarity_usage
+from ..similarity import Similarity, SimilarityUsage, lexical_similarity, similarity_usage
 from ..tasks.faults import FAULTS, build_sandbox
 from ..tasks.intent import IntentSpec, ResolutionVariant
 from ..tasks.invariants import recorded_state_intact
@@ -224,6 +224,7 @@ def run_benchmark(
     provider: Provider,
     similarity: Similarity | None = None,
     frozen_library: Path | None = None,
+    reranker: Similarity | None = None,
 ) -> Path:
     """Run every (arm, fault, occurrence) episode and write the ledger.
 
@@ -288,13 +289,19 @@ def run_benchmark(
     for arm in arms:
         if frozen_library is not None:
             library = Library(
-                frozen_library, similarity=scorer, evaluate_preconditions=evaluate_preconditions
+                frozen_library,
+                similarity=scorer,
+                evaluate_preconditions=evaluate_preconditions,
+                reranker=reranker,
             )
         else:
             library_root = out.parent / f"library-{arm.value}"
             _require_empty_library(library_root, arm)
             library = Library(
-                library_root, similarity=scorer, evaluate_preconditions=evaluate_preconditions
+                library_root,
+                similarity=scorer,
+                evaluate_preconditions=evaluate_preconditions,
+                reranker=reranker,
             )
         for occurrence in range(1, occurrences + 1):
             for fault_type in faults:
@@ -394,6 +401,7 @@ def run_episode(
                 accounting=accounting,
                 library_hash=library_hash,
                 threshold=library.threshold,
+                rerank_k=_rerank_k(library),
                 change_surface=applied_surface,
             )
 
@@ -403,11 +411,11 @@ def run_episode(
 
         # Measured around the arm's run, so the row carries what this episode's dispatch
         # spent through the seam rather than the library's lifetime total.
-        embedding_before = similarity_usage(library.similarity)
+        embedding_before = _arm2_usage(library)
         result = _run_arm(
             arm, signature, box, library, fault_type, seed, occurrence, accounting, frozen=frozen
         )
-        embedding_after = similarity_usage(library.similarity)
+        embedding_after = _arm2_usage(library)
         state_intact: bool | None = None
         try:
             verdict = fault.check(box)
@@ -437,6 +445,7 @@ def run_episode(
                 accounting=accounting,
                 library_hash=library_hash,
                 threshold=library.threshold,
+                rerank_k=_rerank_k(library),
                 change_surface=applied_surface,
             )
 
@@ -477,6 +486,7 @@ def run_episode(
             program_id=result.program_id,
             dispatch_score=result.dispatch_score,
             similarity_threshold=library.threshold,
+            rerank_k=_rerank_k(library),
             library_hash=library_hash,
             admission_gate=None
             if arm is Arm.REACT or admission_gate is None
@@ -817,6 +827,28 @@ def _require_measurable(faults: list[str]) -> None:
         _intent_for(fault_type)
 
 
+def _rerank_k(library: Library) -> int | None:
+    """The `rerank_k` a row records: the library's, or `None` when it has no reranker."""
+    return library.rerank_k if library.reranker is not None else None
+
+
+def _arm2_usage(library: Library) -> SimilarityUsage:
+    """What arm 2's scorers have spent so far: the similarity seam plus the reranker.
+
+    Summed per distinct scorer, so one object used as both stages is counted once.
+    The reranker spends in the same currency as the embedding seam -- its own, never the
+    LLM's -- so it lands in the same `embedding_*` fields (issue #104, ADR-0011).
+    """
+    scorers: list[Similarity] = [library.similarity]
+    if library.reranker is not None and library.reranker is not library.similarity:
+        scorers.append(library.reranker)
+    usages = [similarity_usage(scorer) for scorer in scorers]
+    return SimilarityUsage(
+        tokens=sum(usage.tokens for usage in usages),
+        calls=sum(usage.calls for usage in usages),
+    )
+
+
 MANIFEST = "build.json"
 """The file in a built root that says which admission gate built it
 (`bench.build_library`). Not a program, so it changes neither `load_all` nor
@@ -901,6 +933,7 @@ def _invalid_record(
     accounting: _AccountingProvider,
     library_hash: str,
     threshold: float,
+    rerank_k: int | None = None,
     change_surface: tuple[str, ...] | None = None,
 ) -> EpisodeRecord:
     """The row for an episode that could not run.
@@ -951,6 +984,7 @@ def _invalid_record(
         ground_truth_ok=None,
         change_surface=change_surface,
         similarity_threshold=threshold,
+        rerank_k=rerank_k,
         library_hash=library_hash,
         invalid_reason=reason,
         model=model,

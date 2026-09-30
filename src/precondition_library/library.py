@@ -139,6 +139,13 @@ def _undeclared_variant_reason(program: Program) -> str | None:
     )
 
 
+DEFAULT_RERANK_K = 3
+"""How many first-stage candidates arm 2's optional reranker rescores (ADR-0011).
+
+Three because both measurable intents declare three resolutions, so a reranker sees every
+resolution a request could need, and because it was already `match_semantic`'s `limit`.
+It matters only when a reranker is set; the value that ran is recorded on every row."""
+
 DEFAULT_SIMILARITY_THRESHOLD = 0.1
 """Arm 2's default similarity floor.
 
@@ -233,6 +240,8 @@ class Library:
         similarity: Similarity = lexical_similarity,
         threshold: float = DEFAULT_SIMILARITY_THRESHOLD,
         evaluate_preconditions: PreconditionEvaluator | None = None,
+        reranker: Similarity | None = None,
+        rerank_k: int = DEFAULT_RERANK_K,
     ) -> None:
         """Open the library at `root`, with arm 2's and arm 3's mechanisms injected.
 
@@ -259,11 +268,22 @@ class Library:
         would let a caller run the arm at a value the harness never recorded;
         `bench/run.py` reads this attribute and writes it on every ledger row, so
         a tuned run is distinguishable from an untuned one.
+
+        `reranker` is arm 2's optional second stage (issue #4, ADR-0011): `similarity`
+        retrieves the top `rerank_k` admitted programs and the reranker -- any
+        `Similarity`, typically the pinned embedding model over a lexical first stage --
+        rescores them, and that score is what the threshold judges and the dispatch
+        records. `None` keeps arm 2 a single stage, exactly as before. It is set here for
+        the same reason `threshold` is: the configuration that ran is the one recorded.
         """
+        if rerank_k < 1:
+            raise ValueError(f"rerank_k must be at least 1, got {rerank_k}")
         self.root = root
         self.similarity = similarity
         self.threshold = threshold
         self.evaluate_preconditions = evaluate_preconditions
+        self.reranker = reranker
+        self.rerank_k = rerank_k
 
     def load_all(self) -> list[Program]:
         """Every stored program, sorted by id so the order is not filesystem luck.
@@ -474,6 +494,11 @@ class Library:
         its text is close enough, and that mis-fire is exactly the phenomenon the
         primary metric counts. A test that made this matcher state-aware would be
         testing a different experiment.
+
+        With a `reranker` the first stage retrieves the top `rerank_k` and the reranker
+        rescores them; the reranker's score is then the one thresholded, ordered and
+        returned. Both stages read the same text, so the reranker adds precision
+        without adding state: arm 2 is exactly as blind as before (ADR-0011).
         """
         query = _query_text(signature)
         scored = [
@@ -481,6 +506,18 @@ class Library:
             for program in self.load_all()
             if program.status is ProgramStatus.ADMITTED
         ]
+        if self.reranker is not None:
+            # Second stage (ADR-0011): the first stage only retrieves; the reranker's
+            # score decides, so it is the one the threshold judges. Ties in the
+            # retrieval break by id, as the final ordering does.
+            scored.sort(key=lambda item: (-item.score, item.program.id))
+            scored = [
+                ScoredProgram(
+                    program=item.program,
+                    score=self.reranker(query, _program_text(item.program)),
+                )
+                for item in scored[: self.rerank_k]
+            ]
         above = [item for item in scored if item.score >= self.threshold]
         above.sort(key=lambda item: (-item.score, item.program.id))
         return above[:limit]

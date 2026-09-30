@@ -50,6 +50,7 @@ from fractions import Fraction
 
 from pydantic import BaseModel
 
+from ..library import DEFAULT_RERANK_K
 from ..similarity import Similarity
 from .pairs import LabelledPair
 from .report import Interval, Rate, wilson_interval
@@ -225,13 +226,22 @@ def detectable_difference(
 
 
 def arm2_outcomes(
-    pairs: Sequence[LabelledPair], candidates: Mapping[str, str], scorer: Similarity
+    pairs: Sequence[LabelledPair],
+    candidates: Mapping[str, str],
+    scorer: Similarity,
+    *,
+    reranker: Similarity | None = None,
+    rerank_k: int = DEFAULT_RERANK_K,
 ) -> list[PairOutcome]:
     """Arm 2 on labelled pairs: the top-scoring candidate and its score, before a threshold.
 
     The same crossing `bench.similarity_probe` measures arm 2 with -- the pair's request
     text against each candidate's program text -- and the same tie-break as
     `Library.match_semantic` (score, then id), so a tie still fires one program.
+
+    With a `reranker`, as in `Library.match_semantic` (ADR-0011): `scorer` retrieves the
+    top `rerank_k`, the reranker rescores them, and the reranker's score is the one the
+    sweep thresholds.
     """
     outcomes: list[PairOutcome] = []
     for pair in pairs:
@@ -239,6 +249,14 @@ def arm2_outcomes(
             ((scorer(pair.task_text, text), variant) for variant, text in candidates.items()),
             key=lambda item: (-item[0], item[1]),
         )
+        if reranker is not None:
+            ranked = sorted(
+                (
+                    (reranker(pair.task_text, candidates[variant]), variant)
+                    for _, variant in ranked[:rerank_k]
+                ),
+                key=lambda item: (-item[0], item[1]),
+            )
         top = ranked[0] if ranked else None
         outcomes.append(
             PairOutcome(
