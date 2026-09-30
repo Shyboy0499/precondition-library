@@ -92,7 +92,7 @@ The measurement moves to **dispatch level**:
         └─ arm 2 scores text similarity (lexical today; an embedding model
                 behind the same seam is the intended replacement)
         │
-  both dispatchers sweep their acceptance threshold
+  arm 2 sweeps its threshold; arm 3, which has no score, is one operating point
         │
   mismatch-vs-coverage curve, Wilson intervals, explicit power statement
 ```

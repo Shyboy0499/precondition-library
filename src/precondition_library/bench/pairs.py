@@ -11,9 +11,9 @@ Why this seam lives here rather than in the dispatch-level harness (issue #5):
 issue #3 requires an AUC control and mismatch scored "on the ambiguous subset,
 with the denominator reported". Neither exists without per-instance labels, and
 the label definition must be frozen before any arm is built, or the comparison
-can be tuned into existence. Issue #5 adds the threshold sweep and coverage
-curves on top of this module; it should not also have to define what a wrong
-answer is.
+can be tuned into existence. `bench.coverage` (issue #5) builds the threshold
+sweep and coverage curve on top of this module; it does not also define what a
+wrong answer is.
 """
 
 from __future__ import annotations

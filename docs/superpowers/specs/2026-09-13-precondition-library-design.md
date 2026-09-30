@@ -50,6 +50,7 @@
 | 40 | 2026-09-30 | **The two questions #86 left to the owner are settled in ADR-0006 (proposed): `submodule_moved/init` counts as five environments, and the ±10pp equivalence margin stays, with its power restated as the TOST it is.** *`init`:* its five instances are byte-identical before resolution and differ in the nested content their gitlink names, which a correct resolution materialises; the owner reads that content as part of the environment, so the counts stand at 61 plan / 47 eval and `submodule_moved` stays in the comparison. `bench.instance_diversity` now expands each gitlink into the nested commit's blob lines, so no commit id enters `instance_signature` and the five are witnessed by content; the re-measured counts are unchanged (`.venv/bin/python -m precondition_library.bench.instance_diversity`), and `tests/test_instance_diversity.py::test_gitlinks_are_compared_by_the_content_they_name` pins it. *The margin:* revisions 38 and 39 stated the episode loop's power with one rate's 95% Wilson interval, but §7 item 10's margin is applied by a TOST to the **difference** of two arms' rates at a 90% interval. With `bench.report.tost_equivalence` and both arms at a shared 50% rate the difference's half-width is ±22.5pp at 24 per arm and **±16.5pp at 47**, and ±10pp first becomes passable at **133 per arm** (87 at 80%, 53 at 90%), not ~94. The margin is **not** revised: item 10 stands at ±10pp and α = 0.05, and at the achieved N the expected verdict is "comparable", which `success_rate_wording` already produces. **Live corrections:** §7's underpower note and `bench.splits`'s module docstring state the TOST figures beside the single-rate ones, and the ~94 is withdrawn; revisions 38 and 39 are left as written (rule 5). `tests/test_ablation_report.py::test_the_margins_quoted_tost_half_widths` and `::test_the_margin_first_becomes_passable_at_133_per_arm` pin the figures. **Logged before any eval pass**: no eval episode has been run, no metric definition, denominator or margin changes, and no result is claimed. |
 | 41 | 2026-09-30 | **The ledger gains `temperature`, and the provider pins it at 0 (issue #6).** #6 asks for the model version and temperature to be pinned and recorded per episode; `model` was recorded, but no temperature was sent or recorded anywhere. `DeepSeekProvider` now sends `temperature` on every call (`DEFAULT_TEMPERATURE = 0.0`, overridable) and reports the value it sent on each `Completion`; `bench/run.py`'s per-episode accounting reads it off the completions, so the row records what the calls used rather than a configuration value, and an episode whose calls disagree raises. A replay row carries `null`, because no model ran. **Not verified:** whether the endpoint honours the field — no live call has been made, a reasoning model may ignore sampling parameters, and temperature 0 is not determinism on a hosted model. The field is additive and defaulted, so no metric definition, denominator or reported number changes; no eval episode has been run, and no result is claimed. |
 | 42 | 2026-09-30 | **Arm 2 gets a pre-registered floor: it counts as the baseline only if its informed-regime strict top-1 on the tune set clears chance by its 95% Wilson lower bound (issue #116, ADR-0007).** #116's last open item asked for the top-1 below which arm 2 is not a usable baseline to be decided before the eval, so that "preconditions beat text similarity" cannot be read off a broken one. §7 gains item 11. The measurement is `bench.similarity_probe.tune_baseline` (informed regime, `TUNE_SEEDS`, the eval library's candidate texts), and the verdict is `bench.report.arm2_baseline_floor`: usable when the Wilson lower bound exceeds 1/3. At 24 decidable pairs the floor falls between 12 and 13. Below it the comparison is still reported, with the verdict beside it, and the claim may not be stated. **Context only, not the gate:** hand-written gold on the tune seeds scores 55/96 (57%, AUC 0.6175), lower bound 0.473, and the probe's informed 15/24 has a lower bound of 0.427. Neither is the pre-registered measurement, which needs the compiled library. The probe module stays ungated on `PROBE_SEEDS`; `tune_baseline` is the one gated measurement and refuses an intent with fewer than two candidates, so an empty library cannot read as a failed baseline. **Logged before any eval pass**: no eval episode has been run, no existing metric definition or denominator changes, and no result is claimed. |
+| 43 | 2026-09-30 | **The primary metric's arithmetic is defined and implemented: arm 2 is swept, arm 3 is one operating point whose coverage is the pre-registered coverage point, and mismatch is per fire (issue #5, ADR-0008).** §7 said both dispatchers sweep their acceptance thresholds, but arm 3 has no score — it fires the most specific program whose preconditions hold, or nothing — so there was nothing to sweep, and the pre-registered coverage point had no value. The owner chose: arm 3 is a single point and its own coverage is the coverage point; mismatch is wrong fires over fires, with any fire on a negative pair wrong. `bench.coverage` implements it over per-pair dispatch outcomes (`PairOutcome`), so it runs before a compiled library exists: `sweep` (one point per distinct arm-2 score, inclusive floor as in `Library.match_semantic`), `operating_point`, `matched_comparison` (nearest coverage, ties to the lower coverage, compared as exact fractions, gap reported), `vacuous_reason` (arm 3 correct on every pair), and `detectable_difference` for item 3. Every function refuses outcomes from both regimes. **Live corrections:** §7 item 1, item 3, Figure 1 and the method diagram, the README diagram, and the `bench.report` and `bench.pairs` docstrings. **Exercised on gold, not the gate:** over the tune seeds' informed pairs, arm 2 traces 7 operating points from 8/96 to 96/96 coverage (mismatch 41/96 at full coverage, i.e. 55 of 96 correct), and arm 3 played by the labelling rule decides all 96 pairs correctly, so `vacuous_reason` fires, as it does on the 128 uninformed pairs. The first real run needs compiled programs (#4, #7). **Logged before any eval pass**: no eval episode has been run, and no result is claimed. |
 
 ---
 
@@ -649,7 +650,7 @@ The primary measurement is a **dispatch-level benchmark**, not an episode run:
         ├─ tune set     calibrate arm 2's representation and threshold
         └─ eval set     the reported numbers
         │
-  both dispatchers sweep their acceptance threshold
+  arm 2 sweeps its threshold; arm 3 is one operating point (ADR-0008)
         │
   mismatch-vs-coverage curve, Wilson intervals, power statement
 ```
@@ -696,9 +697,10 @@ parameter binding first.
 
 ### Figures
 
-**Figure 1 — mismatch vs coverage.** The primary figure. Both dispatchers swept
-across acceptance thresholds; mismatch rate against coverage, Wilson intervals at
-each operating point, and the pre-registered coverage point marked.
+**Figure 1 — mismatch vs coverage.** The primary figure. Arm 2's curve over every
+distinct acceptance threshold, and arm 3 as a single operating point, since it has
+no score to sweep (ADR-0008); mismatch rate against coverage, Wilson intervals at
+each operating point, and the pre-registered coverage point — arm 3's own — marked.
 
 **Figure 2 — cost vs repeat (secondary).** **Cumulative amortized** tokens and LLM
 calls per episode against `occurrence_index`, one line per arm, from the
@@ -731,13 +733,26 @@ after seeing results.
 1. **Primary metric:** the mismatch-versus-coverage curve, and the difference
    between dispatchers **at matched coverage**. The directional claim is stated at
    a pre-registered coverage point; the full curve is reported regardless.
+   Defined by ADR-0008 and computed by `bench.coverage`: *coverage* is fires over
+   pairs, negatives included; *mismatch* is wrong fires over fires, a fire on a
+   negative pair counting as wrong. Arm 2's threshold is swept over every distinct
+   score; arm 3 has no score and is one operating point, and **its coverage is the
+   pre-registered coverage point**. Arm 2's point nearest it is the matched one, a
+   tie going to the lower coverage, and the coverage gap is reported beside the
+   difference. The regimes are compared separately, never pooled (ADR-0004). While
+   arm 3 decides every pair correctly — hand-written programs that agree with the
+   labelling rules do, by construction — the comparison is vacuous, and the report
+   prints `vacuous_reason` instead of it.
 2. **Unit of analysis:** the fault seed/family, not the episode. Seeds split into
    disjoint admit / tune / eval sets; episodes paired by (fault, seed). Within the
    episode loop the independent observations are its **variant** occurrences only:
    a replay re-asks a state an earlier occurrence introduced, and is excluded from
    every independence claim (see "Ledger").
 3. **Power statement:** required — the detectable effect size at the chosen pair
-   count, coverage points, and alpha.
+   count, coverage points, and alpha. `bench.coverage.detectable_difference` computes
+   it for two arms' fire counts (two-proportion normal approximation, α = 0.05
+   two-sided and power 0.80 by default; ADR-0008 records those as defaults, not as a
+   registered α for the directional claim).
 4. **Secondary metrics:** tokens and LLM calls per episode by occurrence index,
    accumulated into a running amortized cost with the break-even marked (the cost
    model, Figure 2); **arm 2's embedding currency separately**, never added to the LLM token fields;

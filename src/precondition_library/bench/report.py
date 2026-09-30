@@ -5,8 +5,9 @@ What is primary, and what this module is not
 The pre-registered primary metric (spec §7, "Pre-registered analysis", revised
 2026-09-13 before any data existed) is the **mismatch-versus-coverage curve at
 matched coverage**, computed over labelled (repo-state, candidate-program)
-dispatch pairs -- the seam in `bench.pairs` and the threshold sweep in issue #5.
-This module does not compute it, and no number printed here is that measurement.
+dispatch pairs -- the seam in `bench.pairs`, swept and matched in `bench.coverage`
+(issue #5, ADR-0008). This module does not compute it, and no number printed here
+is that measurement.
 
 The episode loop `bench.run` writes is retained only as a demonstration and is
 explicitly underpowered. The nominal grid is 5 faults x 4 occurrences x 3 arms,
