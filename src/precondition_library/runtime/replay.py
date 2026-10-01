@@ -30,7 +30,7 @@ from pydantic import BaseModel
 
 from ..program import GroundTruthResult, Program
 from ..sandbox import Sandbox, git_env
-from .confine import run_confined
+from .confine import network_isolation_available, run_confined
 from .guard import Verdict, screen
 from .probes import SHELL, UnboundParameterError, bindings, evaluate_predicates, substitute
 from .templates import run_steps
@@ -59,6 +59,11 @@ class ReplayResult(BaseModel):
     reason: str = ""
     """Why `ok` is false: a refusal, an unbound body parameter, a timeout, a
     non-zero exit, or failed postconditions. Empty when `ok`."""
+    network_isolated: bool = False
+    """Whether the body ran inside an empty network namespace (issue #10). False
+    when nothing ran (a refusal or an unbound parameter) or when the host could
+    not provide one; recorded, not enforced, since a host may withhold the
+    privilege (`runtime.confine.network_isolation_available`)."""
 
 
 def check_postconditions(program: Program, env: Sandbox) -> GroundTruthResult:
@@ -96,6 +101,8 @@ def replay(program: Program, env: Sandbox, *, timeout_s: float = 60.0) -> Replay
         ok, exit_code, stdout, stderr, timed_out, unbound, reason, post = run_steps(
             program, env, timeout_s=timeout_s
         )
+        # The steps ran through `run_confined`, so they carry the same network
+        # isolation; `unbound` means nothing ran, so it did not.
         return ReplayResult(
             ok=ok,
             exit_code=exit_code,
@@ -105,6 +112,7 @@ def replay(program: Program, env: Sandbox, *, timeout_s: float = 60.0) -> Replay
             unbound_parameter=unbound,
             reason=reason,
             postconditions=post,
+            network_isolated=(not unbound) and network_isolation_available(),
         )
 
     assert program.body is not None  # the model guarantees exactly one of body/steps
@@ -165,4 +173,5 @@ def replay(program: Program, env: Sandbox, *, timeout_s: float = 60.0) -> Replay
         timed_out=timed_out,
         postconditions=postconditions,
         reason=reason,
+        network_isolated=confined.network_isolated,
     )
