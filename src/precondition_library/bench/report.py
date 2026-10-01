@@ -14,8 +14,12 @@ explicitly underpowered. The nominal grid is 5 faults x 4 occurrences x 3 arms,
 but only two of the five faults are measurable -- the other three are fixed
 single sentences and sit in `tasks.registry.EXCLUDED_FROM_BENCHMARK` -- so the
 runnable demo is 2 faults x 4 occurrences x 3 arms = **24 episodes**, and
-`bench.run` refuses the excluded three rather than skipping them. Spec §7
-excludes the demo from the primary claim. So the two figures built here are:
+`bench.run` refuses the excluded three rather than skipping them. The issue #7
+baselines are additional arms a run may include -- among them the zero-token
+gold **oracle floor** -- so a run that names them adds 2 x 4 episodes per
+baseline on the same grid; the per-arm tables below carry each one without
+special-casing. Spec §7 excludes the demo from the primary claim. So the two
+figures built here are:
 
 * a **cost model** -- mean tokens and LLM calls per episode against
   `occurrence_index`, one series per arm, over the **replay** occurrences: the
@@ -1859,8 +1863,16 @@ def _summary(
             f" {_format_mean(triple.tokens_per_episode, 'tokens/episode')}"
             f" {rendered_success}"
         )
+    gold = next((triple for triple in triples if triple.arm is Arm.GOLD), None)
+    if gold is not None:
+        lines.append(
+            "  gold is the oracle floor (issue #7): it replays the ground-truth variant's "
+            "hand-written resolution at zero LLM tokens, so its success bounds what any arm "
+            "could reach here and its cost bounds the cheapest an arm could be. It is an "
+            "oracle, not a dispatcher, so it is absent from the matched-coverage comparison."
+        )
     lines.append(
-        "Pareto over the three (an arm is only dominated if it is no better on success "
+        "Pareto over the arms (an arm is only dominated if it is no better on success "
         "and no cheaper on both costs):"
     )
     if pareto.frontier:

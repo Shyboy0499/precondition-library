@@ -22,11 +22,25 @@ from ..program import EpisodeOutcome
 
 
 class Arm(StrEnum):
-    """The three conditions. Each builds its own library from an empty start."""
+    """The conditions compared. In the online mode each builds its own library
+    from an empty start; a frozen run (ADR-0009) dispatches them all against one.
+
+    The first three are the experiment: ReAct with no reuse (arm 1), text
+    similarity (arm 2), and executable preconditions (arm 3). The rest are the
+    baselines issue #7 adds so an arm-3 win is attributable rather than a straw
+    man -- a zero-token oracle floor (`GOLD`), and (to come) a soft classifier
+    over the same probe features, an intent-key lookup, and ReAct with
+    prior-success memory.
+
+    `GOLD` is an **oracle**: it consults the state's ground-truth variant to pick
+    the hand-written resolution, which is exactly why it is a floor and why it is
+    excluded from the matched-coverage dispatch comparison (ADR-0014). Every other
+    arm is denied the checker until after it has stopped (`bench.run`)."""
 
     REACT = "react"
     SEMANTIC = "semantic"
     PRECONDITION = "precondition"
+    GOLD = "gold"
 
 
 class OccurrenceRole(StrEnum):
