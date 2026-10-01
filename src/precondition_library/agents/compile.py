@@ -187,6 +187,30 @@ gate's verdict is reproducible: a gate whose verdict flickered would make every
 downstream comparison meaningless.
 """
 
+BREADTH_CAP = 0.5
+"""The most of the sampled state universe a precondition set may fire on (issue #10).
+
+A precondition set that matches most states is not targeted: it would fire on
+states it has nothing to do with, which is the mismatch this project measures.
+#10 asks for a "measured breadth cap: predicates matching >X% of sampled states
+are rejected, and X plus the sampling procedure are recorded." X is 0.50 and the
+sampling procedure is `sampled_states` below.
+
+Measured, so the cap is grounded rather than guessed: every gold program fires on
+exactly one of the ten sampled states (0.10), because each resolves one state and
+no other. The cap sits well above that, so it cannot reject a well-targeted
+program, and it rejects one firing on six or more of the ten.
+
+For the current fault family the cap does not bind *after* the enumerated negative
+classes: a program that has already been rejected on the clean sandbox, every
+unrelated fault's states and its declared siblings can only still fire on its own
+fault's remaining states, of which no fault has more than three. The cap is the
+holistic backstop the enumerated classes are a sharpening of, and it becomes
+load-bearing if a fault ever injects more states than the classes enumerate (a
+non-resolution state of a program's own fault is in the universe but named by no
+enumerated class). `precondition_breadth` is also the recorded measurement a
+report can quote for any program, including an over-broad one the classes catch."""
+
 _SEED_SEARCH_LIMIT = 64
 """How far the seed scans run when selecting a fault's distinct states.
 
@@ -503,10 +527,40 @@ def admit(
                 f"resolution is correct is the mismatch this gate exists to refuse"
             )
 
+    # Breadth cap (issue #10). The fraction of the sampled universe the
+    # preconditions fire on must not exceed BREADTH_CAP. Reaching here means the
+    # clean sandbox, every unrelated fault's states and the declared siblings were
+    # all rejected, so the only universe states that can still fire are this
+    # fault's own non-sibling states -- its resolution, plus any injected state
+    # that is not a declared resolution. Evaluating only those is the cheap
+    # equivalent of `precondition_breadth`'s full sweep (which rebuilds the
+    # unrelated faults' sandboxes only to confirm the zero we already have); the
+    # two agree, pinned by test_breadth_cap. The denominator is the whole universe.
+    total = len(sampled_states())
+    sibling_seeds = {seed for seed, _ in siblings}
+    own_remaining = [seed for seed in _state_seeds(FAULTS[name]) if seed not in sibling_seeds]
+    fired_where: list[str] = []
+    for seed in own_remaining:
+        accepted, error = _preconditions_accept(program, seed, [name])
+        if error is not None:
+            return False, f"negative side failed: preconditions could not be evaluated ({error})"
+        if accepted:
+            fired_where.append(f"{name}:{FAULTS[name].variant_for_seed(seed)}")
+    fired = len(fired_where)
+    if fired > BREADTH_CAP * total:
+        return False, (
+            f"negative side failed: preconditions fired on {fired} of {total} sampled "
+            f"states ({fired / total:.0%}), over the {BREADTH_CAP:.0%} breadth cap "
+            f"(issue #10): a precondition set that matches most states is not targeted. "
+            f"Fired on: {', '.join(fired_where)}"
+        )
+
     return True, (
         f"admitted: postconditions held on {len(seeds)} freshly faulted sandbox(es); "
         f"preconditions rejected 1 clean sandbox, {len(unrelated_states)} unrelated "
-        f"state(s) and {len(siblings)} same-intent state(s)"
+        f"state(s) and {len(siblings)} same-intent state(s), and fired on {fired} of "
+        f"{total} sampled states ({fired / total:.0%}), within the {BREADTH_CAP:.0%} "
+        f"breadth cap"
     )
 
 
@@ -542,6 +596,47 @@ def _preconditions_accept(
         first = refused[0]
         return False, f"precondition {first.name!r} was refused: {first.observed}"
     return result.ok, None
+
+
+def sampled_states() -> list[tuple[str, int]]:
+    """The deterministic state universe the breadth cap measures over (issue #10).
+
+    The clean sandbox, then one sandbox per distinct injected state of every fault
+    at the first seed that selects it (`_state_seeds`, via `variant_for_seed`) --
+    the same enumeration the negative side uses, taken over all faults. Each entry
+    is `(fault_name, seed)`; an empty fault name is the clean sandbox. Fixed and
+    reproducible, so the breadth fraction is a property of the program, not of a
+    sampling draw.
+    """
+    universe: list[tuple[str, int]] = [("", _CLEAN_SEED)]
+    for fault_name in sorted(FAULTS):
+        universe.extend((fault_name, seed) for seed in _state_seeds(FAULTS[fault_name]))
+    return universe
+
+
+def precondition_breadth(program: Program) -> tuple[int, int, list[str]]:
+    """How many of the sampled states the program's preconditions fire on.
+
+    Returns `(fired, total, labels)`. A fire is the preconditions holding with none
+    refused; a refused or unbindable precondition is not a fire (the negative side
+    rejects a refused program on its own terms, so it is not also counted here).
+    Standalone and assumption-free -- it builds the whole universe -- so it is the
+    recorded breadth measurement for any program, including an over-broad one the
+    enumerated negative classes would also catch. `admit` uses it, so the number it
+    enforces and the number a report quotes are the same computation.
+    """
+    universe = sampled_states()
+    fired: list[str] = []
+    for fault_name, seed in universe:
+        faults = [fault_name] if fault_name else []
+        accepted, error = _preconditions_accept(program, seed, faults)
+        if error is None and accepted:
+            if fault_name:
+                state = FAULTS[fault_name].variant_for_seed(seed)
+                fired.append(f"{fault_name}:{state}" if state is not None else fault_name)
+            else:
+                fired.append("clean")
+    return len(fired), len(universe), fired
 
 
 def _sibling_seeds(
