@@ -45,12 +45,14 @@ from __future__ import annotations
 
 import math
 import statistics
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from fractions import Fraction
 
 from pydantic import BaseModel
 
+from ..intent_key import agreeing
 from ..library import DEFAULT_RERANK_K
+from ..program import Program
 from ..similarity import Similarity
 from .pairs import LabelledPair
 from .report import Interval, Rate, wilson_interval
@@ -287,3 +289,31 @@ def arm3_outcomes(
         )
         for pair in pairs
     ]
+
+
+def intent_key_outcomes(
+    pairs: Sequence[LabelledPair], programs: Iterable[Program]
+) -> list[PairOutcome]:
+    """Arm 2c on labelled pairs: the variant stored under the pair's request key.
+
+    The same rule `Library.match_intent_key` applies in the episodes
+    (`intent_key.agreeing`): the admitted programs compiled from a request with the
+    pair's normalised text fire their one variant, and a key whose programs disagree
+    abstains (ADR-0015). Like arm 3 it has no score, so it is one operating point,
+    not a curve. `programs` is the library under test -- its `compiled_from_task`
+    is the key -- so hand-written gold, whose provenance names no request, fires on
+    nothing here, and the function is exercised on compiled-style programs.
+    """
+    pool = list(programs)
+    outcomes: list[PairOutcome] = []
+    for pair in pairs:
+        keyed = agreeing(pool, pair.task_text)
+        outcomes.append(
+            PairOutcome(
+                correct_variant=pair.correct_variant,
+                fired_variant=keyed[0].variant if keyed else None,
+                score=None,
+                informed=pair.informed,
+            )
+        )
+    return outcomes

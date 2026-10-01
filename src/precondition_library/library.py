@@ -5,10 +5,12 @@ changes, as `library/README.md` specifies. The digest `library_hash()` belongs
 beside it because issue #4 requires every ledger row to record which frozen
 library its episode ran against.
 
-The ablation's two dispatch strategies meet here, as two functions at one seam.
+The ablation's dispatch strategies meet here, as functions at one seam.
 `match_semantic` (arm 2) ranks admitted programs by how similar their text is to
 the request; `match_preconditions` (arm 3) returns the admitted programs whose
-executable preconditions accept the environment. The arms differ in which
+executable preconditions accept the environment; `match_intent_key` (arm 2c,
+issue #7) returns the programs compiled from a request with the same normalised
+text, abstaining when they disagree on the resolution. The arms differ in which
 function is called and nothing else, so **each arm's mechanism is injected at
 construction rather than named in either matcher**: arm 2's `similarity` is
 lexical today and an embedding model behind the same `Similarity` Protocol
@@ -34,6 +36,7 @@ from typing import Protocol
 
 import yaml
 
+from .intent_key import agreeing
 from .program import GroundTruthResult, Program, ProgramStatus
 from .sandbox import Sandbox
 from .signatures import TaskSignature
@@ -568,6 +571,22 @@ class Library:
         ]
         accepted.sort(key=lambda program: (-len(program.preconditions), program.id))
         return accepted
+
+    def match_intent_key(self, signature: TaskSignature) -> list[Program]:
+        """Arm 2c. Admitted programs compiled from a request with the same key.
+
+        The baseline issue #7 calls "exact/parameterised intent-key dispatch": the
+        request is normalised (`intent_key.intent_key`) and compared with the request
+        each program was compiled from. It reads the request alone -- never the
+        environment and never a score -- which is the point of it as a competitor.
+
+        When the programs under the key implement two or more variants the key
+        **abstains** and this returns `[]` (ADR-0015), so the caller falls back
+        exactly as it does when nothing matched. The rule is
+        `intent_key.agreeing`, shared with the pair-level analysis so the two
+        cannot drift. Eligibility is `admitted` only, as for the other matchers.
+        """
+        return agreeing(self.load_all(), signature.intent)
 
     def _program_directories(self) -> list[Path]:
         """Every directory under the root that holds a `program.yaml`, sorted.

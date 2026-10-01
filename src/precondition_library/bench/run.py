@@ -46,7 +46,12 @@ from pathlib import Path
 from typing import Any
 
 from ..agents.compile import AdmissionGate, admit, compile_program
-from ..agents.dispatch import Dispatch, dispatch_preconditions, dispatch_semantic
+from ..agents.dispatch import (
+    Dispatch,
+    dispatch_intent_key,
+    dispatch_preconditions,
+    dispatch_semantic,
+)
 from ..agents.react import solve
 from ..library import Library, ProgramIdCollisionError
 from ..program import EpisodeOutcome, Program, ProgramStatus
@@ -565,8 +570,9 @@ def _run_arm(
 ) -> _ArmResult:
     """The one arm-specific decision. Everything downstream is shared.
 
-    Arm 1 solves and stops when the model declares itself finished. Arms 2 and 3
-    dispatch first; a hit is replayed with no model call, and anything else — no
+    Arm 1 solves and stops when the model declares itself finished. The
+    dispatching arms (2, 3, and the intent-key baseline 2c) dispatch first; a hit
+    is replayed with no model call, and anything else — no
     applicable program, a fire whose body or postconditions failed, or a guard
     refusal — falls back to the agent for this episode only, at full price (spec
     §8). A fallback is a cost, and the tokens it spends are charged to the arm
@@ -599,11 +605,7 @@ def _run_arm(
             compilable=False,
         )
 
-    decision: Dispatch = (
-        dispatch_semantic(signature, library)
-        if arm is Arm.SEMANTIC
-        else dispatch_preconditions(signature, library, box)
-    )
+    decision = _dispatch(arm, signature, library, box)
 
     if decision.program is None:
         outcome, transcript = solve(signature, box, accounting)
@@ -689,6 +691,22 @@ def _run_arm(
         timed_out=replayed.timed_out,
         compilable=True,
     )
+
+
+def _dispatch(arm: Arm, signature: TaskSignature, library: Library, box: Sandbox) -> Dispatch:
+    """The dispatching arm's one call into `agents.dispatch`.
+
+    An explicit table rather than an if/else whose last branch catches "everything
+    else": a new arm that reached here without its own entry would otherwise run
+    arm 3's matcher under its own name, and its rows would be arm 3's.
+    """
+    if arm is Arm.SEMANTIC:
+        return dispatch_semantic(signature, library)
+    if arm is Arm.PRECONDITION:
+        return dispatch_preconditions(signature, library, box)
+    if arm is Arm.INTENT_KEY:
+        return dispatch_intent_key(signature, library)
+    raise ValueError(f"arm {arm.value!r} does not dispatch from a library")
 
 
 def _run_gold(oracle: Program | None, box: Sandbox) -> _ArmResult:
