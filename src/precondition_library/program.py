@@ -13,7 +13,23 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+
+class Step(BaseModel):
+    """One invocation of an allowlisted argv template (issue #10).
+
+    The safe alternative to a line of a shell `body`: `template` names an entry
+    in `runtime.templates.TEMPLATES`, and `args` supplies that template's
+    literal arguments (e.g. a commit `message`). The bound parameters a template
+    reads -- `upstream_remote`, `submodule_path` -- come from the sandbox at run
+    time, not from here, and the executor builds an argv array from both and
+    runs it without a shell, so no value in a step can become code. A program
+    carries either `steps` or a `body`, never both.
+    """
+
+    template: str
+    args: dict[str, str] = Field(default_factory=dict)
 
 
 class Predicate(BaseModel):
@@ -94,8 +110,16 @@ class Program(BaseModel):
     parameters: list[str] = Field(default_factory=list)
     """Names of environment-bound values, so one program serves many repos."""
     preconditions: list[Predicate]
-    body: str
-    """Program source. Executed by runtime.replay; never executed by the compile step."""
+    body: str | None = None
+    """Shell program source, for the model-compiled path. Executed by
+    runtime.replay behind the guard; never executed by the compile step. A
+    program carries exactly one of `body` or `steps` -- the shell path, or the
+    argv-template path below."""
+    steps: list[Step] | None = None
+    """An argv-template program (issue #10): a list of allowlisted operations the
+    runtime runs as argv arrays, without a shell. The safe alternative to a free
+    shell `body` for resolutions a fixed catalogue can express; exactly one of the
+    two is set."""
     postconditions: list[Predicate]
     variant: str | None = None
     """Which resolution of its intent's ambiguity this program implements.
@@ -107,6 +131,22 @@ class Program(BaseModel):
     """
     provenance: Provenance
     status: ProgramStatus = ProgramStatus.CANDIDATE
+
+    @model_validator(mode="after")
+    def _exactly_one_representation(self) -> Program:
+        """A program is executed one way, so it declares one.
+
+        Both set would let the two disagree about what the program does (and let
+        a `steps` program smuggle an unscreened shell body past the runtime);
+        neither set is a program with nothing to run. The runtime dispatches on
+        which one is present, so the choice has to be unambiguous here."""
+        has_body = self.body is not None and self.body.strip() != ""
+        has_steps = bool(self.steps)
+        if has_body and has_steps:
+            raise ValueError("a program sets either body or steps, not both")
+        if not has_body and not has_steps:
+            raise ValueError("a program must set a body or steps")
+        return self
 
 
 class PredicateResult(BaseModel):

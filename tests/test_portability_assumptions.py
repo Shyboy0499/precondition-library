@@ -162,25 +162,30 @@ def test_shell_supports_the_process_substitution_the_gold_probes_need() -> None:
     assert completed.stdout.strip() == "b"
 
 
-def test_gold_bodies_never_arrive_with_carriage_returns() -> None:
-    """A `\\r` in a body is invisible and can disable the entire body.
+def test_gold_programs_never_arrive_with_carriage_returns() -> None:
+    """A `\\r` in a gold program is invisible and can corrupt what runs.
 
-    `bench/gold/*.yaml` bodies are handed to `bash -c`. Under a CRLF checkout the
-    trailing `\\r` can make a whole body ineffective while the command still exits
-    0 -- indistinguishable from a real mis-fire in the ledger, which is the
-    measurement this repository exists to make. `.gitattributes` pins `eol=lf` so
-    a Windows clone cannot produce that; this asserts the artifact, so removing
-    the setting fails here rather than at measurement time.
+    A shell `body` is handed to `bash -c`, where a trailing `\\r` under a CRLF
+    checkout can make a whole line ineffective while the command still exits 0 --
+    indistinguishable from a real mis-fire in the ledger, which is the measurement
+    this repository exists to make. An argv-template program (issue #10) carries no
+    shell body, but a `\\r` in a step's template id or a literal argument would be
+    the same silent corruption. `.gitattributes` pins `eol=lf` so a Windows clone
+    cannot produce either; this asserts the artifact, so removing the setting fails
+    here rather than at measurement time.
     """
-    bodies = [
-        program["body"]
-        for path in sorted(GOLD_DIR.glob("*.yaml"))
-        for program in yaml.safe_load(path.read_text(encoding="utf-8"))["programs"]
-    ]
+    scalars: list[str] = []
+    for path in sorted(GOLD_DIR.glob("*.yaml")):
+        for program in yaml.safe_load(path.read_text(encoding="utf-8"))["programs"]:
+            if program.get("body"):
+                scalars.append(program["body"])
+            for step in program.get("steps", []):
+                scalars.append(step["template"])
+                scalars.extend(str(value) for value in step.get("args", {}).values())
 
-    assert bodies, "no gold bodies loaded; the glob or the schema changed, so this pins nothing"
-    offenders = [body for body in bodies if "\r" in body]
-    assert not offenders, f"{len(offenders)} gold bodies contain a carriage return"
+    assert scalars, "no gold programs loaded; the glob or the schema changed, so this pins nothing"
+    offenders = [text for text in scalars if "\r" in text]
+    assert not offenders, f"{len(offenders)} gold program scalars contain a carriage return"
 
 
 def test_git_status_returns_none_outside_a_git_repository(tmp_path, monkeypatch) -> None:

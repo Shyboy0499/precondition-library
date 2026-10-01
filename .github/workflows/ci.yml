@@ -53,7 +53,9 @@ jobs:
   # Deliberately a subset, not the whole suite: #87 measured the full suite at 35m56s on
   # Windows, because every probe spawns a fresh Git Bash process. This job runs the tests
   # whose subject *is* portability or the sandbox, which is the smallest set that would
-  # have gone red for D1-D4.
+  # have gone red for D1-D4. test_argv_templates is included because its realpath
+  # containment check is path-separator sensitive (issue #10), so Windows is where a
+  # containment bug would first show.
   #
   # What this does NOT cover, so nobody reads a green tick as more than it is: the other
   # ~40 test modules, the full-suite runtime, and anything outside the sandbox path --
@@ -84,3 +86,4 @@ jobs:
           tests/test_sandbox_submodule_moved.py
           tests/test_read_only_probes.py
           tests/test_process_confinement.py
+          tests/test_argv_templates.py
