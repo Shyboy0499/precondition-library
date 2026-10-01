@@ -1,6 +1,7 @@
 """Choosing which stored program to replay. This module is the experiment.
 
-Arms 2 and 3 differ only in the function they call here. Everything downstream
+The dispatching arms -- 2, 3, and issue #7's intent-key baseline 2c -- differ
+only in the function they call here. Everything downstream
 of a successful choice is identical — same runtime, same guard, same checker —
 so any difference in outcome is attributable to the dispatch mechanism rather
 than to the rest of the pipeline.
@@ -66,6 +67,25 @@ def dispatch_semantic(signature: TaskSignature, lib: Library) -> Dispatch:
         return Dispatch(None, None, "no admitted program above the similarity floor")
     best = ranked[0]
     return Dispatch(best.program, best.score, "nearest by text similarity")
+
+
+def dispatch_intent_key(signature: TaskSignature, lib: Library) -> Dispatch:
+    """Arm 2c: the program stored under the request's normalised key (issue #7).
+
+    The lookup-table baseline: `Library.match_intent_key` normalises the request,
+    finds the admitted programs compiled from a request with the same key, and
+    abstains when they implement more than one resolution (ADR-0015). Its first
+    element is already the choice, so nothing here re-ranks or filters.
+
+    The score is `None`, as for arm 3: a key either matches or it does not, so
+    there is no number to record, and `dispatch_score` stays arm 2's alone.
+    """
+    keyed = lib.match_intent_key(signature)
+    if not keyed:
+        return Dispatch(
+            None, None, "no admitted program under this request key, or its programs disagree"
+        )
+    return Dispatch(keyed[0], None, "the one resolution stored under this request key")
 
 
 def dispatch_preconditions(signature: TaskSignature, lib: Library, env: Sandbox) -> Dispatch:
