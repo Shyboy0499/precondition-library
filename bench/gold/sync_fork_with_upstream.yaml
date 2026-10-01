@@ -25,9 +25,9 @@ programs:
       - name: local_commits_change_nothing
         description: The local commits change nothing, so the branch can be set to upstream without losing any work.
         probe: 'test -z "$(git diff --name-only {upstream_remote}/{upstream_branch}...HEAD)"'
-    body: |
-      git fetch {upstream_remote}
-      git reset --hard {upstream_remote}/{upstream_branch}
+    steps:
+      - template: fetch
+      - template: reset_hard_to_upstream
     postconditions:
       - name: matches_upstream
         description: The local branch is now exactly the commit upstream has.
@@ -54,9 +54,9 @@ programs:
       - name: local_and_upstream_files_disjoint
         description: No file the local commits change was also changed upstream, so replaying them onto upstream cannot conflict.
         probe: 'test -z "$(comm -12 <(git diff --name-only {upstream_remote}/{upstream_branch}...HEAD | sort) <(git diff --name-only HEAD...{upstream_remote}/{upstream_branch} | sort))"'
-    body: |
-      git fetch {upstream_remote}
-      git rebase {upstream_remote}/{upstream_branch}
+    steps:
+      - template: fetch
+      - template: rebase_onto_upstream
     postconditions:
       - name: upstream_contained
         description: Upstream's tip is now an ancestor of the local branch.
@@ -91,9 +91,9 @@ programs:
       - name: local_work_beyond_the_overlap
         description: The local commits also change a file upstream did not, so there is local work that has to be preserved.
         probe: 'test -n "$(comm -23 <(git diff --name-only {upstream_remote}/{upstream_branch}...HEAD | sort) <(git diff --name-only HEAD...{upstream_remote}/{upstream_branch} | sort))"'
-    body: |
-      git fetch {upstream_remote}
-      git merge --no-edit {upstream_remote}/{upstream_branch}
+    steps:
+      - template: fetch
+      - template: merge_upstream_no_edit
     postconditions:
       - name: upstream_contained
         description: Upstream's tip is reachable from the local branch.

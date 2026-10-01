@@ -15,13 +15,11 @@ the user's work.
 
 from __future__ import annotations
 
-import subprocess
-
 import pytest
 from conftest import GOLD_CASES, gold_program
 
-from precondition_library.runtime.probes import SHELL
-from precondition_library.sandbox import Sandbox, git_env, run_git
+from precondition_library.runtime.templates import run_steps
+from precondition_library.sandbox import Sandbox, run_git
 from precondition_library.signatures import StateFingerprint
 from precondition_library.tasks.faults.diverged import INTENT, SPEC, STATE_VARIANT
 
@@ -37,30 +35,19 @@ DESTROYS_LOCAL_WORK = ["disjoint_files", "overlapping_files"]
 
 
 def _run_body(variant: str, box: Sandbox) -> None:
-    """Run a gold body with its parameters substituted.
+    """Run a gold resolution's argv-template steps against the sandbox.
 
-    A full templating engine is not needed: the bodies reference exactly the
-    three declared parameters, so `str.format` is the whole substitution.
-
-    The body goes through `SHELL`, the interpreter `probes.py` declares, rather
-    than `shell=True`. These are multi-line POSIX bodies: `shell=True` picks the
-    platform's own shell, and on Windows that is `cmd.exe`, which runs the first
-    line, discards the rest, and returns **0**. The body would appear to succeed
-    while the assertions below failed for a reason naming the gold body instead.
+    The gold programs are now argv-template programs (issue #10), so the steps
+    run through `templates.run_steps` -- the same executor `replay` uses, argv
+    arrays with no shell -- rather than a substituted shell body. This asserts
+    every step ran and exited cleanly; whether the *outcome* was correct is the
+    job of `SPEC.check` in the callers, which is the point of running `discard`
+    on the wrong states below (the commands succeed while destroying work).
     """
-    body = gold_program(variant).body.format(
-        work_dir=str(box.work), upstream_remote="upstream", upstream_branch="main"
+    _ok, exit_code, stdout, stderr, timed_out, _unbound, _reason, _post = run_steps(
+        gold_program(variant), box
     )
-    result = subprocess.run(
-        [*SHELL, body],
-        cwd=box.work,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        env=git_env(),
-    )
-    assert result.returncode == 0, f"{variant} body failed:\n{result.stdout}\n{result.stderr}"
+    assert not timed_out and exit_code == 0, f"{variant} steps failed:\n{stdout}\n{stderr}"
 
 
 def _commit_shas(box: Sandbox) -> tuple[str, str, str, str]:

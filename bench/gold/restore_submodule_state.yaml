@@ -14,8 +14,8 @@ programs:
       - name: submodule_not_initialised
         description: This clone has not initialised the nested checkout, so it has no working tree here.
         probe: 'test -z "$(git submodule status -- {submodule_path} | grep -v "^-")"'
-    body: |
-      git submodule update --init -- {submodule_path}
+    steps:
+      - template: submodule_update_init
     postconditions:
       - name: submodule_initialised
         description: The nested checkout now exists and is initialised.
@@ -42,10 +42,11 @@ programs:
       - name: pin_drifted
         description: The commit recorded for the nested checkout is not the commit upstream pins.
         probe: 'test -n "$(git diff --name-only {upstream_remote}/{upstream_branch} HEAD -- {submodule_path})"'
-    body: |
-      git fetch {upstream_remote}
-      git checkout {upstream_remote}/{upstream_branch} -- {submodule_path}
-      git commit -q -m "chore: repin nested library to upstream"
+    steps:
+      - template: fetch
+      - template: checkout_upstream_path
+      - template: commit
+        args: {message: "chore: repin nested library to upstream"}
     postconditions:
       - name: pinned_to_upstream
         description: The commit recorded for the nested checkout now equals the commit upstream pins.
@@ -66,11 +67,12 @@ programs:
       - name: upstream_dropped_it
         description: Upstream's tree no longer contains the nested repository at all.
         probe: 'test -z "$(git ls-tree {upstream_remote}/{upstream_branch} -- {submodule_path})"'
-    body: |
-      git rm --cached -- {submodule_path}
-      git config --file .gitmodules --remove-section submodule.{submodule_path} || true
-      git add .gitmodules
-      git commit -q -m "chore: drop nested library reference"
+    steps:
+      - template: rm_cached_path
+      - template: gitmodules_remove_section
+      - template: add_gitmodules
+      - template: commit
+        args: {message: "chore: drop nested library reference"}
     postconditions:
       - name: no_longer_declared
         description: The nested repository is no longer declared in the project's tree.

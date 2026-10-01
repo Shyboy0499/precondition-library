@@ -33,6 +33,7 @@ from ..sandbox import Sandbox, git_env
 from .confine import run_confined
 from .guard import Verdict, screen
 from .probes import SHELL, UnboundParameterError, bindings, evaluate_predicates, substitute
+from .templates import run_steps
 
 
 class ReplayResult(BaseModel):
@@ -85,7 +86,28 @@ def replay(program: Program, env: Sandbox, *, timeout_s: float = 60.0) -> Replay
     `unbound_parameter=True` instead of raising (issue #76); a placeholder
     outside the vocabulary still raises, because that is a compile defect rather
     than an inapplicable program.
+
+    An argv-template program (`program.steps`) takes the typed path instead
+    (issue #10): it runs through `templates.run_steps`, which builds a validated
+    argv per step and executes it without a shell, so there is no shell body to
+    screen. The guard path below is only for the model-compiled shell body.
     """
+    if program.steps is not None:
+        ok, exit_code, stdout, stderr, timed_out, unbound, reason, post = run_steps(
+            program, env, timeout_s=timeout_s
+        )
+        return ReplayResult(
+            ok=ok,
+            exit_code=exit_code,
+            stdout=stdout,
+            stderr=stderr,
+            timed_out=timed_out,
+            unbound_parameter=unbound,
+            reason=reason,
+            postconditions=post,
+        )
+
+    assert program.body is not None  # the model guarantees exactly one of body/steps
     decision = screen(program.body, env_root=str(env.work))
     if decision.verdict is Verdict.REFUSE:
         return ReplayResult(

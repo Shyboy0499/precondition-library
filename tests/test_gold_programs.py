@@ -51,17 +51,32 @@ def test_gold_programs_are_well_formed(intent: str) -> None:
         assert program.status is ProgramStatus.CANDIDATE, "hand-written != admitted"
         assert program.preconditions, f"{program.id}: needs preconditions"
         assert program.postconditions, f"{program.id}: needs postconditions"
-        assert program.body.strip(), f"{program.id}: needs a body"
+        # A program carries exactly one executable representation -- a shell body
+        # or argv-template steps (the Program model enforces the exclusivity;
+        # here we only require that one is present).
+        assert program.body or program.steps, f"{program.id}: needs a body or steps"
         for predicate in program.preconditions + program.postconditions:
             assert predicate.probe.strip(), f"{program.id}: {predicate.name} has an empty probe"
             assert predicate.description.strip(), f"{program.id}: {predicate.name} undescribed"
 
 
+def _executable_signature(program) -> tuple:
+    """A hashable form of what a program runs, for the distinctness check.
+
+    Steps compare as their (template, sorted args) sequence; a shell body as its
+    stripped text. Two candidates that run the same thing are not two
+    resolutions, whichever representation they use.
+    """
+    if program.steps is not None:
+        return tuple((s.template, tuple(sorted(s.args.items()))) for s in program.steps)
+    return (program.body.strip(),)
+
+
 @pytest.mark.parametrize("intent", [i.name for i in ambiguous_intents()])
 def test_gold_bodies_are_distinct(intent: str) -> None:
     """Two candidates that do the same thing are not two resolutions."""
-    bodies = {p.body.strip() for p in gold_programs(intent)}
-    assert len(bodies) == len(gold_programs(intent))
+    signatures = {_executable_signature(p) for p in gold_programs(intent)}
+    assert len(signatures) == len(gold_programs(intent))
 
 
 @pytest.mark.parametrize("intent", [i.name for i in ambiguous_intents()])
