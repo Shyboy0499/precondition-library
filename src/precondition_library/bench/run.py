@@ -49,7 +49,7 @@ from ..agents.compile import AdmissionGate, admit, compile_program
 from ..agents.dispatch import Dispatch, dispatch_preconditions, dispatch_semantic
 from ..agents.react import solve
 from ..library import Library, ProgramIdCollisionError
-from ..program import EpisodeOutcome, ProgramStatus
+from ..program import EpisodeOutcome, Program, ProgramStatus
 from ..provider import Completion, Provider, ProviderError
 from ..runtime.probes import evaluate_preconditions
 from ..runtime.replay import ReplayResult, replay
@@ -60,6 +60,7 @@ from ..tasks.faults import FAULTS, build_sandbox
 from ..tasks.intent import IntentSpec, ResolutionVariant
 from ..tasks.invariants import recorded_state_intact
 from ..tasks.registry import EXCLUDED_FROM_BENCHMARK, ambiguous_intents
+from .gold import load_gold_programs
 from .ledger import Arm, EpisodeRecord, OccurrenceRole, append
 from .splits import occurrence_roles
 
@@ -226,6 +227,7 @@ def run_benchmark(
     similarity: Similarity | None = None,
     frozen_library: Path | None = None,
     reranker: Similarity | None = None,
+    gold_programs: dict[str, dict[str, Program]] | None = None,
     replicate: int = 1,
 ) -> Path:
     """Run every (arm, fault, occurrence) episode and write the ledger.
@@ -238,6 +240,14 @@ def run_benchmark(
     an embedding model costs means being able to run with one. It defaults to the lexical
     implementation, which spends nothing, so every row's `embedding_tokens` stays 0 until a
     model is behind the seam (issue #104).
+
+    `gold_programs` is the oracle floor's injected input, needed only when `arms` names
+    `Arm.GOLD` (issue #7, ADR-0014): the committed hand-written resolutions indexed by
+    fault then variant (`bench.gold.load_gold_programs`). It defaults to loading the
+    repository's own `bench/gold/`; a caller injects a different set the way it injects a
+    different `similarity`. When the gold arm runs, coverage is checked up front -- every
+    measured fault's every variant must have exactly one gold resolution -- so the oracle
+    can always answer, rather than silently falling to a non-oracle path mid-run.
 
     `seeds` supplies the seed for each occurrence, positionally: occurrence `k`
     runs against `seeds[k - 1]`, so the same seed reaches every arm and the
@@ -288,6 +298,13 @@ def run_benchmark(
         frozen_hash = _require_frozen_library(frozen_library)
         gate = read_admission_gate(frozen_library)
 
+    # The oracle floor's programs, resolved and coverage-checked only when the gold
+    # arm is in the run, so a run without it needs no gold directory on disk.
+    gold_index: dict[str, dict[str, Program]] = {}
+    if Arm.GOLD in arms:
+        gold_index = gold_programs if gold_programs is not None else load_gold_programs()
+        _require_gold_covers(faults, gold_index)
+
     for arm in arms:
         if frozen_library is not None:
             library = Library(
@@ -318,6 +335,7 @@ def run_benchmark(
                     model=model,
                     frozen=frozen_library is not None,
                     admission_gate=gate,
+                    gold_variants=gold_index.get(fault_type, {}),
                     replicate=replicate,
                 )
                 append(out, record)
@@ -343,6 +361,7 @@ def run_episode(
     model: str,
     frozen: bool = False,
     admission_gate: AdmissionGate | None = AdmissionGate.TWO_SIDED,
+    gold_variants: dict[str, Program] | None = None,
     replicate: int = 1,
 ) -> EpisodeRecord:
     """One episode: build a sandbox, let the arm act, check ground truth, record.
@@ -416,11 +435,28 @@ def run_episode(
         correct = intent.correct_variant(state)
         signature = TaskSignature(intent=request, fingerprint=state, target=str(box.work))
 
+        # The oracle floor's program for this state: the gold resolution of the
+        # ground-truth variant (issue #7, ADR-0014). Resolved here, where ground
+        # truth is known, and handed to `_run_arm` so that function stays a pure
+        # dispatch of what the arm was given -- it is `None` for every non-gold arm
+        # and for a benign state no gold answers. Consulting `correct` is the oracle
+        # nature the floor is defined by, not a leak into the compared arms.
+        oracle = (gold_variants or {}).get(correct.id) if correct is not None else None
+
         # Measured around the arm's run, so the row carries what this episode's dispatch
         # spent through the seam rather than the library's lifetime total.
         embedding_before = _arm2_usage(library)
         result = _run_arm(
-            arm, signature, box, library, fault_type, seed, occurrence, accounting, frozen=frozen
+            arm,
+            signature,
+            box,
+            library,
+            fault_type,
+            seed,
+            occurrence,
+            accounting,
+            frozen=frozen,
+            oracle=oracle,
         )
         embedding_after = _arm2_usage(library)
         state_intact: bool | None = None
@@ -500,7 +536,7 @@ def run_episode(
             library_hash=library_hash,
             library_program_ids=library_program_ids,
             admission_gate=None
-            if arm is Arm.REACT or admission_gate is None
+            if arm in (Arm.REACT, Arm.GOLD) or admission_gate is None
             else admission_gate.value,
             admitted=result.admitted,
             refusal_reason=result.refusal_reason,
@@ -525,6 +561,7 @@ def _run_arm(
     accounting: _AccountingProvider,
     *,
     frozen: bool = False,
+    oracle: Program | None = None,
 ) -> _ArmResult:
     """The one arm-specific decision. Everything downstream is shared.
 
@@ -534,7 +571,17 @@ def _run_arm(
     refusal — falls back to the agent for this episode only, at full price (spec
     §8). A fallback is a cost, and the tokens it spends are charged to the arm
     that had to pay them.
+
+    The gold arm is the oracle floor (issue #7, ADR-0014): `oracle` is the
+    hand-written resolution for the ground-truth variant, resolved by the caller,
+    and the arm simply replays it with no model call. It never falls back and
+    never compiles -- the floor's whole point is a zero-token run -- so a gold
+    replay that fails is recorded as a failure rather than paid for again by the
+    agent. It cannot misfire: it fires the correct variant by construction.
     """
+    if arm is Arm.GOLD:
+        return _run_gold(oracle, box)
+
     if arm is Arm.REACT:
         outcome, transcript = solve(signature, box, accounting)
         return _ArmResult(
@@ -641,6 +688,55 @@ def _run_arm(
         replay_failure_reason=replayed.reason if replayed.unbound_parameter else None,
         timed_out=replayed.timed_out,
         compilable=True,
+    )
+
+
+def _run_gold(oracle: Program | None, box: Sandbox) -> _ArmResult:
+    """The oracle floor: replay the ground-truth variant's gold program (issue #7).
+
+    No model is ever consulted -- the floor exists to bound cost at zero LLM calls
+    -- so there is no fallback and no compile. `oracle` is `None` only for a benign
+    state no gold answers; `run_benchmark` checks coverage before the run, so for a
+    measured fault the oracle is always present. A `None` oracle is recorded as a
+    failure with no spend rather than handed to the agent, because a floor that
+    quietly called the model would no longer be a zero-token floor.
+
+    `fired_variant` is the gold program's own variant, which is the ground-truth
+    variant by construction, so the oracle never misfires. `admitted` and
+    `dispatch_score` stay `None`: the oracle has no library and no score, exactly
+    as arm 1 has none, and `compilable` is false because no model ran.
+    """
+    if oracle is None:
+        return _ArmResult(
+            EpisodeOutcome.FAIL,
+            None,
+            fired_variant=None,
+            program_id=None,
+            dispatch_score=None,
+            admitted=None,
+            refusal_reason=None,
+            compile_failure_reason=None,
+            replay_failure_reason="no gold resolution for this state's variant",
+            timed_out=False,
+            compilable=False,
+        )
+    replayed = replay(oracle, box)
+    return _ArmResult(
+        EpisodeOutcome.SUCCESS if replayed.ok else EpisodeOutcome.FAIL,
+        None,
+        # The gold program fires the ground-truth variant, so the oracle's fire is
+        # recorded even on a replay failure: the floor fired the right resolution
+        # and the environment rejected it, which is a fact about the run, not a
+        # misfire. `refused` leaves no variant, matching the compiled arms.
+        fired_variant=None if replayed.refused else oracle.variant,
+        program_id=oracle.id,
+        dispatch_score=None,
+        admitted=None,
+        refusal_reason=replayed.reason if replayed.refused else None,
+        compile_failure_reason=None,
+        replay_failure_reason=replayed.reason if replayed.unbound_parameter else None,
+        timed_out=replayed.timed_out,
+        compilable=False,
     )
 
 
@@ -836,6 +932,30 @@ def _require_measurable(faults: list[str]) -> None:
     """Refuse a request naming an unmeasurable fault, before any episode runs."""
     for fault_type in faults:
         _intent_for(fault_type)
+
+
+def _require_gold_covers(faults: list[str], gold_index: dict[str, dict[str, Program]]) -> None:
+    """Refuse a gold-arm run whose oracle cannot answer some measured state (issue #7).
+
+    The oracle picks the gold resolution of the ground-truth variant, so every
+    variant the intent can require must have exactly one gold program. Checking it
+    once, before any episode, keeps the floor honest: a missing resolution would
+    otherwise surface mid-run as a zero-spend failure that reads like a gold
+    program that could not run, when the real cause is a gap in the oracle. Refusing
+    up front, the way an unmeasurable fault is refused, makes the gap a
+    configuration error rather than a silent dent in the floor.
+    """
+    for fault_type in faults:
+        intent = _intent_for(fault_type)
+        have = gold_index.get(fault_type, {})
+        want = {variant.id for variant in intent.variants}
+        missing = sorted(want - set(have))
+        if missing:
+            raise ValueError(
+                f"the gold oracle has no resolution for fault {fault_type!r} variant(s) "
+                f"{missing}; it cannot be the floor for a state those variants resolve. "
+                f"Add them to bench/gold or run without the gold arm"
+            )
 
 
 def _rerank_k(library: Library) -> int | None:

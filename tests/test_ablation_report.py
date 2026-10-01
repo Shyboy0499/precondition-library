@@ -1013,7 +1013,7 @@ def test_the_report_states_the_triple_and_emits_the_pareto(tmp_path: Path) -> No
 
     assert "Arm triples" in report
     assert "tokens/success" in report
-    assert "Pareto over the three" in report
+    assert "Pareto over the arms" in report
     assert "on the frontier" in report
     csv = (dest / "arm_triples.csv").read_text(encoding="utf-8")
     assert "tokens_per_success" in csv and "on_frontier" in csv
