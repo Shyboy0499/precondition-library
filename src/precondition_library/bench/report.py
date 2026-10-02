@@ -310,8 +310,13 @@ def tost_equivalence(
     *,
     margin: float = EQUIVALENCE_MARGIN,
     alpha: float = TOST_ALPHA,
+    quantity: str = "success rates",
 ) -> Equivalence | None:
     """Whether two success rates are equivalent within `margin`, by TOST.
+
+    The arithmetic holds for any two proportions; `quantity` names them in the reason, so a
+    caller comparing mismatch rates (`bench.soft_vote.claim2_verdict`) is not told about
+    success rates.
 
     Two one-sided tests against the margin, which is the same as asking whether the
     (1-2*alpha) interval for the difference lies wholly inside +/- margin. `None` when
@@ -335,7 +340,7 @@ def tost_equivalence(
     if equivalent:
         reason = (
             f"the {1 - 2 * alpha:.0%} interval for the difference lies inside "
-            f"+/-{margin:.0%}, so the two success rates are equivalent at this margin"
+            f"+/-{margin:.0%}, so the two {quantity} are equivalent at this margin"
         )
     elif interval.low > -margin or interval.high < margin:
         reason = (
