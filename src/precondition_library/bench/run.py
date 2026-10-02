@@ -68,7 +68,14 @@ from ..tasks.intent import IntentSpec, ResolutionVariant
 from ..tasks.invariants import recorded_state_intact
 from ..tasks.registry import EXCLUDED_FROM_BENCHMARK, ambiguous_intents
 from .gold import load_gold_programs
-from .ledger import Arm, EpisodeRecord, OccurrenceRole, append
+from .ledger import (
+    Arm,
+    EpisodeRecord,
+    OccurrenceRole,
+    append,
+    append_transcript,
+    transcripts_path,
+)
 from .splits import occurrence_roles
 
 _EXCLUDED_NOTICE = (
@@ -378,6 +385,7 @@ def run_benchmark(
                     gold_variants=gold_index.get(fault_type, {}),
                     memory=memory,
                     replicate=replicate,
+                    transcript_log=transcripts_path(out),
                 )
                 append(out, record)
 
@@ -405,6 +413,7 @@ def run_episode(
     gold_variants: dict[str, Program] | None = None,
     memory: SuccessMemory | None = None,
     replicate: int = 1,
+    transcript_log: Path | None = None,
 ) -> EpisodeRecord:
     """One episode: build a sandbox, let the arm act, check ground truth, record.
 
@@ -551,7 +560,7 @@ def run_episode(
             )
             _record_mismatch(result, library, correct, acceptable, fault_type, seed, occurrence)
 
-        return EpisodeRecord(
+        record = EpisodeRecord(
             arm=arm,
             task_id=intent.name,
             fault_type=fault_type,
@@ -595,6 +604,10 @@ def run_episode(
             timed_out=result.timed_out,
             model=model,
         )
+        if transcript_log is not None and result.transcript is not None:
+            # Every solve's transcript, beside its row (issue #171); a replay ran no agent.
+            append_transcript(transcript_log, record, result.transcript)
+        return record
     finally:
         if box is not None:
             box.destroy()

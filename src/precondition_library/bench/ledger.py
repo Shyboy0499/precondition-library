@@ -374,6 +374,39 @@ def append(path: Path, record: EpisodeRecord) -> None:
         handle.flush()
 
 
+def transcripts_path(ledger: Path) -> Path:
+    """Where the transcripts of `ledger`'s rows go: `<stem>.transcripts.jsonl` beside it."""
+    return ledger.with_name(f"{ledger.stem}.transcripts.jsonl")
+
+
+def append_transcript(path: Path, record: EpisodeRecord, transcript: list[dict]) -> None:
+    """Append one agent transcript, keyed the way its ledger row is (issue #171).
+
+    The ledger stores numbers, not what the agent did, so diagnosing #171 -- an agent
+    that fixed the repository and kept verifying -- needed a separate traced re-run.
+    This sidecar keeps every solve's transcript beside its row: one JSON line with the
+    row's identifying fields and the transcript as `solve` returned it. Written and
+    flushed like `append`, so a killed run keeps what it finished. Transcripts hold
+    the system prompt, the request, the commands and their output -- sandbox paths, no
+    credentials, since the provider's key never enters a transcript.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    line = {
+        "arm": record.arm.value,
+        "task_id": record.task_id,
+        "fault_type": record.fault_type,
+        "seed": record.seed,
+        "occurrence_index": record.occurrence_index,
+        "replicate": record.replicate,
+        "outcome": record.outcome.value,
+        "transcript": transcript,
+    }
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(line, default=str))
+        handle.write("\n")
+        handle.flush()
+
+
 def read(path: Path) -> list[EpisodeRecord]:
     """Read the ledger back. Malformed trailing lines are reported, not skipped.
 

@@ -44,7 +44,7 @@ from ..library import Library
 from ..program import Program, ProgramStatus
 from ..provider import Provider
 from ..runtime.probes import evaluate_preconditions
-from .ledger import Arm, append
+from .ledger import Arm, append, transcripts_path
 from .run import MANIFEST, _require_measurable, run_episode
 from .splits import SMOKE_SEEDS, occurrence_roles
 
@@ -131,6 +131,7 @@ def build_library(
                     provider=provider,
                     library=library,
                     model=model,
+                    transcript_log=transcripts_path(ledger),
                 )
                 append(ledger, record)
                 for program in library.load_all():

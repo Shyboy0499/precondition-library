@@ -169,6 +169,7 @@ def run_live(plan: LivePlan, *, provider: Provider, model: str, out: Path) -> Li
     episode_seeds = list(plan.episode_seeds)
     artifacts = {
         "build_ledger": "build.jsonl",
+        "build_transcripts": "build.transcripts.jsonl",
         "library_two_sided": two_sided.name,
         "library_positive_only": positive_only.name,
     }
