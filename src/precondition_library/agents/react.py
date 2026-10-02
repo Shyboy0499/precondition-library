@@ -65,6 +65,7 @@ def solve(
     provider: Provider,
     *,
     max_steps: int = 12,
+    prelude: str | None = None,
 ) -> tuple[EpisodeOutcome, list[dict]]:
     """Run the arm-1 loop and return its outcome with the full transcript.
 
@@ -94,15 +95,22 @@ def solve(
     so the agent takes over" (spec §8); arm 1 *is* that agent, so it never
     returns it.
 
+    `prelude` is text placed before the task in the user message, and it is arm 1b's
+    only difference from arm 1 (issue #7, ADR-0017): the recalled memory entries. It
+    goes in the user message rather than the system prompt so the system prefix stays
+    the one every arm sends. `None` -- arm 1 -- leaves the user message the task text
+    alone, exactly as before.
+
     The transcript is a first-class output, not a debugging aid: the compile
     step reads it to author a program, so it records the system prompt, the task
     text, every model turn (with the tool calls it returned, in the API's own
     shape), and every tool result, in order.
     """
     task_text = signature.intent
+    user_content = task_text if prelude is None else f"{prelude}\n\n{task_text}"
     transcript: list[dict] = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": task_text},
+        {"role": "user", "content": user_content},
     ]
     tools = available_tools()
 

@@ -30,8 +30,8 @@ class Arm(StrEnum):
     baselines issue #7 adds so an arm-3 win is attributable rather than a straw
     man -- a zero-token oracle floor (`GOLD`), an intent-key lookup
     (`INTENT_KEY`, arm 2c: the request string itself, ADR-0015), a soft vote over
-    arm 3's own probe features (`SOFT_VOTE`, arm 2b, ADR-0016), and (to come)
-    ReAct with prior-success memory.
+    arm 3's own probe features (`SOFT_VOTE`, arm 2b, ADR-0016), and ReAct with
+    a memory of its own past successes (`REACT_MEMORY`, arm 1b, ADR-0017).
 
     `GOLD` is an **oracle**: it consults the state's ground-truth variant to pick
     the hand-written resolution, which is exactly why it is a floor and why it is
@@ -44,6 +44,7 @@ class Arm(StrEnum):
     GOLD = "gold"
     INTENT_KEY = "intent_key"
     SOFT_VOTE = "soft_vote"
+    REACT_MEMORY = "react_memory"
 
 
 class OccurrenceRole(StrEnum):
@@ -224,6 +225,12 @@ class EpisodeRecord(BaseModel):
     pre-registration has the threshold calibrated on the held-out tune set, and a
     reader can see from the ledger alone whether that calibration happened rather
     than inferring it from the code's default."""
+
+    memory_recalled: int | None = None
+    """How many of arm 1b's stored trajectories were placed in this episode's prompt
+    (issue #7, ADR-0017). 0 is a 1b episode whose memory had nothing similar yet; `None`
+    on every other arm. Recorded so the cost curve can be read beside how much memory 1b
+    actually had to work with."""
 
     soft_threshold: float | None = None
     """Arm 2b's learned inclusive floor on its soft-vote score (issue #7, ADR-0016),

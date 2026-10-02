@@ -53,6 +53,7 @@ from ..agents.dispatch import (
     dispatch_semantic,
     dispatch_soft_vote,
 )
+from ..agents.memory import SuccessMemory, render
 from ..agents.react import solve
 from ..library import Library, ProgramIdCollisionError
 from ..program import EpisodeOutcome, Program, ProgramStatus
@@ -219,6 +220,8 @@ class _ArmResult:
     logic inside `dispatch.py`, and a fourth arm must not need this file audited
     for it. Arm 1's solve is not compilable because arm 1 has no library; a
     replay hit is not compilable because no model ran."""
+    memory_recalled: int | None = None
+    """How many memory entries arm 1b put in this episode's prompt; `None` for other arms."""
 
 
 def run_benchmark(
@@ -310,6 +313,13 @@ def run_benchmark(
         frozen_hash = _require_frozen_library(frozen_library)
         gate = read_admission_gate(frozen_library)
 
+    if Arm.REACT_MEMORY in arms and frozen_library is not None:
+        raise ValueError(
+            "arm 1b (react_memory) learns from its own episodes, and a frozen run exists so "
+            "that nothing learns mid-run (ADR-0009); run 1b in the online mode, where the cost "
+            "curve it is a baseline for is measured (ADR-0017)"
+        )
+
     if Arm.SOFT_VOTE in arms and soft_threshold is None:
         raise ValueError(
             "arm 2b (soft_vote) needs a learned soft_threshold; learn one on the tune seeds "
@@ -342,6 +352,9 @@ def run_benchmark(
                 reranker=reranker,
                 soft_threshold=soft_threshold,
             )
+        # Arm 1b's memory: one per arm per run, grown in occurrence order like a library,
+        # so no replicate or other arm starts from its trajectories (ADR-0017).
+        memory = SuccessMemory() if arm is Arm.REACT_MEMORY else None
         for occurrence in range(1, occurrences + 1):
             for fault_type in faults:
                 record = run_episode(
@@ -356,6 +369,7 @@ def run_benchmark(
                     frozen=frozen_library is not None,
                     admission_gate=gate,
                     gold_variants=gold_index.get(fault_type, {}),
+                    memory=memory,
                     replicate=replicate,
                 )
                 append(out, record)
@@ -382,6 +396,7 @@ def run_episode(
     frozen: bool = False,
     admission_gate: AdmissionGate | None = AdmissionGate.TWO_SIDED,
     gold_variants: dict[str, Program] | None = None,
+    memory: SuccessMemory | None = None,
     replicate: int = 1,
 ) -> EpisodeRecord:
     """One episode: build a sandbox, let the arm act, check ground truth, record.
@@ -478,6 +493,7 @@ def run_episode(
             accounting,
             frozen=frozen,
             oracle=oracle,
+            memory=memory,
         )
         embedding_after = _arm2_usage(library)
         state_intact: bool | None = None
@@ -555,11 +571,12 @@ def run_episode(
             dispatch_score=result.dispatch_score,
             similarity_threshold=library.threshold,
             soft_threshold=library.soft_threshold if arm is Arm.SOFT_VOTE else None,
+            memory_recalled=result.memory_recalled,
             rerank_k=_rerank_k(library),
             library_hash=library_hash,
             library_program_ids=library_program_ids,
             admission_gate=None
-            if arm in (Arm.REACT, Arm.GOLD) or admission_gate is None
+            if arm in (Arm.REACT, Arm.REACT_MEMORY, Arm.GOLD) or admission_gate is None
             else admission_gate.value,
             admitted=result.admitted,
             refusal_reason=result.refusal_reason,
@@ -585,6 +602,7 @@ def _run_arm(
     *,
     frozen: bool = False,
     oracle: Program | None = None,
+    memory: SuccessMemory | None = None,
 ) -> _ArmResult:
     """The one arm-specific decision. Everything downstream is shared.
 
@@ -602,9 +620,16 @@ def _run_arm(
     never compiles -- the floor's whole point is a zero-token run -- so a gold
     replay that fails is recorded as a failure rather than paid for again by the
     agent. It cannot misfire: it fires the correct variant by construction.
+
+    Arm 1b (issue #7, ADR-0017) is arm 1 with the most similar entries of its own
+    memory placed before the task; it writes the trajectory back only when the model
+    declares the task done, before the checker has run, so no ground truth reaches it.
     """
     if arm is Arm.GOLD:
         return _run_gold(oracle, box)
+
+    if arm is Arm.REACT_MEMORY:
+        return _run_react_memory(signature, box, accounting, memory)
 
     if arm is Arm.REACT:
         outcome, transcript = solve(signature, box, accounting)
@@ -727,6 +752,46 @@ def _dispatch(arm: Arm, signature: TaskSignature, library: Library, box: Sandbox
     if arm is Arm.SOFT_VOTE:
         return dispatch_soft_vote(signature, library, box)
     raise ValueError(f"arm {arm.value!r} does not dispatch from a library")
+
+
+def _run_react_memory(
+    signature: TaskSignature,
+    box: Sandbox,
+    accounting: _AccountingProvider,
+    memory: SuccessMemory | None,
+) -> _ArmResult:
+    """Arm 1b: ReAct with its own past successes in the prompt (issue #7, ADR-0017).
+
+    Recall, solve, then remember. The write happens here, inside the arm, on the
+    model's own declaration of success -- `run_episode` runs the fault's checker only
+    after this returns, so the memory cannot be filtered by ground truth. The tokens
+    the longer prompt costs are spent through `accounting` like any other call, so
+    they are 1b's on the row. Like arm 1 it has no library: nothing is compiled.
+    """
+    if memory is None:
+        raise ValueError(
+            "arm 1b needs its run's SuccessMemory; run it through run_benchmark, or pass "
+            "run_episode(memory=SuccessMemory())"
+        )
+    recalled = memory.recall(signature.intent)
+    outcome, transcript = solve(signature, box, accounting, prelude=render(recalled))
+    if outcome is EpisodeOutcome.SUCCESS:
+        memory.record(signature.intent, transcript)
+    return _ArmResult(
+        outcome,
+        transcript,
+        fired_variant=None,
+        program_id=None,
+        dispatch_score=None,
+        admitted=None,
+        refusal_reason=None,
+        compile_failure_reason=None,
+        replay_failure_reason=None,
+        timed_out=False,
+        # 1b keeps memory, not a library, so its solution is not compiled.
+        compilable=False,
+        memory_recalled=len(recalled),
+    )
 
 
 def _run_gold(oracle: Program | None, box: Sandbox) -> _ArmResult:
