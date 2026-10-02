@@ -7,9 +7,9 @@ the diverged sandbox test pins -- the fault is present after injection, the
 fingerprint sees it, a wrong resolution is rejected, a correct one is accepted
 -- with the negative controls chosen to be the destructive commands themselves.
 
-The checker reads its ground truth from refs under `refs/sandbox/`, which the
-injector records; the tests never pass the seed to `check`, so the checker
-cannot cheat by re-deriving the answer from the request.
+The checker reads its ground truth from `Sandbox.recorded`, which the injector
+fills outside the clone; the tests never pass the seed to `check`, so the
+checker cannot cheat by re-deriving the answer from the request.
 """
 
 from __future__ import annotations

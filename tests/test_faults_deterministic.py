@@ -63,9 +63,9 @@ DISTINGUISHING_SEEDS: dict[str, tuple[int, int]] = {
 def _refs(repo: Path) -> tuple[str, ...]:
     """Every ref and the object it points at, sorted, for one repository.
 
-    The objectname is the commit SHA for branch refs and the blob SHA for the
-    `refs/sandbox/` ground-truth refs some faults record, so comparing this
-    compares commit SHAs rather than only the working tree.
+    The objectname is the commit SHA for every ref a fault leaves -- branches and
+    remote-tracking refs; no ground truth is recorded in the clone (#103, #161) --
+    so comparing this compares commit SHAs rather than only the working tree.
     """
     out = run_git(("for-each-ref", "--format=%(refname) %(objectname)"), cwd=repo).stdout
     return tuple(sorted(line for line in out.splitlines() if line))

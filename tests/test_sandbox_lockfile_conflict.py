@@ -14,9 +14,9 @@ graded here. `check` therefore grades the outcome structurally -- upstream
 contained, no markers, both dependencies present -- which is what makes the
 dependency-dropping resolution fail.
 
-The checker reads its ground truth from refs under `refs/sandbox/`, which the
-injector records; the tests never pass the seed to `check`, so the checker cannot
-cheat by re-deriving the answer from the request.
+The checker reads its ground truth from `Sandbox.recorded`, which the injector
+fills outside the clone; the tests never pass the seed to `check`, so the checker
+cannot cheat by re-deriving the answer from the request.
 """
 
 from __future__ import annotations

@@ -43,9 +43,9 @@ _LOCAL_WORK = "\nLocal work in progress: keep me.\n"
 _UNTRACKED_PATH = "notes/scratch.txt"
 _UNTRACKED_TEXT = "scratch note, not committed yet\n"
 
-# Refs under refs/sandbox/ keep the injected state reachable by git itself, so
-# the checker stays git-only: the patch is a blob the working tree must still
-# contain, and the untracked ref exists only when a file was injected.
+# The injected work is recorded in `Sandbox.recorded`, outside the clone, so the
+# checker grades from git alone: the patch is text the working tree must still
+# contain, and the untracked entry exists only when a file was injected.
 
 
 def state_for_seed(seed: int) -> str:
@@ -122,8 +122,8 @@ class DirtyTreeFault(FaultSpec):
         Two clauses. First, upstream's tip must be contained in the local branch.
         Second, the uncommitted work recorded at injection must still be present:
         the tracked half is a patch the working tree must still reverse-apply,
-        and the untracked half a file whose content must match. Both clauses are
-        recorded under `refs/sandbox/`, which no ordinary branch rewrite removes.
+        and the untracked half a file whose content must match. Both are recorded
+        in `Sandbox.recorded`, outside the clone, so no branch rewrite removes them.
 
         The second clause is what makes the destructive "fixes" fail. `reset
         --hard upstream/main`, `checkout -- .` and `clean -fd` all satisfy the

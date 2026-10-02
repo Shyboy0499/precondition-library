@@ -399,8 +399,8 @@ class DivergedFault(FaultSpec):
         Second, the file changes the local-only commits made must still be present,
         checked by reverting them from the current tree (`git apply --reverse
         --check`) -- a change that cannot be reverted from HEAD is a change that
-        was destroyed. The recorded pre-injection commits live under
-        `refs/sandbox/`, which no ordinary branch rewrite removes.
+        was destroyed. The recorded pre-injection commits are named in
+        `Sandbox.recorded`, outside the clone, so no branch rewrite removes them.
 
         The second clause is the one that matters: `git reset --hard upstream/main`
         on the overlapping state satisfies the first clause while discarding the

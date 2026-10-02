@@ -281,17 +281,6 @@ def git_out(*args: str, cwd: Path) -> str:
     return run_git(args, cwd=cwd).stdout.strip()
 
 
-def store_blob(work: Path, ref: str, content: str) -> None:
-    """Write `content` as a blob and point `ref` at it.
-
-    A ref rather than a side file keeps the recorded ground truth inside git,
-    where a checker reads it with `git cat-file` and a branch rewrite cannot
-    silently drop it.
-    """
-    sha = run_git(("hash-object", "-w", "--stdin"), cwd=work, stdin=content).stdout.strip()
-    run_git(("update-ref", ref, sha), cwd=work)
-
-
 def _force_writable(path: str) -> None:
     """Add the owner write bit, leaving every other bit alone.
 
@@ -406,32 +395,18 @@ class Sandbox:
                 pass
 
 
-INJECTED_REF = "refs/sandbox/injected"
-"""Where a fault marks that it has run: an empty blob, and deliberately nothing more.
-
-`require_uninjected` needs a durable "already injected" marker, and the marker used to be
-`refs/sandbox/base` -- which named the pre-injection tip, so `git diff refs/sandbox/base
-HEAD` showed the injected fault without diagnosing it (issue #103). The base commit is
-still recorded, in `Sandbox.recorded`, where the graded code cannot read it; what stays in
-the clone is a ref whose content says only "a fault ran here", which the task text already
-says.
-
-It stays a ref rather than moving to memory because its whole job is to survive on disk: a
-second `inject` call on a rebuilt sandbox has to see it, and an in-memory marker would not
-outlive the object that carried it.
-"""
-
-
-def require_uninjected(sandbox: Sandbox, *, fault: str, ref: str = INJECTED_REF) -> None:
-    """Raise if this sandbox already has `fault` injected.
+def require_uninjected(sandbox: Sandbox, *, fault: str) -> None:
+    """Raise if this sandbox already has a fault injected.
 
     Injecting a fault twice would build a state that is neither fault, so it is an
-    error rather than a no-op. `ref` is the ref the fault records when it runs; a
-    sandbox already holding it has been injected.
+    error rather than a no-op. The marker is the recorded base in `Sandbox.recorded`:
+    it used to be a ref in the clone (`refs/sandbox/injected`), where the graded agent
+    and compiled preconditions could read it (issue #161). A `Sandbox` is only ever
+    built by `create`, never rebuilt from disk, so the in-memory record lives exactly
+    as long as the sandbox it describes.
     """
-    work = sandbox.work
-    if run_git(("rev-parse", "--verify", ref), cwd=work, check=False).returncode == 0:
-        raise RuntimeError(f"{work} already has a {fault} fault injected")
+    if "base" in sandbox.recorded:
+        raise RuntimeError(f"{sandbox.work} already has a {fault} fault injected")
 
 
 def record_base(sandbox: Sandbox, *, fault: str) -> str:
@@ -442,11 +417,9 @@ def record_base(sandbox: Sandbox, *, fault: str) -> str:
     call's `HEAD` would be the already-injected state, not the base.
     """
     require_uninjected(sandbox, fault=fault)
-    work = sandbox.work
-    base = git_out("rev-parse", "HEAD", cwd=work)
-    # The value goes to the harness; the clone gets only the marker. See `INJECTED_REF`.
+    base = git_out("rev-parse", "HEAD", cwd=sandbox.work)
+    # Recorded for the harness only; nothing about it is written into the clone (#161).
     sandbox.recorded["base"] = base
-    store_blob(work, INJECTED_REF, "")
     return base
 
 
@@ -486,31 +459,18 @@ def _seed_base(work: Path) -> None:
     run_git(("push", "-q", "-u", "upstream", "main"), cwd=work)
 
 
-_RECORDED_SUBMODULE_PATH_REF = "refs/sandbox/submodule-path"
-"""Where a fault injector records the submodule path it injected, as a blob.
+RECORDED_SUBMODULE_PATH = "submodule-path"
+"""The `Sandbox.recorded` key a fault injector records its submodule path under.
 
-A fault's ground truth lives under `refs/sandbox/` so a branch rewrite cannot
-drop it. This one has a second reason: the path is the *input* to the task, and
-a correct removal deletes the `.gitmodules` entry that would otherwise carry it,
-so the recorded value is what still names it in the state a program must bind.
-
-The `submodule_moved` injector writes this ref and its checker reads it back;
-the runtime needs the same name to bind `{submodule_path}` there, so the literal
-is repeated here beside its reader. `tasks/faults/submodule_moved.py` holds the
-other copy and the two are one convention -- the sandbox cannot import it
-because the faults import the sandbox.
+The path is the *input* to the task, and a correct removal deletes the `.gitmodules`
+entry that would otherwise carry it, so the recorded value is what still names it in
+the state a program must bind. It lives in the harness's record, not in the clone
+(issue #161): as a ref it was readable by the agent and could anchor a precondition
+that holds in every sandbox and in no real repository.
 """
 
 
-def _recorded_submodule_path(work: Path) -> str | None:
-    """The submodule path a fault injector recorded, or None when none is."""
-    result = run_git(("cat-file", "-p", _RECORDED_SUBMODULE_PATH_REF), cwd=work, check=False)
-    if result.returncode != 0 or not result.stdout.strip():
-        return None
-    return result.stdout.strip()
-
-
-def submodule_path(work: Path) -> str | None:
+def submodule_path(sandbox: Sandbox) -> str | None:
     """The submodule's path: recorded injection first, `.gitmodules` second.
 
     The order is the point, not an accident. `.gitmodules` is how a repository
@@ -519,8 +479,8 @@ def submodule_path(work: Path) -> str | None:
     of `submodule_moved` is *removing* the submodule, and a correct removal
     deletes the `.gitmodules` entry -- the evidence of what the path was. Reading
     it first would leave the program that did the right thing unable to bind the
-    postcondition that says so. The injector records the path under
-    `refs/sandbox/submodule-path`, which survives the removal, so it wins.
+    postcondition that says so. The injector records the path in
+    `Sandbox.recorded`, which survives the removal, so it wins.
 
     Lives here rather than in `signatures` because it is a git read under the
     pinned environment, which this module owns, and because both the observed
@@ -528,12 +488,12 @@ def submodule_path(work: Path) -> str | None:
     the two cannot disagree about where the submodule is. One submodule is all
     the grid models, so the first declared path is returned.
     """
-    recorded = _recorded_submodule_path(work)
-    if recorded is not None:
+    recorded = sandbox.recorded.get(RECORDED_SUBMODULE_PATH)
+    if recorded:
         return recorded
     result = run_git(
         ("config", "--file", ".gitmodules", "--get-regexp", r"^submodule\..*\.path$"),
-        cwd=work,
+        cwd=sandbox.work,
         check=False,
     )
     if result.returncode != 0 or not result.stdout.strip():

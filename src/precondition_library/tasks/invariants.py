@@ -8,10 +8,13 @@ the fault. The fault checkers each carry the clause that matters for their own s
 `lockfile_conflict` rejects a hand-resolved merge that drops a dependency), but
 those are per-fault. These two are general:
 
-* **Recorded state preserved.** Every ref under `refs/sandbox/` that existed when the
-  episode started still resolves to the value it had. Those are where the injectors
-  record ground truth, so they are also the proof the repository was not re-cloned or
-  wiped: a fresh clone has no `refs/sandbox/` at all.
+* **Repository not replaced.** Every object a work ref named when the episode started
+  is still in the work repository's object store. A correct resolution moves
+  `refs/heads/*` and `refs/remotes/*`, but it never deletes the objects they named --
+  a `reset --hard` leaves them in the store -- so a missing one means the repository
+  was re-cloned or wiped. This used to be "every ref under `refs/sandbox/` still
+  resolves", but those refs were harness bookkeeping inside the clone the agent reads,
+  and they have moved into `Sandbox.recorded` (issue #161).
 * **No force-push to upstream.** Every upstream ref recorded at the start still
   exists, and its current value descends from the recorded one. A rewritten history
   that drops commits fails here even though the command exits 0, which is the class
@@ -30,10 +33,11 @@ boolean beside it (issue #96).
 
 **Minimal diff** joined the same fact rather than growing a second one: when the caller
 declares a fault's `change_surface`, the committed diff from the recorded base is checked
-against it. What is still not here: refs outside `refs/sandbox/` are not pinned -- a correct
-resolution moves `refs/heads/*` and a fetch moves `refs/remotes/*` -- so a body that deletes
-an unrelated tag is not caught, and an *uncommitted* change is invisible to a diff between
-two commits.
+against it. What is still not here: work refs are not pinned -- a correct resolution moves
+`refs/heads/*` and a fetch moves `refs/remotes/*` -- so a body that deletes an unrelated tag
+is not caught while its commit is still in the store; a re-clone of a state whose every
+commit is already on upstream (`dirty_tree`'s, say) is caught only by the fault's own
+checker; and an *uncommitted* change is invisible to a diff between two commits.
 """
 
 from __future__ import annotations
@@ -41,14 +45,16 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
-from ..sandbox import Sandbox, run_git, store_blob
+from ..sandbox import Sandbox, run_git
 from .spec import GroundTruth
 
-START_REF = "refs/sandbox/refs-at-start"
-"""Where the post-injection ref snapshot is stored, inside the sandbox's own repo."""
+RECORDED_REFS_AT_START = "refs-at-start"
+"""The `Sandbox.recorded` key the post-injection ref snapshot is held under.
 
-_GUARDED_WORK_PREFIX = "refs/sandbox/"
-"""The work refs that must not move. `refs/heads/*` and `refs/remotes/*` may."""
+Held by the harness, not stored in the clone: as `refs/sandbox/refs-at-start` it listed
+every ref the injector left, readable by the agent and by compiled preconditions
+(issue #161).
+"""
 
 
 def _refs(repo: Path) -> dict[str, str]:
@@ -70,23 +76,28 @@ def record_refs_at_start(sandbox: Sandbox) -> None:
     """
     lines = [f"work {name} {sha}" for name, sha in sorted(_refs(sandbox.work).items())]
     lines += [f"upstream {name} {sha}" for name, sha in sorted(_refs(sandbox.upstream).items())]
-    store_blob(sandbox.work, START_REF, "\n".join(lines) + "\n")
+    sandbox.recorded[RECORDED_REFS_AT_START] = "\n".join(lines) + "\n"
 
 
 def _recorded(sandbox: Sandbox) -> tuple[dict[str, str], dict[str, str]] | None:
     """The snapshot as `(work refs, upstream refs)`, or `None` if none was recorded."""
-    read = run_git(("cat-file", "-p", START_REF), cwd=sandbox.work, check=False)
-    if read.returncode != 0:
+    snapshot = sandbox.recorded.get(RECORDED_REFS_AT_START)
+    if snapshot is None:
         return None
     work: dict[str, str] = {}
     upstream: dict[str, str] = {}
-    for line in read.stdout.splitlines():
+    for line in snapshot.splitlines():
         side, _, rest = line.partition(" ")
         name, _, sha = rest.partition(" ")
         if not (name and sha):
             continue
         (work if side == "work" else upstream)[name] = sha
     return work, upstream
+
+
+def _has_object(repo: Path, sha: str) -> bool:
+    """Whether `sha` is still in `repo`'s object store, reachable or not."""
+    return run_git(("cat-file", "-e", sha), cwd=repo, check=False).returncode == 0
 
 
 def _descends_from(repo: Path, older: str, newer: str) -> bool:
@@ -98,7 +109,7 @@ def _descends_from(repo: Path, older: str, newer: str) -> bool:
 
 
 def recorded_state_intact(sandbox: Sandbox, *, surface: Sequence[str] | None = None) -> GroundTruth:
-    """Whether the resolution left the recorded refs and upstream's history alone.
+    """Whether the resolution kept the repository and left upstream's history alone.
 
     Graded like any other ground-truth clause, so it reaches the ledger through the
     existing `ground_truth_ok` column rather than needing a field of its own: the
@@ -112,17 +123,13 @@ def recorded_state_intact(sandbox: Sandbox, *, surface: Sequence[str] | None = N
         return GroundTruth(ok=True, detail="no ref snapshot was recorded for this sandbox")
     work_at_start, upstream_at_start = recorded
 
-    work_now = _refs(sandbox.work)
     for name, sha in sorted(work_at_start.items()):
-        if not name.startswith(_GUARDED_WORK_PREFIX):
-            continue
-        current = work_now.get(name)
-        if current != sha:
+        if not _has_object(sandbox.work, sha):
             return GroundTruth(
                 ok=False,
                 detail=(
-                    f"{name} was {sha[:12]} when the episode started and is "
-                    f"{current[:12] if current else 'gone'} now: recorded state was destroyed"
+                    f"{name} named {sha[:12]} when the episode started and that object is no "
+                    "longer in the repository: it was re-cloned or wiped"
                 ),
             )
 
@@ -146,7 +153,7 @@ def recorded_state_intact(sandbox: Sandbox, *, surface: Sequence[str] | None = N
         return GroundTruth(
             ok=True,
             detail=(
-                "every recorded ref still resolves and upstream's history only moved on "
+                "the repository was kept and upstream's history only moved on "
                 "(no change surface was declared)"
             ),
         )
@@ -173,7 +180,7 @@ def recorded_state_intact(sandbox: Sandbox, *, surface: Sequence[str] | None = N
     return GroundTruth(
         ok=True,
         detail=(
-            "every recorded ref still resolves, upstream's history only moved on, and the "
+            "the repository was kept, upstream's history only moved on, and the "
             f"committed diff stays inside {sorted(surface) or 'an empty surface'}"
         ),
     )

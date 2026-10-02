@@ -340,7 +340,7 @@ def bindings(env: Sandbox) -> dict[str, str]:
         "upstream_remote": "upstream",
         "upstream_branch": "main",
     }
-    path = submodule_path(env.work)
+    path = submodule_path(env)
     if path is not None:
         values["submodule_path"] = path
     return values
