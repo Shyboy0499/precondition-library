@@ -31,12 +31,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ...sandbox import (
+    RECORDED_SUBMODULE_PATH,
     Sandbox,
     create_submodule_origin,
     git_out,
     record_base,
     run_git,
-    store_blob,
 )
 from ...signatures import StateFingerprint
 from ..intent import IntentSpec, ResolutionVariant, draw_index, sample_index
@@ -155,12 +155,6 @@ def draw_for_seed(seed: int) -> Draw:
         content=draw_index(seed, "submodule_moved", "library_content", len(_LIBRARY_CONTENTS)),
     )
 
-
-# Ground truth the checker reads, recorded under refs/sandbox/ so `check` grades
-# the outcome without being handed the seed, and can still name the submodule's
-# path after a correct removal has emptied the `.gitmodules` entry that would
-# otherwise reveal it.
-_PATH_REF = "refs/sandbox/submodule-path"
 
 # Local paths are a valid submodule URL, but git >= 2.38 refuses them for
 # submodule operations unless allowed. Passed per command, so no global or
@@ -353,9 +347,9 @@ class SubmoduleMovedFault(FaultSpec):
 
         # The path is recorded because the *probes* bind `{submodule_path}` from it, and
         # a correct removal deletes the `.gitmodules` entry that would otherwise carry it.
-        # The state is deliberately not recorded: a label in the clone is what issue #103
-        # is about, and it now travels on the sandbox object instead.
-        store_blob(work, _PATH_REF, SUBMODULE_PATH)
+        # It is recorded on the sandbox object, never in the clone: a ref there was
+        # readable by the agent and could anchor a precondition (issues #103, #161).
+        sandbox.recorded[RECORDED_SUBMODULE_PATH] = SUBMODULE_PATH
 
         # Leave the remote-tracking ref current so observe() can read it without
         # fetching (observe must not mutate the environment).

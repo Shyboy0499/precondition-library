@@ -15,7 +15,8 @@ the *environment*. Everything above guards the task text; that control guards th
 Issue #103 found the injected state written in plaintext under `refs/sandbox/`, where a
 precondition could read the resolution rather than diagnose it. It was pinned as a strict
 `xfail` so it could not be forgotten, and fixing the leak turned it into the assertion
-below -- which is why the marker is gone rather than lingering.
+below -- which is why the marker is gone rather than lingering. #161 later moved the rest
+of `refs/sandbox/` out of the clone too (`tests/test_harness_record_outside_clone.py`).
 """
 
 from __future__ import annotations

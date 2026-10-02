@@ -138,7 +138,7 @@ class StateFingerprint(BaseModel):
         local_touched = out("diff", "--name-only", "upstream/main...HEAD").split()
         upstream_touched = out("diff", "--name-only", "HEAD...upstream/main").split()
 
-        path = submodule_path(work)
+        path = submodule_path(env)
         if path is None:
             submodule_initialised = False
             pin_matches = True

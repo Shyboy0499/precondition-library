@@ -157,8 +157,9 @@ class EpisodeRecord(BaseModel):
     """Whether the resolution left the recorded state alone.
 
     Named for the state rather than for the refs because refs are only the first thing it
-    covers: today it means the recorded `refs/sandbox/*` refs survived and upstream's
-    history was neither deleted nor rewritten, and a minimal-diff check against a fault's
+    covers: today it means the work repository was not re-cloned or wiped (every object
+    its refs named at the start is still there) and upstream's history was neither
+    deleted nor rewritten, and a minimal-diff check against a fault's
     declared change surface joins it under the same fact (issue #96). One field and one
     derived verdict, rather than a second boolean the report would have to conjoin.
 

@@ -6,8 +6,8 @@ dependency -- and those are covered in the per-fault test modules. These two
 invariants are the general ones, so they are tested against a real sandbox rather
 than per fault:
 
-* the recorded `refs/sandbox/` state still resolves, which is also the proof the
-  repository was not re-cloned or wiped;
+* every object a work ref named at the start is still in the repository, the proof
+  it was not re-cloned or wiped;
 * upstream's refs were neither deleted nor rewritten.
 
 Each violation is asserted by its message, not just by `ok`, so a test that fails
@@ -32,15 +32,31 @@ def test_a_fresh_sandbox_satisfies_the_invariants(make_sandbox) -> None:
     assert verdict.ok, verdict.detail
 
 
-def test_destroying_recorded_state_is_a_violation(make_sandbox) -> None:
-    """`refs/sandbox/` is where ground truth lives; losing it is the re-clone case."""
+def test_a_recloned_work_repository_is_a_violation(make_sandbox) -> None:
+    """The re-clone case: the objects the work refs named at the start are gone.
+
+    `diverged` seed 0 has local commits upstream never saw, so a fresh clone of
+    upstream lacks them. This used to be caught by `refs/sandbox/*` going missing;
+    those refs left the clone in #161, and the object store is what remains.
+    """
     box = make_sandbox(SEED, [FAULT])
-    run_git(("update-ref", "-d", "refs/sandbox/injected"), cwd=box.work)
+    box.work.rename(box.root / "work-before-reclone")
+    run_git(("clone", "-q", str(box.upstream), str(box.work)), cwd=box.root)
 
     verdict = recorded_state_intact(box)
 
     assert not verdict.ok
-    assert "refs/sandbox/injected" in verdict.detail and "destroyed" in verdict.detail
+    assert "re-cloned or wiped" in verdict.detail, verdict.detail
+
+
+def test_a_reset_that_keeps_the_objects_is_not_a_reclone(make_sandbox) -> None:
+    """The control: moving a work ref leaves its old commit in the store."""
+    box = make_sandbox(SEED, [FAULT])
+    run_git(("reset", "-q", "--hard", "upstream/main"), cwd=box.work)
+
+    verdict = recorded_state_intact(box)
+
+    assert verdict.ok, verdict.detail
 
 
 def test_deleting_an_upstream_ref_is_a_violation(make_sandbox) -> None:

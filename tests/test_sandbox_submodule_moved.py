@@ -14,9 +14,9 @@ A submodule needs a third repository behind its URL. `inject` builds one inside
 the sandbox root from a local path, so the whole test stays offline and
 deterministic.
 
-The checker reads its ground truth from refs under `refs/sandbox/`, which the
-injector records; the tests never pass the seed to `check`, so the checker cannot
-cheat by re-deriving the state from the request.
+The checker reads its ground truth from `Sandbox.recorded`, which the injector
+fills outside the clone; the tests never pass the seed to `check`, so the checker
+cannot cheat by re-deriving the state from the request.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from dataclasses import replace
 import pytest
 
 import precondition_library.sandbox as sandbox_module
-from precondition_library.sandbox import Sandbox, run_git
+from precondition_library.sandbox import RECORDED_SUBMODULE_PATH, Sandbox, run_git
 from precondition_library.signatures import StateFingerprint
 from precondition_library.tasks.faults import build_sandbox
 from precondition_library.tasks.faults.submodule_moved import (
@@ -341,8 +341,8 @@ def test_the_selector_is_not_written_into_the_clone(make_sandbox) -> None:
     """The other half: the harness holding it is only a fix if the clone does not.
 
     Asserted negatively and by name, because the leak was a *plaintext label* rather than
-    a missing file: `refs/sandbox/submodule-state` must not resolve, while the path ref
-    the probes bind from must.
+    a missing file: `refs/sandbox/submodule-state` must not resolve. Since #161 the path
+    the probes bind from is not in the clone either; it is in `Sandbox.recorded`.
     """
     box = make_sandbox(SEED_BY_STATE["remove"], ["submodule_moved"])
 
@@ -357,5 +357,6 @@ def test_the_selector_is_not_written_into_the_clone(make_sandbox) -> None:
         run_git(
             ("rev-parse", "--verify", "refs/sandbox/submodule-path"), cwd=box.work, check=False
         ).returncode
-        == 0
-    ), "the probes bind {submodule_path} from this ref; it must stay"
+        != 0
+    ), "the submodule path is harness bookkeeping and must not be in the clone (#161)"
+    assert box.recorded[RECORDED_SUBMODULE_PATH] == SUBMODULE_PATH

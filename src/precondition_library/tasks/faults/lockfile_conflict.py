@@ -64,9 +64,9 @@ _BASE_VERSIONS = ("0.1.0", "0.2.0")
 _PACKAGE_SALT = "lockfile_conflict:package"
 _VERSION_SALT = "lockfile_conflict:version"
 
-# Ground truth lives under refs/sandbox/, where a branch rewrite cannot drop it
-# and the checker can read it with `git cat-file` rather than re-deriving it
-# from a seed the checker is never given.
+# Ground truth lives in `Sandbox.recorded`, which the harness holds outside the
+# clone: no branch rewrite can drop it, the graded code cannot read it, and the
+# checker need not re-derive it from a seed it is never given (#103, #161).
 
 # A conflict marker starts a line: `<<<<<<<`, `=======` (separator), `>>>>>>>`
 # (end) or `|||||||` (diff3 base).
