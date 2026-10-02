@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import gold_programs
+from conftest import gold_programs, make_record
 
 from precondition_library.agents.compile import AdmissionGate
 from precondition_library.bench import live
@@ -23,7 +23,7 @@ from precondition_library.bench.build_library import (
     BuiltProgram,
     _write_manifest,
 )
-from precondition_library.bench.ledger import Arm
+from precondition_library.bench.ledger import Arm, EpisodeOutcome, append
 from precondition_library.library import Library
 from precondition_library.program import ProgramStatus
 
@@ -49,13 +49,60 @@ def _fill(root: Path, gate: AdmissionGate) -> list[BuiltProgram]:
     return built
 
 
+REJECTED = "negative side failed: preconditions accepted an overlap state"
+
+
+def _write_build_rows(ledger: Path, *, admitted: bool) -> None:
+    """The two kinds of build row the second live run produced (#173)."""
+    append(
+        ledger,
+        make_record(
+            arm=Arm.PRECONDITION,
+            outcome=EpisodeOutcome.FALLBACK,
+            seed=0,
+            tool_calls=15,
+            admitted=admitted,
+            compile_failure_reason=None if admitted else REJECTED,
+        ),
+    )
+    append(
+        ledger,
+        make_record(
+            arm=Arm.PRECONDITION,
+            outcome=EpisodeOutcome.FAIL,
+            fault_type="submodule_moved",
+            seed=1,
+            tool_calls=24,
+            admitted=None,
+        ),
+    )
+
+
 @pytest.fixture
 def stubbed(monkeypatch):
-    calls: dict[str, list[dict]] = {"build": [], "benchmark": [], "report": []}
+    calls: dict[str, list] = {"build": [], "benchmark": [], "report": [], "admit": [True]}
 
     def fake_build(**kwargs) -> BuildReport:
         calls["build"].append(kwargs)
         root, ungated = kwargs["root"], kwargs["positive_only_root"]
+        admit = calls["admit"][0]
+        _write_build_rows(kwargs["ledger"], admitted=admit)
+        if not admit:
+            for target, gate in (
+                (root, AdmissionGate.TWO_SIDED),
+                (ungated, AdmissionGate.POSITIVE_ONLY),
+            ):
+                target.mkdir(parents=True)
+                _write_manifest(target, gate, list(live.MEASURED_FAULTS), (0,))
+            empty = dict(
+                ledger=kwargs["ledger"], programs=[], library_hash=Library(root).library_hash()
+            )
+            return BuildReport(
+                root=root,
+                gate=AdmissionGate.TWO_SIDED,
+                positive_only=BuildReport(root=ungated, gate=AdmissionGate.POSITIVE_ONLY, **empty),
+                **empty,
+            )
         built = _fill(root, AdmissionGate.TWO_SIDED)
         _fill(ungated, AdmissionGate.POSITIVE_ONLY)
         second = BuildReport(
@@ -151,6 +198,7 @@ def test_the_key_comes_from_a_file_and_is_never_printed(monkeypatch, tmp_path, c
             admitted_positive_only=0,
             compiled=0,
             library_hash="h",
+            build=[],
             soft_threshold=1.0,
             claim2="c",
             claim2_reason="r",
@@ -206,3 +254,55 @@ def test_exactly_one_key_source_is_required(tmp_path) -> None:
         live.main(out)
     with pytest.raises(SystemExit):
         live.main([*out, "--api-key-env", "X", "--api-key-file", str(tmp_path / "k")])
+
+
+def test_every_summary_reports_each_build_episode(stubbed, tmp_path) -> None:
+    result = live.run_live(PLAN, provider=object(), model="fake", out=tmp_path / "run")
+
+    admitted, never_done = result.build
+    assert (admitted.seed, admitted.admitted, admitted.reason) == (0, True, None)
+    assert never_done.admitted is None and never_done.tool_calls == 24
+    assert never_done.reason == "not compiled: the agent did not declare the task done"
+    assert result.stopped_after is None
+
+
+def test_an_empty_library_stops_cleanly_after_the_build(stubbed, tmp_path) -> None:
+    """The second live run's case (#173): nothing admitted, so stages 2-4 are skipped."""
+    stubbed["admit"][0] = False
+    out = tmp_path / "run"
+    result = live.run_live(PLAN, provider=object(), model="fake", out=out)
+
+    assert result.stopped_after == "build"
+    assert "admitted none" in (result.stop_reason or "")
+    assert result.build[0].reason == REJECTED, "the gate's reason reaches the summary"
+    (online,) = stubbed["benchmark"]
+    assert online["arms"] == [Arm.REACT, Arm.REACT_MEMORY], "the online arms need no library"
+    assert stubbed["report"] == [] and not (out / "primary").exists()
+    assert result.soft_threshold is None and result.figure1 is None
+
+    text = (out / "summary.txt").read_text(encoding="utf-8")
+    assert "STOPPED after build" in text and REJECTED in text
+    assert (
+        json.loads((out / "summary.json").read_text(encoding="utf-8"))["stopped_after"] == "build"
+    )
+
+
+def test_the_command_exits_1_with_a_message_when_it_stopped(monkeypatch, tmp_path, capsys) -> None:
+    key_file = tmp_path / "key"
+    key_file.write_text("k", encoding="utf-8")
+    stopped = live.LiveSummary(
+        model="m",
+        plan=PLAN,
+        admitted_two_sided=0,
+        admitted_positive_only=0,
+        compiled=0,
+        library_hash="h",
+        build=[],
+        stopped_after="build",
+        stop_reason="nothing admitted",
+        artifacts={},
+    )
+    monkeypatch.setattr(live, "run_live", lambda plan, **_: stopped)
+    code = live.main(["--api-key-file", str(key_file), "--out", str(tmp_path / "o")])
+    assert code == 1
+    assert "stopped after build" in capsys.readouterr().out
