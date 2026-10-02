@@ -218,7 +218,10 @@ class _ArmResult:
     """Whether this episode solved a task whose solution should be compiled.
 
     Set by `_run_arm` from what actually happened: true only when a compiled arm
-    had to solve, has a transcript, and owns a library to store into. It is a
+    had to solve, **the agent itself declared the task done** (issue #160 -- a
+    transcript that ran out of budget is not a solution, and the agent's own verdict
+    is the one the no-oracle rule allows), has a transcript, and owns a library to
+    store into. It is a
     property of the result rather than of the arm so `_learn_from_solution`
     branches on the episode, not on which arm ran it -- §4 keeps arm-specific
     logic inside `dispatch.py`, and a fourth arm must not need this file audited
@@ -563,6 +566,7 @@ def run_episode(
             cached_tokens_in=accounting.cached_tokens_in,
             cache_write_tokens_in=accounting.cache_write_tokens_in,
             llm_calls=accounting.llm_calls,
+            tool_calls=_tool_calls(result.transcript),
             temperature=accounting.temperature,
             wall_clock_s=time.monotonic() - started,
             outcome=result.outcome,
@@ -667,7 +671,7 @@ def _run_arm(
             compile_failure_reason=None,
             replay_failure_reason=None,
             timed_out=False,
-            compilable=True,
+            compilable=outcome is EpisodeOutcome.SUCCESS,
         )
 
     fired = decision.program
@@ -721,7 +725,7 @@ def _run_arm(
             # (issue #60).
             replay_failure_reason=None,
             timed_out=replayed.timed_out,
-            compilable=True,
+            compilable=outcome is EpisodeOutcome.SUCCESS,
         )
     return _ArmResult(
         _after_fallback(outcome),
@@ -736,7 +740,7 @@ def _run_arm(
         # the body could not run at all (issue #76).
         replay_failure_reason=replayed.reason if replayed.unbound_parameter else None,
         timed_out=replayed.timed_out,
-        compilable=True,
+        compilable=outcome is EpisodeOutcome.SUCCESS,
     )
 
 
@@ -858,6 +862,11 @@ def _run_gold(oracle: Program | None, box: Sandbox) -> _ArmResult:
         timed_out=replayed.timed_out,
         compilable=False,
     )
+
+
+def _tool_calls(transcript: list[dict] | None) -> int:
+    """How many tool calls a transcript ran, refused ones included (issue #160)."""
+    return sum(1 for entry in transcript or [] if entry.get("role") == "tool")
 
 
 def _record_mismatch(
