@@ -237,6 +237,13 @@ def arm2_outcomes(
 ) -> list[PairOutcome]:
     """Arm 2 on labelled pairs: the top-scoring candidate and its score, before a threshold.
 
+    For **one text per variant** -- the declared state grid and the gold probe, where each
+    resolution has one hand-written program and a declared state has no sandbox. A compiled
+    library is measured by `bench.library_pairs.library_pair_outcomes` instead, through
+    `Library.match_semantic` itself (ADR-0022): that scores the request plus the
+    fingerprint, applies the library's eligibility filter, and holds several programs
+    per variant, none of which this form does.
+
     The same crossing `bench.similarity_probe` measures arm 2 with -- the pair's request
     text against each candidate's program text -- and the same tie-break as
     `Library.match_semantic` (score, then id), so a tie still fires one program.
@@ -277,8 +284,9 @@ def arm3_outcomes(
     """Arm 3 on labelled pairs, from a caller-supplied decision.
 
     `decide` returns the variant arm 3 fires for the pair's state, or `None`. With a
-    compiled library that is `match_preconditions` over a built sandbox; the arithmetic
-    here does not care, which is what lets the guard be exercised on gold today.
+    compiled library that is `match_preconditions` over a built sandbox, which
+    `bench.library_pairs` runs (ADR-0022); the arithmetic here does not care, which is what
+    lets the guard be exercised on gold.
     """
     return [
         PairOutcome(
