@@ -50,7 +50,16 @@ class FaultSpec:
     """
 
     def inject(self, seed: int, sandbox) -> None:
-        """Mutate `sandbox` into the faulty state. Same seed, same state."""
+        """Mutate `sandbox` into the faulty state. Same seed, same state.
+
+        **Must leave `upstream/main` resolvable** (issue #4, ADR-0018).
+        `StateFingerprint.observe` reads the tracked ref, so a state that prunes or
+        deletes it has no fingerprint, and a state with no fingerprint cannot be one of
+        admission's negative sandboxes. A fault whose story is a missing upstream branch
+        (as `branch_renamed`'s is) leaves the stale remote-tracking ref in place -- what a
+        non-pruning fetch leaves -- and carries the change in another field.
+        `tests/test_one_free_variable.py` builds every state admission builds and checks
+        the ref resolves."""
         raise NotImplementedError("implemented per plan: phase 1")
 
     def task_text(self, seed: int) -> str:

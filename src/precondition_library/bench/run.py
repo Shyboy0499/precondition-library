@@ -576,7 +576,7 @@ def run_episode(
             library_hash=library_hash,
             library_program_ids=library_program_ids,
             admission_gate=None
-            if arm in (Arm.REACT, Arm.REACT_MEMORY, Arm.GOLD) or admission_gate is None
+            if arm not in DISPATCHING_ARMS or admission_gate is None
             else admission_gate.value,
             admitted=result.admitted,
             refusal_reason=result.refusal_reason,
@@ -736,12 +736,25 @@ def _run_arm(
     )
 
 
+DISPATCHING_ARMS: frozenset[Arm] = frozenset(
+    {Arm.SEMANTIC, Arm.PRECONDITION, Arm.INTENT_KEY, Arm.SOFT_VOTE}
+)
+"""The arms that choose a stored program from a library (issue #4).
+
+These are the arms a frozen run compares: each dispatches against the one shared
+artifact, carries its admission gate on every row, and differs from the others only
+in the matcher `_dispatch` calls. Arm 1, arm 1b and the gold oracle are not here --
+they never read a library -- and record no gate. Named once so `_dispatch`, the
+gate field and the tests cannot disagree about which arms these are."""
+
+
 def _dispatch(arm: Arm, signature: TaskSignature, library: Library, box: Sandbox) -> Dispatch:
     """The dispatching arm's one call into `agents.dispatch`.
 
     An explicit table rather than an if/else whose last branch catches "everything
     else": a new arm that reached here without its own entry would otherwise run
-    arm 3's matcher under its own name, and its rows would be arm 3's.
+    arm 3's matcher under its own name, and its rows would be arm 3's. It serves
+    exactly `DISPATCHING_ARMS`, which a test pins.
     """
     if arm is Arm.SEMANTIC:
         return dispatch_semantic(signature, library)
