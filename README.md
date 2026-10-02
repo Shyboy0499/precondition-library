@@ -460,6 +460,22 @@ before anything runs:
   not an omission — credential handling stays with the caller, and nothing in the
   package will find a key on its own.
 
+**A whole live run is one command.** `bench/live.py` chains the stages in the spec's
+order: build and gate the frozen library twice, learn arm 2b's threshold on the tune
+seeds, run the frozen benchmark and the admission factorial, produce Figure 1 from
+the library's own matchers, and run arms 1 and 1b online. Every artifact goes into one
+fresh directory, with `summary.txt` and `summary.json` saying what ran and where each
+artifact is:
+
+```bash
+uv run python -m precondition_library.bench.live \
+  --api-key-env DEEPSEEK_API_KEY --out ../live-run   # or --api-key-file PATH
+```
+
+You name where the key is, so the package still finds none on its own.
+`--episode-seeds` (default 4, the first live run's; the plan is 40) sizes the
+episode stages, and `--skip-online` drops arms 1 and 1b.
+
 ## Prior work
 
 Every citation below was checked against the source before publication — title,
