@@ -10,7 +10,9 @@ The ablation's dispatch strategies meet here, as functions at one seam.
 the request; `match_preconditions` (arm 3) returns the admitted programs whose
 executable preconditions accept the environment; `match_intent_key` (arm 2c,
 issue #7) returns the programs compiled from a request with the same normalised
-text, abstaining when they disagree on the resolution. The arms differ in which
+text, abstaining when they disagree on the resolution; and `match_soft` (arm 2b,
+issue #7) scores each admitted program by the fraction of its preconditions that
+hold -- arm 3's features under a soft rule. The arms differ in which
 function is called and nothing else, so **each arm's mechanism is injected at
 construction rather than named in either matcher**: arm 2's `similarity` is
 lexical today and an embedding model behind the same `Similarity` Protocol
@@ -169,12 +171,24 @@ class ScoredProgram:
     beside the program is what lets the episode runner record it without
     re-running the ranking: a second scoring pass could disagree with the one
     that actually chose the program, and the recorded number would then describe
-    a decision that was not made. Arm 3 returns bare programs because the spec
-    defines `dispatch_score` as `None` for every arm but this one.
+    a decision that was not made. Arm 2b's soft vote returns its fraction the same
+    way (issue #7). Arm 3 returns bare programs: it has no score.
     """
 
     program: Program
     score: float
+
+
+def soft_vote_score(result: GroundTruthResult) -> float:
+    """Arm 2b's score for one program: the fraction of its preconditions that held.
+
+    `result` is the program's `evaluate_preconditions` verdict, the same object arm 3
+    reads `.ok` from. An empty precondition set scores 1.0 -- arm 3 accepts it too, so
+    the soft vote at 1.0 stays exactly arm 3.
+    """
+    if not result.predicates:
+        return 1.0
+    return sum(predicate.ok for predicate in result.predicates) / len(result.predicates)
 
 
 def _program_text(program: Program) -> str:
@@ -245,6 +259,7 @@ class Library:
         evaluate_preconditions: PreconditionEvaluator | None = None,
         reranker: Similarity | None = None,
         rerank_k: int = DEFAULT_RERANK_K,
+        soft_threshold: float | None = None,
     ) -> None:
         """Open the library at `root`, with arm 2's and arm 3's mechanisms injected.
 
@@ -278,6 +293,12 @@ class Library:
         rescores them, and that score is what the threshold judges and the dispatch
         records. `None` keeps arm 2 a single stage, exactly as before. It is set here for
         the same reason `threshold` is: the configuration that ran is the one recorded.
+
+        `soft_threshold` is arm 2b's inclusive floor (issue #7, ADR-0016): the fraction of
+        a program's preconditions that must hold for the soft vote to fire it. It has no
+        default because a default would be an untuned value recorded as if it had been
+        learned; `match_soft` refuses to run without one, and `bench.soft_vote` learns it
+        on the tune seeds.
         """
         if rerank_k < 1:
             raise ValueError(f"rerank_k must be at least 1, got {rerank_k}")
@@ -287,6 +308,7 @@ class Library:
         self.evaluate_preconditions = evaluate_preconditions
         self.reranker = reranker
         self.rerank_k = rerank_k
+        self.soft_threshold = soft_threshold
 
     def load_all(self) -> list[Program]:
         """Every stored program, sorted by id so the order is not filesystem luck.
@@ -571,6 +593,51 @@ class Library:
         ]
         accepted.sort(key=lambda program: (-len(program.preconditions), program.id))
         return accepted
+
+    def rank_soft(self, env: Sandbox) -> list[ScoredProgram]:
+        """Arm 2b's scores, before its threshold: every admitted program, best first.
+
+        The soft vote (issue #7, ADR-0016) reads exactly what arm 3 reads -- the
+        per-predicate results of `self.evaluate_preconditions` -- and replaces arm 3's
+        hard rule (every precondition must hold) with a score: the **fraction** of the
+        program's preconditions that held. Arm 3 is therefore the soft vote at a
+        threshold of 1.0, which is what lets 2b ask whether the hard conjunction adds
+        anything over the same information.
+
+        A program with no preconditions scores 1.0, the vacuous truth arm 3 also
+        accepts. A refused probe counts as not held, as it does for arm 3. Ordered by
+        score, then by precondition count (more specific first, arm 3's tie-break),
+        then by id, so equal scores come back in a stable order.
+        """
+        if self.evaluate_preconditions is None:
+            raise ValueError(
+                "arm 2b's matcher needs a predicate evaluator; construct the library as "
+                "Library(root, evaluate_preconditions=...)"
+            )
+        scored = [
+            ScoredProgram(program, soft_vote_score(self.evaluate_preconditions(program, env)))
+            for program in self.load_all()
+            if program.status is ProgramStatus.ADMITTED
+        ]
+        scored.sort(
+            key=lambda item: (-item.score, -len(item.program.preconditions), item.program.id)
+        )
+        return scored
+
+    def match_soft(self, env: Sandbox) -> list[ScoredProgram]:
+        """Arm 2b. The `rank_soft` programs whose score clears `soft_threshold`.
+
+        The threshold is inclusive, as arm 2's is, and set at construction so the value
+        that ran is the value the ledger records. Refuses to run without one: an
+        unlearned default would be recorded as if it had been tuned.
+        """
+        if self.soft_threshold is None:
+            raise ValueError(
+                "arm 2b needs a learned soft_threshold; learn one on the tune seeds with "
+                "bench.soft_vote.learn_soft_threshold and pass Library(soft_threshold=...)"
+            )
+        threshold = self.soft_threshold
+        return [item for item in self.rank_soft(env) if item.score >= threshold]
 
     def match_intent_key(self, signature: TaskSignature) -> list[Program]:
         """Arm 2c. Admitted programs compiled from a request with the same key.

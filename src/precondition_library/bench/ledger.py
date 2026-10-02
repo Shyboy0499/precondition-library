@@ -29,9 +29,9 @@ class Arm(StrEnum):
     similarity (arm 2), and executable preconditions (arm 3). The rest are the
     baselines issue #7 adds so an arm-3 win is attributable rather than a straw
     man -- a zero-token oracle floor (`GOLD`), an intent-key lookup
-    (`INTENT_KEY`, arm 2c: the request string itself, ADR-0015), and (to come) a
-    soft classifier over the same probe features and ReAct with prior-success
-    memory.
+    (`INTENT_KEY`, arm 2c: the request string itself, ADR-0015), a soft vote over
+    arm 3's own probe features (`SOFT_VOTE`, arm 2b, ADR-0016), and (to come)
+    ReAct with prior-success memory.
 
     `GOLD` is an **oracle**: it consults the state's ground-truth variant to pick
     the hand-written resolution, which is exactly why it is a floor and why it is
@@ -43,6 +43,7 @@ class Arm(StrEnum):
     PRECONDITION = "precondition"
     GOLD = "gold"
     INTENT_KEY = "intent_key"
+    SOFT_VOTE = "soft_vote"
 
 
 class OccurrenceRole(StrEnum):
@@ -214,7 +215,8 @@ class EpisodeRecord(BaseModel):
 
     program_id: str | None = None
     dispatch_score: float | None = None
-    """Similarity score for arm 2; None for the other arms."""
+    """The score the arm selected with: arm 2's similarity, or arm 2b's soft-vote share
+    of preconditions holding (issue #7). None for arms with no score."""
     similarity_threshold: float | None = None
     """Arm 2's inclusive similarity floor as configured for this episode.
 
@@ -222,6 +224,11 @@ class EpisodeRecord(BaseModel):
     pre-registration has the threshold calibrated on the held-out tune set, and a
     reader can see from the ledger alone whether that calibration happened rather
     than inferring it from the code's default."""
+
+    soft_threshold: float | None = None
+    """Arm 2b's learned inclusive floor on its soft-vote score (issue #7, ADR-0016),
+    recorded on 2b's rows so the learned value is visible beside every decision it made.
+    `None` on every other arm."""
 
     rerank_k: int | None = None
     """How many first-stage candidates arm 2's reranker rescored, or `None` when the

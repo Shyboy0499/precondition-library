@@ -51,6 +51,7 @@ from ..agents.dispatch import (
     dispatch_intent_key,
     dispatch_preconditions,
     dispatch_semantic,
+    dispatch_soft_vote,
 )
 from ..agents.react import solve
 from ..library import Library, ProgramIdCollisionError
@@ -233,6 +234,7 @@ def run_benchmark(
     frozen_library: Path | None = None,
     reranker: Similarity | None = None,
     gold_programs: dict[str, dict[str, Program]] | None = None,
+    soft_threshold: float | None = None,
     replicate: int = 1,
 ) -> Path:
     """Run every (arm, fault, occurrence) episode and write the ledger.
@@ -253,6 +255,11 @@ def run_benchmark(
     different `similarity`. When the gold arm runs, coverage is checked up front -- every
     measured fault's every variant must have exactly one gold resolution -- so the oracle
     can always answer, rather than silently falling to a non-oracle path mid-run.
+
+    `soft_threshold` is arm 2b's learned floor (issue #7, ADR-0016), required when `arms`
+    names `Arm.SOFT_VOTE` and refused up front when it is missing: an untuned default
+    would be recorded on every row as if it had been learned. Learn it on the tune seeds
+    with `bench.soft_vote.learn_soft_threshold`.
 
     `seeds` supplies the seed for each occurrence, positionally: occurrence `k`
     runs against `seeds[k - 1]`, so the same seed reaches every arm and the
@@ -303,6 +310,12 @@ def run_benchmark(
         frozen_hash = _require_frozen_library(frozen_library)
         gate = read_admission_gate(frozen_library)
 
+    if Arm.SOFT_VOTE in arms and soft_threshold is None:
+        raise ValueError(
+            "arm 2b (soft_vote) needs a learned soft_threshold; learn one on the tune seeds "
+            "with bench.soft_vote.learn_soft_threshold and pass run_benchmark(soft_threshold=...)"
+        )
+
     # The oracle floor's programs, resolved and coverage-checked only when the gold
     # arm is in the run, so a run without it needs no gold directory on disk.
     gold_index: dict[str, dict[str, Program]] = {}
@@ -317,6 +330,7 @@ def run_benchmark(
                 similarity=scorer,
                 evaluate_preconditions=evaluate_preconditions,
                 reranker=reranker,
+                soft_threshold=soft_threshold,
             )
         else:
             library_root = out.parent / f"library-{arm.value}"
@@ -326,6 +340,7 @@ def run_benchmark(
                 similarity=scorer,
                 evaluate_preconditions=evaluate_preconditions,
                 reranker=reranker,
+                soft_threshold=soft_threshold,
             )
         for occurrence in range(1, occurrences + 1):
             for fault_type in faults:
@@ -431,6 +446,7 @@ def run_episode(
                 library_hash=library_hash,
                 library_program_ids=library_program_ids,
                 threshold=library.threshold,
+                soft_threshold=library.soft_threshold if arm is Arm.SOFT_VOTE else None,
                 rerank_k=_rerank_k(library),
                 change_surface=applied_surface,
                 replicate=replicate,
@@ -494,6 +510,7 @@ def run_episode(
                 library_hash=library_hash,
                 library_program_ids=library_program_ids,
                 threshold=library.threshold,
+                soft_threshold=library.soft_threshold if arm is Arm.SOFT_VOTE else None,
                 rerank_k=_rerank_k(library),
                 change_surface=applied_surface,
                 replicate=replicate,
@@ -537,6 +554,7 @@ def run_episode(
             program_id=result.program_id,
             dispatch_score=result.dispatch_score,
             similarity_threshold=library.threshold,
+            soft_threshold=library.soft_threshold if arm is Arm.SOFT_VOTE else None,
             rerank_k=_rerank_k(library),
             library_hash=library_hash,
             library_program_ids=library_program_ids,
@@ -571,7 +589,7 @@ def _run_arm(
     """The one arm-specific decision. Everything downstream is shared.
 
     Arm 1 solves and stops when the model declares itself finished. The
-    dispatching arms (2, 3, and the intent-key baseline 2c) dispatch first; a hit
+    dispatching arms (2, 3, and the baselines 2b and 2c) dispatch first; a hit
     is replayed with no model call, and anything else — no
     applicable program, a fire whose body or postconditions failed, or a guard
     refusal — falls back to the agent for this episode only, at full price (spec
@@ -706,6 +724,8 @@ def _dispatch(arm: Arm, signature: TaskSignature, library: Library, box: Sandbox
         return dispatch_preconditions(signature, library, box)
     if arm is Arm.INTENT_KEY:
         return dispatch_intent_key(signature, library)
+    if arm is Arm.SOFT_VOTE:
+        return dispatch_soft_vote(signature, library, box)
     raise ValueError(f"arm {arm.value!r} does not dispatch from a library")
 
 
@@ -1115,6 +1135,7 @@ def _invalid_record(
     threshold: float,
     library_program_ids: list[str] | None = None,
     rerank_k: int | None = None,
+    soft_threshold: float | None = None,
     change_surface: tuple[str, ...] | None = None,
     replicate: int = 1,
 ) -> EpisodeRecord:
@@ -1167,6 +1188,7 @@ def _invalid_record(
         ground_truth_ok=None,
         change_surface=change_surface,
         similarity_threshold=threshold,
+        soft_threshold=soft_threshold,
         rerank_k=rerank_k,
         library_hash=library_hash,
         library_program_ids=library_program_ids,

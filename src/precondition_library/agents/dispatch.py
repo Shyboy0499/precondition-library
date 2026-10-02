@@ -1,7 +1,7 @@
 """Choosing which stored program to replay. This module is the experiment.
 
-The dispatching arms -- 2, 3, and issue #7's intent-key baseline 2c -- differ
-only in the function they call here. Everything downstream
+The dispatching arms -- 2, 3, and issue #7's baselines 2b (soft vote) and 2c
+(intent key) -- differ only in the function they call here. Everything downstream
 of a successful choice is identical — same runtime, same guard, same checker —
 so any difference in outcome is attributable to the dispatch mechanism rather
 than to the rest of the pipeline.
@@ -86,6 +86,24 @@ def dispatch_intent_key(signature: TaskSignature, lib: Library) -> Dispatch:
             None, None, "no admitted program under this request key, or its programs disagree"
         )
     return Dispatch(keyed[0], None, "the one resolution stored under this request key")
+
+
+def dispatch_soft_vote(signature: TaskSignature, lib: Library, env: Sandbox) -> Dispatch:
+    """Arm 2b: the program with the largest fraction of preconditions holding (issue #7).
+
+    The soft classifier over arm 3's own probe features (ADR-0016):
+    `Library.match_soft` scores each admitted program by the fraction of its
+    preconditions that hold in `env`, keeps those at or above the learned threshold,
+    and orders them; its first element is already the choice. The score is recorded
+    as `dispatch_score`, as arm 2's similarity is. `signature` is unused, as for arm
+    3: the soft vote reads the environment, not the request.
+    """
+    del signature
+    ranked = lib.match_soft(env)
+    if not ranked:
+        return Dispatch(None, None, "no admitted program's precondition share cleared the floor")
+    best = ranked[0]
+    return Dispatch(best.program, best.score, "largest share of preconditions holding")
 
 
 def dispatch_preconditions(signature: TaskSignature, lib: Library, env: Sandbox) -> Dispatch:
