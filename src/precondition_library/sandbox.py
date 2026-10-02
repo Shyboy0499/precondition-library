@@ -38,6 +38,7 @@ exists, in the same order, through `build_sandbox`; only the direction changed.
 from __future__ import annotations
 
 import os
+import shlex
 import shutil
 import stat
 import subprocess
@@ -119,6 +120,81 @@ These do not override a fault injector's explicit `-c`: command-line config wins
 over this, which is why `submodule_moved` can still allow the local file protocol
 for its own `submodule add`.
 """
+
+
+ALLOWED_GIT_CONFIG_OVERRIDES: frozenset[str] = frozenset({"protocol.file.allow=always"})
+"""The only per-invocation config override a model-authored git command may carry.
+
+`_GIT_HARDENING` is pinned through the environment, and command-line config wins over
+it: `git -c core.hooksPath=<dir> commit` runs a hook from `<dir>` under the hardened
+environment (verified, issue #159). Refusing per-invocation overrides is therefore part
+of the hardening, and it is an **allowlist** rather than a denylist because the keys
+that run a command (`core.hooksPath`, `core.fsmonitor`, `core.sshCommand`,
+`core.editor`, `!`-aliases, filter and diff drivers, ...) are too many to enumerate
+safely. The one entry is local-file transport, which the submodule fault family needs
+to clone a nested repository from a path inside the sandbox -- the override the live
+agent reached for on its own.
+
+A *persistent* `git config <key>` write in the repository does not need refusing: the
+environment's `GIT_CONFIG_COUNT` outranks repository config (verified, #159).
+"""
+
+_GLOBAL_OPTIONS_WITH_ARGUMENT = frozenset(
+    {"-c", "-C", "--git-dir", "--work-tree", "--namespace", "--super-prefix", "--config-env"}
+)
+"""git's global options that take their value as the next argument."""
+
+
+def git_config_overrides(tokens: Sequence[str]) -> list[str]:
+    """Every per-invocation config override in a tokenised command, as written.
+
+    Only git's **global** options count -- the ones between `git` and its subcommand
+    -- because `-c` after a subcommand is something else (`git log -c` is a combined
+    diff). Every `git` token is parsed, so a nested invocation
+    (`git submodule foreach git -c ...`) is seen, and a token holding a whole quoted
+    command (`foreach 'git -c ... fetch'`) is split and parsed too. `-c key=value`
+    yields `key=value`; `--config-env` yields `config-env:<arg>`, which no allowlist
+    entry matches, because its value comes from the environment and cannot be vetted.
+    """
+    found: list[str] = []
+    for index, token in enumerate(tokens):
+        if " " in token or "\t" in token:
+            try:
+                found.extend(git_config_overrides(shlex.split(token)))
+            except ValueError:
+                pass
+            continue
+        if Path(token).name != "git":
+            continue
+        position = index + 1
+        while position < len(tokens) and tokens[position].startswith("-"):
+            option = tokens[position]
+            if option == "-c" and position + 1 < len(tokens):
+                found.append(tokens[position + 1])
+            elif option == "--config-env" and position + 1 < len(tokens):
+                found.append(f"config-env:{tokens[position + 1]}")
+            elif option.startswith("--config-env="):
+                found.append(f"config-env:{option.split('=', 1)[1]}")
+            position += 2 if option in _GLOBAL_OPTIONS_WITH_ARGUMENT else 1
+    return found
+
+
+def disallowed_git_config_overrides(tokens: Sequence[str]) -> list[str]:
+    """The overrides in `tokens` that `ALLOWED_GIT_CONFIG_OVERRIDES` does not permit.
+
+    Keys are compared lower-cased up to the value, as git compares section and
+    variable names case-insensitively.
+    """
+
+    def normalised(override: str) -> str:
+        key, sep, value = override.partition("=")
+        return f"{key.lower()}{sep}{value}"
+
+    return [
+        override
+        for override in git_config_overrides(tokens)
+        if normalised(override) not in ALLOWED_GIT_CONFIG_OVERRIDES
+    ]
 
 
 def git_env(home: Path | None = None) -> dict[str, str]:

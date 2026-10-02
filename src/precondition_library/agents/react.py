@@ -25,7 +25,12 @@ import subprocess
 
 from ..program import EpisodeOutcome
 from ..provider import Provider
-from ..sandbox import Sandbox, run_git
+from ..sandbox import (
+    ALLOWED_GIT_CONFIG_OVERRIDES,
+    Sandbox,
+    disallowed_git_config_overrides,
+    run_git,
+)
 from ..signatures import TaskSignature
 
 _GIT_TIMEOUT_S = 30.0
@@ -236,6 +241,17 @@ def _run_tool(command: str, env: Sandbox) -> tuple[str, bool]:
     if retargeting:
         return (
             _refused(f"{retargeting[0]!r} would run outside the sandbox working directory"),
+            False,
+        )
+    overrides = disallowed_git_config_overrides(argv)
+    if overrides:
+        # Command-line config wins over the hardened environment, so an override
+        # could re-enable hooks or other command-running config (issue #159).
+        return (
+            _refused(
+                f"config override {overrides[0]!r} is not allowed; only "
+                f"{sorted(ALLOWED_GIT_CONFIG_OVERRIDES)} may be set with -c"
+            ),
             False,
         )
 

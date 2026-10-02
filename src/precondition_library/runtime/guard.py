@@ -50,6 +50,8 @@ import shlex
 from dataclasses import dataclass
 from enum import StrEnum
 
+from ..sandbox import ALLOWED_GIT_CONFIG_OVERRIDES, disallowed_git_config_overrides
+
 
 class Verdict(StrEnum):
     ALLOW = "allow"
@@ -237,6 +239,34 @@ def _global_config_write_effect(body: str) -> str | None:
     return None
 
 
+_GIT_CONFIG_ENV_ASSIGNMENT = re.compile(r"(?<![A-Za-z0-9_])(GIT_CONFIG[A-Z0-9_]*)=")
+"""A body setting `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_n`, `GIT_CONFIG_PARAMETERS`,
+`GIT_CONFIG_GLOBAL`, `GIT_CONFIG_NOSYSTEM`, ... in its own environment -- which would
+replace the hardening the harness pins through those same variables (issue #159).
+Matched on the raw text because `_commands` drops leading assignments."""
+
+
+def _git_config_override_effect(body: str) -> str | None:
+    """A per-invocation git config override outside the allowlist (issue #159).
+
+    `git -c core.hooksPath=<dir>` runs hooks from `<dir>` despite the hardening, because
+    command-line config wins over the environment's; so does a body that re-sets the
+    `GIT_CONFIG_*` variables itself. Both are refused, except the overrides
+    `sandbox.ALLOWED_GIT_CONFIG_OVERRIDES` names.
+    """
+    assignment = _GIT_CONFIG_ENV_ASSIGNMENT.search(body)
+    if assignment is not None:
+        return f"sets {assignment.group(1)} in the body's environment"
+    for tokens in _commands(body):
+        disallowed = disallowed_git_config_overrides(tokens)
+        if disallowed:
+            return (
+                f"git config override {disallowed[0]!r}; only "
+                f"{sorted(ALLOWED_GIT_CONFIG_OVERRIDES)} may be set per invocation"
+            )
+    return None
+
+
 def _force_push_effect(body: str, env_root: str) -> str | None:
     for tokens in _commands(body):
         if os.path.basename(tokens[0]) != "git" or "push" not in tokens:
@@ -294,11 +324,12 @@ def screen(body: str, *, env_root: str) -> Decision:
     """Inspect a program body before execution, refusing by effect.
 
     Refuses: writes outside `env_root`, outbound network calls, credential and
-    environment-variable reads, `git config --global` writes, and force-pushes to
-    a remote not recognisable as the sandbox. Everything else runs inside the
-    sandbox -- including destructive operations there, which are permitted on
-    purpose because the sandbox is disposable and destroying it is the contained
-    outcome.
+    environment-variable reads, `git config --global` writes, per-invocation git
+    config overrides outside the allowlist (`-c`, `--config-env`, `GIT_CONFIG_*`;
+    issue #159), and force-pushes to a remote not recognisable as the sandbox.
+    Everything else runs inside the sandbox -- including destructive operations
+    there, which are permitted on purpose because the sandbox is disposable and
+    destroying it is the contained outcome.
 
     Each refusal reason names the effect it refused. A refusal is data for the
     caller, not a skip: the refusal rate is a finding about the compile step.
@@ -310,6 +341,7 @@ def screen(body: str, *, env_root: str) -> Decision:
         ("credential read", _credential_effect(body)),
         ("environment-variable read", _env_read_effect(body)),
         ("git config --global write", _global_config_write_effect(body)),
+        ("git config override", _git_config_override_effect(body)),
         ("force-push outside the sandbox", _force_push_effect(body, env_root)),
         ("write outside env_root", _outside_write_effect(body, env_root)),
     )
