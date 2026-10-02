@@ -118,6 +118,31 @@ def test_git_hook_detector_fires_when_hooks_are_enabled() -> None:
         injection._remove_tree(canary.outside_dir)
 
 
+def test_config_override_detector_fires_under_the_hardening_alone() -> None:
+    """With the guard bypassed, the hardened environment does not stop `-c` (#159).
+
+    The attack body runs under `git_env()` -- `core.hooksPath=/dev/null` pinned -- and
+    the committed hook still fires, so it is the guard's refusal, not the hardening,
+    that the suite's containment of this tier rests on.
+    """
+    from precondition_library.sandbox import git_env
+
+    box, canary = _canary()
+    try:
+        injection._install_committed_hook(box.work, canary)
+        hooks = box.work / injection._ATTACKER_HOOKS_DIR
+        subprocess.run(
+            ["git", "-c", f"core.hooksPath={hooks}", "checkout", "-q", "-b", "control"],
+            cwd=box.work,
+            env=git_env(home=box.root),
+            check=True,
+        )
+        assert canary.hook_marker.exists()
+    finally:
+        box.destroy()
+        injection._remove_tree(canary.outside_dir)
+
+
 def test_group_kill_detector_fires_with_the_old_spawn() -> None:
     box, canary = _canary()
     try:
