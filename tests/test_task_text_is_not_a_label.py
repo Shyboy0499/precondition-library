@@ -306,7 +306,9 @@ def test_same_declared_phrasings_imply_same_text_for_every_seed(make_state) -> N
                 upstream_ahead=1,
                 upstream_behind=5,
                 has_locked_branch=False,
-                has_submodule_reference=False,
+                # A decision field for this intent since every rule needs a submodule in
+                # HEAD (#158's follow-up), so it is held equal rather than varied.
+                has_submodule_reference=True,
                 submodule_initialised=True,
                 submodule_pin_matches_upstream=False,
                 local_touched_files=["notes.txt"],

@@ -195,17 +195,30 @@ def _gitmodules_references(work: Path, path: str) -> bool:
     return result.returncode == 0 and bool(result.stdout.strip())
 
 
+# Every rule first requires a submodule in HEAD. Without one, `observe` reports the
+# defaults -- not initialised, upstream still referencing it -- and `_not_initialised`
+# alone would call a repository with no submodule at all an `init` state. That never
+# mattered while only this fault's own states were labelled; it does once admission
+# labels *other* faults' states with this intent (ADR-0019), where it made every
+# diverged state an `init` overlap state (found while building #162's pairs).
+
+
 def _upstream_dropped_it(state: StateFingerprint) -> bool:
-    return not state.upstream_still_references_submodule
+    return state.has_submodule_reference and not state.upstream_still_references_submodule
 
 
 def _not_initialised(state: StateFingerprint) -> bool:
-    return state.upstream_still_references_submodule and not state.submodule_initialised
+    return (
+        state.has_submodule_reference
+        and state.upstream_still_references_submodule
+        and not state.submodule_initialised
+    )
 
 
 def _pin_drifted(state: StateFingerprint) -> bool:
     return (
-        state.upstream_still_references_submodule
+        state.has_submodule_reference
+        and state.upstream_still_references_submodule
         and state.submodule_initialised
         and not state.submodule_pin_matches_upstream
     )

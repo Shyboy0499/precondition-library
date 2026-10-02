@@ -52,6 +52,14 @@ foreign state wrongly would now admit a program that fires there. That dependenc
 already existed for the pairs' labels (`bench.pairs`), so the gate and the metric now
 rest on the same rules rather than on different ones.
 
+That dependency was exercised before this record was merged. The
+`restore_submodule_state` rules labelled a repository with **no submodule** as `init`,
+because `observe` reports a missing submodule as "not initialised, upstream still
+references it". Under this decision that made every diverged state, and the fault-free
+sandbox, an `init` overlap state where a submodule program's fire would count as
+correct. The rule was fixed rather than the decision: every submodule rule now first
+requires a submodule in `HEAD`, and `tests/test_overlap_states.py` pins it.
+
 ## Alternatives rejected
 
 | Alternative | Why rejected |
