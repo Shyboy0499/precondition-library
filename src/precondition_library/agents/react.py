@@ -8,7 +8,8 @@ and the result worthless.
 
 The stopping rule is the part a later reader is most likely to "simplify" back
 into a defect, so it is stated on `solve` as well as here: the loop stops when
-the model declares the task finished, or when `max_steps` runs out. It must
+the model declares the task finished -- by calling `finish`, or by a turn with no
+tool call -- or when `max_steps` or `max_tool_calls` runs out. It must
 **not** stop when the ground-truth checker says the environment is good. Issue
 #9 names that as the flaw in an earlier sketch of this arm: a checker used as a
 stopping oracle hands arm 1 information the compiled arms do not have (they run
@@ -46,6 +47,29 @@ commands in one episode and 12 in another, depending only on how the model batch
 This cap makes the budget mean the same thing for every model -- twice the turn budget,
 so a model that issues one call per turn is never the one it stops."""
 
+FINISH_TOOL = "finish"
+"""The tool the model calls to declare the task done (issue #171).
+
+The live model never ended a turn without a tool call -- it kept verifying a repository
+it had already fixed until the budget ran out -- so "no tool call means done" left 3 of
+5 failed build episodes failing with the checker already passing. A tool-calling model
+reliably calls a tool; calling `finish` is the same declaration, made in the form the
+model actually produces. It is still the agent's own verdict, never the checker's."""
+
+NUDGE_TOOL_CALL_MARGIN = 4
+"""Remaining tool calls at which the one-time budget reminder is sent (issue #171)."""
+
+BUDGET_NUDGE = (
+    "Budget check: you are about to run out of turns or tool calls. If the request is "
+    "already satisfied, call `finish` now with a one-line summary. Otherwise make the "
+    "one change that completes it."
+)
+"""Sent once, as a user message, before the turn that may be the agent's last.
+
+Issue #171's second half. It tells the agent how much budget is left, which a human
+running the agent would also see; it says nothing about whether the repository is
+right, so the decision to finish stays the agent's."""
+
 _MAX_OUTPUT_CHARS = 4_000
 """Per-stream cap on what is fed back, so one noisy command cannot balloon the
 transcript that every later turn re-sends (and is billed for)."""
@@ -61,16 +85,16 @@ SYSTEM_PROMPT = """\
 You are a git maintenance agent working in a single disposable repository. You
 complete the user's request by running git commands and reading their output.
 
-You have exactly one tool, `run_git`, which runs one git command in the
-repository's working directory. There is no file-reader, no shell, and no other
-tool. Call it with one command per turn. The command must start with `git`;
-shell operators (&&, |, ;, redirects) and options that retarget the repository
-are refused.
+You have two tools. `run_git` runs one git command in the repository's working
+directory; there is no file-reader, no shell, and no other way to act. Call it
+with one command per turn. The command must start with `git`; shell operators
+(&&, |, ;, redirects) and options that retarget the repository are refused.
+`finish` declares that the request is satisfied and ends the task.
 
 After each command you receive its exit code, stdout and stderr. Read failures
-and correct them. Preserve anything the user told you must survive, and do not
-stop until you believe the request is satisfied. When you are finished, reply
-with your final answer and no tool call."""
+and correct them. Preserve anything the user told you must survive. As soon as
+the request is satisfied, call `finish` with a one-line summary of what you did;
+do not keep re-checking a repository that is already right."""
 
 
 def solve(
@@ -129,8 +153,16 @@ def solve(
     ]
     tools = available_tools()
     executed = 0
+    nudged = False
 
-    for _ in range(max_steps):
+    for step in range(max_steps):
+        last_turn = step == max_steps - 1
+        nearly_out = max_tool_calls - executed <= NUDGE_TOOL_CALL_MARGIN
+        if not nudged and step > 0 and (last_turn or nearly_out):
+            # Once, before the turn that may be the last (issue #171). Budget only --
+            # it never tells the agent whether the repository is right.
+            transcript.append({"role": "user", "content": BUDGET_NUDGE, "nudge": True})
+            nudged = True
         try:
             completion = provider.complete(
                 system=SYSTEM_PROMPT, messages=_api_messages(transcript), tools=tools
@@ -155,6 +187,14 @@ def solve(
             }
         )
         for call in completion.tool_calls:
+            name, command = _parse_tool_call(call)
+            if name == FINISH_TOOL:
+                # The agent's own declaration (issue #171). Calls after it in the same
+                # turn are not run: the agent has said it is done.
+                transcript.append(
+                    {"role": "assistant", "content": _finish_summary(call), "done": True}
+                )
+                return EpisodeOutcome.SUCCESS, transcript
             if executed >= max_tool_calls:
                 # The budget counts commands, not turns: a model that batches calls
                 # reaches it as surely as one that does not (issue #160).
@@ -169,11 +209,13 @@ def solve(
                 )
                 return EpisodeOutcome.FAIL, transcript
             executed += 1
-            name, command = _parse_tool_call(call)
             if name == "run_git":
                 result, ok = _run_tool(command, env)
             else:
-                result, ok = _refused(f"unknown tool {name!r}; only 'run_git' exists"), False
+                result, ok = (
+                    _refused(f"unknown tool {name!r}; the tools are 'run_git' and 'finish'"),
+                    False,
+                )
             transcript.append(
                 {
                     "role": "tool",
@@ -240,7 +282,27 @@ def available_tools() -> list[dict]:
                     "required": ["command"],
                 },
             },
-        }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": FINISH_TOOL,
+                "description": (
+                    "Declare that the user's request is satisfied and end the task. Call it "
+                    "as soon as the repository is in the requested state."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "summary": {
+                            "type": "string",
+                            "description": "One line saying what was done.",
+                        }
+                    },
+                    "required": ["summary"],
+                },
+            },
+        },
     ]
     return tools
 
@@ -340,6 +402,18 @@ def _api_messages(transcript: list[dict]) -> list[dict]:
         else:
             messages.append({"role": role, "content": entry["content"]})
     return messages
+
+
+def _finish_summary(call: dict) -> str:
+    """The `summary` a `finish` call carried, or `""` when it is missing or malformed."""
+    function = call.get("function")
+    raw = function.get("arguments") if isinstance(function, dict) else None
+    try:
+        arguments = json.loads(raw) if isinstance(raw, str) and raw else {}
+    except ValueError:
+        return ""
+    summary = arguments.get("summary") if isinstance(arguments, dict) else None
+    return summary if isinstance(summary, str) else ""
 
 
 def _parse_tool_call(call: dict) -> tuple[str, str]:
