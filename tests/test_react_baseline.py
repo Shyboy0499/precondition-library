@@ -193,8 +193,10 @@ def test_max_steps_bounds_the_loop(make_sandbox) -> None:
     assert outcome is EpisodeOutcome.FAIL
     assert len(fake.calls) == 3
     assert sum(entry["role"] == "assistant" for entry in transcript) == 3
-    # system + task + 3 x (assistant, tool) + the budget note.
-    assert len(transcript) == 2 + 2 * 3 + 1
+    # system + task + 3 x (assistant, tool) + the one budget reminder before the last
+    # turn (issue #171) + the budget note.
+    assert len(transcript) == 2 + 2 * 3 + 1 + 1
+    assert sum(1 for entry in transcript if entry.get("nudge")) == 1
     assert "budget" in transcript[-1]["content"]
 
 
