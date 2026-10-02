@@ -193,6 +193,13 @@ class EpisodeRecord(BaseModel):
     same `None`-means-not-declared convention.
     """
     llm_calls: int
+    tool_calls: int = 0
+    """Tool calls the agent executed this episode, refused ones included (issue #160).
+
+    Recorded beside `llm_calls` because a model can batch several tool calls into one
+    turn, so the number of commands an episode ran is not a function of its calls to
+    the model. 0 for a replay, where no agent ran, and for a row written before the
+    field existed."""
     wall_clock_s: float
 
     outcome: EpisodeOutcome

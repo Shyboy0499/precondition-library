@@ -37,6 +37,15 @@ _GIT_TIMEOUT_S = 30.0
 """Wall-clock bound on one tool call. A git command in a local sandbox is
 instant; anything slower is a hang, and hanging unattended is a failure mode."""
 
+DEFAULT_MAX_TOOL_CALLS = 24
+"""Tool calls one solve may execute, across all its turns (issue #160).
+
+`max_steps` counts **model turns**, and a model may batch several tool calls into one:
+in the first live run the agent issued 4-5 per turn, so "12 steps" meant about 45
+commands in one episode and 12 in another, depending only on how the model batched.
+This cap makes the budget mean the same thing for every model -- twice the turn budget,
+so a model that issues one call per turn is never the one it stops."""
+
 _MAX_OUTPUT_CHARS = 4_000
 """Per-stream cap on what is fed back, so one noisy command cannot balloon the
 transcript that every later turn re-sends (and is billed for)."""
@@ -71,13 +80,14 @@ def solve(
     *,
     max_steps: int = 12,
     prelude: str | None = None,
+    max_tool_calls: int = DEFAULT_MAX_TOOL_CALLS,
 ) -> tuple[EpisodeOutcome, list[dict]]:
     """Run the arm-1 loop and return its outcome with the full transcript.
 
     The loop sends the system prompt and the task text, lets the model call the
     one tool, feeds each result back, and repeats. It ends when the model
-    declares the task finished or after `max_steps` model turns, whichever comes
-    first.
+    declares the task finished, after `max_steps` model turns, or once
+    `max_tool_calls` tool calls have run (issue #160), whichever comes first.
 
     **The stopping rule must not consult the fault's checker.** A ground-truth
     oracle here would give arm 1 information the compiled arms are never given:
@@ -118,6 +128,7 @@ def solve(
         {"role": "user", "content": user_content},
     ]
     tools = available_tools()
+    executed = 0
 
     for _ in range(max_steps):
         try:
@@ -144,6 +155,20 @@ def solve(
             }
         )
         for call in completion.tool_calls:
+            if executed >= max_tool_calls:
+                # The budget counts commands, not turns: a model that batches calls
+                # reaches it as surely as one that does not (issue #160).
+                transcript.append(
+                    {
+                        "role": "error",
+                        "content": (
+                            f"tool-call budget exhausted after {max_tool_calls} tool calls "
+                            "without a finish declaration"
+                        ),
+                    }
+                )
+                return EpisodeOutcome.FAIL, transcript
+            executed += 1
             name, command = _parse_tool_call(call)
             if name == "run_git":
                 result, ok = _run_tool(command, env)
