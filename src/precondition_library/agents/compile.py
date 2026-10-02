@@ -45,8 +45,9 @@ from ..runtime.probes import evaluate_preconditions, placeholders
 from ..runtime.replay import replay
 from ..runtime.templates import step_parameters
 from ..sandbox import Sandbox
-from ..signatures import TaskSignature
+from ..signatures import StateFingerprint, TaskSignature
 from ..tasks.faults import FAULTS, build_sandbox
+from ..tasks.intent import IntentSpec
 from ..tasks.registry import ambiguous_intents
 from ..tasks.spec import FaultSpec
 
@@ -500,19 +501,38 @@ def admit(
         for other in unrelated
         for seed in _state_seeds(FAULTS[other])
     ]
+    # Another fault's injector can produce a state this program's own intent labels:
+    # `lockfile_conflict` injects a diverged branch the sync intent calls `merge`. Such
+    # an **overlap state** is not unrelated -- firing there is right when the program
+    # implements the label and wrong otherwise -- so it is judged as a same-intent
+    # state, by this intent's own decision rule (issue #158, ADR-0019). Only a state
+    # the intent leaves unlabelled is unrelated, where any fire is a defect.
+    intent = _intent_for_fault(name)
+    overlap_fired: list[str] = []
     for other, seed, state in unrelated_states:
-        accepted, error = _preconditions_accept(program, seed, [other])
+        accepted, error, label = _preconditions_accept_labelled(program, seed, [other], intent)
         if error is not None:
             return False, f"negative side failed: preconditions could not be evaluated ({error})"
-        if accepted:
-            which = f"{other} seed {seed}"
-            if state is not None:
-                which += f" resolves to {state!r}"
+        if not accepted:
+            continue
+        which = f"{other} seed {seed}"
+        if label is not None:
+            if label == program.variant:
+                overlap_fired.append(f"{other}:{state}")
+                continue
             return False, (
-                f"negative side failed: preconditions accepted 1 of "
-                f"{len(unrelated_states)} unrelated states ({which}); a precondition "
-                f"set that accepts unrelated states is a defect"
+                f"negative side failed: preconditions accepted an overlap state ({which}, "
+                f"which this intent's own rule labels {label!r}, but the program implements "
+                f"{program.variant!r}); firing where another resolution is correct is the "
+                f"mismatch this gate exists to refuse"
             )
+        if state is not None:
+            which += f" resolves to {state!r}"
+        return False, (
+            f"negative side failed: preconditions accepted 1 of "
+            f"{len(unrelated_states)} unrelated states ({which}); a precondition "
+            f"set that accepts unrelated states is a defect"
+        )
 
     siblings = _sibling_seeds(name, program.variant, declared)
     for seed, variant in siblings:
@@ -529,11 +549,12 @@ def admit(
 
     # Breadth cap (issue #10). The fraction of the sampled universe the
     # preconditions fire on must not exceed BREADTH_CAP. Reaching here means the
-    # clean sandbox, every unrelated fault's states and the declared siblings were
+    # clean sandbox, every unlabelled unrelated state and the declared siblings were
     # all rejected, so the only universe states that can still fire are this
     # fault's own non-sibling states -- its resolution, plus any injected state
-    # that is not a declared resolution. Evaluating only those is the cheap
-    # equivalent of `precondition_breadth`'s full sweep (which rebuilds the
+    # that is not a declared resolution -- and the overlap states it fired on
+    # correctly (`overlap_fired`, issue #158), which are added below. Evaluating
+    # only those is the cheap equivalent of `precondition_breadth`'s full sweep (which rebuilds the
     # unrelated faults' sandboxes only to confirm the zero we already have); the
     # two agree, pinned by test_breadth_cap. The denominator is the whole universe.
     total = len(sampled_states())
@@ -546,6 +567,8 @@ def admit(
             return False, f"negative side failed: preconditions could not be evaluated ({error})"
         if accepted:
             fired_where.append(f"{name}:{FAULTS[name].variant_for_seed(seed)}")
+    # Overlap states the program fired on correctly are fires on the universe too.
+    fired_where.extend(overlap_fired)
     fired = len(fired_where)
     if fired > BREADTH_CAP * total:
         return False, (
@@ -555,10 +578,16 @@ def admit(
             f"Fired on: {', '.join(fired_where)}"
         )
 
+    overlap_note = (
+        f" (firing correctly on {len(overlap_fired)} overlap state(s) its intent labels "
+        f"{program.variant!r})"
+        if overlap_fired
+        else ""
+    )
     return True, (
         f"admitted: postconditions held on {len(seeds)} freshly faulted sandbox(es); "
         f"preconditions rejected 1 clean sandbox, {len(unrelated_states)} unrelated "
-        f"state(s) and {len(siblings)} same-intent state(s), and fired on {fired} of "
+        f"state(s){overlap_note} and {len(siblings)} same-intent state(s), and fired on {fired} of "
         f"{total} sampled states ({fired / total:.0%}), within the {BREADTH_CAP:.0%} "
         f"breadth cap"
     )
@@ -726,6 +755,42 @@ def _unguarded_body_parameters(program: Program) -> list[str]:
     return sorted(used - declared)
 
 
+def _intent_for_fault(fault_name: str) -> IntentSpec | None:
+    """The ambiguous intent registered for `fault_name`, or None."""
+    return next((item for item in ambiguous_intents() if item.fault == fault_name), None)
+
+
+def _preconditions_accept_labelled(
+    program: Program, seed: int, faults: list[str], intent: IntentSpec | None
+) -> tuple[bool, str | None, str | None]:
+    """`_preconditions_accept`, plus `intent`'s label for the state, in one build.
+
+    The label is the variant `intent`'s own decision rule calls correct in the observed
+    state (issue #158), or None when the intent leaves the state unlabelled -- or when
+    there is no intent to ask, or its rules match the state more than once (a defect in
+    the rules, which must not make a state look like a legitimate fire site).
+    """
+    box = build_sandbox(seed, faults)
+    try:
+        label: str | None = None
+        if intent is not None:
+            try:
+                variant = intent.correct_variant(StateFingerprint.observe(box))
+            except ValueError:
+                variant = None
+            label = variant.id if variant is not None else None
+        result = evaluate_preconditions(program, box)
+    except KeyError as exc:
+        return False, str(exc), None
+    finally:
+        box.destroy()
+    refused = [predicate for predicate in result.predicates if predicate.refused]
+    if refused:
+        first = refused[0]
+        return False, f"precondition {first.name!r} was refused: {first.observed}", None
+    return result.ok, None, label
+
+
 def _declared_variant_ids(fault_name: str) -> set[str] | None:
     """The variant ids an ambiguous intent declares for `fault_name`, else None.
 
@@ -734,7 +799,7 @@ def _declared_variant_ids(fault_name: str) -> set[str] | None:
     would reject every program. The registry is the one place that decides which
     intents are ambiguous, so admission reads it rather than re-deriving the list.
     """
-    intent = next((item for item in ambiguous_intents() if item.fault == fault_name), None)
+    intent = _intent_for_fault(fault_name)
     return None if intent is None else {variant.id for variant in intent.variants}
 
 
