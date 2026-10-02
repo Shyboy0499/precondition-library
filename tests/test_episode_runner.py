@@ -48,7 +48,12 @@ from precondition_library.program import (
     ProgramStatus,
     Provenance,
 )
-from precondition_library.provider import Completion, ProviderError, TokenUsage
+from precondition_library.provider import (
+    Completion,
+    ProviderError,
+    ProviderTransportError,
+    TokenUsage,
+)
 from precondition_library.runtime.probes import evaluate_preconditions
 from precondition_library.runtime.replay import replay
 from precondition_library.similarity import SimilarityUsage
@@ -1287,11 +1292,11 @@ class _FlakyProvider:
     """Raise each queued status once, then serve the wrapped completions.
 
     A `provider.complete` call that fails with a status is what the retry policy
-    exists for; the wrapper lets a test put a 429 or a 500 in front of a scripted
-    solve without a network.
+    exists for; the wrapper lets a test put a 429, a 500 or (`None`) a transport
+    timeout in front of a scripted solve without a network.
     """
 
-    def __init__(self, statuses: list[int], *completions: Completion) -> None:
+    def __init__(self, statuses: list[int | None], *completions: Completion) -> None:
         self._statuses = list(statuses)
         self._inner = FakeProvider(*completions)
         self.calls = 0
@@ -1302,6 +1307,9 @@ class _FlakyProvider:
         self.calls += 1
         if self._statuses:
             status = self._statuses.pop(0)
+            if status is None:
+                # A timeout: no response, so no status (issue #157).
+                raise ProviderTransportError("DeepSeek request failed in transport: ReadTimeout")
             raise ProviderError(f"DeepSeek request failed with HTTP {status}", status_code=status)
         return self._inner.complete(system=system, messages=messages, tools=tools)
 
@@ -1564,3 +1572,50 @@ def test_a_row_whose_fault_check_failed_carries_no_surface(tmp_path: Path) -> No
     assert record.ground_truth_ok is False, "but the fault was not repaired"
     assert record.recorded_state_intact is None
     assert record.change_surface is None
+
+
+def test_a_timed_out_call_is_retried_and_counted_on_the_row(tmp_path, monkeypatch) -> None:
+    """A transport timeout is transient (issue #157): retried, and the attempt is a call.
+
+    The first live run lost every compile to a timeout that was neither retried nor
+    counted. Now the timed-out attempt is retried under the same cap as a 429 and shows
+    in `llm_calls`, so the ledger records the call the arm paid for.
+    """
+    monkeypatch.setattr("precondition_library.bench.run.time.sleep", lambda _seconds: None)
+    provider = _FlakyProvider([None], *_resolves_discard())
+
+    record = run_episode(
+        Arm.REACT,
+        "diverged",
+        DISCARD_SEED,
+        1,
+        role=OccurrenceRole.VARIANT,
+        provider=provider,
+        library=Library(tmp_path / "lib"),
+        model="fake",
+    )
+
+    assert provider.calls == 4, "the timeout must be retried once"
+    assert record.outcome is EpisodeOutcome.SUCCESS
+    assert record.llm_calls == 4, "the timed-out attempt must appear in the ledger"
+    assert record.succeeded is True
+
+
+def test_persistent_timeouts_are_capped_and_counted(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("precondition_library.bench.run.time.sleep", lambda _seconds: None)
+    provider = _FlakyProvider([None, None, None, None], *_resolves_discard())
+
+    record = run_episode(
+        Arm.REACT,
+        "diverged",
+        DISCARD_SEED,
+        1,
+        role=OccurrenceRole.VARIANT,
+        provider=provider,
+        library=Library(tmp_path / "lib"),
+        model="fake",
+    )
+
+    assert provider.calls == 3, "one call plus the two the cap allows"
+    assert record.outcome is EpisodeOutcome.FAIL
+    assert record.llm_calls == 3, "every timed-out attempt is a call"

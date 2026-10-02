@@ -43,6 +43,20 @@ temperature 0 is not a determinism guarantee on any hosted model. What is record
 the value sent, which is what this code can know.
 """
 
+DEFAULT_TIMEOUT_S = 300.0
+"""Seconds to wait for a response once connected (issue #157).
+
+Set explicitly because the alternative is httpx's default of **5 seconds**, which the
+first live run measured as fatal: every compile reply -- a whole YAML program from a
+reasoning model -- took longer, so every compile timed out and the build admitted
+nothing. 300 s is the value that smoke build then completed every call under. A call
+that genuinely hangs still ends, and `bench.run` retries it as a transport failure.
+"""
+
+DEFAULT_CONNECT_TIMEOUT_S = 30.0
+"""Seconds to establish the connection. Kept separate and short: a connection that
+cannot be made in 30 s is a network fault to retry, not a slow reply to wait out."""
+
 DEFAULT_BASE_URL = "https://api.deepseek.com"
 """DeepSeek's OpenAI-compatible base. The chat-completions path is appended."""
 
@@ -120,6 +134,18 @@ class ProviderError(RuntimeError):
         self.status_code = status_code
 
 
+class ProviderTransportError(ProviderError):
+    """The request never produced a response: a timeout, a refused or reset connection.
+
+    A `ProviderError` with no `status_code`, as the base class's docstring has always
+    described transport failures, so `bench.run`'s accounting counts the attempt like
+    any other raised call. A subclass rather than a flag because it is the one kind of
+    status-less failure that is **transient**: a malformed body is deterministic for the
+    same reply, a timeout is not, and the retry policy needs to tell them apart without
+    parsing message text (issue #157).
+    """
+
+
 class Provider(Protocol):
     """Minimal LLM boundary. Implementations must report real usage."""
 
@@ -158,6 +184,8 @@ class DeepSeekProvider:
         base_url: str | None = None,
         transport: httpx.BaseTransport | None = None,
         temperature: float = DEFAULT_TEMPERATURE,
+        timeout: float = DEFAULT_TIMEOUT_S,
+        connect_timeout: float = DEFAULT_CONNECT_TIMEOUT_S,
     ) -> None:
         self._model = model
         self._temperature = temperature
@@ -168,6 +196,7 @@ class DeepSeekProvider:
                 "Content-Type": "application/json",
             },
             transport=transport,
+            timeout=httpx.Timeout(timeout, connect=connect_timeout),
         )
 
     def complete(
@@ -181,7 +210,14 @@ class DeepSeekProvider:
         if tools is not None:
             payload["tools"] = tools
 
-        response = self._client.post("/chat/completions", json=payload)
+        try:
+            response = self._client.post("/chat/completions", json=payload)
+        except httpx.TransportError as exc:
+            # A timeout or a broken connection: no response, so no status. Raised as a
+            # ProviderError so the caller's retry policy and call count see it (#157).
+            raise ProviderTransportError(
+                f"DeepSeek request failed in transport: {type(exc).__name__}: {exc}"
+            ) from exc
         if not response.is_success:
             raise ProviderError(
                 f"DeepSeek request failed with HTTP {response.status_code}: "
