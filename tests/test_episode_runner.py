@@ -707,28 +707,36 @@ def test_the_derived_program_id_is_a_single_path_component() -> None:
 # --- a misfire is recorded independently of success --------------------------
 
 
+def _fires_on_any_local_work(**overrides) -> Program:
+    """A `discard` program loosened to fire wherever local commits exist.
+
+    Discard is acceptable only where the local commits change nothing (ADR-0023), so
+    on a state with real local work -- `merge` or `rebase` -- this is a wrong fire.
+    Merge and rebase are acceptable on every diverged state, so they cannot misfire
+    there, and a wrong fire has to be a `discard`.
+    """
+    loose = _discard_program(**overrides)
+    return loose.model_copy(update={"preconditions": loose.preconditions[:1]})
+
+
 def test_a_wrong_program_misfires_and_the_episode_still_succeeds(tmp_path: Path) -> None:
     """The quadrant the ledger was reshaped for: wrong fire, successful episode.
 
-    A `merge` program whose preconditions accept the state fires on a state whose
-    resolution is `discard`. Its body does nothing, so its postconditions fail;
-    the arm demotes it, falls back to the agent, and the agent resolves the task.
-    The row must say both `misfired` and `succeeded`, and the library must show
-    the demotion.
+    A `discard` program whose preconditions accept the state fires on a state whose
+    resolution is `merge`, where discarding is not acceptable. Its body does nothing,
+    so its postconditions fail; the arm demotes it, falls back to the agent, and the
+    agent resolves the task. The row must say both `misfired` and `succeeded`, and
+    the library must show the demotion.
     """
-    wrong = _discard_program(
-        id="wrong-merge",
-        variant="merge",
-        body="true\n",
-    )
+    wrong = _fires_on_any_local_work(id="wrong-discard", body="true\n")
     root = tmp_path / "lib"
     library = _library_with_admitted(root, wrong)
-    provider = FakeProvider(*_resolves_discard(), _completion(_MALFORMED_REPLY))
+    provider = FakeProvider(*_resolves_merge(), _completion(_MALFORMED_REPLY))
 
     record = run_episode(
         Arm.PRECONDITION,
         "diverged",
-        DISCARD_SEED,
+        VARIANT_SEED,
         1,
         role=OccurrenceRole.VARIANT,
         provider=provider,
@@ -736,8 +744,9 @@ def test_a_wrong_program_misfires_and_the_episode_still_succeeds(tmp_path: Path)
         model="fake",
     )
 
-    assert record.fired_variant == "merge"
-    assert record.correct_variant == "discard"
+    assert record.fired_variant == "discard"
+    assert record.correct_variant == "merge"
+    assert record.acceptable_variants == ["merge", "rebase"]
     assert record.misfired is True
     assert record.succeeded is True, "the fallback agent must still be graded as succeeding"
     assert record.outcome is EpisodeOutcome.FALLBACK
@@ -752,15 +761,16 @@ def test_a_wrong_program_misfires_and_the_episode_still_succeeds(tmp_path: Path)
 def test_two_wrong_variant_fires_quarantine_the_program(tmp_path: Path) -> None:
     """§8's "mismatches twice" is reachable, and it is not the demotion path.
 
-    The program declares `rebase` but the state requires `discard`; the body
-    resets to upstream, so the postconditions hold and the replay is a success.
+    The program declares `discard` on a `merge` state, where discarding destroys the
+    local work and is not acceptable (ADR-0023); the body resets to upstream, so the
+    postconditions hold and the replay is a success.
     A single wrong fire therefore does not demote it -- and a demoted program
     would never be dispatched again, so the second fire could never happen. The
     count is what withdraws it: after the second wrong fire the library
     quarantines it, retaining it for analysis, and a third occurrence would find
     no admitted program to fire.
     """
-    wrong = _discard_program(id="always-wrong-variant", variant="rebase")
+    wrong = _fires_on_any_local_work(id="always-wrong-variant")
     root = tmp_path / "lib"
     library = _library_with_admitted(root, wrong)
     provider = FakeProvider(raises=AssertionError("a replay must not call the model"))
@@ -768,7 +778,7 @@ def test_two_wrong_variant_fires_quarantine_the_program(tmp_path: Path) -> None:
     first = run_episode(
         Arm.PRECONDITION,
         "diverged",
-        DISCARD_SEED,
+        VARIANT_SEED,
         1,
         role=OccurrenceRole.VARIANT,
         provider=provider,
@@ -776,8 +786,8 @@ def test_two_wrong_variant_fires_quarantine_the_program(tmp_path: Path) -> None:
         model="fake",
     )
 
-    assert first.fired_variant == "rebase"
-    assert first.correct_variant == "discard"
+    assert first.fired_variant == "discard"
+    assert first.correct_variant == "merge"
     assert first.misfired is True
     assert first.outcome is EpisodeOutcome.SUCCESS, "the body still satisfied its postconditions"
     assert [program.status for program in Library(root).load_all()] == [ProgramStatus.ADMITTED], (
@@ -788,7 +798,7 @@ def test_two_wrong_variant_fires_quarantine_the_program(tmp_path: Path) -> None:
     second = run_episode(
         Arm.PRECONDITION,
         "diverged",
-        SECOND_DISCARD_SEED,
+        REPLAY_SEED,
         2,
         # The second sight of the state, so the plan calls it a replay -- which is
         # also why its misfire is the same program's error being counted again.

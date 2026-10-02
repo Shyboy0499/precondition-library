@@ -19,11 +19,12 @@ import pytest
 from conftest import FakeProvider
 from test_episode_runner import (
     DISCARD_SEED,
-    SECOND_DISCARD_SEED,
+    REPLAY_SEED,
     VARIANT_SEED,
     _completion,
     _discard_program,
     _finish,
+    _fires_on_any_local_work,
     _library_with_admitted,
     _reply_text,
     _resolves_discard,
@@ -126,9 +127,13 @@ def test_every_arm_dispatches_against_the_same_unchanged_library(tmp_path: Path)
 def test_a_frozen_library_counts_misfires_on_the_row_but_never_quarantines(
     tmp_path: Path,
 ) -> None:
-    """Online, two wrong fires quarantine a program; frozen, the artifact stays put."""
+    """Online, two wrong fires quarantine a program; frozen, the artifact stays put.
+
+    The wrong fire is `discard` on a `merge` state (ADR-0023: merge and rebase are
+    acceptable on every diverged state, so only discard on real local work misfires).
+    """
     root = tmp_path / "frozen"
-    wrong = _discard_program(id="always-wrong-variant", variant="rebase")
+    wrong = _fires_on_any_local_work(id="always-wrong-variant")
     _library_with_admitted(root, wrong)
     before = Library(root).library_hash()
 
@@ -136,7 +141,7 @@ def test_a_frozen_library_counts_misfires_on_the_row_but_never_quarantines(
         arms=[Arm.PRECONDITION],
         faults=["diverged"],
         occurrences=2,
-        seeds=[DISCARD_SEED, SECOND_DISCARD_SEED],
+        seeds=[VARIANT_SEED, REPLAY_SEED],
         out=tmp_path / "ledger.jsonl",
         model="fake",
         provider=FakeProvider(raises=AssertionError("a replay must not call the model")),

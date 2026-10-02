@@ -21,7 +21,8 @@ coverage point is arm 3's own coverage, so no coverage value had to be picked.
 * *coverage* -- fires / pairs. Negative pairs (no resolution is correct) are in the
   denominator: a dispatcher that fires on them is covering states it should not touch.
 * *mismatch* -- wrong fires / fires, where a fire is wrong when the fired variant is not
-  the pair's correct one, **including any fire on a negative pair**. Per fire, because
+  one the pair accepts (its label, or another resolution its checker also accepts,
+  ADR-0023), **including any fire on a negative pair**. Per fire, because
   the spec's mis-fire is "a program that runs, claims success, and did not"; a per-pair
   rate would fold coverage back in and reward a dispatcher for rarely firing.
 * *matched coverage* -- arm 2's operating point whose coverage is nearest arm 3's, a tie
@@ -54,7 +55,7 @@ from ..intent_key import agreeing
 from ..library import DEFAULT_RERANK_K
 from ..program import Program
 from ..similarity import Similarity
-from .pairs import LabelledPair
+from .pairs import LabelledPair, accepts
 from .report import Interval, Rate, wilson_interval
 
 
@@ -70,6 +71,20 @@ class PairOutcome(BaseModel):
     """Arm 2's score for `fired_variant`; `None` for a dispatcher with no score (arm 3)."""
     informed: bool
     """Which request channel the pair's text came through, so regimes cannot be pooled."""
+    acceptable_variants: tuple[str, ...] = ()
+    """Every resolution that is right here, the label among them (ADR-0023); `()` on a
+    negative pair, or with a label for an outcome that names only the label."""
+
+    def fire_is_right(self, variant: str) -> bool:
+        """Whether firing `variant` here is correct (`pairs.accepts`)."""
+        return accepts(self.correct_variant, self.acceptable_variants, variant)
+
+    @property
+    def decided_correctly(self) -> bool:
+        """Fired an acceptable resolution, or refused a negative pair."""
+        if self.fired_variant is None:
+            return self.correct_variant is None
+        return self.fire_is_right(self.fired_variant)
 
 
 class OperatingPoint(BaseModel):
@@ -106,7 +121,10 @@ def operating_point(
     """Coverage and per-fire mismatch at one threshold (`None`: fire whenever eligible)."""
     _require_one_regime(outcomes)
     fired = [outcome for outcome in outcomes if _fires(outcome, threshold)]
-    wrong = sum(outcome.fired_variant != outcome.correct_variant for outcome in fired)
+    wrong = sum(
+        outcome.fired_variant is not None and not outcome.fire_is_right(outcome.fired_variant)
+        for outcome in fired
+    )
     return OperatingPoint(
         threshold=threshold,
         coverage=Rate(numerator=len(fired), denominator=len(outcomes)),
@@ -193,7 +211,7 @@ def vacuous_reason(arm3_outcomes: Sequence[PairOutcome]) -> str | None:
     _require_one_regime(arm3_outcomes)
     if not arm3_outcomes:
         return None
-    if all(o.fired_variant == o.correct_variant for o in arm3_outcomes):
+    if all(o.decided_correctly for o in arm3_outcomes):
         return (
             f"arm 3 decides all {len(arm3_outcomes)} pairs correctly, so it is the labelling "
             f"rule rather than a dispatcher: the comparison needs fallible (compiled) programs"
@@ -270,6 +288,7 @@ def arm2_outcomes(
         outcomes.append(
             PairOutcome(
                 correct_variant=pair.correct_variant,
+                acceptable_variants=pair.acceptable_variants,
                 fired_variant=top[1] if top is not None else None,
                 score=top[0] if top is not None else None,
                 informed=pair.informed,
@@ -291,6 +310,7 @@ def arm3_outcomes(
     return [
         PairOutcome(
             correct_variant=pair.correct_variant,
+            acceptable_variants=pair.acceptable_variants,
             fired_variant=decide(pair),
             score=None,
             informed=pair.informed,
@@ -319,6 +339,7 @@ def intent_key_outcomes(
         outcomes.append(
             PairOutcome(
                 correct_variant=pair.correct_variant,
+                acceptable_variants=pair.acceptable_variants,
                 fired_variant=keyed[0].variant if keyed else None,
                 score=None,
                 informed=pair.informed,

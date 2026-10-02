@@ -89,8 +89,26 @@ class ResolutionVariant:
     the variant should be redesigned rather than labelled.
     """
 
+    accepted_by: Callable[[StateFingerprint], bool] | None = None
+    """States where this resolution is **also acceptable**, beyond the ones it labels.
+
+    `decided_by` names the one resolution a state is labelled with; this names every
+    other labelled state where the fault's own checker accepts this resolution too
+    (issue #172, ADR-0023). `None` means the resolution is acceptable only where it is
+    the label. It never makes an unlabelled state acceptable: a state no rule labels
+    stays a negative, where every fire is wrong. The declaration is pinned against the
+    checker by `tests/test_acceptable_variants.py`, which replays every gold resolution
+    on every state and requires the two to agree.
+    """
+
     def correct_in(self, state: StateFingerprint) -> bool:
         return self.decided_by(state)
+
+    def accepted_in(self, state: StateFingerprint) -> bool:
+        """Whether this resolution is acceptable in `state`: its label, or declared so."""
+        if self.decided_by(state):
+            return True
+        return self.accepted_by is not None and self.accepted_by(state)
 
 
 @dataclass(frozen=True)
@@ -218,3 +236,15 @@ class IntentSpec:
                 f"({[m.id for m in matches]}); decision rules must partition the states"
             )
         return matches[0] if matches else None
+
+    def acceptable_variants(self, state: StateFingerprint) -> tuple[str, ...]:
+        """Every resolution acceptable in `state`, sorted; `()` for an unlabelled state.
+
+        The label (`correct_variant`) is always among them. A fire is a mismatch only when
+        the fired resolution is not in this set (ADR-0023): the label names the canonical
+        resolution, and this names what the checker accepts. An unlabelled state has no
+        acceptable resolution, so every fire there stays wrong.
+        """
+        if self.correct_variant(state) is None:
+            return ()
+        return tuple(sorted(v.id for v in self.variants if v.accepted_in(state)))

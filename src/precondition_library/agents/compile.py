@@ -39,7 +39,7 @@ import yaml
 from pydantic import BaseModel, Field, ValidationError
 
 from .. import __version__
-from ..program import Program, ProgramStatus, Provenance
+from ..program import Program, ProgramStatus, Provenance, accepts
 from ..provider import Provider, TokenUsage
 from ..runtime.probes import evaluate_preconditions, placeholders
 from ..runtime.replay import replay
@@ -510,19 +510,24 @@ def admit(
     intent = _intent_for_fault(name)
     overlap_fired: list[str] = []
     for other, seed, state in unrelated_states:
-        accepted, error, label = _preconditions_accept_labelled(program, seed, [other], intent)
+        accepted, error, label, acceptable = _preconditions_accept_labelled(
+            program, seed, [other], intent
+        )
         if error is not None:
             return False, f"negative side failed: preconditions could not be evaluated ({error})"
         if not accepted:
             continue
         which = f"{other} seed {seed}"
         if label is not None:
-            if label == program.variant:
+            # Right when the program's resolution is one the state accepts (ADR-0023),
+            # not only when it is the label.
+            if program.variant is not None and accepts(label, acceptable, program.variant):
                 overlap_fired.append(f"{other}:{state}")
                 continue
             return False, (
                 f"negative side failed: preconditions accepted an overlap state ({which}, "
-                f"which this intent's own rule labels {label!r}, but the program implements "
+                f"which this intent's own rule labels {label!r} and accepts "
+                f"{list(acceptable) or [label]}, but the program implements "
                 f"{program.variant!r}); firing where another resolution is correct is the "
                 f"mismatch this gate exists to refuse"
             )
@@ -535,25 +540,37 @@ def admit(
         )
 
     siblings = _sibling_seeds(name, program.variant, declared)
+    # A sibling state is labelled with another resolution, but the checker may accept this
+    # program's resolution there too (ADR-0023: merge and rebase on any diverged state).
+    # Firing on such a state is right, and counts toward the breadth cap like any fire.
+    sibling_fired: list[str] = []
     for seed, variant in siblings:
-        accepted, error = _preconditions_accept(program, seed, [name])
+        accepted, error, label, acceptable = _preconditions_accept_labelled(
+            program, seed, [name], intent
+        )
         if error is not None:
             return False, f"negative side failed: preconditions could not be evaluated ({error})"
-        if accepted:
-            return False, (
-                f"negative side failed: preconditions accepted 1 of {len(siblings)} "
-                f"same-intent states ({name} seed {seed} resolves to {variant!r}, but the "
-                f"program implements {program.variant!r}); firing where a sibling "
-                f"resolution is correct is the mismatch this gate exists to refuse"
-            )
+        if not accepted:
+            continue
+        if program.variant is not None and accepts(label, acceptable, program.variant):
+            sibling_fired.append(f"{name}:{variant}")
+            continue
+        return False, (
+            f"negative side failed: preconditions accepted 1 of {len(siblings)} "
+            f"same-intent states ({name} seed {seed} resolves to {variant!r}, which accepts "
+            f"{list(acceptable) or [variant]}, but the program implements "
+            f"{program.variant!r}); firing where a sibling resolution is correct is the "
+            f"mismatch this gate exists to refuse"
+        )
 
     # Breadth cap (issue #10). The fraction of the sampled universe the
     # preconditions fire on must not exceed BREADTH_CAP. Reaching here means the
-    # clean sandbox, every unlabelled unrelated state and the declared siblings were
-    # all rejected, so the only universe states that can still fire are this
-    # fault's own non-sibling states -- its resolution, plus any injected state
-    # that is not a declared resolution -- and the overlap states it fired on
-    # correctly (`overlap_fired`, issue #158), which are added below. Evaluating
+    # clean sandbox and every unlabelled unrelated state were rejected, and every
+    # overlap or sibling state it fired on accepts its resolution, so the universe
+    # states that fired are this fault's own non-sibling states -- its resolution,
+    # plus any injected state that is not a declared resolution -- and the overlap
+    # and sibling states it fired on correctly (`overlap_fired`, issue #158;
+    # `sibling_fired`, ADR-0023), which are added below. Evaluating
     # only those is the cheap equivalent of `precondition_breadth`'s full sweep (which rebuilds the
     # unrelated faults' sandboxes only to confirm the zero we already have); the
     # two agree, pinned by test_breadth_cap. The denominator is the whole universe.
@@ -567,8 +584,10 @@ def admit(
             return False, f"negative side failed: preconditions could not be evaluated ({error})"
         if accepted:
             fired_where.append(f"{name}:{FAULTS[name].variant_for_seed(seed)}")
-    # Overlap states the program fired on correctly are fires on the universe too.
+    # Overlap and sibling states the program fired on correctly are fires on the universe
+    # too (issue #158, ADR-0023).
     fired_where.extend(overlap_fired)
+    fired_where.extend(sibling_fired)
     fired = len(fired_where)
     if fired > BREADTH_CAP * total:
         return False, (
@@ -762,33 +781,39 @@ def _intent_for_fault(fault_name: str) -> IntentSpec | None:
 
 def _preconditions_accept_labelled(
     program: Program, seed: int, faults: list[str], intent: IntentSpec | None
-) -> tuple[bool, str | None, str | None]:
-    """`_preconditions_accept`, plus `intent`'s label for the state, in one build.
+) -> tuple[bool, str | None, str | None, tuple[str, ...]]:
+    """`_preconditions_accept`, plus `intent`'s label and acceptable set, in one build.
 
     The label is the variant `intent`'s own decision rule calls correct in the observed
     state (issue #158), or None when the intent leaves the state unlabelled -- or when
     there is no intent to ask, or its rules match the state more than once (a defect in
-    the rules, which must not make a state look like a legitimate fire site).
+    the rules, which must not make a state look like a legitimate fire site). The
+    acceptable set is every resolution the state accepts, the label among them
+    (ADR-0023); `()` whenever the label is None.
     """
     box = build_sandbox(seed, faults)
     try:
         label: str | None = None
+        acceptable: tuple[str, ...] = ()
         if intent is not None:
+            state = StateFingerprint.observe(box)
             try:
-                variant = intent.correct_variant(StateFingerprint.observe(box))
+                variant = intent.correct_variant(state)
             except ValueError:
                 variant = None
-            label = variant.id if variant is not None else None
+            if variant is not None:
+                label = variant.id
+                acceptable = intent.acceptable_variants(state)
         result = evaluate_preconditions(program, box)
     except KeyError as exc:
-        return False, str(exc), None
+        return False, str(exc), None, ()
     finally:
         box.destroy()
     refused = [predicate for predicate in result.predicates if predicate.refused]
     if refused:
         first = refused[0]
-        return False, f"precondition {first.name!r} was refused: {first.observed}", None
-    return result.ok, None, label
+        return False, f"precondition {first.name!r} was refused: {first.observed}", None, ()
+    return result.ok, None, label, acceptable
 
 
 def _declared_variant_ids(fault_name: str) -> set[str] | None:
