@@ -53,13 +53,25 @@ def test_a_program_firing_correctly_on_an_overlap_state_is_admitted() -> None:
     assert "overlap state" in reason, reason
 
 
-def test_a_program_firing_on_an_overlap_state_with_the_wrong_variant_is_rejected() -> None:
-    """Mislabelled `rebase`, it now fires where the intent says `merge`: a mismatch."""
+def test_rebase_on_a_merge_labelled_overlap_state_is_now_accepted() -> None:
+    """The second live run's case (#172, ADR-0023): the checker accepts rebase here.
+
+    Labelled `rebase`, the program fires where the intent's label is `merge`. Merge and
+    rebase are both acceptable on every diverged state, so this is not a mismatch.
+    """
     admitted, reason = admit(
         _merge_without_the_workaround(variant="rebase"), "diverged", seeds=[MERGE_SEED]
     )
+    assert admitted, reason
+
+
+def test_a_program_firing_on_an_overlap_state_with_an_unacceptable_variant_is_rejected() -> None:
+    """Mislabelled `discard`, it fires where only merge and rebase are acceptable."""
+    admitted, reason = admit(
+        _merge_without_the_workaround(variant="discard"), "diverged", seeds=[MERGE_SEED]
+    )
     assert not admitted
-    assert "overlap state" in reason and "'merge'" in reason and "'rebase'" in reason, reason
+    assert "overlap state" in reason and "'merge'" in reason and "'discard'" in reason, reason
 
 
 def test_the_gold_merge_program_is_still_admitted() -> None:

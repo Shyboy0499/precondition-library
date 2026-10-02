@@ -79,9 +79,9 @@ def soft_vote_outcomes(
             for injected in ([fault], []):
                 box = build_sandbox(seed, injected)
                 try:
-                    correct = (
-                        intent.correct_variant(StateFingerprint.observe(box)) if injected else None
-                    )
+                    state = StateFingerprint.observe(box) if injected else None
+                    correct = intent.correct_variant(state) if state is not None else None
+                    acceptable = intent.acceptable_variants(state) if state is not None else ()
                     ranked = library.rank_soft(box)
                 finally:
                     box.destroy()
@@ -89,6 +89,7 @@ def soft_vote_outcomes(
                 outcomes.append(
                     PairOutcome(
                         correct_variant=correct.id if correct is not None else None,
+                        acceptable_variants=acceptable,
                         fired_variant=top.program.variant if top is not None else None,
                         score=top.score if top is not None else None,
                         informed=False,
@@ -106,11 +107,17 @@ def _decision(outcome: PairOutcome, threshold: float) -> str | None:
 def _correct_decisions(outcomes: Sequence[PairOutcome], threshold: float) -> int:
     """How many outcomes the vote decides correctly at `threshold`.
 
-    A decision is correct when it equals the label, so abstaining on a negative counts
-    and abstaining on a positive does not. The floor is inclusive, as in
+    A decision is correct when it is an acceptable resolution (ADR-0023), so abstaining
+    on a negative counts and abstaining on a positive does not. The floor is inclusive, as in
     `coverage.operating_point`, so the accuracy here and the curve there agree.
     """
-    return sum(_decision(outcome, threshold) == outcome.correct_variant for outcome in outcomes)
+    return sum(_decided_correctly(outcome, _decision(outcome, threshold)) for outcome in outcomes)
+
+
+def _decided_correctly(outcome: PairOutcome, decision: str | None) -> bool:
+    if decision is None:
+        return outcome.correct_variant is None
+    return outcome.fire_is_right(decision)
 
 
 def learn_soft_threshold(outcomes: Sequence[PairOutcome]) -> float:

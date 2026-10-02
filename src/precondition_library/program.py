@@ -208,3 +208,16 @@ class EpisodeOutcome(StrEnum):
     It is not a claim that nothing was spent: a checker that raises after the arm
     ran leaves an episode that cost tokens and cannot be graded, and the row
     carries that spend rather than hiding it."""
+
+
+def accepts(correct: str | None, acceptable: tuple[str, ...], fired: str) -> bool:
+    """Whether firing `fired` is right: one of the acceptable resolutions (ADR-0023).
+
+    The one rule every scorer shares -- the pair metric, the soft-vote tuning, the
+    episode ledger and admission -- so they cannot disagree about what a mismatch is.
+    A negative (`correct is None`) accepts nothing. An empty `acceptable` with a label
+    is a record from before ADR-0023, and accepts the label alone.
+    """
+    if correct is None:
+        return False
+    return fired in acceptable if acceptable else fired == correct

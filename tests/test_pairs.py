@@ -51,12 +51,25 @@ def test_firing_a_program_is_wrong_on_a_benign_state(state_grid) -> None:
 
 
 def test_wrong_resolution_is_wrong_and_right_one_is_right(state_grid) -> None:
+    """Merge is the label; rebase is also accepted there (ADR-0023); discard is not."""
     intent = INTENTS["sync_fork_with_upstream"]
-    state = state_grid["sync_fork_with_upstream"]["overlapping_files"]  # merge is correct
+    state = state_grid["sync_fork_with_upstream"]["overlapping_files"]
     pair = label(intent, seed=3, state=state)
+    assert pair.correct_variant == "merge"
+    assert pair.acceptable_variants == ("merge", "rebase")
     assert decision_is_correct(pair, candidate_variant="merge") is True
-    assert decision_is_correct(pair, candidate_variant="rebase") is False
+    assert decision_is_correct(pair, candidate_variant="rebase") is True
     assert decision_is_correct(pair, candidate_variant="discard") is False
+
+
+def test_a_negative_pair_accepts_nothing(state_grid) -> None:
+    intent = INTENTS["sync_fork_with_upstream"]
+    pair = label(
+        intent, seed=3, state=state_grid["sync_fork_with_upstream"]["benign_nothing_local"]
+    )
+    assert pair.correct_variant is None and pair.acceptable_variants == ()
+    for variant in ("merge", "rebase", "discard"):
+        assert decision_is_correct(pair, candidate_variant=variant) is False
 
 
 def test_generator_rejects_empty_input(state_grid) -> None:

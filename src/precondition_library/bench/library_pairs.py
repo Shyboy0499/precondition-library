@@ -150,6 +150,7 @@ def is_pair(environment: str, intent: IntentSpec, pair: LabelledPair) -> bool:
 def _outcome(pair: LabelledPair, variant: str | None, score: float | None) -> PairOutcome:
     return PairOutcome(
         correct_variant=pair.correct_variant,
+        acceptable_variants=pair.acceptable_variants,
         fired_variant=variant,
         score=score,
         informed=pair.informed,

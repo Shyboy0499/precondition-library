@@ -56,7 +56,7 @@ from ..agents.dispatch import (
 from ..agents.memory import SuccessMemory, render
 from ..agents.react import solve
 from ..library import Library, ProgramIdCollisionError
-from ..program import EpisodeOutcome, Program, ProgramStatus
+from ..program import EpisodeOutcome, Program, ProgramStatus, accepts
 from ..provider import Completion, Provider, ProviderError, ProviderTransportError
 from ..runtime.probes import evaluate_preconditions
 from ..runtime.replay import ReplayResult, replay
@@ -476,6 +476,7 @@ def run_episode(
 
         request = fault.task_text(seed)
         correct = intent.correct_variant(state)
+        acceptable = intent.acceptable_variants(state)
         signature = TaskSignature(intent=request, fingerprint=state, target=str(box.work))
 
         # The oracle floor's program for this state: the gold resolution of the
@@ -548,7 +549,7 @@ def run_episode(
             _learn_from_solution(
                 result, signature, box, library, fault_type, seed, occurrence, accounting
             )
-            _record_mismatch(result, library, correct, fault_type, seed, occurrence)
+            _record_mismatch(result, library, correct, acceptable, fault_type, seed, occurrence)
 
         return EpisodeRecord(
             arm=arm,
@@ -571,6 +572,7 @@ def run_episode(
             wall_clock_s=time.monotonic() - started,
             outcome=result.outcome,
             correct_variant=correct.id if correct is not None else None,
+            acceptable_variants=list(acceptable),
             fired_variant=result.fired_variant,
             ground_truth_ok=ground_truth_ok,
             recorded_state_intact=state_intact,
@@ -873,6 +875,7 @@ def _record_mismatch(
     result: _ArmResult,
     library: Library,
     correct: ResolutionVariant | None,
+    acceptable: tuple[str, ...],
     fault_type: str,
     seed: int,
     occurrence: int,
@@ -883,9 +886,11 @@ def _record_mismatch(
     that was not this state's ground truth -- and it is independent of episode
     success, which is why this is a separate step from the demotion in
     `_is_genuine_miss`. A program can be wrong about the resolution and still
-    satisfy its postconditions (`rebase` on a state that requires `merge` reaches
-    a synced tree), so it is never demoted and would mis-fire on every later
-    occurrence; `Library.record_mismatch` withdraws it after the second.
+    satisfy its postconditions (`discard` on a state with real local work leaves a
+    synced tree while destroying that work), so it is never demoted and would
+    mis-fire on every later occurrence; `Library.record_mismatch` withdraws it after
+    the second. "Wrong" is outside the state's acceptable set (ADR-0023): `rebase` on
+    a `merge`-labelled state is accepted by the checker and is not counted.
 
     Nothing is counted when the body did not run to completion: a guard refusal
     leaves `fired_variant` None, and a timeout is a runtime mishap rather than
@@ -894,7 +899,7 @@ def _record_mismatch(
     stopped -- the arm itself is never allowed to see ground truth.
     """
     correct_id = correct.id if correct is not None else None
-    if result.fired_variant is None or result.fired_variant == correct_id:
+    if result.fired_variant is None or accepts(correct_id, acceptable, result.fired_variant):
         return
     if result.program_id is None or result.timed_out:
         return

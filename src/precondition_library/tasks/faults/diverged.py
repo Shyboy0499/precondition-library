@@ -239,6 +239,22 @@ def _is_disjoint_from_upstream(state: StateFingerprint) -> bool:
     )
 
 
+def _has_local_work_to_integrate(state: StateFingerprint) -> bool:
+    """Any labelled diverged state: local commits exist beside upstream's.
+
+    Merge and rebase both satisfy this fault's checker in every such state -- upstream
+    contained, local changes surviving -- including the one the label calls `discard`
+    and each other's. Measured, not assumed: every gold body on every state over 60
+    seeds (issue #172), and pinned by `tests/test_acceptable_variants.py`. `discard` is
+    accepted only where it is the label, because elsewhere it destroys the local work.
+    """
+    return (
+        _is_empty_of_changes(state)
+        or _overlaps_upstream(state)
+        or _is_disjoint_from_upstream(state)
+    )
+
+
 VARIANTS = [
     ResolutionVariant(
         id="discard",
@@ -248,6 +264,7 @@ VARIANTS = [
     ResolutionVariant(
         id="merge",
         decided_by=_overlaps_upstream,
+        accepted_by=_has_local_work_to_integrate,
         rationale=(
             "Both sides changed the same file, so replaying local commits would "
             "discard a resolution and risk re-conflicting; merge keeps both."
@@ -256,6 +273,7 @@ VARIANTS = [
     ResolutionVariant(
         id="rebase",
         decided_by=_is_disjoint_from_upstream,
+        accepted_by=_has_local_work_to_integrate,
         rationale=(
             "Local commits touch only files upstream left alone, so replaying them "
             "on top of upstream is conflict-free and keeps history linear."

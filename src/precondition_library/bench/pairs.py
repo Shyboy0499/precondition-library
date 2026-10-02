@@ -22,6 +22,7 @@ from collections.abc import Iterable, Sequence
 
 from pydantic import BaseModel
 
+from ..program import accepts
 from ..signatures import StateFingerprint
 from ..tasks.intent import IntentSpec
 
@@ -36,6 +37,12 @@ class LabelledPair(BaseModel):
     """None means no resolution is correct: the environment needs nothing done, so
     every program must refuse to fire. Negative examples are half the point -- a
     dispatcher that always fires can only be caught by them."""
+    acceptable_variants: tuple[str, ...] = ()
+    """Every resolution the checker accepts here, the label among them (ADR-0023).
+
+    A decision is correct when it fires one of these; `()` on a negative pair. A pair
+    built before the field existed has `()` with a label, which reads as the label alone.
+    """
     task_text: str
     ambiguous: bool
     """True when the intent has two or more resolutions, so the text alone cannot decide."""
@@ -74,6 +81,7 @@ def label(
         seed=seed,
         state=state,
         correct_variant=resolved.id if resolved is not None else None,
+        acceptable_variants=intent.acceptable_variants(state),
         task_text=intent.task_text(seed) if uninformed else intent.task_text(seed, state),
         ambiguous=intent.is_ambiguous,
         informed=False if uninformed else intent.uses_informed_wording(state),
@@ -117,7 +125,7 @@ def decision_is_correct(pair: LabelledPair, candidate_variant: str) -> bool:
     This is the grading function for a dispatch decision, and the reason
     `Program.variant` exists: without it a wrong answer is undefinable.
     """
-    return pair.correct_variant is not None and candidate_variant == pair.correct_variant
+    return accepts(pair.correct_variant, pair.acceptable_variants, candidate_variant)
 
 
 def ambiguous_subset(pairs: Iterable[LabelledPair]) -> list[LabelledPair]:

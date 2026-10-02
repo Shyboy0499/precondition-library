@@ -18,7 +18,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ValidationError
 
-from ..program import EpisodeOutcome
+from ..program import EpisodeOutcome, accepts
 
 
 class Arm(StrEnum):
@@ -215,6 +215,10 @@ class EpisodeRecord(BaseModel):
     Required, with no default, because None is a meaningful answer ("this state
     needs nothing done"). A defaulted field could be forgotten and silently read
     as a benign state, which would turn a missing fact into a wrong one."""
+    acceptable_variants: list[str] | None = None
+    """Every resolution the checker accepts in this state, the label among them
+    (ADR-0023). `None` on a row written before the field existed, which reads as the
+    label alone, so an old ledger keeps the meaning it was written with."""
     fired_variant: str | None = None
     """The resolution the program that actually ran implements; None if none fired."""
     ground_truth_ok: bool | None
@@ -323,14 +327,17 @@ class EpisodeRecord(BaseModel):
 
     @property
     def misfired(self) -> bool:
-        """A program fired that was not the ground-truth resolution.
+        """A program fired a resolution this state does not accept (ADR-0023).
 
         Deliberately independent of final state, and of `outcome`: a wrong fire
         often ends in a successful episode because the arm falls back to the agent.
         That quadrant -- misfired and successful -- is the one the primary metric
         exists to count, and a single `outcome` value could not express it.
         """
-        return self.fired_variant is not None and self.fired_variant != self.correct_variant
+        if self.fired_variant is None:
+            return False
+        acceptable = tuple(self.acceptable_variants or ())
+        return not accepts(self.correct_variant, acceptable, self.fired_variant)
 
     @property
     def succeeded(self) -> bool:
