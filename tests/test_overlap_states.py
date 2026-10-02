@@ -22,6 +22,7 @@ from precondition_library.runtime.probes import evaluate_preconditions
 from precondition_library.signatures import StateFingerprint
 from precondition_library.tasks.faults import build_sandbox
 from precondition_library.tasks.faults.diverged import INTENT as SYNC_INTENT
+from precondition_library.tasks.faults.submodule_moved import INTENT as SUBMODULE_INTENT
 
 MERGE_SEED = 0  # diverged seed 0 injects overlapping_files -> merge
 
@@ -65,3 +66,21 @@ def test_the_gold_merge_program_is_still_admitted() -> None:
     """The workaround precondition is now redundant, not wrong: gold still passes."""
     admitted, reason = admit(gold_program("merge"), "diverged", seeds=[MERGE_SEED])
     assert admitted, reason
+
+
+def test_a_state_with_no_submodule_is_not_a_submodule_overlap_state() -> None:
+    """The restore-submodule intent must leave a repository with no submodule unlabelled.
+
+    Without a gitlink, `observe` reports "not initialised, upstream still references it",
+    and the `init` rule used to read that as an `init` state -- so every diverged state,
+    and the fault-free sandbox, was an `init` overlap state for a submodule program.
+    """
+    for faults in ([], ["diverged"]):
+        for seed in (0, 1, 2):
+            box = build_sandbox(seed, faults)
+            try:
+                state = StateFingerprint.observe(box)
+            finally:
+                box.destroy()
+            assert not state.has_submodule_reference
+            assert SUBMODULE_INTENT.correct_variant(state) is None, (faults, seed)
