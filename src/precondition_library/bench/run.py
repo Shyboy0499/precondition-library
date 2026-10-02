@@ -57,7 +57,7 @@ from ..agents.memory import SuccessMemory, render
 from ..agents.react import solve
 from ..library import Library, ProgramIdCollisionError
 from ..program import EpisodeOutcome, Program, ProgramStatus
-from ..provider import Completion, Provider, ProviderError
+from ..provider import Completion, Provider, ProviderError, ProviderTransportError
 from ..runtime.probes import evaluate_preconditions
 from ..runtime.replay import ReplayResult, replay
 from ..sandbox import Sandbox
@@ -162,13 +162,17 @@ class _AccountingProvider:
 
 
 def _is_retryable(error: ProviderError) -> bool:
-    """Whether a provider error is transient (spec §8): rate limit or 5xx only.
+    """Whether a provider error is transient (spec §8): rate limit, 5xx, or transport.
 
     A 4xx means the request itself was wrong and will be wrong again, so retrying
-    it would only spend more of the budget on the same failure. A `ProviderError`
-    with no status is a malformed body, which is deterministic for the same
-    reply, or a transport failure the caller did not classify.
+    it would only spend more of the budget on the same failure. A transport failure
+    -- a timeout, a dropped connection (`ProviderTransportError`) -- never reached a
+    response and is transient by nature, so it is retried under the same cap (issue
+    #157). Any other `ProviderError` with no status is a malformed body, which is
+    deterministic for the same reply, and is not retried.
     """
+    if isinstance(error, ProviderTransportError):
+        return True
     status = error.status_code
     return status is not None and (status == _RATE_LIMIT_STATUS or status >= _SERVER_ERROR_FLOOR)
 

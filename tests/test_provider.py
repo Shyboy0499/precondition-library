@@ -18,10 +18,13 @@ import pytest
 from conftest import FakeProvider
 
 from precondition_library.provider import (
+    DEFAULT_CONNECT_TIMEOUT_S,
+    DEFAULT_TIMEOUT_S,
     Completion,
     DeepSeekProvider,
     Provider,
     ProviderError,
+    ProviderTransportError,
     TokenUsage,
 )
 
@@ -294,3 +297,38 @@ def test_fake_provider_records_calls_and_can_raise() -> None:
 def test_fake_provider_refuses_to_invent_a_completion() -> None:
     with pytest.raises(AssertionError, match="empty queue"):
         FakeProvider().complete(system="s", messages=[])
+
+
+# --- timeouts and transport failures (issue #157) ---------------------------------
+
+
+def test_the_client_sets_an_explicit_timeout_not_httpxs_default() -> None:
+    """httpx's 5 s default timed out every live compile; the provider sets its own."""
+    provider = _provider(_capturing()[0])
+    timeout = provider._client.timeout
+    assert timeout.read == DEFAULT_TIMEOUT_S
+    assert timeout.connect == DEFAULT_CONNECT_TIMEOUT_S
+    assert DEFAULT_TIMEOUT_S > 5.0
+
+
+def test_a_caller_can_set_the_timeouts() -> None:
+    provider = DeepSeekProvider(
+        api_key="test-key", transport=_capturing()[0], timeout=42.0, connect_timeout=3.0
+    )
+    assert (provider._client.timeout.read, provider._client.timeout.connect) == (42.0, 3.0)
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [httpx.ReadTimeout("timed out"), httpx.ConnectError("refused"), httpx.RemoteProtocolError("x")],
+    ids=["read-timeout", "connect-error", "protocol-error"],
+)
+def test_a_transport_failure_is_a_provider_error_without_a_status(failure) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise failure
+
+    with pytest.raises(ProviderTransportError) as excinfo:
+        _provider(httpx.MockTransport(handler)).complete(system="s", messages=[])
+    assert isinstance(excinfo.value, ProviderError), "the caller's accounting catches it"
+    assert excinfo.value.status_code is None
+    assert type(failure).__name__ in str(excinfo.value)
