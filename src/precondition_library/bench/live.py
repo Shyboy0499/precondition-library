@@ -201,7 +201,7 @@ def run_live(plan: LivePlan, *, provider: Provider, model: str, out: Path) -> Li
             model=model,
             provider=provider,
         )
-        artifacts["online_ledger"] = str(online.relative_to(out))
+        result.artifacts["online_ledger"] = str(online.relative_to(out))
 
     (out / "summary.json").write_text(result.model_dump_json(indent=2), encoding="utf-8")
     (out / "summary.txt").write_text(_text(result), encoding="utf-8")
