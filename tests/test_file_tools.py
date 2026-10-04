@@ -81,8 +81,8 @@ def test_a_path_out_of_the_tree_is_refused(tmp_path: Path, path: str, reason: st
     assert not (tmp_path.parent / "outside.txt").exists()
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="symbolic links need privilege on Windows")
 def test_a_symbolic_link_is_never_followed(tmp_path: Path) -> None:
+    """POSIX symbolic links; the Windows CI job runs only the portability tests."""
     work, outside = tmp_path / "work", tmp_path / "outside"
     work.mkdir()
     outside.mkdir()
