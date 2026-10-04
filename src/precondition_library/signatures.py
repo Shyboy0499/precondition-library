@@ -18,6 +18,7 @@ structurally different repos must not resolve to the same program.
 
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -41,6 +42,57 @@ def _render(value: object) -> str:
     if value == "":
         return "(none)"
     return str(value)
+
+
+_NOT_YET_RENDERED = frozenset(
+    {"merge_conflicted_files", "upstream_dropped_lines", "local_dropped_lines"}
+)
+"""Fields `as_text` leaves out until the lock-conflict intent is registered (#191).
+
+`as_text` is arm 2's whole view of state, so a field added to it changes every arm-2
+score in every measured family. These exist for the lock-conflict intent, which is not
+yet measured; rendering them is part of the change that registers it (as ADR-0027 and
+ADR-0028 did for the dirty-tree and branch-wiring fields), so until then every measured
+arm-2 text is byte-identical."""
+
+
+class _ThreeWay:
+    """One file's three versions -- merge base, local, upstream -- read without writing.
+
+    Each is read with `git show <commit>:<path>`; a side that does not have the file
+    reads as empty. The merge is tried with `git merge-file -p` on copies in a temporary
+    directory outside the repository, so observing never writes to it.
+    """
+
+    def __init__(self, work: Path, path: str, base: str, upstream: str) -> None:
+        def blob(commit: str) -> str:
+            shown = run_git(("show", f"{commit}:{path}"), cwd=work, check=False)
+            return shown.stdout if shown.returncode == 0 else ""
+
+        self.base, self.local, self.upstream = blob(base), blob("HEAD"), blob(upstream)
+        self._work = work
+
+    def conflicts(self) -> bool:
+        with tempfile.TemporaryDirectory() as scratch:
+            names = []
+            for name, text in (("local", self.local), ("base", self.base), ("up", self.upstream)):
+                target = Path(scratch) / name
+                target.write_text(text, encoding="utf-8")
+                names.append(str(target))
+            merged = run_git(("merge-file", "-p", "-q", *names), cwd=self._work, check=False)
+        return merged.returncode != 0
+
+    def dropped_by(self, side: str) -> list[str]:
+        """Base lines `side` removed that the other side still has.
+
+        A line both sides changed -- a version bump, say -- is in neither side's text,
+        so it is not counted as dropped by either: only a real removal is.
+        """
+        base = set(self.base.splitlines())
+        dropper, keeper = (
+            (self.upstream, self.local) if side == "upstream" else (self.local, self.upstream)
+        )
+        return sorted((base - set(dropper.splitlines())) & set(keeper.splitlines()))
 
 
 def _config(work: Path, key: str) -> str:
@@ -120,6 +172,16 @@ class StateFingerprint(BaseModel):
     clone; empty when the clone records none."""
     local_branches: list[str] = []
     """Every local branch: `git for-each-ref --format=%(refname:short) refs/heads/`."""
+
+    # Discriminators for the lock-conflict intent (#191). Observed now, rendered by
+    # `as_text` only once that intent is registered: see `_NOT_YET_RENDERED`.
+    merge_conflicted_files: list[str] = []
+    """Files both sides changed whose three-way merge conflicts: `git merge-file -p` on the
+    merge base's, HEAD's and upstream's versions, tried outside the repository."""
+    upstream_dropped_lines: list[str] = []
+    """In those files, lines of the merge base upstream removed and the local side kept."""
+    local_dropped_lines: list[str] = []
+    """In those files, lines of the merge base the local side removed and upstream kept."""
 
     @property
     def conflicting_files(self) -> set[str]:
@@ -215,6 +277,17 @@ class StateFingerprint(BaseModel):
         untracked = out("ls-files", "--others", "--exclude-standard").splitlines()
         upstream_paths = set(out("ls-tree", "-r", "--name-only", upstream).splitlines())
 
+        conflicted: list[_ThreeWay] = []
+        conflicted_names: list[str] = []
+        both_changed = sorted(set(local_touched) & set(upstream_touched))
+        merge_base = run_git(("merge-base", "HEAD", upstream), cwd=work, check=False)
+        if both_changed and merge_base.returncode == 0:
+            for path in both_changed:
+                three = _ThreeWay(work, path, merge_base.stdout.strip(), upstream)
+                if three.conflicts():
+                    conflicted.append(three)
+                    conflicted_names.append(path)
+
         return cls(
             dirty_worktree=bool(out("status", "--porcelain")),
             branch=branch,
@@ -237,6 +310,13 @@ class StateFingerprint(BaseModel):
             local_branches=sorted(
                 out("for-each-ref", "--format=%(refname:short)", "refs/heads/").splitlines()
             ),
+            merge_conflicted_files=conflicted_names,
+            upstream_dropped_lines=sorted(
+                {line for three in conflicted for line in three.dropped_by("upstream")}
+            ),
+            local_dropped_lines=sorted(
+                {line for three in conflicted for line in three.dropped_by("local")}
+            ),
         )
 
     def as_text(self) -> str:
@@ -256,7 +336,9 @@ class StateFingerprint(BaseModel):
         signal compared with itself.
         """
         return "\n".join(
-            f"{name}: {_render(getattr(self, name))}" for name in type(self).model_fields
+            f"{name}: {_render(getattr(self, name))}"
+            for name in type(self).model_fields
+            if name not in _NOT_YET_RENDERED
         )
 
 
