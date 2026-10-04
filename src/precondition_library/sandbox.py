@@ -145,6 +145,22 @@ _GLOBAL_OPTIONS_WITH_ARGUMENT = frozenset(
 """git's global options that take their value as the next argument."""
 
 
+def git_invocation(argv: Sequence[str]) -> tuple[list[str], str | None, list[str]]:
+    """A tokenised `git ...` line as (global options, subcommand, its arguments).
+
+    The global options are the ones between `git` and the subcommand, each with its
+    value when it takes the next argument (`-c key=value` gives both tokens). The
+    subcommand is `None` when there is none (`git --version`).
+    """
+    position = 1
+    while position < len(argv) and argv[position].startswith("-"):
+        position += 2 if argv[position] in _GLOBAL_OPTIONS_WITH_ARGUMENT else 1
+    global_options = list(argv[1 : min(position, len(argv))])
+    if position >= len(argv):
+        return global_options, None, []
+    return global_options, argv[position], list(argv[position + 1 :])
+
+
 def git_config_overrides(tokens: Sequence[str]) -> list[str]:
     """Every per-invocation config override in a tokenised command, as written.
 
