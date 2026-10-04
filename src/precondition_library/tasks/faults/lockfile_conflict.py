@@ -27,7 +27,19 @@ file:
 3. the locally-added dependency is still present *and* the upstream-added one
    is too. This is the clause that punishes the plausible wrong answer: deleting
    the markers by hand "succeeds" as a command while silently dropping a
-   dependency, and a real regeneration would keep both.
+   dependency, and a real regeneration would keep both;
+4. a dependency one side removed stays removed -- re-adding it is the mirror of
+   dropping one, and a regeneration from the side that still lists it does exactly
+   that;
+5. the file is still lock-shaped: exactly one `version` line. A union merge keeps
+   both sides' version lines, which no real lockfile could hold.
+
+Each seed selects one of three live states (#191), chosen so that different fixed
+resolutions are right in different states, by this checker:
+
+* ``additions_only`` -- each side adds one dependency and bumps the version;
+* ``upstream_removed`` -- as well, upstream drops a dependency the local side kept;
+* ``local_removed`` -- as well, the local side drops one upstream kept.
 
 This fault is real but not yet measurable: it has no `IntentSpec`, so the
 request text still names the fault and it stays excluded from any dispatch
@@ -64,6 +76,16 @@ _BASE_VERSIONS = ("0.1.0", "0.2.0")
 _PACKAGE_SALT = "lockfile_conflict:package"
 _VERSION_SALT = "lockfile_conflict:version"
 
+# The three live states a seed selects between, and the salt that chooses them.
+# Appending a state would change which state an existing seed injects, so add
+# states deliberately.
+INJECTED_STATES = ("additions_only", "upstream_removed", "local_removed")
+_STATE_SALT = "lockfile_conflict:state"
+
+# A dependency the base lists and one side may drop. Never a drawn package name, so
+# it cannot coincide with either side's addition.
+_REMOVABLE_PACKAGE = "zlib"
+
 # Ground truth lives in `Sandbox.recorded`, which the harness holds outside the
 # clone: no branch rewrite can drop it, the graded code cannot read it, and the
 # checker need not re-derive it from a seed it is never given (#103, #161).
@@ -71,6 +93,20 @@ _VERSION_SALT = "lockfile_conflict:version"
 # A conflict marker starts a line: `<<<<<<<`, `=======` (separator), `>>>>>>>`
 # (end) or `|||||||` (diff3 base).
 _MARKER_PATTERN = r"^(<{7}|={7}|>{7}|\|{7})"
+
+
+def state_for_seed(seed: int) -> str:
+    """Which live state this seed injects. Deterministic.
+
+    One definition shared by `inject` and the tests, so a test cannot disagree with the
+    injected environment.
+    """
+    return INJECTED_STATES[sample_index(seed, _STATE_SALT, len(INJECTED_STATES))]
+
+
+def removable_dependency_for_seed(seed: int) -> str:
+    """The base entry a side may drop, e.g. `zlib 0.1.0`."""
+    return f"{_REMOVABLE_PACKAGE} {base_version_for_seed(seed)}"
 
 
 def local_package_for_seed(seed: int) -> str:
@@ -114,6 +150,7 @@ def _base_lock_text(seed: int) -> str:
         + f"version = {version}\n"
         + "packages = [\n"
         + f'    "{_BASE_PACKAGE} {version}",\n'
+        + f'    "{removable_dependency_for_seed(seed)}",\n'
         + "]\n"
     )
 
@@ -124,7 +161,8 @@ def _edited_lock_text(seed: int, side: str) -> str:
     Both sides rewrite the version line and insert immediately after
     `packages = [`, so the two edits occupy the same region and a merge of them
     conflicts. Which side is built is decided by the caller, not by the seed, so
-    the same seed still yields byte-identical content for each commit.
+    the same seed still yields byte-identical content for each commit. The side the
+    state names as the remover leaves the removable entry out; the other keeps it.
     """
     local_version, upstream_version = _versions_for_seed(seed)
     if side == "local":
@@ -133,12 +171,15 @@ def _edited_lock_text(seed: int, side: str) -> str:
     else:
         version = upstream_version
         entry = upstream_dependency_for_seed(seed)
+    removes = state_for_seed(seed) == f"{side}_removed"
+    kept = "" if removes else f'    "{removable_dependency_for_seed(seed)}",\n'
     return (
         _HEADER
         + f"version = {version}\n"
         + "packages = [\n"
         + f'    "{entry}",\n'
         + f'    "{_BASE_PACKAGE} {base_version_for_seed(seed)}",\n'
+        + kept
         + "]\n"
     )
 
@@ -189,6 +230,8 @@ class LockfileConflictFault(FaultSpec):
         run_git(("reset", "--hard", local_tip), cwd=work)
         sandbox.recorded["local-dependency"] = local_dependency_for_seed(seed)
         sandbox.recorded["upstream-dependency"] = upstream_dependency_for_seed(seed)
+        if state_for_seed(seed) != "additions_only":
+            sandbox.recorded["removed-dependency"] = removable_dependency_for_seed(seed)
 
         # Leave the remote-tracking ref current so observe() can read it without
         # fetching (observe must not mutate the environment).
@@ -201,16 +244,21 @@ class LockfileConflictFault(FaultSpec):
         )
 
     def check(self, sandbox: Sandbox) -> GroundTruth:
-        """Grade the outcome, not the method, in three clauses.
+        """Grade the outcome, not the method, in five clauses.
 
         First, upstream's tip must be contained in the local branch. Second, no
         conflict marker may remain anywhere in the working tree, so a sync left
         half-resolved fails. Third, both added dependency entries must still be
-        in the lock-shaped file: the local one and the upstream one.
+        in the lock-shaped file: the local one and the upstream one. Fourth, a
+        dependency one side removed must stay removed. Fifth, the file must have
+        exactly one `version` line.
 
         The third clause is the point. Hand-deleting the markers while keeping
         one side "succeeds" as a command and satisfies the first two clauses, but
-        it silently drops a dependency; a real regeneration would keep both.
+        it silently drops a dependency; a real regeneration would keep both. The
+        fourth is its mirror: rebuilding from the side that still lists a removed
+        dependency resurrects it. The fifth refuses a union merge, which keeps both
+        sides' lines and so both sides' versions.
         """
         work = sandbox.work
         upstream_tip = git_out("rev-parse", "refs/heads/main", cwd=sandbox.upstream)
@@ -248,11 +296,24 @@ class LockfileConflictFault(FaultSpec):
                 detail=f"the upstream-added dependency is missing from {LOCK_PATH}",
             )
 
+        removed = sandbox.recorded.get("removed-dependency")
+        if removed is not None and removed in text:
+            return GroundTruth(
+                ok=False,
+                detail=f"a dependency one side removed is back in {LOCK_PATH}: {removed}",
+            )
+        versions = [line for line in text.splitlines() if line.startswith("version = ")]
+        if len(versions) != 1:
+            return GroundTruth(
+                ok=False,
+                detail=f"{LOCK_PATH} has {len(versions)} version lines, not one",
+            )
+
         return GroundTruth(
             ok=True,
             detail=(
-                "upstream tip is contained, no conflict markers remain, and both sides' "
-                "dependencies are present"
+                "upstream tip is contained, no conflict markers remain, both sides' "
+                "additions are present and nothing removed came back"
             ),
         )
 
