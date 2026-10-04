@@ -1,0 +1,101 @@
+# Hand-written resolutions for the `sync_through_a_conflicting_lockfile` intent (#191).
+#
+# The intent is defined in tasks/faults/lockfile_conflict.py and not yet registered:
+# until it is, nothing measured dispatches these, and the lockfile_conflict fault stays
+# excluded from the benchmark. They exist now so that the acceptable sets the intent
+# declares can be pinned against the fault's own checker by replay
+# (tests/test_lockfile_intent.py), the way ADR-0023 pins the measured intents'.
+#
+# Each body merges, takes one side's lock-shaped file, and re-inserts the entries the
+# other side added since the merge base -- a stand-in for regeneration, since the
+# sandbox has no package manager (see the fault's module docstring). The additions go
+# through a file under `.git/` rather than a shell loop, so the body reads no variable
+# it did not assign. Steps are chained with `&&` where a failure must stop the body.
+#
+# Preconditions are probes, so they must agree with the intent's decision rules
+# (decided_by in tasks/faults/lockfile_conflict.py). They are written independently --
+# agreeing by construction would defeat the point of having a check.
+#
+# Descriptions state the applicability condition in the vocabulary a request would
+# use, without naming a resolution label.
+programs:
+  - id: rebuild-the-lock-from-upstreams
+    intent: sync_through_a_conflicting_lockfile
+    variant: take_upstream
+    parameters: [upstream_remote, upstream_branch]
+    preconditions:
+      - name: both_sides_have_commits
+        description: Upstream and the local branch each have commits the other lacks.
+        probe: 'test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0 && test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0'
+      - name: a_merge_would_conflict
+        description: Merging upstream would stop on a conflict inside a file both sides changed.
+        probe: 'git merge-tree "$(git merge-base HEAD {upstream_remote}/{upstream_branch})" HEAD {upstream_remote}/{upstream_branch} | grep -q "^+<<<<<<<"'
+      - name: local_side_removed_nothing
+        description: The local side removed no dependency that upstream still lists.
+        probe: 'base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) && test -z "$(comm -12 <(comm -23 <(git show "$base":deps.lock | sort -u) <(git show HEAD:deps.lock | sort -u)) <(git show {upstream_remote}/{upstream_branch}:deps.lock | sort -u))"'
+    body: |
+      git fetch -q {upstream_remote} &&
+      base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+      git diff "$base" HEAD -- deps.lock | sed -n 's/^+\(    ".*",\)$/\1/p' > .git/lock-additions &&
+      { git merge --no-edit {upstream_remote}/{upstream_branch} || true; } &&
+      git checkout --theirs deps.lock &&
+      sed -i '\%^packages = \[$%r .git/lock-additions' deps.lock &&
+      rm .git/lock-additions &&
+      git add deps.lock &&
+      git commit -q --no-edit
+    postconditions:
+      - name: upstream_contained
+        description: The local branch now contains upstream's tip.
+        probe: 'git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD'
+      - name: no_conflict_markers
+        description: No conflict marker is left in the dependency file.
+        probe: '! grep -qE "^(<<<<<<<|=======|>>>>>>>)" deps.lock'
+    provenance:
+      compiled_from_task: hand-written gold resolution for benchmarking
+      model: human
+      compiler_version: human
+      episode_id: gold/sync_through_a_conflicting_lockfile/take_upstream
+      fault: lockfile_conflict
+    status: candidate
+
+  - id: rebuild-the-lock-from-ours
+    intent: sync_through_a_conflicting_lockfile
+    variant: keep_local
+    parameters: [upstream_remote, upstream_branch]
+    preconditions:
+      - name: both_sides_have_commits
+        description: Upstream and the local branch each have commits the other lacks.
+        probe: 'test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0 && test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0'
+      - name: a_merge_would_conflict
+        description: Merging upstream would stop on a conflict inside a file both sides changed.
+        probe: 'git merge-tree "$(git merge-base HEAD {upstream_remote}/{upstream_branch})" HEAD {upstream_remote}/{upstream_branch} | grep -q "^+<<<<<<<"'
+      - name: local_side_removed_something
+        description: The local side removed a dependency that upstream still lists.
+        probe: 'base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) && test -n "$(comm -12 <(comm -23 <(git show "$base":deps.lock | sort -u) <(git show HEAD:deps.lock | sort -u)) <(git show {upstream_remote}/{upstream_branch}:deps.lock | sort -u))"'
+      - name: upstream_removed_nothing
+        description: Upstream removed no dependency that the local side still lists.
+        probe: 'base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) && test -z "$(comm -12 <(comm -23 <(git show "$base":deps.lock | sort -u) <(git show {upstream_remote}/{upstream_branch}:deps.lock | sort -u)) <(git show HEAD:deps.lock | sort -u))"'
+    body: |
+      git fetch -q {upstream_remote} &&
+      base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+      git diff "$base" {upstream_remote}/{upstream_branch} -- deps.lock | sed -n 's/^+\(    ".*",\)$/\1/p' > .git/lock-additions &&
+      { git merge --no-edit {upstream_remote}/{upstream_branch} || true; } &&
+      git checkout --ours deps.lock &&
+      sed -i '\%^packages = \[$%r .git/lock-additions' deps.lock &&
+      rm .git/lock-additions &&
+      git add deps.lock &&
+      git commit -q --no-edit
+    postconditions:
+      - name: upstream_contained
+        description: The local branch now contains upstream's tip.
+        probe: 'git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD'
+      - name: no_conflict_markers
+        description: No conflict marker is left in the dependency file.
+        probe: '! grep -qE "^(<<<<<<<|=======|>>>>>>>)" deps.lock'
+    provenance:
+      compiled_from_task: hand-written gold resolution for benchmarking
+      model: human
+      compiler_version: human
+      episode_id: gold/sync_through_a_conflicting_lockfile/keep_local
+      fault: lockfile_conflict
+    status: candidate
