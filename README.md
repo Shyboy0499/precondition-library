@@ -132,9 +132,10 @@ genuine measurement — the boundary condition, where state-aware wording nearly
 determines the resolution and the mechanism is not needed. An earlier draft
 pooled the two regimes into one number (0.795–0.801, the control's pre-split
 pooled figures) that described neither. The uninformed regime is gated; the
-informed AUC is reported, never gated. Three of the five faults still return one
-fixed sentence and are excluded from dispatch measurement, declared in
-`tasks/registry.py`'s `EXCLUDED_FROM_BENCHMARK`.
+informed AUC is reported, never gated. Every fault now has a registered intent
+(ADR-0027 to ADR-0029), so none is excluded from dispatch measurement;
+`tasks/registry.py`'s `EXCLUDED_FROM_BENCHMARK` is empty, and would name any later
+fault whose request is a fixed sentence.
 
 The end-to-end episode loop survives as a small demonstration, explicitly
 labelled underpowered. It is not the claim; its first run is reported in
