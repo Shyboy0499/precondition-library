@@ -238,6 +238,50 @@ def git_env(home: Path | None = None) -> dict[str, str]:
     return env
 
 
+_PINNED_DATES = ("GIT_AUTHOR_DATE", "GIT_COMMITTER_DATE")
+
+
+def run_env(env: Sandbox) -> dict[str, str]:
+    """The environment a probe, body or step runs under in `env`.
+
+    `git_env(home=env.root)` for a harness sandbox, unchanged. On a checkout (#181) the
+    same hardened environment, with three differences and nothing else: the user's
+    identity in place of the sandbox's (or none, so a commit fails rather than borrow
+    one), no pinned dates, and the upstream redirects appended to the pinned config
+    list, so the hardening still applies and the redirect cannot be dropped by a call
+    site. Network isolation is `runtime.confine`'s and does not change.
+    """
+    values = git_env(home=env.root)
+    context = env.checkout
+    if context is None:
+        return values
+    for name in _PINNED_DATES:
+        values.pop(name, None)
+    if context.identity is None:
+        for name in (
+            "GIT_AUTHOR_NAME",
+            "GIT_AUTHOR_EMAIL",
+            "GIT_COMMITTER_NAME",
+            "GIT_COMMITTER_EMAIL",
+        ):
+            values.pop(name, None)
+    else:
+        name, email = context.identity
+        values.update(
+            GIT_AUTHOR_NAME=name,
+            GIT_AUTHOR_EMAIL=email,
+            GIT_COMMITTER_NAME=name,
+            GIT_COMMITTER_EMAIL=email,
+        )
+    count = int(values["GIT_CONFIG_COUNT"])
+    for mirror, original in context.redirects:
+        values[f"GIT_CONFIG_KEY_{count}"] = f"url.{mirror}.insteadOf"
+        values[f"GIT_CONFIG_VALUE_{count}"] = original
+        count += 1
+    values["GIT_CONFIG_COUNT"] = str(count)
+    return values
+
+
 def run_git(
     args: Sequence[str],
     *,
@@ -336,8 +380,36 @@ def _clear_readonly_quiet(func: Callable[..., object], path: str, exc: BaseExcep
 
 
 @dataclass(frozen=True)
+class CheckoutContext:
+    """What makes a `Sandbox` an existing checkout rather than one `create` built (#181).
+
+    Set only by `checkout.open_checkout`. A harness sandbox has none, and every field
+    here is what differs on a checkout:
+
+    * `parameters` -- the values `runtime.probes.repository_bindings` derived from the
+      repository, used in place of the harness's fixed vocabulary;
+    * `identity` -- the user's own `user.name` and `user.email`, so a replayed commit is
+      theirs and dated now, never the sandbox's pinned identity and date; `None` when
+      the repository has none, and then a commit fails rather than borrow one;
+    * `redirects` -- `(mirror, original)` URL pairs: git is told to read `original`
+      from the local `mirror` (`url.<mirror>.insteadOf <original>`), so a program's own
+      `git fetch` reads what the trusted pre-fetch brought down, with no network, and a
+      push can only ever reach the mirror.
+    """
+
+    parameters: dict[str, str]
+    identity: tuple[str, str] | None
+    redirects: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True)
 class Sandbox:
-    """A disposable environment and the handles needed to inspect it."""
+    """A disposable environment and the handles needed to inspect it.
+
+    Or an existing checkout (`checkout` set, #181): then `work` is the user's
+    repository, `root` a scratch directory holding only the run's `HOME` and the
+    upstream mirror, and `destroy` removes `root` alone.
+    """
 
     root: Path
     work: Path
@@ -369,6 +441,9 @@ class Sandbox:
 
     `None` whenever `injected_state` is `None` (no fault, or more than one).
     """
+
+    checkout: CheckoutContext | None = None
+    """Set when this is an existing checkout rather than a harness sandbox (#181)."""
 
     recorded: dict[str, str] = field(default_factory=dict)
     """Values the injectors need the checkers to have, held **here** rather than in the clone.
