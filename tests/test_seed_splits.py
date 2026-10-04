@@ -54,6 +54,9 @@ DECLARED_ROLE_COUNTS = {
     ("smoke", "dirty_tree"): (4, 0),
     ("tune", "dirty_tree"): (10, 6),
     ("eval", "dirty_tree"): (14, 26),
+    ("smoke", "branch_renamed"): (4, 0),
+    ("tune", "branch_renamed"): (15, 1),
+    ("eval", "branch_renamed"): (30, 10),
 }
 
 

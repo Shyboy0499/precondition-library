@@ -110,7 +110,8 @@ The full plan is all of `EVAL_SEEDS`, which `--episode-seeds 40` asks for."""
 
 class LivePlan(BaseModel):
     """What a live run covers. The seed defaults are the first live run's (#163); the
-    faults are every measured one, which since ADR-0027 includes `dirty_tree`."""
+    faults are every measured one, which since ADR-0027 and ADR-0028 includes `dirty_tree`
+    and `branch_renamed`."""
 
     faults: tuple[str, ...] = MEASURED_FAULTS
     build_seeds: tuple[int, ...] = SMOKE_SEEDS

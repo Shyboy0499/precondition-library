@@ -1,10 +1,11 @@
-"""The renamed-branch intent, defined but not registered (#190, step 3).
+"""The renamed-branch intent, registered and measured (#190, ADR-0028).
 
 `tasks.faults.branch_renamed.INTENT` labels each injected state with the resolution it
 needs and declares which others the fault's own checker also accepts (ADR-0023). It is
-not registered, so nothing measured reads it yet. These tests pin, on real sandboxes:
+registered, so every measured path reads it. These tests pin, on real sandboxes:
 
-* it is defined and not registered, and admission still sees one branch_renamed state;
+* it is registered, its fault is no longer excluded, and each seed is labelled with the
+  resolution its state needs;
 * each injected state is labelled as declared, and its declared grid entry matches what
   a real sandbox observes;
 * **the declared acceptable sets are exactly what the checker accepts**, by replaying
@@ -50,11 +51,18 @@ def _gold(variant: str):
     return next(p for p in gold_programs(INTENT.name) if p.variant == variant)
 
 
-def test_the_intent_is_defined_but_not_registered() -> None:
-    assert INTENT.name not in INTENTS and INTENT.name not in STATE_GRID
-    assert "branch_renamed" in EXCLUDED_FROM_BENCHMARK
-    assert SPEC.variant_for_seed(0) is None, "admission still builds one branch_renamed state"
+def test_the_intent_is_registered_and_measured() -> None:
+    assert INTENTS[INTENT.name] is INTENT and STATE_GRID[INTENT.name] is BRANCH_RENAMED_STATES
+    assert INTENT in ambiguous_intents()
+    assert "branch_renamed" not in EXCLUDED_FROM_BENCHMARK
     assert {state_for_seed(seed) for seed in SEED_FOR.values()} == set(SEED_FOR)
+    for state, seed in SEED_FOR.items():
+        assert SPEC.variant_for_seed(seed) == STATE_VARIANT[state], state
+
+
+def test_the_request_is_a_phrasing_not_a_fixed_sentence() -> None:
+    texts = {SPEC.task_text(seed) for seed in range(40)}
+    assert texts <= set(INTENT.phrasings) and len(texts) > 1
 
 
 @pytest.mark.parametrize("state", sorted(SEED_FOR))
@@ -152,6 +160,8 @@ def test_each_gold_program_resolves_its_own_state_with_its_conditions(state: str
 def test_no_measured_intent_labels_a_renamed_state(state: str) -> None:
     """A rename is not another family's situation: their resolutions leave the wiring stale."""
     for intent in ambiguous_intents():
+        if intent is INTENT:
+            continue
         assert intent.correct_variant(BRANCH_RENAMED_STATES[state]) is None, intent.name
         assert intent.acceptable_variants(BRANCH_RENAMED_STATES[state]) == (), intent.name
 

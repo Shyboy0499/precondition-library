@@ -101,6 +101,7 @@
 | 91 | 2026-10-04 | **The fingerprint observes the branch wiring a rename leaves stale, without rendering it (issue #190, step 1).** `StateFingerprint` gains `tracked_branch` (`branch.<branch>.merge`, without `refs/heads/`), `upstream_default_branch` (what `refs/remotes/<upstream remote>/HEAD` names, without the remote) and `local_branches`. The default is read from the recorded remote `HEAD`, which a plain fetch never moves and the trusted pre-fetch brings current with `remote set-head --auto` (#205), so the owner's decision not to prune (#190) costs nothing: the stale old-name ref stays, and `HEAD` says what upstream uses now, read locally with no fetch and no `ls-remote`. `as_text` leaves the three fields out (`signatures._NOT_YET_RENDERED`) until the intent is registered, as revision 86 did for the dirty-tree fields, so **every arm-2 text, and every measured number, is unchanged**. No result is claimed. |
 | 92 | 2026-10-04 | **`branch_renamed` injects three states, as a pre-fetched checkout shows them, and its checker protects local work (issue #190, step 2).** Upstream now renames its default branch *and* moves on with one commit there, and each seed selects `plain`, `local_work` (a local commit upstream lacks, so the sync is no fast-forward) or `name_taken` (a local branch already has the new name, with a commit of its own). The injector leaves the sandbox as the trusted pre-fetch leaves a checkout -- fetched, `remote set-head --auto` run, **nothing pruned** (owner's decision, #190) -- so the old name's remote-tracking ref is stale and still resolves, which is the quiet wrong fix the checker must refuse. `check` gains two clauses: the `local_work` commit's change must still be in the tree (graded by presence, as `diverged` does), and the `name_taken` branch's commit must still be reachable from a local branch, so `reset --hard` onto the new name and `branch -M` over the taken name both fail. **Correction to revision 28:** `branch_renamed`'s change surface is no longer empty: a fast-forward or merge brings upstream's `app.py` commit, and the local commit's `docs/readme.md`, into the committed diff from the base, so it declares those two; the empty-surface rule is pinned on its own. `sandbox.harness_upstream_branch` makes a harness sandbox read upstream's default from a recorded `refs/remotes/upstream/HEAD`, as a checkout does (`repository_bindings`), so `upstream_ref` and `{upstream_branch}` agree with a checkout of the same state; no other fault records one, so every other state still reads `upstream/main`. `variant_for_seed` stays `None`, so the fault stays excluded and admission still builds one state of it, at seed 0. No measured number changes and no result is claimed. |
 | 93 | 2026-10-04 | **The renamed-branch intent is defined, and its acceptable sets are pinned to the checker -- not yet registered (issue #190, step 3).** `tasks.faults.branch_renamed.INTENT` (`follow_renamed_upstream_branch`) labels `plain` `rename`, `local_work` `merge` and `name_taken` `retrack`, decided by `tracked_branch`, `upstream_default_branch`, `local_branches` and `upstream_behind`; no rule reads the request. Measured by replaying every gold body on every state with its conditions stripped, the checker accepts {merge, rename, retrack} on `plain`, {merge} on `local_work` and {merge, retrack} on `name_taken`, and the declared sets equal that (`tests/test_branch_renamed_intent.py`). This is `diverged`'s shape: `merge` is right everywhere, and the wrong fires are an in-place retrack or rename over local work and a rename onto a taken name. Gold bodies chain their steps with `&&`, so a failed `git branch -m` stops the body rather than letting the rest act as a different resolution. `StateFingerprint.follows_a_renamed_branch` names the situation, and **`diverged`'s rules now refuse it**: without the guard they labelled the renamed `local_work` state `rebase`, a resolution that leaves the wiring stale and passes no checker there. No diverged state records an upstream default, so no label this family has had changes. The intent is not registered and `variant_for_seed` stays `None`, so no measured number changes and no result is claimed. |
+| 94 | 2026-10-04 | **The renamed-branch intent is registered, so `branch_renamed` is measured (issue #190, ADR-0028).** `follow_renamed_upstream_branch` joins `tasks.registry.INTENTS`, `EXCLUDED_FROM_BENCHMARK` names only `lockfile_conflict`, and the four declared renamed states join `STATE_GRID`. `as_text` now renders `tracked_branch`, `upstream_default_branch` and `local_branches`, so **every arm-2 text gains three lines** and arm-2 numbers recorded before this revision are not comparable with later runs. The fault draws Tier 1 axes `name` (the new branch name, already bound as `{upstream_branch}`) and `content` (four flavours of each side's texts) for every resolution. `diverged`'s three gold programs gain a precondition that the branch follows the branch upstream uses now: it holds on every diverged state, and without it gold `rebase` fired on the renamed `local_work` state. Measured from the declared draw: the eval set builds 30 `branch_renamed` environments (`merge` 9, `rename` 12, `retrack` 9), 91 across the four faults; occurrence roles are smoke 4/0, tune 15/1, eval 30/10; the text control's uninformed AUC is 0.500 by construction and informed 1.000; 0.135 of uninformed requests over seeds 0–199 name the fault. **Live corrections:** §3's intents and AUC tables and naming fractions, §7's demo arithmetic (48 episodes), occurrence and instance tables and interval widths (Wilson ±10.1pp and TOST ±12.0pp at 91), §10's testing block and open risk 6 now count four measured faults and one excluded. No eval episode has been run on the new grid, and no result is claimed. |
 
 ---
 
@@ -269,6 +270,7 @@ described by **intents**, each carrying a paraphrase distribution and one or mor
 | `sync_fork_with_upstream` | discard / rebase / merge | whether local-only commits change files at all, and whether they touch files upstream also changed |
 | `restore_submodule_state` | init / repin / remove | whether the submodule is initialised, whether upstream still references it, whether the recorded pin matches |
 | `keep_uncommitted_work_and_sync` | stash / commit / aside | whether an untracked file sits where upstream now tracks one, and whether the uncommitted edits touch a file upstream changed (ADR-0027) |
+| `follow_renamed_upstream_branch` | rename / retrack / merge | whether the branch follows a name upstream no longer uses, whether local commits exist, and whether a local branch already has the new name (ADR-0028) |
 
 Only intents with two or more resolutions have an experimental surface, and
 `tasks/registry.py` is the single place that distinction lives, so an
@@ -296,8 +298,9 @@ reveals the situation to a careful reader, as a real user's description often do
 state may reach the request only through that declared map. The fraction of
 sampled uninformed requests that name the fault is documented and asserted:
 `sync_fork_with_upstream` 0.000 over seeds 0–49, `restore_submodule_state`
-0.060 over 0–49 and 0.125 over 0–199, and `keep_uncommitted_work_and_sync` 0.000
-over 0–199, all at ≤ 0.35
+0.060 over 0–49 and 0.125 over 0–199, `keep_uncommitted_work_and_sync` 0.000
+over 0–199, and `follow_renamed_upstream_branch` 0.160 over 0–49 and 0.135 over
+0–199, all at ≤ 0.35
 (`tests/test_intent_ambiguity.py`).
 
 #### The boundary condition
@@ -322,6 +325,7 @@ sets (overlap raises):
 | `sync_fork_with_upstream` | 0.500 | 0.962 |
 | `restore_submodule_state` | 0.500 | 0.945 |
 | `keep_uncommitted_work_and_sync` | 0.500 | 1.000 |
+| `follow_renamed_upstream_branch` | 0.500 | 1.000 |
 
 **On uninformed requests the text cannot carry the resolution (AUC 0.500), by
 construction and not by measurement: the sampler never consults state, so every
@@ -748,16 +752,16 @@ rather than to fit a budget.
 **The episode loop is retained only as a demonstration, explicitly underpowered:**
 
 ```text
-3 measurable faults × 4 occurrences × 3 arms = 36 episodes   (demo, UNDERPOWERED)
-    (the nominal 5 faults × 4 × 3 = 60 is not runnable: the two other faults
-     return a single fixed sentence and are in EXCLUDED_FROM_BENCHMARK)
+4 measurable faults × 4 occurrences × 3 arms = 48 episodes   (demo, UNDERPOWERED)
+    (the nominal 5 faults × 4 × 3 = 60 is not runnable: the fifth fault
+     returns a single fixed sentence and is in EXCLUDED_FROM_BENCHMARK)
 ```
 
 It is labelled underpowered wherever it appears and excluded from the primary
 claim. Its value is showing the harness works end to end, not producing a result.
-The 60-episode figure is the nominal grid; the runnable demo is 36 (24 before
-ADR-0027 registered `dirty_tree`), and an earlier draft stated the nominal figure as
-though it could run.
+The 60-episode figure is the nominal grid; the runnable demo is 48 (24 before
+ADR-0027 registered `dirty_tree`, 36 before ADR-0028 registered `branch_renamed`), and
+an earlier draft stated the nominal figure as though it could run.
 
 Seeds are split into disjoint admit / tune / eval sets and every arm is routed
 through the same (fault, seed) pairs, so the comparison is paired rather than
@@ -971,12 +975,15 @@ ledger row; ADR-0005 decision 5):
 | smoke | 0, 1, 2, 4 | `diverged` | 4 | 0 |
 | smoke | 0, 1, 2, 4 | `submodule_moved` | 4 | 0 |
 | smoke | 0, 1, 2, 4 | `dirty_tree` | 4 | 0 |
+| smoke | 0, 1, 2, 4 | `branch_renamed` | 4 | 0 |
 | tune | 1000-1015 | `diverged` | 15 | 1 |
 | tune | 1000-1015 | `submodule_moved` | 7 | 9 |
 | tune | 1000-1015 | `dirty_tree` | 10 | 6 |
+| tune | 1000-1015 | `branch_renamed` | 15 | 1 |
 | eval | 2000-2039 | `diverged` | 32 | 8 |
 | eval | 2000-2039 | `submodule_moved` | 15 | 25 |
 | eval | 2000-2039 | `dirty_tree` | 14 | 26 |
+| eval | 2000-2039 | `branch_renamed` | 30 | 10 |
 
 **The independent observations are the distinct instances, and the counts are
 measured, not inferred from the grid.** Each measurable fault now draws each state
@@ -996,10 +1003,13 @@ breakdown the report carries (`bench.report.achieved_instances`) is:
 | `dirty_tree` | `aside` | 4 |
 | `dirty_tree` | `commit` | 4 |
 | `dirty_tree` | `stash` | 6 |
+| `branch_renamed` | `merge` | 9 |
+| `branch_renamed` | `rename` | 12 |
+| `branch_renamed` | `retrack` | 9 |
 
-The 40-seed eval set therefore builds **61 independent environments** -- 47 on the
-first two faults, up from 6, and 14 on `dirty_tree` since ADR-0027 -- and every
-resolution reaches the owner's target of 4. `dirty_tree/aside` sits exactly on it:
+The 40-seed eval set therefore builds **91 independent environments** -- 47 on the
+first two faults, up from 6, 14 on `dirty_tree` since ADR-0027 and 30 on
+`branch_renamed` since ADR-0028 -- and every resolution reaches the owner's target of 4. `dirty_tree/aside` sits exactly on it:
 its only axis, the content flavour, has four values, so no seed set can draw a fifth.
 The smoke (admit) set draws no `stash` state, so a library built on it holds no
 `stash` program; a `stash` state accepts `commit` and `aside` too (ADR-0023), so a
@@ -1012,12 +1022,12 @@ measurement, including that distinct identities are distinct environments, with
 reason.** No interval could be attached at 6 environments. One arm's success
 rate now carries a real interval: its 95% Wilson half-width near 0.5 is about
 **±18.6pp** at the owner's target of 24, **±13.7pp** at the 47 the first two faults
-build and **±12.2pp** at the 61 all three build. But the
+build, **±12.2pp** at the 61 three build and **±10.1pp** at the 91 all four build. But the
 ±10pp margin (item 10) is applied to the **difference** between two arms' rates, by
 a TOST at a 90% interval, and that interval is wider. With `tost_equivalence` and
 both arms at the same observed 50% rate — the most favourable case — the difference's
-half-width is about **±22.5pp** at 24 per arm, **±16.5pp** at 47 and **±14.6pp** at 61,
-and ±10pp first
+half-width is about **±22.5pp** at 24 per arm, **±16.5pp** at 47, **±14.6pp** at 61
+and **±12.0pp** at 91, and ±10pp first
 becomes passable at **133 per arm** (87 at an 80% rate, 53 at 90%; any observed
 difference needs more). ADR-0006 keeps the margin at ±10pp, so at the achieved N the
 expected verdict is "comparable", which the report already produces for an
@@ -1213,8 +1223,8 @@ TEXT CONTROL    a bag-of-words classifier trained on the request text alone
                 and the mechanism is not needed. Pinned by a positive control
                 that fires on an intent whose informed wording fully determines
                 the answer, so the control cannot pass by being a no-op. Only
-                registered intents are measured; the two unconverted faults
-                return a fixed sentence and are excluded (`EXCLUDED_FROM_BENCHMARK`).
+                registered intents are measured; the one unconverted fault
+                returns a fixed sentence and is excluded (`EXCLUDED_FROM_BENCHMARK`).
 IMPORT GRAPH    replay cannot reach provider, directly or transitively.
                 IMPLEMENTED AND PASSING (tests/test_replay_isolated_from_provider.py)
 ZERO TOKEN      stronger than the import test: replay runs with a provider whose
@@ -1329,13 +1339,13 @@ claim.
 5. **Model drift.** Provider-side model updates mid-experiment would confound
    everything. `model` is recorded per episode; a version change invalidates the
    affected run and requires re-running that arm.
-6. **Two of the five faults are not converted.** `branch_renamed` and
-   `lockfile_conflict` still return a single fixed request sentence (#190, #191;
-   `dirty_tree` was converted by #189 and registered by ADR-0027), so for them the text remains a perfect class label — the original
-   defect. They are scoped out of this change and **must not be included in any
-   dispatch measurement** until they gain an `IntentSpec` with two or more
-   state-decided resolutions. Enforced rather than
-   merely stated: `EXCLUDED_FROM_BENCHMARK` in `tasks/registry.py` names them, and
+6. **One of the five faults is not converted.** `lockfile_conflict` still returns a
+   single fixed request sentence (#191; `dirty_tree` and `branch_renamed` were
+   converted by #189 and #190 and registered by ADR-0027 and ADR-0028), so for it
+   the text remains a perfect class label — the original defect. It is scoped out
+   and **must not be included in any dispatch measurement** until it gains an
+   `IntentSpec` with two or more state-decided resolutions. Enforced rather than
+   merely stated: `EXCLUDED_FROM_BENCHMARK` in `tasks/registry.py` names it, and
    a test asserts every fault is either intent-covered or listed there, so a fault
    cannot be silently absent from both.
 

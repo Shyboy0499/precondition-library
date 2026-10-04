@@ -184,7 +184,7 @@ def test_an_unknown_family_is_refused_before_anything_runs(merge_state, tmp_path
             tmp_path / "library",
             merge_state.work,
             request="r",
-            fault="branch_renamed",
+            fault="lockfile_conflict",
             provider=Scripted("unused"),
             confirm=lambda e: True,
             fetch=False,

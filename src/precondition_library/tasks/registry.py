@@ -9,13 +9,15 @@ counted into a rate as if it were evidence.
 
 from __future__ import annotations
 
+from .faults.branch_renamed import INTENT as BRANCH_RENAMED_INTENT
 from .faults.dirty_tree import INTENT as DIRTY_TREE_INTENT
 from .faults.diverged import INTENT as DIVERGED_INTENT
 from .faults.submodule_moved import INTENT as SUBMODULE_INTENT
 from .intent import IntentSpec
 
 INTENTS: dict[str, IntentSpec] = {
-    intent.name: intent for intent in (DIVERGED_INTENT, SUBMODULE_INTENT, DIRTY_TREE_INTENT)
+    intent.name: intent
+    for intent in (DIVERGED_INTENT, SUBMODULE_INTENT, DIRTY_TREE_INTENT, BRANCH_RENAMED_INTENT)
 }
 
 
@@ -27,7 +29,7 @@ def ambiguous_intents() -> list[IntentSpec]:
     )
 
 
-EXCLUDED_FROM_BENCHMARK: set[str] = {"branch_renamed", "lockfile_conflict"}
+EXCLUDED_FROM_BENCHMARK: set[str] = {"lockfile_conflict"}
 """Faults that must never be measured, because they return a fixed request sentence.
 
 Excluded explicitly rather than left merely absent, so that every fault is

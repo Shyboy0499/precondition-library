@@ -160,6 +160,7 @@ def test_label_does_not_depend_on_wording(state_grid) -> None:
 def test_registry_exposes_only_intents_with_a_surface() -> None:
     names = [intent.name for intent in ambiguous_intents()]
     assert names == [
+        "follow_renamed_upstream_branch",
         "keep_uncommitted_work_and_sync",
         "restore_submodule_state",
         "sync_fork_with_upstream",

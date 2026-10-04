@@ -43,16 +43,6 @@ def _render(value: object) -> str:
     return str(value)
 
 
-_NOT_YET_RENDERED = frozenset({"tracked_branch", "upstream_default_branch", "local_branches"})
-"""Fields `as_text` leaves out until the branch-renamed intent is registered (#190).
-
-`as_text` is arm 2's whole view of state, so a field added to it changes every arm-2
-score in every measured family. These exist for the branch-renamed intent, which is
-not yet measured; rendering them is part of the change that registers it (as
-ADR-0027 did for the dirty-tree fields), so until then every measured arm-2 text is
-byte-identical."""
-
-
 def _config(work: Path, key: str) -> str:
     """A git config value, or "" when the key is unset (`git config --get` exits 1)."""
     result = run_git(("config", "--get", key), cwd=work, check=False)
@@ -118,8 +108,7 @@ class StateFingerprint(BaseModel):
     --exclude-standard`, kept where `git ls-tree -r --name-only upstream/main` lists the
     path. A sync cannot bring upstream's file in without displacing such a file."""
 
-    # Discriminators for the branch-renamed intent (#190). Observed now, rendered by
-    # `as_text` only once that intent is registered: see `_NOT_YET_RENDERED`.
+    # Discriminators for the branch-renamed intent (#190, ADR-0028).
     tracked_branch: str = ""
     """The upstream branch the current branch is configured to follow: `git config
     branch.<branch>.merge`, without `refs/heads/`. Empty when it follows none."""
@@ -267,9 +256,7 @@ class StateFingerprint(BaseModel):
         signal compared with itself.
         """
         return "\n".join(
-            f"{name}: {_render(getattr(self, name))}"
-            for name in type(self).model_fields
-            if name not in _NOT_YET_RENDERED
+            f"{name}: {_render(getattr(self, name))}" for name in type(self).model_fields
         )
 
 
