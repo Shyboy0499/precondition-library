@@ -124,7 +124,7 @@ def test_the_text_and_json_forms_carry_the_decision(tmp_path, capsys) -> None:
             main(["dispatch", "--repo", str(box.work), "--library", str(library.root), "--json"])
             == 0
         )
-        printed = json.loads(capsys.readouterr().out)
+        printed = json.loads(capsys.readouterr().out)["report"]
         assert printed["fires"] == report.fires
         assert printed["parameters"]["upstream_remote"] == "upstream"
     finally:

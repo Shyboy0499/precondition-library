@@ -136,14 +136,15 @@ SNAPSHOT_NAME = "snapshot"
 """The directory under the scratch root that holds a checkout's copy for probing."""
 
 
-def snapshot(env: Sandbox) -> Sandbox:
+def snapshot(env: Sandbox, name: str = SNAPSHOT_NAME) -> Sandbox:
     """A copy of the checkout `env` to probe, so a probe that writes cannot touch the original.
 
     A probe that writes is refused but not undone (`runtime.probes`), so dispatching on a
     checkout probes this copy. It copies the whole working tree with its `.git` -- the
     uncommitted state is part of what a precondition reads, and a fresh clone would lose
     it -- into the scratch root, so `env.destroy` removes it too. The copy keeps the
-    checkout's upstream mirror and identity, and binds `work_dir` to itself.
+    checkout's upstream mirror and identity, and binds `work_dir` to itself. `name` is the
+    copy's directory under the root, so one checkout can hold several copies at once.
 
     A linked worktree (whose `.git` is a file pointing into another repository's git
     directory) is refused: its copy would still write into that shared directory.
@@ -155,7 +156,7 @@ def snapshot(env: Sandbox) -> Sandbox:
         raise NotACheckoutError(
             f"{env.work} is a linked worktree; its copy would share the original git directory"
         )
-    copy = env.root / SNAPSHOT_NAME
+    copy = env.root / name
     shutil.copytree(env.work, copy, symlinks=True)
     parameters = {**context.parameters, "work_dir": str(copy)}
     return replace(env, work=copy, checkout=replace(context, parameters=parameters))
