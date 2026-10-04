@@ -16,14 +16,19 @@ Layout, one directory per program:
 library/
 └── <program-id>/
     ├── program.yaml     # intent, parameters, preconditions, body, postconditions
-    └── history.jsonl    # status changes, and mismatch events, with the episode
-                         # that caused each
+    └── history.jsonl    # status changes, mismatch events and revision events,
+                         # with the episode that caused each
 ```
 
 A mismatch event (`{"event": "mismatch", ...}`) is not a status change: it
 records one wrong-variant fire while the program stays `admitted`, and the
 second such event moves it to `quarantined` (spec §8). The same file therefore
 shows both why and when a program was withdrawn.
+
+A revision event (`{"event": "revised", ...}`) is not a status change either. It
+records that the stored program is a compile's one revision (ADR-0030), and carries
+the refused first program and admission's reason for refusing it, so a refused
+compile is kept even when its revision is what was stored.
 
 Three rules keep this directory trustworthy:
 

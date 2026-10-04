@@ -1692,6 +1692,15 @@ def test_a_refused_compile_is_revised_once_with_the_refusal(tmp_path: Path) -> N
     assert '"admission_refusal"' in request and "rejected before any sandbox" in request
     assert '"previous_program"' in request and '"always"' in request
 
+    library = Library(tmp_path / "library-precondition")
+    (stored,) = library.load_all()
+    first = library.first_compile(stored.id)
+    assert [p.name for p in first.preconditions] == ["always"], "the refused program is kept"
+    assert first.status is ProgramStatus.CANDIDATE
+    history = (library.root / stored.id / "history.jsonl").read_text(encoding="utf-8")
+    (event,) = [json.loads(line) for line in history.splitlines() if '"revised"' in line]
+    assert "rejected before any sandbox" in event["reason"]
+
 
 def test_a_revision_that_is_refused_too_keeps_the_last_reason(tmp_path: Path) -> None:
     always = Predicate(name="always", description="holds anywhere", probe="true")

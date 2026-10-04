@@ -21,9 +21,12 @@ of building is recorded and never mixed into the comparison's rows. Their `arm` 
 dispatch arms fall straight back to solving, so the two are identical here.
 
 **The admission factor's second library** (ADR-0010). With `positive_only_root`, every
-compiled program is gated a second time with `AdmissionGate.POSITIVE_ONLY` into another
-root, so the 2x2's two libraries come from one compile. Each root gets a `build.json`
-naming its gate; the runner reads it to label rows.
+episode's first compile is gated a second time with `AdmissionGate.POSITIVE_ONLY` into
+another root, so the 2x2's two libraries come from one compile. A program the two-sided
+gate refused may be revised once (ADR-0030); the revision is the two-sided gate's
+feedback, so it stays in the two-sided library and the positive-only one keeps the first
+compile. Each root gets a `build.json` naming its gate; the runner reads it to label
+rows.
 
 Building needs a model: the solves and compiles are LLM calls. This module takes the
 `provider` as the runner does and reads no environment, so it runs wherever a key is
@@ -98,10 +101,13 @@ def build_library(
     from the comparison's.
 
     `positive_only_root` builds the 2x2's second library in the same pass (ADR-0010):
-    each compiled program is gated a second time with `AdmissionGate.POSITIVE_ONLY` and
-    stored there. **Compiled once, gated twice**, so the two libraries hold the same
-    programs and differ only in which the gate admitted -- two compiles would let a
-    model's run-to-run variation into the admission factor.
+    each episode's first compile is gated a second time with `AdmissionGate.POSITIVE_ONLY`
+    and stored there. **Compiled once, gated twice**, so the two libraries hold the same
+    first programs -- two compiles would let a model's run-to-run variation into the
+    admission factor. Where the two-sided gate refused one and its revision was stored
+    (ADR-0030), the two-sided library holds the revision: telling the compiler why is
+    part of what that gate does, and the positive-only gate has no negative side to
+    tell it anything.
     """
     _require_measurable(faults)
     for target in (root, positive_only_root):
@@ -145,9 +151,8 @@ def build_library(
                         )
                     )
                     if positive_only_root is not None:
-                        ungated.append(
-                            _gate_positive_only(program, fault, seed, positive_only_root)
-                        )
+                        first = library.first_compile(program.id)
+                        ungated.append(_gate_positive_only(first, fault, seed, positive_only_root))
 
     _write_manifest(root, AdmissionGate.TWO_SIDED, faults, seeds)
     second: BuildReport | None = None
@@ -170,13 +175,8 @@ def build_library(
     )
 
 
-def _gate_positive_only(program: Program, fault: str, seed: int, root: Path) -> BuiltProgram:
-    """Store the compiled program as a candidate in `root` and gate it positive-only.
-
-    The candidate is the compiled program itself -- the two-sided gate only ever changed
-    its status -- so resetting the status recovers exactly what the compile produced.
-    """
-    candidate = program.model_copy(update={"status": ProgramStatus.CANDIDATE})
+def _gate_positive_only(candidate: Program, fault: str, seed: int, root: Path) -> BuiltProgram:
+    """Store the episode's first compile as a candidate in `root` and gate it positive-only."""
     library = Library(root)
     library.add(candidate)
     admitted, _ = admit(candidate, fault, seeds=[seed], gate=AdmissionGate.POSITIVE_ONLY)
