@@ -367,7 +367,9 @@ def _outside_write_effect(body: str, env_root: str) -> str | None:
             if index + 1 < len(tokens):
                 targets.append(tokens[index + 1])
         for target in targets:
-            target = target.strip("'\"")
+            # `$(cmd 2>/dev/null)` leaves the substitution's `)` on the last token, and
+            # `/dev/null)` is not `/dev/null` (a compiled probe was refused for it, #214).
+            target = target.strip("'\"").rstrip(")")
             if target in _NON_WRITE_TARGETS:
                 continue
             if _escapes_env(target, env_root):
