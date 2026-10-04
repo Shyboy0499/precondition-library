@@ -611,6 +611,7 @@ def admit(
     # program's resolution there too (ADR-0023: merge and rebase on any diverged state).
     # Firing on such a state is right, and counts toward the breadth cap like any fire.
     sibling_fired: list[str] = []
+    own_states = {FAULTS[name].variant_for_seed(seed) for seed in seeds}
     for seed, variant in siblings:
         accepted, error, label, acceptable = _preconditions_accept_labelled(
             program, seed, [name], intent
@@ -623,6 +624,18 @@ def admit(
             sibling_fired.append(f"{name}:{variant}")
             continue
         _note(fired_on, (name,), seed)
+        if variant in own_states:
+            # The program fired on the state it was compiled from, where its body passed:
+            # the preconditions are right to fire, and the declared variant is what is wrong
+            # (the fifth live run: an `aside` body labelled `stash`).
+            return False, (
+                f"negative side failed: preconditions accepted 1 of {len(siblings)} "
+                f"same-intent states ({name} seed {seed} resolves to {variant!r}, which accepts "
+                f"{list(acceptable) or [variant]}), and that is the state the program was "
+                f"compiled from: it declares variant {program.variant!r}, but the solution it "
+                f"was compiled from is a {variant!r} resolution there, so the declared variant, "
+                f"not the preconditions, is what is wrong"
+            )
         return False, (
             f"negative side failed: preconditions accepted 1 of {len(siblings)} "
             f"same-intent states ({name} seed {seed} resolves to {variant!r}, which accepts "
