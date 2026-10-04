@@ -371,6 +371,16 @@ def git_out(*args: str, cwd: Path) -> str:
     return run_git(args, cwd=cwd).stdout.strip()
 
 
+def git_config(work: Path, key: str) -> str | None:
+    """A git config value, or `None` when the key is unset.
+
+    `git config --get` exits 1 for an absent key, which callers report as a state --
+    a branch that tracks nothing -- rather than raise on.
+    """
+    result = run_git(("config", "--get", key), cwd=work, check=False)
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
 def _force_writable(path: str) -> None:
     """Add the owner write bit, leaving every other bit alone.
 

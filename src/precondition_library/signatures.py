@@ -23,7 +23,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from .sandbox import Sandbox, run_git, submodule_path, upstream_ref
+from .sandbox import Sandbox, git_config, run_git, submodule_path, upstream_ref
 
 
 def _render(value: object) -> str:
@@ -81,12 +81,6 @@ class _ThreeWay:
             (self.upstream, self.local) if side == "upstream" else (self.local, self.upstream)
         )
         return sorted((base - set(dropper.splitlines())) & set(keeper.splitlines()))
-
-
-def _config(work: Path, key: str) -> str:
-    """A git config value, or "" when the key is unset (`git config --get` exits 1)."""
-    result = run_git(("config", "--get", key), cwd=work, check=False)
-    return result.stdout.strip() if result.returncode == 0 else ""
 
 
 def _has_locked_branch(work: Path, branch: str) -> bool:
@@ -273,7 +267,7 @@ class StateFingerprint(BaseModel):
         default_ref = run_git(
             ("symbolic-ref", "-q", "--short", f"refs/remotes/{remote}/HEAD"), cwd=work, check=False
         ).stdout.strip()
-        merge_ref = _config(work, f"branch.{branch}.merge")
+        merge_ref = git_config(work, f"branch.{branch}.merge") or ""
 
         untracked = out("ls-files", "--others", "--exclude-standard").splitlines()
         upstream_paths = set(out("ls-tree", "-r", "--name-only", upstream).splitlines())
