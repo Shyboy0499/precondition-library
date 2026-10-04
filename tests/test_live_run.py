@@ -27,6 +27,7 @@ from precondition_library.bench.build_library import (
 from precondition_library.bench.ledger import Arm, EpisodeOutcome, append, read
 from precondition_library.library import Library
 from precondition_library.program import ProgramStatus
+from precondition_library.tasks.registry import ambiguous_intents
 
 PLAN = live.LivePlan(
     build_seeds=(0,), tune_seeds=(0, 1), pair_seeds=(0, 1), episode_seeds=(2000, 2001)
@@ -37,8 +38,8 @@ def _fill(root: Path, gate: AdmissionGate) -> list[BuiltProgram]:
     """Stand in for one gated build: every gold program, admitted, plus the manifest."""
     library = Library(root)
     built = []
-    for intent in ("sync_fork_with_upstream", "restore_submodule_state"):
-        for program in gold_programs(intent):
+    for intent in ambiguous_intents():
+        for program in gold_programs(intent.name):
             library.add(program)
             library.set_status(program.id, ProgramStatus.ADMITTED)
             built.append(

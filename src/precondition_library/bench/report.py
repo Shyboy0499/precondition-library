@@ -11,12 +11,12 @@ is that measurement.
 
 The episode loop `bench.run` writes is retained only as a demonstration and is
 explicitly underpowered. The nominal grid is 5 faults x 4 occurrences x 3 arms,
-but only two of the five faults are measurable -- the other three are fixed
+but only three of the five faults are measurable -- the other two are fixed
 single sentences and sit in `tasks.registry.EXCLUDED_FROM_BENCHMARK` -- so the
-runnable demo is 2 faults x 4 occurrences x 3 arms = **24 episodes**, and
-`bench.run` refuses the excluded three rather than skipping them. The issue #7
+runnable demo is 3 faults x 4 occurrences x 3 arms = **36 episodes**, and
+`bench.run` refuses the excluded two rather than skipping them. The issue #7
 baselines are additional arms a run may include -- among them the zero-token
-gold **oracle floor** -- so a run that names them adds 2 x 4 episodes per
+gold **oracle floor** -- so a run that names them adds 3 x 4 episodes per
 baseline on the same grid; the per-arm tables below carry each one without
 special-casing. Spec §7 excludes the demo from the primary claim. So the two
 figures built here are:

@@ -88,11 +88,11 @@ SMOKE_SEEDS: tuple[int, ...] = (0, 1, 2, 4)
 """Pipeline shake-out, and the admit set for the precondition vocabulary.
 
 Four seeds, so the full repeat structure runs -- four occurrences, with
-`occurrence_index` reaching 4 -- through every arm and both measurable fault
-families. Its job is to prove the harness runs end to end against a real model
+`occurrence_index` reaching 4 -- through every arm and every measurable fault
+family. Its job is to prove the harness runs end to end against a real model
 and to produce the first programs that `admit` gates into the library (spec
 section 7, "Design": the admit set builds the precondition vocabulary). 4 seeds
-x 2 measurable faults x 3 arms is 24 episodes.
+x 3 measurable faults x 3 arms is 36 episodes.
 
 The seeds are not `range(4)`: seed 3 injects `repin` for `submodule_moved`, which
 seed 2 already injects, so the block 0-3 would never show the `init` state and the

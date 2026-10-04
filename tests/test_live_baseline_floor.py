@@ -25,8 +25,9 @@ from precondition_library.bench.similarity_probe import program_text_candidates,
 from precondition_library.library import Library
 from precondition_library.program import ProgramStatus
 from precondition_library.similarity import lexical_similarity
+from precondition_library.tasks.registry import ambiguous_intents
 
-INTENTS = ("sync_fork_with_upstream", "restore_submodule_state")
+INTENTS = tuple(intent.name for intent in ambiguous_intents())
 
 
 def _library(root: Path, *, keep=lambda program: True) -> Library:

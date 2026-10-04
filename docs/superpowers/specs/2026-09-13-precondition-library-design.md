@@ -97,6 +97,7 @@
 | 87 | 2026-10-04 | **The dirty-tree fault injects three states that separate its resolutions (issue #189, step 2).** Each `dirty_tree` seed now selects `disjoint` (an uncommitted edit in a file upstream left alone, plus an untracked file), `same_file` (an edit in the file upstream changed, a separate hunk) or `collision` (an untracked file at a path upstream's new commit adds). Measured with plain git before building: stash-sync-pop and commit-then-merge keep the work on the first two and both fail on a collision -- the pop cannot restore an untracked file over a tracked one, the merge meets an add/add conflict -- while moving the colliding file aside first keeps both. The checker is unchanged except that, on a collision, the untracked work may be at `<path>.local`, the one place it can survive beside upstream's file. `variant_for_seed` stays `None`, so admission still builds one dirty_tree state as an unrelated negative -- seed 0, now `same_file` -- and no measured program accepts it (local-only commits or a submodule are what they require). The fault stays excluded. No measurement changes. |
 | 88 | 2026-10-04 | **The dirty-tree intent is defined, and its acceptable sets are pinned to the checker -- not yet registered (issue #189, step 3).** `tasks.faults.dirty_tree.INTENT` (`keep_uncommitted_work_and_sync`) labels `disjoint` `stash`, `same_file` `commit`, `collision` `aside` and a clean tree nothing, deciding by the fingerprint fields of revision 86; `stash` and `commit` are also acceptable wherever nothing collides and `aside` wherever there is work to keep (ADR-0023). Its eight phrasings name no resolution. `bench/gold/keep_uncommitted_work_and_sync.yaml` holds a gold program per resolution, each with preconditions written independently of the rules. `tests/test_dirty_tree_intent.py` replays every gold body, conditions stripped, on every injected state: the checker's verdict equals membership in the declared set in all nine cases; each gold program's preconditions fire on its own state only; each resolves its own state with its conditions in place. **It is not registered**: `INTENTS` and `STATE_GRID` do not list it (`DIRTY_TREE_STATES` is declared beside them), the fault stays in `EXCLUDED_FROM_BENCHMARK` and `variant_for_seed` stays `None`, so nothing measured reads it. No measurement changes. |
 | 89 | 2026-10-04 | **The trusted pre-fetch follows a default branch upstream renamed (fix to revision 79).** A clone records `refs/remotes/<remote>/HEAD` once, and no fetch updates an existing one -- git >= 2.48 only creates it when missing -- so after upstream renamed `main` to `trunk`, `repository_bindings` still derived `main`, a branch upstream no longer has, and `dispatch` and `learn` would bind every `{upstream_branch}` to it. `open_checkout`'s pre-fetch now also runs `git remote set-head <remote> --auto`, with the user's own git like the fetch, before deriving the parameters; a remote that reports no HEAD leaves the recorded one. Reproduced first: the new test bound `main` before the change and binds `trunk` after it. Stale remote-tracking refs are not pruned; whether the pre-fetch should prune is #190's question. No measurement changes. |
+| 90 | 2026-10-04 | **The dirty-tree intent is registered, so `dirty_tree` is measured (issue #189, ADR-0027).** `keep_uncommitted_work_and_sync` joins `tasks.registry.INTENTS`, `dirty_tree` leaves `EXCLUDED_FROM_BENCHMARK` (now `branch_renamed` and `lockfile_conflict`), and its four declared states join `STATE_GRID`. `StateFingerprint.as_text` now renders `dirty_files` and `untracked_upstream_collisions` for every state, so **every arm-2 text in every family gains two lines**, and arm-2 numbers recorded before this revision are not comparable with later runs; the recorded baselines are history and are not recomputed. The fault draws two Tier 1 axes (ADR-0005): `content` (four flavours of every text the injector writes) and `untracked` (whether a non-colliding untracked file accompanies `disjoint` and `same_file`); `aside` varies on `content` only. Measured from the declared draw: the eval set builds 14 `dirty_tree` environments (`aside` 4, `commit` 4, `stash` 6), so the 40 eval seeds build 61 environments across the three faults, and the smoke set draws no `stash` state. **Live corrections:** §3's intents and AUC tables and naming fractions, §7's demo arithmetic (36 episodes, not 24), occurrence and instance tables and interval widths, §10's testing block and open risk 6 now count three measured faults and two excluded ones. `bench.live.MEASURED_FAULTS` is derived from the registry. No eval episode has been run on the new grid, and no result is claimed. |
 
 ---
 
@@ -264,6 +265,7 @@ described by **intents**, each carrying a paraphrase distribution and one or mor
 | --- | --- | --- |
 | `sync_fork_with_upstream` | discard / rebase / merge | whether local-only commits change files at all, and whether they touch files upstream also changed |
 | `restore_submodule_state` | init / repin / remove | whether the submodule is initialised, whether upstream still references it, whether the recorded pin matches |
+| `keep_uncommitted_work_and_sync` | stash / commit / aside | whether an untracked file sits where upstream now tracks one, and whether the uncommitted edits touch a file upstream changed (ADR-0027) |
 
 Only intents with two or more resolutions have an experimental surface, and
 `tasks/registry.py` is the single place that distinction lives, so an
@@ -290,8 +292,9 @@ state is already known, `variant_phrasings` may supply *informed* wording that
 reveals the situation to a careful reader, as a real user's description often does;
 state may reach the request only through that declared map. The fraction of
 sampled uninformed requests that name the fault is documented and asserted:
-`sync_fork_with_upstream` 0.000 over seeds 0–49 and `restore_submodule_state`
-0.060 over 0–49 and 0.125 over 0–199, both at ≤ 0.35
+`sync_fork_with_upstream` 0.000 over seeds 0–49, `restore_submodule_state`
+0.060 over 0–49 and 0.125 over 0–199, and `keep_uncommitted_work_and_sync` 0.000
+over 0–199, all at ≤ 0.35
 (`tests/test_intent_ambiguity.py`).
 
 #### The boundary condition
@@ -315,6 +318,7 @@ sets (overlap raises):
 | --- | --- | --- |
 | `sync_fork_with_upstream` | 0.500 | 0.962 |
 | `restore_submodule_state` | 0.500 | 0.945 |
+| `keep_uncommitted_work_and_sync` | 0.500 | 1.000 |
 
 **On uninformed requests the text cannot carry the resolution (AUC 0.500), by
 construction and not by measurement: the sampler never consults state, so every
@@ -741,15 +745,16 @@ rather than to fit a budget.
 **The episode loop is retained only as a demonstration, explicitly underpowered:**
 
 ```text
-2 measurable faults × 4 occurrences × 3 arms = 24 episodes   (demo, UNDERPOWERED)
-    (the nominal 5 faults × 4 × 3 = 60 is not runnable: the three other faults
+3 measurable faults × 4 occurrences × 3 arms = 36 episodes   (demo, UNDERPOWERED)
+    (the nominal 5 faults × 4 × 3 = 60 is not runnable: the two other faults
      return a single fixed sentence and are in EXCLUDED_FROM_BENCHMARK)
 ```
 
 It is labelled underpowered wherever it appears and excluded from the primary
 claim. Its value is showing the harness works end to end, not producing a result.
-The 60-episode figure is the nominal grid; the runnable demo is 24, and an
-earlier draft stated the nominal figure as though it could run.
+The 60-episode figure is the nominal grid; the runnable demo is 36 (24 before
+ADR-0027 registered `dirty_tree`), and an earlier draft stated the nominal figure as
+though it could run.
 
 Seeds are split into disjoint admit / tune / eval sets and every arm is routed
 through the same (fault, seed) pairs, so the comparison is paired rather than
@@ -962,10 +967,13 @@ ledger row; ADR-0005 decision 5):
 | --- | --- | --- | --- | --- |
 | smoke | 0, 1, 2, 4 | `diverged` | 4 | 0 |
 | smoke | 0, 1, 2, 4 | `submodule_moved` | 4 | 0 |
+| smoke | 0, 1, 2, 4 | `dirty_tree` | 4 | 0 |
 | tune | 1000-1015 | `diverged` | 15 | 1 |
 | tune | 1000-1015 | `submodule_moved` | 7 | 9 |
+| tune | 1000-1015 | `dirty_tree` | 10 | 6 |
 | eval | 2000-2039 | `diverged` | 32 | 8 |
 | eval | 2000-2039 | `submodule_moved` | 15 | 25 |
+| eval | 2000-2039 | `dirty_tree` | 14 | 26 |
 
 **The independent observations are the distinct instances, and the counts are
 measured, not inferred from the grid.** Each measurable fault now draws each state
@@ -982,9 +990,17 @@ breakdown the report carries (`bench.report.achieved_instances`) is:
 | `submodule_moved` | `init` | 5 |
 | `submodule_moved` | `remove` | 5 |
 | `submodule_moved` | `repin` | 5 |
+| `dirty_tree` | `aside` | 4 |
+| `dirty_tree` | `commit` | 4 |
+| `dirty_tree` | `stash` | 6 |
 
-The 40-seed eval set therefore builds **47 independent environments**, up from 6,
-and every resolution clears the owner's target of 4. The counts come from
+The 40-seed eval set therefore builds **61 independent environments** -- 47 on the
+first two faults, up from 6, and 14 on `dirty_tree` since ADR-0027 -- and every
+resolution reaches the owner's target of 4. `dirty_tree/aside` sits exactly on it:
+its only axis, the content flavour, has four values, so no seed set can draw a fifth.
+The smoke (admit) set draws no `stash` state, so a library built on it holds no
+`stash` program; a `stash` state accepts `commit` and `aside` too (ADR-0023), so a
+fire of either there is correct. The counts come from
 `FaultSpec.instance_for_seed` over the plan's seeds; reproduce the real-sandbox
 measurement, including that distinct identities are distinct environments, with
 `.venv/bin/python -m precondition_library.bench.instance_diversity`.
@@ -992,11 +1008,13 @@ measurement, including that distinct identities are distinct environments, with
 **The episode-level mismatch comparison is still underpowered, for a different
 reason.** No interval could be attached at 6 environments. One arm's success
 rate now carries a real interval: its 95% Wilson half-width near 0.5 is about
-**±18.6pp** at the owner's target of 24 and **±13.7pp** at the 47 achieved. But the
+**±18.6pp** at the owner's target of 24, **±13.7pp** at the 47 the first two faults
+build and **±12.2pp** at the 61 all three build. But the
 ±10pp margin (item 10) is applied to the **difference** between two arms' rates, by
 a TOST at a 90% interval, and that interval is wider. With `tost_equivalence` and
 both arms at the same observed 50% rate — the most favourable case — the difference's
-half-width is about **±22.5pp** at 24 per arm and **±16.5pp** at 47, and ±10pp first
+half-width is about **±22.5pp** at 24 per arm, **±16.5pp** at 47 and **±14.6pp** at 61,
+and ±10pp first
 becomes passable at **133 per arm** (87 at an 80% rate, 53 at 90%; any observed
 difference needs more). ADR-0006 keeps the margin at ±10pp, so at the achieved N the
 expected verdict is "comparable", which the report already produces for an
@@ -1192,7 +1210,7 @@ TEXT CONTROL    a bag-of-words classifier trained on the request text alone
                 and the mechanism is not needed. Pinned by a positive control
                 that fires on an intent whose informed wording fully determines
                 the answer, so the control cannot pass by being a no-op. Only
-                registered intents are measured; the three unconverted faults
+                registered intents are measured; the two unconverted faults
                 return a fixed sentence and are excluded (`EXCLUDED_FROM_BENCHMARK`).
 IMPORT GRAPH    replay cannot reach provider, directly or transitively.
                 IMPLEMENTED AND PASSING (tests/test_replay_isolated_from_provider.py)
@@ -1308,9 +1326,9 @@ claim.
 5. **Model drift.** Provider-side model updates mid-experiment would confound
    everything. `model` is recorded per episode; a version change invalidates the
    affected run and requires re-running that arm.
-6. **Three of the five faults are not converted.** `dirty_tree`,
-   `branch_renamed`, and `lockfile_conflict` still return a single fixed request
-   sentence, so for them the text remains a perfect class label — the original
+6. **Two of the five faults are not converted.** `branch_renamed` and
+   `lockfile_conflict` still return a single fixed request sentence (#190, #191;
+   `dirty_tree` was converted by #189 and registered by ADR-0027), so for them the text remains a perfect class label — the original
    defect. They are scoped out of this change and **must not be included in any
    dispatch measurement** until they gain an `IntentSpec` with two or more
    state-decided resolutions. Enforced rather than

@@ -89,7 +89,9 @@ from .similarity_probe import program_text_candidates, tune_baseline
 from .soft_vote import claim2_verdict, learn_soft_threshold, soft_vote_outcomes
 from .splits import EVAL_SEEDS, SMOKE_SEEDS, TUNE_SEEDS
 
-MEASURED_FAULTS: tuple[str, ...] = ("diverged", "submodule_moved")
+MEASURED_FAULTS: tuple[str, ...] = tuple(sorted(intent.fault for intent in ambiguous_intents()))
+"""Every fault an ambiguous intent covers (`tasks.registry`), by name. Derived, so that
+registering an intent puts its fault in the default plan; `LivePlan.faults` narrows it."""
 FROZEN_ARMS: tuple[Arm, ...] = (
     Arm.REACT,
     Arm.SEMANTIC,
@@ -107,7 +109,8 @@ The full plan is all of `EVAL_SEEDS`, which `--episode-seeds 40` asks for."""
 
 
 class LivePlan(BaseModel):
-    """What a live run covers. The defaults are the first live run's (#163)."""
+    """What a live run covers. The seed defaults are the first live run's (#163); the
+    faults are every measured one, which since ADR-0027 includes `dirty_tree`."""
 
     faults: tuple[str, ...] = MEASURED_FAULTS
     build_seeds: tuple[int, ...] = SMOKE_SEEDS

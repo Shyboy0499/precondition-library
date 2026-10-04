@@ -1,10 +1,11 @@
-"""The dirty-tree intent, defined but not registered (#189, step 3).
+"""The dirty-tree intent, registered and measured (#189, ADR-0027).
 
 `tasks.faults.dirty_tree.INTENT` labels each injected state with the resolution it
 needs and declares which others the fault's own checker also accepts (ADR-0023). It is
-not registered, so nothing measured reads it yet. These tests pin, on real sandboxes:
+registered, so every measured path reads it. These tests pin, on real sandboxes:
 
-* it is defined and not registered, and admission still sees one dirty_tree state;
+* it is registered, its fault is no longer excluded, and each seed is labelled with
+  the resolution its state needs;
 * each injected state is labelled as declared, and its declared grid entry matches what
   a real sandbox observes;
 * **the declared acceptable sets are exactly what the checker accepts**, by replaying
@@ -25,7 +26,11 @@ from precondition_library.runtime.replay import replay
 from precondition_library.signatures import StateFingerprint
 from precondition_library.tasks.faults import build_sandbox
 from precondition_library.tasks.faults.dirty_tree import INTENT, SPEC, STATE_VARIANT, state_for_seed
-from precondition_library.tasks.registry import EXCLUDED_FROM_BENCHMARK, INTENTS
+from precondition_library.tasks.registry import (
+    EXCLUDED_FROM_BENCHMARK,
+    INTENTS,
+    ambiguous_intents,
+)
 from precondition_library.tasks.state_grid import DIRTY_TREE_STATES, STATE_GRID
 
 SEED_FOR = {"disjoint": 5, "same_file": 0, "collision": 2}
@@ -44,11 +49,20 @@ def _gold(variant: str):
     return next(p for p in gold_programs(INTENT.name) if p.variant == variant)
 
 
-def test_the_intent_is_defined_but_not_registered() -> None:
-    assert INTENT.name not in INTENTS and INTENT.name not in STATE_GRID
-    assert "dirty_tree" in EXCLUDED_FROM_BENCHMARK
-    assert SPEC.variant_for_seed(0) is None, "admission still builds one dirty_tree state"
+def test_the_intent_is_registered_and_measured() -> None:
+    assert INTENTS[INTENT.name] is INTENT and STATE_GRID[INTENT.name] is DIRTY_TREE_STATES
+    assert INTENT in ambiguous_intents()
+    assert "dirty_tree" not in EXCLUDED_FROM_BENCHMARK
     assert {state_for_seed(seed) for seed in SEED_FOR.values()} == set(SEED_FOR)
+    for state, seed in SEED_FOR.items():
+        assert SPEC.variant_for_seed(seed) == STATE_VARIANT[state], state
+
+
+def test_the_request_is_a_phrasing_not_the_fault_name() -> None:
+    for seed in range(20):
+        text = SPEC.task_text(seed)
+        assert text == INTENT.task_text(seed)
+        assert "dirty" not in text.lower(), text
 
 
 @pytest.mark.parametrize("state", sorted(SEED_FOR))

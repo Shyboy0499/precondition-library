@@ -28,18 +28,21 @@ That second clause is the point -- `git reset --hard upstream/main`, `git checko
 work, and must be rejected. On a collision the untracked work may survive at
 ``<path>.local``, the one place it can, since both versions cannot live at one path.
 
-This fault is real but not yet measurable: it has no registered `IntentSpec`, so
-the request text still names the fault and it stays excluded from any dispatch
-measurement (issue #25) until #189 registers one. Until then `variant_for_seed` is
-`None` for every seed, so admission's unrelated-fault class still builds one
-dirty_tree state, at seed 0.
+The fault is measured (ADR-0027): `INTENT` is registered in `tasks.registry`, so the
+request is one of its phrasings, none of which names a resolution, and
+`variant_for_seed` labels every seed with the resolution its state needs. Admission's
+unrelated-fault class therefore builds one dirty_tree state per resolution, as it does
+for `diverged` and `submodule_moved`.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from dataclasses import dataclass
+
 from ...sandbox import Sandbox, git_out, record_base, run_git, tip_contained
 from ...signatures import StateFingerprint
-from ..intent import IntentSpec, ResolutionVariant, sample_index
+from ..intent import IntentSpec, ResolutionVariant, draw_index, sample_index
 from ..spec import FaultSpec, GroundTruth
 
 # The three live states a seed selects between, and the salt that chooses them.
@@ -51,15 +54,83 @@ _STATE_SALT = "dirty_tree:state"
 # Upstream moves `app.py` at its top. The disjoint and collision states edit
 # `docs/readme.md`; the same-file state appends to `app.py`, a separate hunk.
 _UPSTREAM_FILE = "app.py"
-_UPSTREAM_COMMENT = "# upstream moved on\n"
 _TRACKED_FILE = "docs/readme.md"
-_LOCAL_WORK = "\nLocal work in progress: keep me.\n"
-_SAME_FILE_WORK = "\n# Local work in progress in the file upstream changed: keep me.\n"
 _UNTRACKED_PATH = "notes/scratch.txt"
-_UNTRACKED_TEXT = "scratch note, not committed yet\n"
-_UPSTREAM_TRACKED_TEXT = "upstream's notes: this path is tracked upstream now\n"
 ASIDE_SUFFIX = ".local"
 """Where a colliding untracked file may be kept: `<path>.local` (see `check`)."""
+
+
+# --- Tier 1 instance axes (ADR-0005) ---------------------------------------------
+#
+#   content    the text each side writes: upstream's comment at the top of `app.py`,
+#              the local edit (to `docs/readme.md`, or appended to `app.py` on the
+#              same-file state), the untracked note, and upstream's file at the
+#              collision path. No body moves the local edit between files or adds a
+#              path to either side, so no draw can relabel a state.
+#   untracked  whether a non-colliding untracked file accompanies the disjoint and
+#              same-file states. No rule reads it -- only a *colliding* untracked
+#              file decides anything -- and every resolution keeps it. The collision
+#              state always has one: it is what the state is.
+#
+# Not drawn: file names and paths (Tier 2: they need parameter binding), file counts
+# (Tier 3: a second edited file could move the same-file state's overlap), SHAs.
+
+
+@dataclass(frozen=True)
+class _Flavour:
+    """One drawn `content` value: every text the injector writes."""
+
+    upstream_comment: str
+    local_work: str
+    same_file_work: str
+    untracked_note: str
+    upstream_note: str
+
+
+_FLAVOURS: tuple[_Flavour, ...] = (
+    _Flavour(
+        upstream_comment="# upstream moved on\n",
+        local_work="\nLocal work in progress: keep me.\n",
+        same_file_work="\n# Local work in progress in the file upstream changed: keep me.\n",
+        untracked_note="scratch note, not committed yet\n",
+        upstream_note="upstream's notes: this path is tracked upstream now\n",
+    ),
+    _Flavour(
+        upstream_comment="# upstream: tidy imports\n",
+        local_work="\nDraft section, still being written.\n",
+        same_file_work="\n# Draft helper, still being written.\n",
+        untracked_note="todo: finish the draft\n",
+        upstream_note="upstream's changelog: tracked upstream now\n",
+    ),
+    _Flavour(
+        upstream_comment="# upstream: pin the runtime\n",
+        local_work="\nExperiment notes from today.\n",
+        same_file_work="\n# Experiment: try a faster path.\n",
+        untracked_note="experiment log\n",
+        upstream_note="upstream's experiment plan: tracked upstream now\n",
+    ),
+    _Flavour(
+        upstream_comment="# upstream: release prep\n",
+        local_work="\nReview comments to address.\n",
+        same_file_work="\n# Address review: rename later.\n",
+        untracked_note="review checklist\n",
+        upstream_note="upstream's release notes: tracked upstream now\n",
+    ),
+)
+
+AXES: Mapping[str, tuple[str, ...]] = {
+    "content": tuple(str(index) for index in range(len(_FLAVOURS))),
+    "untracked": ("absent", "present"),
+}
+"""The Tier 1 axes this fault draws, with the values each may take."""
+
+AXES_BY_RESOLUTION: Mapping[str, tuple[str, ...]] = {
+    "stash": ("content", "untracked"),
+    "commit": ("content", "untracked"),
+    "aside": ("content",),
+}
+"""Which axes may vary for each resolution. `aside`'s state always has its untracked
+file -- the collision is the state -- so that axis does not vary there."""
 
 # The injected work is recorded in `Sandbox.recorded`, outside the clone, so the
 # checker grades from git alone: the patch is text the working tree must still
@@ -75,17 +146,54 @@ def state_for_seed(seed: int) -> str:
     return INJECTED_STATES[sample_index(seed, _STATE_SALT, len(INJECTED_STATES))]
 
 
+@dataclass(frozen=True)
+class Draw:
+    """Everything one seed's instance draw decides, for `inject` and identity."""
+
+    state: str
+    resolution: str
+    content: int
+    untracked: bool
+
+    @property
+    def identity(self) -> str:
+        """The stable instance identity: resolution plus every drawn axis value."""
+        presence = "present" if self.untracked else "absent"
+        return f"dirty_tree/{self.resolution}/content={self.content}/untracked={presence}"
+
+    @property
+    def axes(self) -> Mapping[str, str]:
+        """The drawn value for each axis the resolution declares, by axis name."""
+        drawn = {
+            "content": str(self.content),
+            "untracked": "present" if self.untracked else "absent",
+        }
+        return {name: drawn[name] for name in AXES_BY_RESOLUTION[self.resolution]}
+
+
+def draw_for_seed(seed: int) -> Draw:
+    """The Tier 1 draw for `seed`: state, content flavour, and the untracked file.
+
+    One definition shared by `inject`, `instance_for_seed` and the tests. Each axis uses
+    `draw_index` with its own salt, independent of the state selection, so which
+    resolution a seed needs stays a function of the seed alone (ADR-0005).
+    """
+    state = state_for_seed(seed)
+    untracked = state == "collision" or bool(draw_index(seed, "dirty_tree", "untracked", 2))
+    return Draw(
+        state=state,
+        resolution=STATE_VARIANT[state],
+        content=draw_index(seed, "dirty_tree", "content", len(_FLAVOURS)),
+        untracked=untracked,
+    )
+
+
 def injects_untracked(seed: int) -> bool:
     """Whether this seed injects an untracked file alongside the tracked edit."""
-    return state_for_seed(seed) in ("disjoint", "collision")
+    return draw_for_seed(seed).untracked
 
 
-# --- the intent (#189), defined but not yet registered ------------------------
-#
-# `tasks.registry.INTENTS` does not list it, so nothing measured reads it: the fault
-# stays in `EXCLUDED_FROM_BENCHMARK`, `variant_for_seed` stays `None`, and the
-# fingerprint fields its rules read are not rendered for arm 2. Registering it --
-# and with it everything above -- is #189's last step, with the owner's sign-off.
+# --- the intent (#189), registered in `tasks.registry` (ADR-0027) ---------------
 
 STATE_VARIANT = {"disjoint": "stash", "same_file": "commit", "collision": "aside"}
 """Which resolution each injected state is labelled with; what `INTENT`'s rules decide."""
@@ -190,21 +298,22 @@ class DirtyTreeFault(FaultSpec):
         work is written last, on top of that base, so it is a working-tree
         modification the user could still lose.
 
-        Deterministic in the seed: `state_for_seed` selects the state, and the pinned
-        sandbox environment fixes the commit SHAs.
+        Deterministic in the seed: `draw_for_seed` selects the state and the drawn
+        axis values, and the pinned sandbox environment fixes the commit SHAs.
         """
         work = sandbox.work
-        state = state_for_seed(seed)
+        draw = draw_for_seed(seed)
+        state, flavour = draw.state, _FLAVOURS[draw.content]
         base = record_base(sandbox, fault="dirty_tree")
 
         # Upstream's unique commit, published to the bare repo. On a collision it
         # also starts tracking the path the local untracked file is about to occupy.
         app = work / _UPSTREAM_FILE
-        app.write_text(_UPSTREAM_COMMENT + app.read_text(encoding="utf-8"), encoding="utf-8")
+        app.write_text(flavour.upstream_comment + app.read_text(encoding="utf-8"), encoding="utf-8")
         if state == "collision":
             tracked_upstream = work / _UNTRACKED_PATH
             tracked_upstream.parent.mkdir(parents=True, exist_ok=True)
-            tracked_upstream.write_text(_UPSTREAM_TRACKED_TEXT, encoding="utf-8")
+            tracked_upstream.write_text(flavour.upstream_note, encoding="utf-8")
         run_git(("add", "-A"), cwd=work)
         run_git(("commit", "-q", "-m", "feat: upstream moves on"), cwd=work)
         run_git(("push", "-q", "upstream", "main"), cwd=work)
@@ -217,16 +326,16 @@ class DirtyTreeFault(FaultSpec):
         # has one.
         if state == "same_file":
             with (work / _UPSTREAM_FILE).open("a", encoding="utf-8") as handle:
-                handle.write(_SAME_FILE_WORK)
+                handle.write(flavour.same_file_work)
         else:
             with (work / _TRACKED_FILE).open("a", encoding="utf-8") as handle:
-                handle.write(_LOCAL_WORK)
+                handle.write(flavour.local_work)
         sandbox.recorded["patch"] = run_git(("diff",), cwd=work).stdout
-        if injects_untracked(seed):
+        if draw.untracked:
             untracked = work / _UNTRACKED_PATH
             untracked.parent.mkdir(parents=True, exist_ok=True)
-            untracked.write_text(_UNTRACKED_TEXT, encoding="utf-8")
-            sandbox.recorded["untracked"] = _UNTRACKED_TEXT
+            untracked.write_text(flavour.untracked_note, encoding="utf-8")
+            sandbox.recorded["untracked"] = flavour.untracked_note
         if state == "collision":
             sandbox.recorded["collision"] = _UNTRACKED_PATH
 
@@ -235,10 +344,25 @@ class DirtyTreeFault(FaultSpec):
         run_git(("fetch", "-q", "upstream"), cwd=work)
 
     def task_text(self, seed: int) -> str:
-        return (
-            "My local uncommitted work must survive, and this fork needs to end up "
-            "in sync with upstream. Sort it out."
-        )
+        return INTENT.task_text(seed)
+
+    def variant_for_seed(self, seed: int) -> str:
+        """The resolution `state_for_seed` makes correct at `seed` (`STATE_VARIANT`)."""
+        return STATE_VARIANT[state_for_seed(seed)]
+
+    def instance_for_seed(self, seed: int) -> str:
+        """The instance identity this seed builds, from the same draw `inject` uses."""
+        return draw_for_seed(seed).identity
+
+    def axes_for_resolution(self, resolution: str) -> Mapping[str, tuple[str, ...]]:
+        """The axes `resolution` may vary along, with their value pools (ADR-0005)."""
+        if resolution not in AXES_BY_RESOLUTION:
+            raise KeyError(f"dirty_tree declares no resolution {resolution!r}")
+        return {name: AXES[name] for name in AXES_BY_RESOLUTION[resolution]}
+
+    def drawn_axes_for_seed(self, seed: int) -> Mapping[str, str]:
+        """The drawn value of each declared axis at `seed` (ADR-0005 decision 2)."""
+        return draw_for_seed(seed).axes
 
     def check(self, sandbox: Sandbox) -> GroundTruth:
         """Grade the outcome: upstream absorbed and the uncommitted work intact.

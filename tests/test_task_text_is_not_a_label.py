@@ -317,6 +317,38 @@ def test_same_declared_phrasings_imply_same_text_for_every_seed(make_state) -> N
                 remotes=["origin"],
             ),
         ),
+        # Both `stash`: work to keep, upstream ahead, nothing local committed, no
+        # collision and no file both sides changed. Everything else is varied.
+        "keep_uncommitted_work_and_sync": (
+            make_state(
+                dirty_worktree=True,
+                branch="feature",
+                upstream_ahead=7,
+                upstream_behind=0,
+                has_locked_branch=True,
+                has_submodule_reference=True,
+                submodule_initialised=True,
+                submodule_pin_matches_upstream=False,
+                upstream_still_references_submodule=False,
+                upstream_touched_files=["src/app.py"],
+                dirty_files=["docs/a.md", "docs/b.md"],
+                remotes=["origin", "upstream", "fork"],
+            ),
+            make_state(
+                dirty_worktree=True,
+                branch="main",
+                upstream_ahead=1,
+                upstream_behind=0,
+                has_locked_branch=False,
+                has_submodule_reference=False,
+                submodule_initialised=False,
+                submodule_pin_matches_upstream=True,
+                upstream_still_references_submodule=True,
+                upstream_touched_files=["src/other.py", "src/app.py"],
+                dirty_files=["notes.txt"],
+                remotes=["origin"],
+            ),
+        ),
     }
     for intent in ambiguous_intents():
         left, right = pairs[intent.name]
