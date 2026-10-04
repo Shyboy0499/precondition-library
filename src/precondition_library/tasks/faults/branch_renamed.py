@@ -32,9 +32,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import Path
 
-from ...sandbox import Sandbox, git_out, record_base, run_git, tip_contained
+from ...sandbox import Sandbox, git_config, git_out, record_base, run_git, tip_contained
 from ...signatures import StateFingerprint
 from ..intent import IntentSpec, ResolutionVariant, draw_index, sample_index
 from ..spec import FaultSpec, GroundTruth
@@ -262,16 +261,6 @@ INTENT = IntentSpec(
 )
 
 
-def _config(work: Path, key: str) -> str | None:
-    """A git config value, or None when the key is unset.
-
-    `git config --get` exits 1 for an absent key, which is a state the checker
-    reports rather than raises on.
-    """
-    result = run_git(("config", "--get", key), cwd=work, check=False)
-    return result.stdout.strip() if result.returncode == 0 else None
-
-
 class BranchRenamedFault(FaultSpec):
     name = "branch_renamed"
     description = "Upstream's default branch was renamed and the fork still tracks the old name"
@@ -382,8 +371,8 @@ class BranchRenamedFault(FaultSpec):
         """
         work = sandbox.work
         branch = git_out("rev-parse", "--abbrev-ref", "HEAD", cwd=work)
-        remote = _config(work, f"branch.{branch}.remote")
-        merge_ref = _config(work, f"branch.{branch}.merge")
+        remote = git_config(work, f"branch.{branch}.remote")
+        merge_ref = git_config(work, f"branch.{branch}.merge")
         if not remote or not merge_ref:
             return GroundTruth(
                 ok=False,
