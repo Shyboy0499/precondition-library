@@ -183,3 +183,67 @@ def test_the_harness_tool_is_not_screened(monkeypatch) -> None:
         assert ok, text
     finally:
         box.destroy()
+
+
+def _bare(tmp_path: Path, name: str, *, branch: str = "main") -> Path:
+    repo = tmp_path / name
+    run_git(("-c", f"init.defaultBranch={branch}", "init", "-q", "--bare", str(repo)), cwd=tmp_path)
+    return repo
+
+
+@pytest.fixture
+def fork(tmp_path):
+    """A fork checkout: `origin` is the user's own fork, `upstream` what it was forked from."""
+    upstream, own = _bare(tmp_path, "upstream.git"), _bare(tmp_path, "own-fork.git")
+    seed = tmp_path / "seed"
+    run_git(("clone", "-q", str(upstream), str(seed)), cwd=tmp_path)
+    _git(seed, "checkout", "-q", "-b", "main")
+    _commit(seed, "base")
+    _git(seed, "push", "-q", "origin", "main")
+    _git(seed, "push", "-q", str(own), "main")
+    work = tmp_path / "work"
+    run_git(("clone", "-q", str(own), str(work)), cwd=tmp_path)
+    _git(work, "remote", "add", "upstream", str(upstream))
+    _git(work, "fetch", "-q", "upstream")
+    _git(work, "config", "user.name", USER[0])
+    _git(work, "config", "user.email", USER[1])
+    env = open_checkout(work, scratch=tmp_path)
+    yield env, own, upstream
+    env.destroy()
+
+
+def _has_branch(bare: Path, branch: str) -> bool:
+    found = run_git(
+        ("rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"), cwd=bare, check=False
+    )
+    return found.returncode == 0
+
+
+def test_the_users_own_fork_is_unreachable_from_the_agent(fork) -> None:
+    """`origin` is the user's repository; a solve on a copy must not push to it."""
+    env, own, _ = fork
+    assert env.checkout is not None and env.checkout.parameters["upstream_remote"] == "upstream"
+    text, ok = react._run_tool("git push origin HEAD:refs/heads/from-the-agent", env)
+    assert not ok, text
+    assert not _has_branch(own, "from-the-agent"), "nothing reached the user's fork"
+    text, ok = react._run_tool("git fetch origin", env)
+    assert not ok, "fetching from it is blocked too"
+    text, ok = react._run_tool("git fetch upstream", env)
+    assert ok, text
+
+
+def test_an_upstream_push_url_is_redirected_to_the_mirror_too(fork, tmp_path) -> None:
+    """A separate `pushurl` must not leave `git push upstream` reaching a real remote."""
+    env, _, upstream = fork
+    elsewhere = _bare(tmp_path, "push-target.git")
+    _git(env.work, "remote", "set-url", "--push", "upstream", str(elsewhere))
+    env.destroy()
+    reopened = open_checkout(env.work, scratch=tmp_path)
+    try:
+        text, ok = react._run_tool("git push upstream HEAD:refs/heads/from-the-agent", reopened)
+        assert ok, text
+        assert _has_branch(reopened.upstream, "from-the-agent"), "it landed in the mirror"
+        assert not _has_branch(elsewhere, "from-the-agent"), "not at the push URL"
+        assert not _has_branch(upstream, "from-the-agent"), "nor at the fetch URL"
+    finally:
+        reopened.destroy()

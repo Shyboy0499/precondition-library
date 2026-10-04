@@ -391,10 +391,12 @@ class CheckoutContext:
     * `identity` -- the user's own `user.name` and `user.email`, so a replayed commit is
       theirs and dated now, never the sandbox's pinned identity and date; `None` when
       the repository has none, and then a commit fails rather than borrow one;
-    * `redirects` -- `(mirror, original)` URL pairs: git is told to read `original`
-      from the local `mirror` (`url.<mirror>.insteadOf <original>`), so a program's own
-      `git fetch` reads what the trusted pre-fetch brought down, with no network, and a
-      push can only ever reach the mirror.
+    * `redirects` -- `(base, original)` URL pairs: git is told to read `original` from
+      `base` (`url.<base>.insteadOf <original>`). The upstream remote's fetch and push
+      URLs go to the local mirror, so a program's own `git fetch` reads what the trusted
+      pre-fetch brought down, with no network, and a push can only ever reach the mirror;
+      every other remote's URLs go to a path that does not exist, so they are not
+      reachable at all (`checkout.BLOCKED_NAME`).
     """
 
     parameters: dict[str, str]
