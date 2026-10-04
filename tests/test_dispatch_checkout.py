@@ -61,7 +61,10 @@ def test_the_checkout_report_fires_what_arm_3_fires_on_the_sandbox(faults, seed,
     try:
         expected = library.match_preconditions(box)
         before = sandbox_state(box)
-        report = dispatch_report(library.root, box.work, scratch=tmp_path)
+        # No pre-fetch: the injectors leave remote-tracking refs current, and a fetch is a
+        # deliberate write (git >= 2.48 also records the remote's HEAD), so the claim
+        # "probing leaves the checkout as it was" is only checkable without one.
+        report = dispatch_report(library.root, box.work, fetch=False, scratch=tmp_path)
         assert report.fires == (expected[0].id if expected else None), render(report)
         assert {p.id for p in report.programs if p.accepted} == {p.id for p in expected}
         assert sandbox_state(box) == before, "probing a copy leaves the checkout as it was"
