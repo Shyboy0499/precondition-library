@@ -1,4 +1,4 @@
-"""The fingerprint observes the branch wiring, without rendering it yet (#190, step 1).
+"""The fingerprint observes the branch wiring, and arm 2 sees it (#190, ADR-0028).
 
 The branch-renamed intent's rules must read three facts the fingerprint did not have:
 which upstream branch the current branch is configured to follow, which branch
@@ -8,8 +8,8 @@ upstream now calls its default, and which local branches exist. These tests pin:
 * the default is read from `refs/remotes/<remote>/HEAD`, which a plain fetch leaves
   alone and the trusted pre-fetch (#205) brings current -- so a rename shows only
   once something has asked upstream, and nothing here fetches;
-* **none reaches `as_text`** until the intent is registered, so every measured arm-2
-  text, and every measured number, is unchanged.
+* **all three reach `as_text`**, arm 2's whole view of state, now that the intent is
+  registered (ADR-0028).
 """
 
 from __future__ import annotations
@@ -18,8 +18,8 @@ from pathlib import Path
 
 from precondition_library.checkout import open_checkout
 from precondition_library.sandbox import run_git
-from precondition_library.signatures import _NOT_YET_RENDERED, StateFingerprint
-from precondition_library.tasks.state_grid import STATE_GRID
+from precondition_library.signatures import StateFingerprint
+from precondition_library.tasks.state_grid import BRANCH_RENAMED_STATES
 
 WIRING = {"tracked_branch", "upstream_default_branch", "local_branches"}
 
@@ -81,11 +81,9 @@ def test_a_checkout_reads_its_own_remote_after_the_pre_fetch(tmp_path) -> None:
     assert state.local_branches == ["main"]
 
 
-def test_arm_2_does_not_see_them_until_the_intent_is_registered() -> None:
-    assert _NOT_YET_RENDERED == WIRING
-    for states in STATE_GRID.values():
-        for state in states.values():
-            assert not any(name in state.as_text() for name in WIRING)
+def test_arm_2_sees_them_now_the_intent_is_registered() -> None:
+    text = BRANCH_RENAMED_STATES["name_taken"].as_text()
+    assert all(f"{name}: " in text for name in WIRING)
     seen = StateFingerprint(
         dirty_worktree=False,
         branch="main",
@@ -97,4 +95,7 @@ def test_arm_2_does_not_see_them_until_the_intent_is_registered() -> None:
         upstream_default_branch="trunk",
         local_branches=["main", "trunk"],
     )
-    assert "trunk" not in seen.as_text(), "observed, not shown to arm 2"
+    lines = seen.as_text().splitlines()
+    assert "tracked_branch: main" in lines
+    assert "upstream_default_branch: trunk" in lines
+    assert "local_branches: main, trunk" in lines

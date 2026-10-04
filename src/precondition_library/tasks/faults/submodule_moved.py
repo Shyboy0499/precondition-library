@@ -20,8 +20,8 @@ does. `check` grades the outcome per state from git alone. The fault is a usable
 negative sandbox for admission, and it *is* part of dispatch measurement: the
 registry returns its ambiguous intent from `ambiguous_intents()` and does not list
 it in `EXCLUDED_FROM_BENCHMARK`, so `tasks/registry.py` is the single place that
-decides this. Issue #25 tracks the two faults that still return a single fixed
-request sentence; those are the excluded ones.
+decides this. Issue #25 tracks the one fault that still returns a single fixed
+request sentence; that is the excluded one.
 """
 
 from __future__ import annotations

@@ -349,6 +349,36 @@ def test_same_declared_phrasings_imply_same_text_for_every_seed(make_state) -> N
                 remotes=["origin"],
             ),
         ),
+        # Both `retrack`: renamed, nothing local, the new name taken. Everything else varies.
+        "follow_renamed_upstream_branch": (
+            make_state(
+                dirty_worktree=True,
+                branch="feature",
+                upstream_ahead=7,
+                upstream_behind=0,
+                has_locked_branch=True,
+                has_submodule_reference=True,
+                upstream_touched_files=["src/app.py"],
+                dirty_files=["docs/a.md"],
+                tracked_branch="main",
+                upstream_default_branch="trunk",
+                local_branches=["feature", "trunk", "old"],
+                remotes=["origin", "upstream", "fork"],
+            ),
+            make_state(
+                dirty_worktree=False,
+                branch="main",
+                upstream_ahead=1,
+                upstream_behind=0,
+                has_locked_branch=False,
+                has_submodule_reference=False,
+                upstream_touched_files=["src/other.py"],
+                tracked_branch="master",
+                upstream_default_branch="develop",
+                local_branches=["develop", "main"],
+                remotes=["origin"],
+            ),
+        ),
     }
     for intent in ambiguous_intents():
         left, right = pairs[intent.name]

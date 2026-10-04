@@ -22,15 +22,21 @@ remote-tracking ref is still there. A fetch does not repair anything: the wiring
 which branch the local one follows -- is the fault, and only a resolution changes it.
 The state is therefore observable without fetching, as `observe` requires: upstream's
 default is `upstream_default_branch`, and the stale wiring is `tracked_branch`.
+
+The fault is measured (ADR-0028): `INTENT` is registered in `tasks.registry`, so the
+request is one of its phrasings and `variant_for_seed` labels every seed with the
+resolution its state needs.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 
 from ...sandbox import Sandbox, git_out, record_base, run_git, tip_contained
 from ...signatures import StateFingerprint
-from ..intent import IntentSpec, ResolutionVariant, sample_index
+from ..intent import IntentSpec, ResolutionVariant, draw_index, sample_index
 from ..spec import FaultSpec, GroundTruth
 
 # The three live states a seed selects between, and the salt that chooses them.
@@ -46,12 +52,73 @@ _UPSTREAM_FILE = "app.py"
 _LOCAL_FILE = "docs/readme.md"
 _TAKEN_FILE = "notes/side.md"
 
+
 # Upstream's new default-branch names, chosen by seed. None is the old name:
 # the fault is that the name changed. The order is part of the seed-to-name
 # mapping, so appending a name would change which name an existing seed injects;
 # add names deliberately.
 NEW_BRANCH_NAMES = ("trunk", "develop", "default", "primary")
 _NAME_SALT = "branch_renamed:name"
+
+
+# --- Tier 1 instance axes (ADR-0005) ---------------------------------------------
+#
+#   name     the name upstream renames its default branch to. A branch name is a
+#            Tier 2 axis elsewhere, because a program must bind it; here it already
+#            is bound -- `{upstream_branch}` is the recorded default
+#            (`sandbox.harness_upstream_branch`) -- so it is safe to draw.
+#   content  the text each side writes: upstream's commit after the rename, the local
+#            commit on `local_work` and the side branch's note on `name_taken`. No
+#            text moves a commit between sides or adds a path, so no draw can relabel
+#            a state.
+#
+# Not drawn: file paths (Tier 2), commit counts (Tier 3), SHAs.
+
+
+@dataclass(frozen=True)
+class _Flavour:
+    """One drawn `content` value: every text the injector writes."""
+
+    upstream_line: str
+    local_line: str
+    side_note: str
+
+
+_FLAVOURS: tuple[_Flavour, ...] = (
+    _Flavour(
+        "# upstream, after the rename\n",
+        "\nLocal work, committed before the rename was noticed.\n",
+        "an experiment on a branch that happens to share the name\n",
+    ),
+    _Flavour(
+        "# upstream: first change on the new default\n",
+        "\nNotes from a local review, committed last week.\n",
+        "a spike kept on a branch of the same name\n",
+    ),
+    _Flavour(
+        "# upstream: housekeeping on the renamed branch\n",
+        "\nA local fix to the docs, not pushed yet.\n",
+        "scratch work parked under that name\n",
+    ),
+    _Flavour(
+        "# upstream: release prep after the rename\n",
+        "\nDraft section added locally.\n",
+        "a local experiment that predates the rename\n",
+    ),
+)
+
+AXES: Mapping[str, tuple[str, ...]] = {
+    "name": NEW_BRANCH_NAMES,
+    "content": tuple(str(index) for index in range(len(_FLAVOURS))),
+}
+"""The Tier 1 axes this fault draws, with the values each may take."""
+
+AXES_BY_RESOLUTION: Mapping[str, tuple[str, ...]] = {
+    "rename": ("name", "content"),
+    "retrack": ("name", "content"),
+    "merge": ("name", "content"),
+}
+"""Which axes may vary for each resolution: both, for all three."""
 
 
 def renamed_branch_for_seed(seed: int) -> str:
@@ -72,15 +139,50 @@ def state_for_seed(seed: int) -> str:
     return INJECTED_STATES[sample_index(seed, _STATE_SALT, len(INJECTED_STATES))]
 
 
-# --- the intent (#190), defined here and not yet registered ------------------------
+# --- the intent (#190), registered in `tasks.registry` (ADR-0028) ---------------
 #
-# Not in `tasks.registry.INTENTS`, so nothing measured reads it: `variant_for_seed`
-# stays `None` and the fault stays excluded. Registering it is the step that changes
-# measurement (the owner approved it on #190); until then it exists so its acceptable
-# sets can be pinned against `check` by replay (`tests/test_branch_renamed_intent.py`).
+# Its acceptable sets are pinned against `check` by replay
+# (`tests/test_branch_renamed_intent.py`).
 
 STATE_VARIANT = {"plain": "rename", "local_work": "merge", "name_taken": "retrack"}
 """Which resolution each injected state is labelled with; what `INTENT`'s rules decide."""
+
+
+@dataclass(frozen=True)
+class Draw:
+    """Everything one seed's instance draw decides, for `inject` and identity."""
+
+    state: str
+    resolution: str
+    name: str
+    content: int
+
+    @property
+    def identity(self) -> str:
+        """The stable instance identity: resolution plus every drawn axis value."""
+        return f"branch_renamed/{self.resolution}/name={self.name}/content={self.content}"
+
+    @property
+    def axes(self) -> Mapping[str, str]:
+        """The drawn value for each axis the resolution declares, by axis name."""
+        drawn = {"name": self.name, "content": str(self.content)}
+        return {axis: drawn[axis] for axis in AXES_BY_RESOLUTION[self.resolution]}
+
+
+def draw_for_seed(seed: int) -> Draw:
+    """The Tier 1 draw for `seed`: state, new name and content flavour.
+
+    One definition shared by `inject`, `instance_for_seed` and the tests. The state and
+    the name keep the salts they always had, and `content` uses `draw_index` under its
+    own, so which resolution a seed needs stays a function of the seed alone (ADR-0005).
+    """
+    state = state_for_seed(seed)
+    return Draw(
+        state=state,
+        resolution=STATE_VARIANT[state],
+        name=renamed_branch_for_seed(seed),
+        content=draw_index(seed, "branch_renamed", "content", len(_FLAVOURS)),
+    )
 
 
 def follows_a_renamed_branch(state: StateFingerprint) -> bool:
@@ -193,15 +295,16 @@ class BranchRenamedFault(FaultSpec):
         """
         work = sandbox.work
         base = record_base(sandbox, fault="branch_renamed")
-        state = state_for_seed(seed)
+        draw = draw_for_seed(seed)
+        state, flavour = draw.state, _FLAVOURS[draw.content]
 
         old_name = git_out("rev-parse", "--abbrev-ref", "HEAD", cwd=work)
-        new_name = renamed_branch_for_seed(seed)
+        new_name = draw.name
         if new_name == old_name:
             raise ValueError(f"{new_name!r} is not a rename of {old_name!r}")
 
         app = work / _UPSTREAM_FILE
-        app.write_text("# upstream, after the rename\n" + app.read_text(encoding="utf-8"))
+        app.write_text(flavour.upstream_line + app.read_text(encoding="utf-8"))
         run_git(("commit", "-q", "-am", "feat: upstream moves on"), cwd=work)
         run_git(("push", "-q", "upstream", old_name), cwd=work)
         run_git(("reset", "-q", "--hard", base), cwd=work)
@@ -214,14 +317,14 @@ class BranchRenamedFault(FaultSpec):
 
         if state == "local_work":
             with (work / _LOCAL_FILE).open("a", encoding="utf-8") as handle:
-                handle.write("\nLocal work, committed before the rename was noticed.\n")
+                handle.write(flavour.local_line)
             run_git(("commit", "-q", "-am", "docs: local work"), cwd=work)
             sandbox.recorded["local-tip"] = git_out("rev-parse", "HEAD", cwd=work)
         elif state == "name_taken":
             run_git(("checkout", "-q", "-b", new_name), cwd=work)
             side = work / _TAKEN_FILE
             side.parent.mkdir(parents=True, exist_ok=True)
-            side.write_text("an experiment on a branch that happens to share the name\n")
+            side.write_text(flavour.side_note)
             run_git(("add", _TAKEN_FILE), cwd=work)
             run_git(("commit", "-q", "-m", "wip: side experiment"), cwd=work)
             sandbox.recorded["taken-tip"] = git_out("rev-parse", "HEAD", cwd=work)
@@ -233,10 +336,25 @@ class BranchRenamedFault(FaultSpec):
         run_git(("remote", "set-head", "upstream", "--auto"), cwd=work)
 
     def task_text(self, seed: int) -> str:
-        return (
-            "Upstream seems to have renamed its branch. Track whatever it uses now, "
-            "and don't leave my fork pointing at something that no longer exists."
-        )
+        return INTENT.task_text(seed)
+
+    def variant_for_seed(self, seed: int) -> str:
+        """The resolution `state_for_seed` makes correct at `seed` (`STATE_VARIANT`)."""
+        return STATE_VARIANT[state_for_seed(seed)]
+
+    def instance_for_seed(self, seed: int) -> str:
+        """The instance identity this seed builds, from the same draw `inject` uses."""
+        return draw_for_seed(seed).identity
+
+    def axes_for_resolution(self, resolution: str) -> Mapping[str, tuple[str, ...]]:
+        """The axes `resolution` may vary along, with their value pools (ADR-0005)."""
+        if resolution not in AXES_BY_RESOLUTION:
+            raise KeyError(f"branch_renamed declares no resolution {resolution!r}")
+        return {name: AXES[name] for name in AXES_BY_RESOLUTION[resolution]}
+
+    def drawn_axes_for_seed(self, seed: int) -> Mapping[str, str]:
+        """The drawn value of each declared axis at `seed` (ADR-0005 decision 2)."""
+        return draw_for_seed(seed).axes
 
     def check(self, sandbox: Sandbox) -> GroundTruth:
         """Grade the outcome: the tracked branch exists upstream, its tip is held, and

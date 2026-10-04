@@ -21,7 +21,6 @@ import pytest
 
 from precondition_library.checkout import open_checkout
 from precondition_library.sandbox import (
-    HARNESS_UPSTREAM_REF,
     NoUpstreamError,
     run_git,
     upstream_ref,
@@ -53,7 +52,8 @@ def test_a_harness_state_seen_as_a_checkout_fingerprints_identically(
     try:
         env = open_checkout(box.work, fetch=False, scratch=tmp_path)
         try:
-            assert upstream_ref(env) == HARNESS_UPSTREAM_REF
+            # `upstream/main`, except where a rename recorded another default (#190).
+            assert upstream_ref(env) == upstream_ref(box)
             assert StateFingerprint.observe(env) == StateFingerprint.observe(box)
         finally:
             env.destroy()

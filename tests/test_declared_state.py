@@ -253,10 +253,10 @@ CLAIMS: list[Claim] = [
     Claim(
         document="src/precondition_library/tasks/registry.py",
         quote="Faults that must never be measured",
-        holds=lambda: len(EXCLUDED_FROM_BENCHMARK) == 2,
+        holds=lambda: len(EXCLUDED_FROM_BENCHMARK) == 1,
         update=(
-            "The excluded set changed size. Check every document that says two faults "
-            "are excluded -- the spec's open risk 6 and the testing block in §10 -- and "
+            "The excluded set changed size. Check every document that says one fault "
+            "is excluded -- the spec's open risk 6 and the testing block in §10 -- and "
             "correct the count."
         ),
     ),

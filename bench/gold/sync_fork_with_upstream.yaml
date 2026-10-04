@@ -19,6 +19,9 @@ programs:
     variant: discard
     parameters: [work_dir, upstream_remote, upstream_branch]
     preconditions:
+      - name: follows_upstreams_current_branch
+        description: The local branch follows the branch upstream uses now.
+        probe: 'test "$(git config "branch.$(git symbolic-ref --short HEAD).merge")" = "refs/heads/{upstream_branch}"'
       - name: has_local_only_commits
         description: The local branch is ahead of upstream, carrying commits upstream does not have.
         probe: 'test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0'
@@ -45,6 +48,9 @@ programs:
     variant: rebase
     parameters: [work_dir, upstream_remote, upstream_branch]
     preconditions:
+      - name: follows_upstreams_current_branch
+        description: The local branch follows the branch upstream uses now.
+        probe: 'test "$(git config "branch.$(git symbolic-ref --short HEAD).merge")" = "refs/heads/{upstream_branch}"'
       - name: has_local_only_commits
         description: The local branch is ahead of upstream, carrying commits upstream does not have.
         probe: 'test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0'
@@ -77,6 +83,9 @@ programs:
     variant: merge
     parameters: [work_dir, upstream_remote, upstream_branch]
     preconditions:
+      - name: follows_upstreams_current_branch
+        description: The local branch follows the branch upstream uses now.
+        probe: 'test "$(git config "branch.$(git symbolic-ref --short HEAD).merge")" = "refs/heads/{upstream_branch}"'
       - name: has_local_only_commits
         description: The local branch is ahead of upstream, carrying commits upstream does not have.
         probe: 'test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0'

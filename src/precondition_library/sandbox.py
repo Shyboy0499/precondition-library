@@ -238,11 +238,6 @@ def git_env(home: Path | None = None) -> dict[str, str]:
     return env
 
 
-HARNESS_UPSTREAM_REF = "upstream/main"
-"""The ref standing for upstream's tip in a sandbox `create` built: remote `upstream`, branch
-`main`, the same fixed vocabulary `runtime.probes.bindings` supplies."""
-
-
 def harness_upstream_branch(work: Path) -> str:
     """Upstream's default branch in a harness sandbox: `main`, unless the clone records
     another.
