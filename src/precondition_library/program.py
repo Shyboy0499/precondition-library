@@ -12,8 +12,15 @@ Nothing in this module may import a provider or perform I/O.
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    SerializerFunctionWrapHandler,
+    model_serializer,
+    model_validator,
+)
 
 
 class Step(BaseModel):
@@ -68,6 +75,23 @@ class Provenance(BaseModel):
     fault by its caller; storing it on the program is what lets a load re-check
     the invariant for a `program.yaml` that never went through admission (issue
     #69)."""
+    learned_on: Literal["checkout"] | None = None
+    """`"checkout"` for a program learned on a user's existing repository (#188,
+    ADR-0026); `None` for one compiled in the harness, which every measured program is.
+
+    **Omitted from the serialized form when `None`** (`_omit_unset_learned_on`), so a
+    harness program's canonical content -- and with it every library hash already
+    recorded in a ledger -- is byte-identical to what it was before the field
+    existed. A measured run refuses a frozen library holding a checkout-learned
+    program (`bench.run`), because its admission was judged partly by a person rather
+    than wholly by the harness."""
+
+    @model_serializer(mode="wrap")
+    def _omit_unset_learned_on(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        data: dict[str, Any] = handler(self)
+        if data.get("learned_on") is None:
+            data.pop("learned_on", None)
+        return data
 
 
 class ProgramStatus(StrEnum):
