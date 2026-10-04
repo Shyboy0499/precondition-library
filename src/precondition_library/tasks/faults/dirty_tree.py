@@ -38,7 +38,8 @@ dirty_tree state, at seed 0.
 from __future__ import annotations
 
 from ...sandbox import Sandbox, git_out, record_base, run_git, tip_contained
-from ..intent import sample_index
+from ...signatures import StateFingerprint
+from ..intent import IntentSpec, ResolutionVariant, sample_index
 from ..spec import FaultSpec, GroundTruth
 
 # The three live states a seed selects between, and the salt that chooses them.
@@ -77,6 +78,95 @@ def state_for_seed(seed: int) -> str:
 def injects_untracked(seed: int) -> bool:
     """Whether this seed injects an untracked file alongside the tracked edit."""
     return state_for_seed(seed) in ("disjoint", "collision")
+
+
+# --- the intent (#189), defined but not yet registered ------------------------
+#
+# `tasks.registry.INTENTS` does not list it, so nothing measured reads it: the fault
+# stays in `EXCLUDED_FROM_BENCHMARK`, `variant_for_seed` stays `None`, and the
+# fingerprint fields its rules read are not rendered for arm 2. Registering it --
+# and with it everything above -- is #189's last step, with the owner's sign-off.
+
+STATE_VARIANT = {"disjoint": "stash", "same_file": "commit", "collision": "aside"}
+"""Which resolution each injected state is labelled with; what `INTENT`'s rules decide."""
+
+
+def has_work_to_keep_and_upstream_ahead(state: StateFingerprint) -> bool:
+    """The family's situation: uncommitted work, upstream ahead, and no local-only commits.
+
+    Local-only commits are `diverged`'s situation, not this one; a clean tree, or one
+    with nothing to bring in from upstream, needs nothing done -- the benign state.
+    """
+    return state.dirty_worktree and state.upstream_ahead > 0 and state.upstream_behind == 0
+
+
+def _collides(state: StateFingerprint) -> bool:
+    return bool(state.untracked_upstream_collisions)
+
+
+def _edits_a_file_upstream_changed(state: StateFingerprint) -> bool:
+    return bool(set(state.dirty_files) & set(state.upstream_touched_files))
+
+
+def _syncable_in_place(state: StateFingerprint) -> bool:
+    """Work to keep, and nothing untracked standing where upstream's files go."""
+    return has_work_to_keep_and_upstream_ahead(state) and not _collides(state)
+
+
+VARIANTS = [
+    ResolutionVariant(
+        id="stash",
+        decided_by=lambda s: _syncable_in_place(s) and not _edits_a_file_upstream_changed(s),
+        accepted_by=_syncable_in_place,
+        rationale=(
+            "Nothing local stands in upstream's way, so setting the work aside, "
+            "fast-forwarding and putting it back keeps it exactly as it was, uncommitted."
+        ),
+    ),
+    ResolutionVariant(
+        id="commit",
+        decided_by=lambda s: _syncable_in_place(s) and _edits_a_file_upstream_changed(s),
+        accepted_by=_syncable_in_place,
+        rationale=(
+            "The work edits a file upstream also changed, so recording it first makes the "
+            "three-way merge explicit and recoverable from history, not from a half-applied stash."
+        ),
+    ),
+    ResolutionVariant(
+        id="aside",
+        decided_by=lambda s: has_work_to_keep_and_upstream_ahead(s) and _collides(s),
+        accepted_by=has_work_to_keep_and_upstream_ahead,
+        rationale=(
+            "An untracked file sits where upstream now tracks one, so it has to be moved "
+            "out of the way before upstream's file can come in; then both survive."
+        ),
+    ),
+]
+
+INTENT = IntentSpec(
+    name="keep_uncommitted_work_and_sync",
+    fault="dirty_tree",
+    phrasings=[
+        "I have changes I have not saved in git yet, and upstream has moved. Get me current "
+        "without losing anything.",
+        "Bring this branch up to date with upstream, but my work in progress must survive.",
+        "Upstream has new work and I am mid-edit. Catch me up without throwing mine away.",
+        "Update this checkout from upstream. Do not lose what I am in the middle of.",
+        "My working tree has changes and the branch is behind upstream. Fix that and keep "
+        "my changes.",
+        "Catch this branch up with upstream while keeping my in-progress edits intact.",
+        "I am in the middle of something and upstream moved on. Sort it out without losing "
+        "my edits.",
+        "Get the latest from upstream here, and keep every change I have not saved yet.",
+    ],
+    naming_markers=["dirty"],
+    variants=VARIANTS,
+    variant_phrasings={
+        "stash": ["my edits are in files upstream did not touch"],
+        "commit": ["I edited a file upstream changed as well"],
+        "aside": ["upstream added a file where I have an unsaved one"],
+    },
+)
 
 
 class DirtyTreeFault(FaultSpec):
