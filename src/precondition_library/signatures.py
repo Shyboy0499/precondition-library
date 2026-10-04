@@ -22,7 +22,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from .sandbox import Sandbox, run_git, submodule_path
+from .sandbox import Sandbox, run_git, submodule_path, upstream_ref
 
 
 def _render(value: object) -> str:
@@ -126,17 +126,24 @@ class StateFingerprint(BaseModel):
         read with the direct git equivalent. The count and touch probes read
         remote-tracking refs, which the fault injector leaves current rather than
         `observe` refreshing them -- fetching here would write to the repo.
+
+        "Upstream" below is `sandbox.upstream_ref(env)`: `upstream/main` in a harness
+        sandbox, the derived `<remote>/<branch>` on a checkout (#181), so the field
+        docstrings' `upstream/main` is the harness spelling of that ref. A checkout with
+        no derivable upstream raises `sandbox.NoUpstreamError` rather than observe
+        against a ref that is not its upstream.
         """
         work = env.work
 
         def out(*args: str) -> str:
             return run_git(args, cwd=work).stdout.strip()
 
+        upstream = upstream_ref(env)
         branch = out("rev-parse", "--abbrev-ref", "HEAD")
-        upstream_ahead = int(out("rev-list", "--count", "HEAD..upstream/main"))
-        upstream_behind = int(out("rev-list", "--count", "upstream/main..HEAD"))
-        local_touched = out("diff", "--name-only", "upstream/main...HEAD").split()
-        upstream_touched = out("diff", "--name-only", "HEAD...upstream/main").split()
+        upstream_ahead = int(out("rev-list", "--count", f"HEAD..{upstream}"))
+        upstream_behind = int(out("rev-list", "--count", f"{upstream}..HEAD"))
+        local_touched = out("diff", "--name-only", f"{upstream}...HEAD").split()
+        upstream_touched = out("diff", "--name-only", f"HEAD...{upstream}").split()
 
         path = submodule_path(env)
         if path is None:
@@ -148,13 +155,13 @@ class StateFingerprint(BaseModel):
             submodule_initialised = bool(status) and not status.startswith("-")
             pin_matches = (
                 run_git(
-                    ("diff", "--name-only", "upstream/main", "HEAD", "--", path),
+                    ("diff", "--name-only", upstream, "HEAD", "--", path),
                     cwd=work,
                     check=False,
                 ).stdout.strip()
                 == ""
             )
-            upstream_references = bool(out("ls-tree", "upstream/main", "--", path))
+            upstream_references = bool(out("ls-tree", upstream, "--", path))
 
         return cls(
             dirty_worktree=bool(out("status", "--porcelain")),
