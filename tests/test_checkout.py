@@ -206,3 +206,33 @@ def test_a_path_that_is_not_a_working_tree_top_level_is_refused(behind, tmp_path
     plain.mkdir()
     with pytest.raises(NotACheckoutError):
         open_checkout(plain, scratch=tmp_path)
+
+
+def test_the_pre_fetch_follows_a_renamed_default_branch(tmp_path) -> None:
+    """Upstream renamed its default branch after the clone: bind the new name, not the old.
+
+    A clone records `refs/remotes/<remote>/HEAD` once, and no fetch updates an existing
+    one -- git >= 2.48 only creates it when missing. So after upstream renames `main` to
+    `trunk`, the clone's HEAD still names `main`, which upstream no longer has, and
+    every program would bind `{upstream_branch}` to it. The trusted pre-fetch asks the
+    remote for its HEAD (`git remote set-head --auto`) along with its refs.
+    """
+    origin = tmp_path / "origin.git"
+    run_git(("-c", "init.defaultBranch=main", "init", "-q", "--bare", str(origin)), cwd=tmp_path)
+    seed = tmp_path / "seed"
+    run_git(("clone", "-q", str(origin), str(seed)), cwd=tmp_path)
+    _git(seed, "checkout", "-q", "-b", "main")
+    _commit(seed, "first")
+    _git(seed, "push", "-q", "origin", "main")
+    work = tmp_path / "work"
+    run_git(("clone", "-q", str(origin), str(work)), cwd=tmp_path)
+    assert _git(work, "symbolic-ref", "--short", "refs/remotes/origin/HEAD") == "origin/main"
+
+    _git(origin, "branch", "-m", "main", "trunk")
+    _git(origin, "symbolic-ref", "HEAD", "refs/heads/trunk")
+
+    env = open_checkout(work, scratch=tmp_path)
+    try:
+        assert bindings(env)["upstream_branch"] == "trunk"
+    finally:
+        env.destroy()
