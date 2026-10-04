@@ -70,6 +70,20 @@ Issue #171's second half. It tells the agent how much budget is left, which a hu
 running the agent would also see; it says nothing about whether the repository is
 right, so the decision to finish stays the agent's."""
 
+LAST_WORD = (
+    "Your budget is spent: no more git commands will run. If the request is satisfied, "
+    "call `finish` with a one-line summary. If it is not, reply in plain text saying what "
+    "remains."
+)
+"""The one extra turn after a budget runs out (issue #179).
+
+In the third live run the reminder arrived when a batching model had about one batch
+left; it used that batch to make the fix, then a verification batch overran the cap,
+and two repositories it had fixed ended `FAIL` with no program compiled. This turn lets
+the agent say whether it is done after the cap, with `finish` the only tool on offer,
+so no command can run. Only `finish` counts as done here: a plain reply means it is not.
+It is the agent's own verdict, as every declaration is."""
+
 _MAX_OUTPUT_CHARS = 4_000
 """Per-stream cap on what is fed back, so one noisy command cannot balloon the
 transcript that every later turn re-sends (and is billed for)."""
@@ -197,17 +211,21 @@ def solve(
                 return EpisodeOutcome.SUCCESS, transcript
             if executed >= max_tool_calls:
                 # The budget counts commands, not turns: a model that batches calls
-                # reaches it as surely as one that does not (issue #160).
+                # reaches it as surely as one that does not (issue #160). The call is
+                # answered, not run, so the transcript stays a valid conversation for
+                # the last word (issue #179), and it is not counted as a command.
                 transcript.append(
                     {
-                        "role": "error",
-                        "content": (
-                            f"tool-call budget exhausted after {max_tool_calls} tool calls "
-                            "without a finish declaration"
-                        ),
+                        "role": "tool",
+                        "tool_call_id": call.get("id"),
+                        "name": name,
+                        "command": command,
+                        "content": _refused("the tool-call budget is spent; not run"),
+                        "ok": False,
+                        "not_run": True,
                     }
                 )
-                return EpisodeOutcome.FAIL, transcript
+                continue
             executed += 1
             if name == "run_git":
                 result, ok = _run_tool(command, env)
@@ -226,14 +244,53 @@ def solve(
                     "ok": ok,
                 }
             )
+        if executed >= max_tool_calls:
+            # No further turn could run a command, so the agent gets its last word now.
+            return _last_word(
+                transcript,
+                provider,
+                f"tool-call budget of {max_tool_calls} spent without a finish declaration",
+            )
 
+    return _last_word(
+        transcript, provider, f"step budget of {max_steps} turns spent without a finish declaration"
+    )
+
+
+def _last_word(
+    transcript: list[dict], provider: Provider, spent: str
+) -> tuple[EpisodeOutcome, list[dict]]:
+    """One more turn once a budget is spent, with only `finish` on offer (issue #179).
+
+    `SUCCESS` only when the agent calls `finish`. A plain reply, a call to anything else,
+    or a provider error is `FAIL`, recorded with which budget ran out.
+    """
+    transcript.append({"role": "user", "content": LAST_WORD, "last_word": True})
+    try:
+        completion = provider.complete(
+            system=SYSTEM_PROMPT, messages=_api_messages(transcript), tools=[_finish_tool()]
+        )
+    except Exception as exc:  # provider errors are recorded, never swallowed
+        transcript.append(
+            {"role": "error", "content": f"provider error: {type(exc).__name__}: {exc}"}
+        )
+        transcript.append({"role": "error", "content": spent})
+        return EpisodeOutcome.FAIL, transcript
+    for call in completion.tool_calls or []:
+        name, _ = _parse_tool_call(call)
+        if name == FINISH_TOOL:
+            transcript.append(
+                {
+                    "role": "assistant",
+                    "content": _finish_summary(call),
+                    "done": True,
+                    "last_word": True,
+                }
+            )
+            return EpisodeOutcome.SUCCESS, transcript
+    transcript.append({"role": "assistant", "content": completion.text, "last_word": True})
     transcript.append(
-        {
-            "role": "error",
-            "content": (
-                f"step budget exhausted after {max_steps} steps without a finish declaration"
-            ),
-        }
+        {"role": "error", "content": f"{spent}; the last word did not declare the task done"}
     )
     return EpisodeOutcome.FAIL, transcript
 
@@ -283,28 +340,33 @@ def available_tools() -> list[dict]:
                 },
             },
         },
-        {
-            "type": "function",
-            "function": {
-                "name": FINISH_TOOL,
-                "description": (
-                    "Declare that the user's request is satisfied and end the task. Call it "
-                    "as soon as the repository is in the requested state."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "summary": {
-                            "type": "string",
-                            "description": "One line saying what was done.",
-                        }
-                    },
-                    "required": ["summary"],
-                },
-            },
-        },
+        _finish_tool(),
     ]
     return tools
+
+
+def _finish_tool() -> dict:
+    """The `finish` declaration's schema, offered every turn and alone on the last word."""
+    return {
+        "type": "function",
+        "function": {
+            "name": FINISH_TOOL,
+            "description": (
+                "Declare that the user's request is satisfied and end the task. Call it "
+                "as soon as the repository is in the requested state."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "summary": {
+                        "type": "string",
+                        "description": "One line saying what was done.",
+                    }
+                },
+                "required": ["summary"],
+            },
+        },
+    }
 
 
 def _run_tool(command: str, env: Sandbox) -> tuple[str, bool]:

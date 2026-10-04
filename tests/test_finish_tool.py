@@ -23,6 +23,7 @@ from conftest import FakeProvider
 from precondition_library.agents.react import (
     BUDGET_NUDGE,
     FINISH_TOOL,
+    LAST_WORD,
     SYSTEM_PROMPT,
     available_tools,
     solve,
@@ -103,16 +104,21 @@ def test_finish_is_accepted_even_when_the_tool_call_budget_is_spent() -> None:
 
 
 def test_one_reminder_is_sent_before_the_last_turn() -> None:
-    provider = FakeProvider(*[_turn(_git("git status")) for _ in range(4)])
+    provider = FakeProvider(
+        *[_turn(_git("git status")) for _ in range(4)],
+        Completion(text="not yet", usage=_USAGE, model="fake"),  # the last word (#179)
+    )
     outcome, transcript = _solve(provider, max_steps=4)
 
     assert outcome is EpisodeOutcome.FAIL
     nudges = [i for i, entry in enumerate(transcript) if entry.get("nudge")]
     assert len(nudges) == 1
     assert transcript[nudges[0]] == {"role": "user", "content": BUDGET_NUDGE, "nudge": True}
-    later_turns = [e for e in transcript[nudges[0] :] if e["role"] == "assistant"]
+    later_turns = [
+        e for e in transcript[nudges[0] :] if e["role"] == "assistant" and not e.get("last_word")
+    ]
     assert len(later_turns) == 1, "it comes before the last turn, not earlier"
-    assert provider.calls[-1]["messages"][-1]["content"] == BUDGET_NUDGE, "the model sees it"
+    assert provider.calls[-2]["messages"][-1]["content"] == BUDGET_NUDGE, "the model sees it"
 
 
 def test_the_reminder_also_fires_when_tool_calls_are_nearly_spent() -> None:
@@ -142,3 +148,45 @@ def test_the_reminder_reveals_nothing_about_the_repository() -> None:
     lowered = BUDGET_NUDGE.lower()
     for word in ("correct", "succeeded", "checker", "passes", "fixed"):
         assert word not in lowered
+
+
+# --- the last word (issue #179) ----------------------------------------------
+
+
+def test_finish_in_the_last_word_rescues_a_fixed_repository() -> None:
+    """The live run's case: the fix lands, a verification batch hits the cap, then finish."""
+    provider = FakeProvider(
+        _turn(*[_git("git status") for _ in range(5)]),
+        _turn(_finish("fast-forwarded and cleaned up")),
+    )
+    outcome, transcript = _solve(provider, max_tool_calls=3)
+
+    assert outcome is EpisodeOutcome.SUCCESS
+    prompt = next(
+        entry for entry in transcript if entry.get("last_word") and entry["role"] == "user"
+    )
+    assert prompt["content"] == LAST_WORD
+    assert transcript[-1]["done"] is True and transcript[-1]["last_word"] is True
+    assert sum(1 for e in _tool_entries(transcript) if not e.get("not_run")) == 3
+
+
+def test_the_last_word_offers_only_finish() -> None:
+    provider = FakeProvider(_turn(*[_git("git status") for _ in range(5)]), _turn(_finish()))
+    _solve(provider, max_tool_calls=3)
+    names = [tool["function"]["name"] for tool in provider.calls[-1]["tools"]]
+    assert names == [FINISH_TOOL], "no command can run on the last word"
+
+
+def test_a_command_on_the_last_word_is_not_a_declaration() -> None:
+    provider = FakeProvider(_turn(*[_git("git status") for _ in range(5)]), _turn(_git("git log")))
+    outcome, transcript = _solve(provider, max_tool_calls=3)
+    assert outcome is EpisodeOutcome.FAIL
+    assert "last word did not declare" in transcript[-1]["content"]
+    assert "git log" not in [e.get("command") for e in _tool_entries(transcript)]
+
+
+def test_the_turn_budget_also_ends_in_a_last_word() -> None:
+    provider = FakeProvider(*[_turn(_git("git status")) for _ in range(2)], _turn(_finish()))
+    outcome, transcript = _solve(provider, max_steps=2)
+    assert outcome is EpisodeOutcome.SUCCESS
+    assert transcript[-1]["last_word"] is True

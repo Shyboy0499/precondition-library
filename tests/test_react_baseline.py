@@ -187,15 +187,17 @@ def test_a_non_git_command_is_refused_as_a_tool_result(make_sandbox) -> None:
 def test_max_steps_bounds_the_loop(make_sandbox) -> None:
     """A model that never finishes is cut off, and the transcript shows where."""
     box = make_sandbox(MODIFIED_ONLY, ["dirty_tree"])
-    fake = FakeProvider(*[_tool("git status --porcelain") for _ in range(3)])
+    fake = FakeProvider(
+        *[_tool("git status --porcelain") for _ in range(3)],
+        _finish("still checking"),  # a plain reply as the last word: not a declaration
+    )
     outcome, transcript = solve(_signature(box), box, fake, max_steps=3)
 
-    assert outcome is EpisodeOutcome.FAIL
-    assert len(fake.calls) == 3
-    assert sum(entry["role"] == "assistant" for entry in transcript) == 3
+    assert outcome is EpisodeOutcome.FAIL, "a plain last word is not a declaration"
+    assert len(fake.calls) == 3 + 1, "three turns and the last word (issue #179)"
     # system + task + 3 x (assistant, tool) + the one budget reminder before the last
-    # turn (issue #171) + the budget note.
-    assert len(transcript) == 2 + 2 * 3 + 1 + 1
+    # turn (issue #171) + the last word's prompt and reply (#179) + the budget note.
+    assert len(transcript) == 2 + 2 * 3 + 1 + 2 + 1
     assert sum(1 for entry in transcript if entry.get("nudge")) == 1
     assert "budget" in transcript[-1]["content"]
 

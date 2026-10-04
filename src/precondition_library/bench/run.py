@@ -881,7 +881,10 @@ def _run_gold(oracle: Program | None, box: Sandbox) -> _ArmResult:
 
 def _tool_calls(transcript: list[dict] | None) -> int:
     """How many tool calls a transcript ran, refused ones included (issue #160)."""
-    return sum(1 for entry in transcript or [] if entry.get("role") == "tool")
+    # A call answered "not run" after the cap (issue #179) executed nothing.
+    return sum(
+        1 for entry in transcript or [] if entry.get("role") == "tool" and not entry.get("not_run")
+    )
 
 
 def _record_mismatch(
