@@ -26,8 +26,10 @@ boundary); this section says precisely where the seatbelt has no purchase:
   variable, or a URL assembled from pieces are invisible here. A command named
   through a variable is not recognised at all.
 * Anything behind an interpreter or an encoding: ``eval``, ``bash -c``,
-  ``python -c``, ``perl``, a base64 blob. Only the obvious network-module
-  heuristics are attempted for those, and they are heuristics.
+  ``python -c``, ``perl``, a base64 blob, GNU sed's ``e`` command. Only the
+  obvious network-module heuristics are attempted for those, and they are
+  heuristics. A sed script's ``w`` file is read as a write target; the rest of
+  the script is not a path (#214).
 * Remotes by resolution. A force-push to a *named* remote is refused even when
   the name is the sandbox's own ``upstream``, because telling a sandbox remote
   from a shared one means running git; only a path under ``env_root`` is
@@ -122,8 +124,12 @@ _ASSIGNED_NAME = re.compile(
     + r"(?:(?:local|export|readonly|declare|typeset)(?:\s+-\w+)*\s+)?([A-Za-z_][A-Za-z0-9_]*)=",
     re.MULTILINE,
 )
+# A `read` may follow a compound keyword (`while read -r x`, `if read -r x`) and its
+# own environment assignments (`IFS= read -r x`) and still assign its names (#214).
+_READ_PREFIX = r"(?:(?:while|until|if|elif|then|do|else|!)\s+)*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*"
 _READ_NAMES = re.compile(
-    _STATEMENT_START + r"read\b(?:\s+-\w+)*((?:\s+[A-Za-z_][A-Za-z0-9_]*)+)", re.MULTILINE
+    _STATEMENT_START + _READ_PREFIX + r"read\b(?:\s+-\w+)*((?:\s+[A-Za-z_][A-Za-z0-9_]*)+)",
+    re.MULTILINE,
 )
 _FOR_NAME = re.compile(_STATEMENT_START + r"for\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\b", re.MULTILINE)
 _STATEMENT_END = re.compile(r"&&|\|\||[;\n|]")
@@ -350,8 +356,10 @@ def _outside_write_effect(body: str, env_root: str) -> str | None:
                 targets.append(tokens[index + 1])
         if name in _WRITE_COMMANDS:
             targets.extend(tokens[1:])
-        elif name == "sed" and any(t == "-i" or t.startswith("-i") for t in tokens[1:]):
-            targets.extend(tokens[1:])
+        elif name == "sed" and any(_in_place(t) for t in tokens[1:]):
+            scripts, files = _sed_arguments(tokens[1:])
+            targets.extend(files)
+            targets.extend(_sed_script_writes(scripts))
         elif name == "find" and any(t in {"-delete", "-exec", "-execdir"} for t in tokens[1:]):
             targets.extend(tokens[1:])
         elif name == "git" and "config" in tokens and "--file" in tokens:
@@ -365,6 +373,65 @@ def _outside_write_effect(body: str, env_root: str) -> str | None:
             if _escapes_env(target, env_root):
                 return f"{target!r} is outside env_root {env_root!r}"
     return None
+
+
+def _in_place(token: str) -> bool:
+    return token.startswith("--in-place") or (token.startswith("-i") and token != "-")
+
+
+def _sed_arguments(args: list[str]) -> tuple[list[str], list[str]]:
+    """A `sed` command's scripts and its file operands, told apart (#214).
+
+    The script is not a path: reading every argument as a write target refused
+    `sed -i '/^packages/r extra' deps.lock`, whose script starts with `/`. The script is
+    the `-e`/`--expression` value, or the first operand when there is none; a `-f`
+    script file is read, not written. What remains are the files `-i` rewrites. An
+    unrecognised shape keeps an argument as a file, so the screen errs toward refusing.
+    """
+    scripts: list[str] = []
+    files: list[str] = []
+    script_given = False
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        if arg == "--":
+            files.extend(args[index + 1 :])
+            break
+        if arg in {"-e", "--expression", "-f", "--file"}:
+            if arg in {"-e", "--expression"} and index + 1 < len(args):
+                scripts.append(args[index + 1])
+            script_given = True
+            index += 2
+            continue
+        if arg.startswith(("--expression=", "--file=")):
+            if arg.startswith("--expression="):
+                scripts.append(arg.split("=", 1)[1])
+            script_given = True
+        elif arg.startswith("-") and not arg.startswith("--") and not _in_place(arg):
+            if arg.endswith(("e", "f")) and index + 1 < len(args):
+                # A cluster ending in -e or -f (`-ne`) takes the next argument.
+                if arg.endswith("e"):
+                    scripts.append(args[index + 1])
+                script_given = True
+                index += 2
+                continue
+        elif not arg.startswith("-"):
+            if script_given:
+                files.append(arg)
+            else:
+                scripts.append(arg)
+                script_given = True
+        index += 1
+    return scripts, files
+
+
+_SED_WRITE = re.compile(r"(?:^|[;{}\n]|/[gpIiMme0-9]*|[0-9$,!~]+)\s*[wW]\s+(\S+)")
+"""A sed `w`/`W` command, or an `s///w` flag, and the file it writes."""
+
+
+def _sed_script_writes(scripts: list[str]) -> list[str]:
+    """The files a sed script writes with `w`, which are write targets like any other."""
+    return [match.group(1) for script in scripts for match in _SED_WRITE.finditer(script)]
 
 
 def screen(body: str, *, env_root: str) -> Decision:

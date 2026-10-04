@@ -8,7 +8,8 @@ The third live run's compiled `submodule_moved` program was refused at admission
 The guard's environment-read rule matched any `$NAME`. It now lets through a variable
 the body assigned in an earlier statement, and still refuses everything the rule exists
 for: an unassigned variable, a read before the assignment (including `FOO=$FOO:x`), the
-environment dumpers, and credential-looking names.
+environment dumpers, and credential-looking names. Since #214 a `read` after a compound
+keyword (`while read -r x`) or its own assignments (`IFS= read -r x`) assigns too.
 """
 
 from __future__ import annotations
@@ -39,6 +40,10 @@ LIVE_PROBE = (
         'read -r head rest <<< "$(git rev-parse HEAD)"; test -n "$head"',
         'for f in a b; do test -n "$f"; done',
         'x=1; test "${x}" = 1',
+        'git diff HEAD | while read -r line; do echo "$line" >> notes.txt; done',
+        'while IFS= read -r pkg; do test -n "$pkg"; done < .git/lock-additions',
+        'until read -r n; do :; done; test -n "$n"',
+        'if read -r first < deps.lock; then test -n "$first"; fi',
     ],
 )
 def test_a_variable_the_body_assigned_first_is_allowed(body: str) -> None:
@@ -54,6 +59,8 @@ def test_a_variable_the_body_assigned_first_is_allowed(body: str) -> None:
         ("FOO=$FOO:x; echo done", "$FOO"),
         ('a=1 test "$b" = 1', "$b"),
         ("echo ${PATH}", "${PATH}"),
+        ("while read -r x; do echo $PATH; done", "$PATH"),
+        ('echo "$x"; while read -r x; do :; done', "$x"),
     ],
 )
 def test_an_unassigned_or_early_read_is_still_refused(body: str, named: str) -> None:
