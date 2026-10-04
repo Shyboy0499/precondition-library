@@ -54,7 +54,8 @@ class Predicate(BaseModel):
     """Shell command run in the environment root. Expected to be side-effect free."""
     expect_exit: int = 0
     expect_pattern: str | None = None
-    """Optional regex the probe's stdout must match."""
+    """Optional regex the probe's stdout must match, read by `runtime.probes.pattern_for`:
+    its `{placeholders}` are bound (regex-escaped) and POSIX classes are understood."""
 
 
 class Provenance(BaseModel):
