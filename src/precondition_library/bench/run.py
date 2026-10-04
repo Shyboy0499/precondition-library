@@ -236,6 +236,9 @@ class _ArmResult:
     replay hit is not compilable because no model ran."""
     memory_recalled: int | None = None
     """How many memory entries arm 1b put in this episode's prompt; `None` for other arms."""
+    compile_attempts: int | None = None
+    """How many compiles this episode's solution took, `COMPILE_ATTEMPTS` at most;
+    `None` when nothing was compiled (ADR-0030)."""
 
 
 def run_benchmark(
@@ -600,6 +603,7 @@ def run_episode(
             admitted=result.admitted,
             refusal_reason=result.refusal_reason,
             compile_failure_reason=result.compile_failure_reason,
+            compile_attempts=result.compile_attempts,
             replay_failure_reason=result.replay_failure_reason,
             timed_out=result.timed_out,
             model=model,
@@ -938,6 +942,11 @@ def _is_genuine_miss(replayed: ReplayResult) -> bool:
     return replayed.postconditions is not None and not replayed.postconditions.ok
 
 
+COMPILE_ATTEMPTS = 2
+"""Compiles one solution may take: a first one and, if admission refuses it, one
+revision told why (ADR-0030). Every attempt's tokens are the episode's."""
+
+
 def _learn_from_solution(
     result: _ArmResult,
     signature: TaskSignature,
@@ -979,30 +988,45 @@ def _learn_from_solution(
 
     episode_id = _episode_id(fault_type, seed, occurrence)
     intent = _intent_for(fault_type)
-    try:
-        compiled = compile_program(
-            signature,
-            box,
-            result.transcript,
-            accounting,
-            fault=fault_type,
-            variant_ids=[variant.id for variant in intent.variants],
+    program: Program | None = None
+    admitted, gate_reason = False, ""
+    revision: tuple[Program, str] | None = None
+    for attempt in range(1, COMPILE_ATTEMPTS + 1):
+        try:
+            compiled = compile_program(
+                signature,
+                box,
+                result.transcript,
+                accounting,
+                fault=fault_type,
+                variant_ids=[variant.id for variant in intent.variants],
+                revision=revision,
+            )
+        except Exception as exc:
+            if program is None:
+                result.compile_attempts = attempt
+                _record_compile_failure(result, f"compile raised {type(exc).__name__}: {exc}")
+                return
+            break  # the revision failed; the refused first program and its reason stand
+        result.compile_attempts = attempt
+        if not compiled.ok or compiled.program is None:
+            if program is None:
+                _record_compile_failure(
+                    result, compiled.reason or "the compile returned no program"
+                )
+                return
+            break
+        # The stored id is derived from this episode's identity, not taken from the
+        # model: a later episode reusing a slug must not lose its program to the
+        # library's correct refusal to overwrite (issue #80).
+        program = compiled.program.model_copy(
+            update={"id": _program_id(fault_type, occurrence, compiled.program.id)}
         )
-    except Exception as exc:
-        _record_compile_failure(result, f"compile raised {type(exc).__name__}: {exc}")
-        return
-
-    if not compiled.ok or compiled.program is None:
-        _record_compile_failure(result, compiled.reason or "the compile returned no program")
-        return
-
-    # The stored id is derived from this episode's identity, not taken from the
-    # model: a later episode reusing a slug must not lose its program to the
-    # library's correct refusal to overwrite (issue #80).
-    program = compiled.program.model_copy(
-        update={"id": _program_id(fault_type, occurrence, compiled.program.id)}
-    )
-    admitted, gate_reason = admit(program, fault_type, seeds=[seed])
+        admitted, gate_reason = admit(program, fault_type, seeds=[seed])
+        if admitted:
+            break
+        revision = (program, gate_reason)
+    assert program is not None  # the loop returns before here when no program parsed
     try:
         library.add(program)
     except ProgramIdCollisionError as exc:

@@ -293,6 +293,10 @@ class EpisodeRecord(BaseModel):
     Set on a row where the arm had to solve and no program came out of it, and
     never on a row whose only degradation is a guard refusal. It is a
     compile-quality signal, not a safety one."""
+    compile_attempts: int | None = None
+    """How many compiles the solution took: 1, or 2 when admission refused the first
+    and the revision was tried (ADR-0030). `None` when nothing was compiled, and on
+    every row written before the revision existed."""
     invalid_reason: str | None = None
     """Why the episode could not be graded (a sandbox, checker or other
     infrastructure failure). Set only when `outcome` is `EpisodeOutcome.INVALID`,

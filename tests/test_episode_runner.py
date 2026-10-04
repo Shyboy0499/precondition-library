@@ -1651,3 +1651,63 @@ def test_persistent_timeouts_are_capped_and_counted(tmp_path, monkeypatch) -> No
     assert provider.calls == 3, "one call plus the two the cap allows"
     assert record.outcome is EpisodeOutcome.FAIL
     assert record.llm_calls == 3, "every timed-out attempt is a call"
+
+
+# --- a refused compile gets one revision, told why (ADR-0030) ----------------
+
+
+def test_a_refused_compile_is_revised_once_with_the_refusal(tmp_path: Path) -> None:
+    """The first program fires everywhere and is refused; the revision is admitted.
+
+    The second compile request carries the refused program and admission's reason
+    in its payload, and the system prompt says what they are. Both compiles are the
+    episode's: they show in `llm_calls` and `compile_attempts`.
+    """
+    always = Predicate(name="always", description="holds anywhere", probe="true")
+    provider = FakeProvider(
+        *_resolves_discard(),
+        _completion(_reply_text(_discard_program(preconditions=[always])), tokens_in=100),
+        _completion(_reply_text(_discard_program()), tokens_in=100, tokens_out=40),
+    )
+    out = tmp_path / "ledger.jsonl"
+    run_benchmark(
+        arms=[Arm.PRECONDITION],
+        faults=["diverged"],
+        occurrences=1,
+        seeds=[DISCARD_SEED],
+        out=out,
+        model="fake",
+        provider=provider,
+    )
+    (row,) = read(out)
+    assert row.admitted is True
+    assert row.compile_attempts == 2
+    assert row.compile_failure_reason is None
+    assert row.llm_calls == 5, "three solve turns and two compiles"
+
+    first_compile, revision = provider.calls[-2:]
+    assert "REVISION" not in first_compile["system"]
+    assert "REVISION" in revision["system"]
+    request = revision["messages"][-1]["content"]
+    assert '"admission_refusal"' in request and "rejected before any sandbox" in request
+    assert '"previous_program"' in request and '"always"' in request
+
+
+def test_a_revision_that_is_refused_too_keeps_the_last_reason(tmp_path: Path) -> None:
+    always = Predicate(name="always", description="holds anywhere", probe="true")
+    broad = _reply_text(_discard_program(preconditions=[always]))
+    provider = FakeProvider(*_resolves_discard(), _completion(broad), _completion(broad))
+    out = tmp_path / "ledger.jsonl"
+    run_benchmark(
+        arms=[Arm.PRECONDITION],
+        faults=["diverged"],
+        occurrences=1,
+        seeds=[DISCARD_SEED],
+        out=out,
+        model="fake",
+        provider=provider,
+    )
+    (row,) = read(out)
+    assert row.admitted is False and row.compile_attempts == 2
+    assert row.compile_failure_reason
+    assert "rejected before any sandbox" in row.compile_failure_reason
