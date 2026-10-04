@@ -109,13 +109,14 @@ def test_a_committed_change_inside_the_surface_is_allowed(make_sandbox) -> None:
 
 
 def test_an_empty_surface_refuses_any_commit(make_sandbox) -> None:
-    """`branch_renamed` is a ref operation, so a commit is outside a fault that has no files.
+    """An empty declaration is not "no check": it is the strictest one.
 
-    An empty declaration is not "no check": it is the strictest one, and it is why the default
-    is empty rather than permissive -- a fault that forgets to declare fails here.
+    It is why the default is empty rather than permissive -- a fault that forgets to declare
+    fails here. No fault declares it today (`branch_renamed` did until #190 gave its upstream a
+    commit to bring in), so the rule is pinned on its own, against a clean sandbox.
     """
-    box = make_sandbox(0, ["branch_renamed"])
-    assert FAULTS["branch_renamed"].change_surface == ()
+    box = make_sandbox(0, [])
+    box.recorded["base"] = run_git(("rev-parse", "HEAD"), cwd=box.work).stdout.strip()
 
     (box.work / "app.py").write_text("# unrelated commit\n", encoding="utf-8")
     run_git(("add", "-A"), cwd=box.work)

@@ -46,7 +46,7 @@ import shutil
 from pathlib import Path
 
 from ..program import GroundTruthResult, Predicate, PredicateResult, Program
-from ..sandbox import Sandbox, run_env, run_git, submodule_path
+from ..sandbox import Sandbox, harness_upstream_branch, run_env, run_git, submodule_path
 from .confine import run_confined
 from .guard import Verdict, screen
 
@@ -314,9 +314,11 @@ def bindings(env: Sandbox) -> dict[str, str]:
     """Values the sandbox supplies for the declared parameter names.
 
     `sandbox.create` clones its only remote as `upstream` and seeds the branch
-    `main`, and the working clone is `env.work`. `submodule_path` comes from
-    `sandbox.submodule_path`, which prefers the path a fault injector recorded
-    and falls back to the repository's own `.gitmodules`: a correct removal of
+    `main`, and the working clone is `env.work`; `upstream_branch` is `main` unless the
+    clone records another default for upstream (`sandbox.harness_upstream_branch`).
+    `submodule_path` comes from `sandbox.submodule_path`, which prefers the path a
+    fault injector recorded and falls back to the repository's own `.gitmodules`: a
+    correct removal of
     the submodule deletes that entry, so the recorded value is what still names
     the path in the state a program needs to bind it. It is present only when one
     of the two supplies it, and deliberately absent (not empty) otherwise. An
@@ -340,7 +342,7 @@ def bindings(env: Sandbox) -> dict[str, str]:
     values = {
         "work_dir": str(env.work),
         "upstream_remote": "upstream",
-        "upstream_branch": "main",
+        "upstream_branch": harness_upstream_branch(env.work),
     }
     path = submodule_path(env)
     if path is not None:

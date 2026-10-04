@@ -243,6 +243,24 @@ HARNESS_UPSTREAM_REF = "upstream/main"
 `main`, the same fixed vocabulary `runtime.probes.bindings` supplies."""
 
 
+def harness_upstream_branch(work: Path) -> str:
+    """Upstream's default branch in a harness sandbox: `main`, unless the clone records
+    another.
+
+    `create` builds every sandbox on `main` and records no `refs/remotes/upstream/HEAD`,
+    so this is `main` for every state that does not move upstream's default. A state
+    that does -- `branch_renamed` (#190) renames it and leaves the clone as the trusted
+    pre-fetch leaves a checkout, with `remote set-head --auto` run -- records the new
+    name there, and a checkout of that state derives the same name
+    (`runtime.probes.repository_bindings`). Reading it here keeps the harness and a
+    checkout of the same state in agreement about what upstream is.
+    """
+    head = run_git(
+        ("symbolic-ref", "-q", "--short", "refs/remotes/upstream/HEAD"), cwd=work, check=False
+    ).stdout.strip()
+    return head.removeprefix("upstream/") if head.startswith("upstream/") else "main"
+
+
 class NoUpstreamError(ValueError):
     """A checkout whose upstream remote or branch could not be derived, so nothing compares."""
 
@@ -250,7 +268,8 @@ class NoUpstreamError(ValueError):
 def upstream_ref(env: Sandbox) -> str:
     """The remote-tracking ref that stands for upstream's tip in `env`.
 
-    `upstream/main` in a harness sandbox. On a checkout (#181), `<remote>/<branch>` from the
+    `upstream/main` in a harness sandbox (`harness_upstream_branch`: the recorded default,
+    which only a renamed upstream moves). On a checkout (#181), `<remote>/<branch>` from the
     parameters `runtime.probes.repository_bindings` derived -- a fork's `origin/trunk` is
     what its upstream is, and reading `upstream/main` there would compare against a ref
     that does not exist, or worse, one that exists and is not upstream. Raises
@@ -259,7 +278,7 @@ def upstream_ref(env: Sandbox) -> str:
     label a state the repository is not in.
     """
     if env.checkout is None:
-        return HARNESS_UPSTREAM_REF
+        return f"upstream/{harness_upstream_branch(env.work)}"
     remote = env.checkout.parameters.get("upstream_remote")
     branch = env.checkout.parameters.get("upstream_branch")
     if remote is None or branch is None:
