@@ -211,7 +211,7 @@ def evaluate_predicate(
     decision = screen(probe, env_root=str(env.work))
     if decision.verdict is Verdict.REFUSE:
         return PredicateResult(
-            name=predicate.name, ok=False, observed=f"refused {decision.reason}", refused=True
+            name=predicate.name, ok=False, observed=decision.reason, refused=True
         )
 
     # A probe must be read-only (issue #10): the guard permits writes inside the sandbox

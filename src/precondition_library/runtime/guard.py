@@ -114,6 +114,19 @@ _CREDENTIAL = re.compile(
 )
 
 _ENV_VAR = re.compile(r"\$[A-Za-z_][A-Za-z0-9_]*|\$\{[A-Za-z_][A-Za-z0-9_]*\}")
+# Where a statement may begin: the start of a line, or just after a separator or an
+# opening of a command substitution, subshell or group.
+_STATEMENT_START = r"(?:^|(?<=[;&|\n(`{]))\s*"
+_ASSIGNED_NAME = re.compile(
+    _STATEMENT_START
+    + r"(?:(?:local|export|readonly|declare|typeset)(?:\s+-\w+)*\s+)?([A-Za-z_][A-Za-z0-9_]*)=",
+    re.MULTILINE,
+)
+_READ_NAMES = re.compile(
+    _STATEMENT_START + r"read\b(?:\s+-\w+)*((?:\s+[A-Za-z_][A-Za-z0-9_]*)+)", re.MULTILINE
+)
+_FOR_NAME = re.compile(_STATEMENT_START + r"for\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\b", re.MULTILINE)
+_STATEMENT_END = re.compile(r"&&|\|\||[;\n|]")
 _ENV_DUMPERS = frozenset({"env", "printenv"})
 _ENV_READ_EXPR = re.compile(r"\b(?:os\.environ|process\.env|getenv\s*\()")
 
@@ -216,10 +229,44 @@ def _credential_effect(body: str) -> str | None:
     return match.group(0) if match else None
 
 
+def _assigned_from(body: str) -> dict[str, int]:
+    """Each variable the body assigns itself, and the offset from which it holds that value.
+
+    A shell variable the body sets -- `NAME=...` (optionally `local`, `export`, ...),
+    `read NAME`, `for NAME in` -- is the body's own value, not the environment's
+    (issue #180). It holds from the end of the statement that assigns it: in
+    `FOO=$FOO:x` the right-hand `$FOO` is still read from the environment, so that
+    stays a refusal. The scan is lexical, like the rest of this module: an assignment
+    inside a `$( )` subshell is counted although it does not reach the parent shell,
+    which can only let through a read of a variable whose name the body itself chose.
+    """
+    assigned: dict[str, int] = {}
+
+    def note(name: str, at: int) -> None:
+        end = _STATEMENT_END.search(body, at)
+        effective = end.end() if end else len(body)
+        assigned[name] = min(assigned.get(name, effective), effective)
+
+    for match in _ASSIGNED_NAME.finditer(body):
+        note(match.group(1), match.end())
+    for match in _READ_NAMES.finditer(body):
+        for name in match.group(1).split():
+            note(name, match.end())
+    for match in _FOR_NAME.finditer(body):
+        note(match.group(1), match.end())
+    return assigned
+
+
 def _env_read_effect(body: str) -> str | None:
-    match = _ENV_VAR.search(body) or _ENV_READ_EXPR.search(body)
-    if match:
+    assigned = _assigned_from(body)
+    for match in _ENV_VAR.finditer(body):
+        name = match.group(0).strip("${}")
+        if name in assigned and assigned[name] <= match.start():
+            continue  # the body's own variable, set by an earlier statement (#180)
         return match.group(0)
+    expression = _ENV_READ_EXPR.search(body)
+    if expression:
+        return expression.group(0)
     for tokens in _commands(body):
         if os.path.basename(tokens[0]) in _ENV_DUMPERS:
             return f"command {os.path.basename(tokens[0])!r}"
