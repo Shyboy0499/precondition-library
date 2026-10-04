@@ -36,6 +36,7 @@ from ..sandbox import (
     run_git,
 )
 from ..signatures import TaskSignature
+from .command_screen import command_running_reason
 
 _GIT_TIMEOUT_S = 30.0
 """Wall-clock bound on one tool call. A git command in a local sandbox is
@@ -326,8 +327,11 @@ def available_tools() -> list[dict]:
     option that retargets the repository -- keep the command pointed at that
     clone; they are not a security boundary against a determined model, because
     a git command can still damage the sandbox. Damaging the sandbox is the
-    accepted cost; damaging the host is not, and running without a shell is what
-    makes `rm -rf ...` a refusal rather than an execution.
+    accepted cost; damaging the host is not. Running without a shell makes
+    `rm -rf ...` a refusal rather than an execution, but git can run a command
+    itself (an alias, a driver, `submodule foreach`, `rebase --exec`), so
+    `command_screen` refuses the ways it does. The live agent used an alias to run
+    `sed` on the host before that screen existed.
 
     This is deliberately **not** `runtime.guard`. The guard constrains a
     replayed program body that runs unattended and may contain arbitrary shell;
@@ -407,6 +411,9 @@ def _run_tool(command: str, env: Sandbox) -> tuple[str, bool]:
             _refused(f"{retargeting[0]!r} would run outside the sandbox working directory"),
             False,
         )
+    runs_a_command = command_running_reason(argv)
+    if runs_a_command is not None:
+        return _refused(f"{runs_a_command}; this tool runs git, not other programs"), False
     overrides = disallowed_git_config_overrides(argv)
     if overrides:
         # Command-line config wins over the hardened environment, so an override
