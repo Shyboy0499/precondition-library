@@ -98,6 +98,7 @@ def test_every_stage_ran_and_wrote_its_artifact(run) -> None:
     assert (out / "report").is_dir() and (out / "primary" / "figure1.csv").is_file()
     assert (out / "summary.json").is_file() and (out / "summary.txt").is_file()
     assert result.soft_threshold is not None and result.figure1 is not None
+    assert result.arm2_floor is not None, "item 11's verdict sits beside Figure 1 (#184)"
 
 
 def test_the_frozen_rows_carry_one_library_and_every_arm(run) -> None:

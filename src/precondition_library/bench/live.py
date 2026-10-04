@@ -20,6 +20,11 @@ gives them, and every artifact lands under one output directory.
 4. **Figure 1** (`bench.library_pairs`, ADR-0022): the two-sided library's own matchers on
    the pair seeds' real sandboxes, into `primary/`, with 2b's Claim-2 verdict. No model
    call.
+
+Before stage 3 sends any eval episode, **arm 2's baseline floor** (spec §7 item 11,
+ADR-0007) is measured against the two-sided library's candidate texts on the tune seeds,
+and its verdict is reported beside Figure 1 (#184): below the floor, the summary says
+that Claim 2 may not be worded as a win over text similarity.
 5. **Online arms 1 and 1b** (ADR-0017), optional: ReAct with and without its memory,
    each growing its own library, into `online/online.jsonl`.
 
@@ -50,15 +55,24 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from ..library import Library
+from ..program import ProgramStatus
 from ..provider import DEFAULT_MODEL, DeepSeekProvider, Provider
 from ..runtime.probes import evaluate_preconditions
+from ..tasks.registry import ambiguous_intents
 from .build_library import build_library
 from .coverage import operating_point, sweep
 from .ledger import Arm, EpisodeOutcome, read
 from .library_pairs import library_pair_outcomes
 from .primary import primary_report, summary, write_primary_report
-from .report import admission_factorial, write_report
+from .report import (
+    ARM2_CANDIDATES_PER_DECISION,
+    BaselineFloor,
+    admission_factorial,
+    arm2_baseline_floor,
+    write_report,
+)
 from .run import run_benchmark
+from .similarity_probe import program_text_candidates, tune_baseline
 from .soft_vote import claim2_verdict, learn_soft_threshold, soft_vote_outcomes
 from .splits import EVAL_SEEDS, SMOKE_SEEDS, TUNE_SEEDS
 
@@ -122,6 +136,8 @@ class LiveSummary(BaseModel):
     claim2_reason: str | None = None
     figure1: str | None = None
     """`bench.primary.summary` of Figure 1: the comparison, or why it is vacuous."""
+    arm2_floor: BaselineFloor | None = None
+    """Spec §7 item 11's verdict on arm 2 as the baseline, measured before any eval episode."""
     factorial: list[dict] = []
     artifacts: dict[str, str]
 
@@ -144,6 +160,52 @@ def _build_episodes(ledger: Path) -> list[BuildEpisode]:
             )
         )
     return episodes
+
+
+NOT_A_WIN_OVER_TEXT = (
+    "arm 2 is not a usable baseline (spec §7 item 11), so this run may not say that "
+    "precondition dispatch beats text similarity; the comparison is reported, not claimed"
+)
+
+
+def baseline_floor(library: Library) -> BaselineFloor:
+    """Spec §7 item 11 against `library`'s admitted programs, exactly as registered.
+
+    Each ambiguous intent's candidates are its fault's admitted programs, one text per
+    resolution (`program_text_candidates`; where a resolution has several programs the
+    last by id stands for it). The strict top-1 comes from `tune_baseline` -- informed
+    regime, tune seeds, the library's own similarity -- and `arm2_baseline_floor` judges
+    it. The tune seeds are the registered `TUNE_SEEDS` whatever `LivePlan.tune_seeds` says:
+    `tune_baseline` reads the declared state grid, not sandboxes, so the registered set
+    costs nothing to use. An intent left with fewer than two candidate resolutions has no
+    choice for arm 2 to make, so the floor is **not measurable**, which is not usable
+    (#184): the third live run's library held only `rebase` for `diverged`, and
+    `tune_baseline` refuses that rather than score a one-candidate decision.
+    """
+    admitted = [p for p in library.load_all() if p.status is ProgramStatus.ADMITTED]
+    candidates = {
+        intent.name: program_text_candidates(
+            [p for p in admitted if p.provenance.fault == intent.fault]
+        )
+        for intent in ambiguous_intents()
+    }
+    short = {name: sorted(found) for name, found in candidates.items() if len(found) < 2}
+    if short:
+        named = "; ".join(f"{name} has {found or 'none'}" for name, found in sorted(short.items()))
+        return BaselineFloor(
+            decided=0,
+            decidable=0,
+            chance=1.0 / ARM2_CANDIDATES_PER_DECISION,
+            lower_bound=None,
+            usable=False,
+            reason=(
+                f"not measurable, so not usable: an intent needs two or more candidate "
+                f"resolutions for arm 2 to choose between, and the library's admitted "
+                f"programs give {named}"
+            ),
+        )
+    row = tune_baseline(candidates, library.similarity)
+    return arm2_baseline_floor(row.decided, row.decidable)
 
 
 def run_live(plan: LivePlan, *, provider: Provider, model: str, out: Path) -> LiveSummary:
@@ -217,6 +279,7 @@ def _measure(
     two_sided, positive_only = out / "library-two-sided", out / "library-positive-only"
     library = Library(two_sided, evaluate_preconditions=evaluate_preconditions)
     soft_threshold = learn_soft_threshold(soft_vote_outcomes(library, faults, plan.tune_seeds))
+    result.arm2_floor = baseline_floor(library)
 
     frozen = run_benchmark(
         arms=list(FROZEN_ARMS),
@@ -291,6 +354,8 @@ def _text(result: LiveSummary) -> str:
             "",
             result.figure1 or "",
             "",
+            *_floor_lines(result.arm2_floor),
+            "",
             "admission factorial:",
             *(json.dumps(cell) for cell in result.factorial),
             "",
@@ -300,6 +365,15 @@ def _text(result: LiveSummary) -> str:
         *(f"  {name}: {path}" for name, path in result.artifacts.items()),
     ]
     return "\n".join(lines) + "\n"
+
+
+def _floor_lines(floor: BaselineFloor | None) -> list[str]:
+    if floor is None:
+        return []
+    lines = [f"arm 2 baseline floor (spec §7 item 11): {floor.reason}"]
+    if not floor.usable:
+        lines.append(f"  {NOT_A_WIN_OVER_TEXT}")
+    return lines
 
 
 def read_api_key(path: Path) -> str:
