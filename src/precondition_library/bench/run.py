@@ -993,6 +993,7 @@ def _learn_from_solution(
     revision: tuple[Program, str] | None = None
     refused_state: StateFingerprint | None = None
     first_refused: tuple[Program, str] | None = None
+    revision_failure: str | None = None
     for attempt in range(1, COMPILE_ATTEMPTS + 1):
         try:
             compiled = compile_program(
@@ -1006,11 +1007,14 @@ def _learn_from_solution(
                 refused_state=refused_state,
             )
         except Exception as exc:
+            result.compile_attempts = attempt
             if program is None:
-                result.compile_attempts = attempt
                 _record_compile_failure(result, f"compile raised {type(exc).__name__}: {exc}")
                 return
-            break  # the revision failed; the refused first program and its reason stand
+            # The revision failed; the refused program and its reason stand, and the row
+            # says the revision was tried and why it produced nothing.
+            revision_failure = f"the revision raised {type(exc).__name__}: {exc}"
+            break
         result.compile_attempts = attempt
         if not compiled.ok or compiled.program is None:
             if program is None:
@@ -1018,6 +1022,9 @@ def _learn_from_solution(
                     result, compiled.reason or "the compile returned no program"
                 )
                 return
+            revision_failure = (
+                f"the revision did not parse: {compiled.reason or 'no program returned'}"
+            )
             break
         # The stored id is derived from this episode's identity, not taken from the
         # model: a later episode reusing a slug must not lose its program to the
@@ -1051,6 +1058,8 @@ def _learn_from_solution(
         library.record_revision(program.id, refused=refused, reason=reason, episode_id=episode_id)
     if admitted:
         library.set_status(program.id, ProgramStatus.ADMITTED, episode_id=episode_id)
+    elif revision_failure is not None:
+        _record_compile_failure(result, f"{gate_reason}; {revision_failure}")
     else:
         _record_compile_failure(result, gate_reason)
 
