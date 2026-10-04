@@ -28,6 +28,11 @@ that Claim 2 may not be worded as a win over text similarity.
 5. **Online arms 1 and 1b** (ADR-0017), optional: ReAct with and without its memory,
    each growing its own library, into `online/online.jsonl`.
 
+**`--primary-only`** runs the build and then only what needs no model call: stage 2,
+arm 2's floor and stage 4. The primary metric is pair-level (ADR-0022), so it costs only
+the build -- about a sixth of the fourth smoke run's tokens -- and a run that wants
+Figure 1 from a new library need not pay for the episodes.
+
 **Replicates** (spec §7 item 2, #185). The registered plan runs the episodes as k = 3
 whole-run replicates; `--replicates K` asks for them. With K > 1 each episode stage goes
 through `bench.run.run_replicates`, writing `<stage>/replicate-r/ledger.jsonl` (the frozen
@@ -119,6 +124,10 @@ class LivePlan(BaseModel):
     pair_seeds: tuple[int, ...] = EVAL_SEEDS
     episode_seeds: tuple[int, ...] = SMOKE_EPISODE_SEEDS
     online: bool = True
+    episodes: bool = True
+    """Whether stage 3 runs. `False` (`--primary-only`) stops after the stages that need no
+    model call -- the 2b threshold, arm 2's floor, Figure 1 and Claim 2 -- so the primary
+    metric costs only the build."""
     replicates: int = 1
     """Whole-run replicates of every episode stage; the registered plan is
     `DEFAULT_REPLICATES` (spec §7 item 2), the smoke default one."""
@@ -302,7 +311,10 @@ def run_live(plan: LivePlan, *, provider: Provider, model: str, out: Path) -> Li
             "so the frozen benchmark, the 2b tuning and Figure 1 had nothing to dispatch"
         )
     else:
-        _measure(result, plan, provider=provider, model=model, out=out)
+        library = Library(two_sided, evaluate_preconditions=evaluate_preconditions)
+        _pair_level(result, plan, library, out)
+        if plan.episodes:
+            _measure(result, plan, provider=provider, model=model, out=out)
     if plan.online:
         online = _episodes(
             result,
@@ -323,16 +335,37 @@ def run_live(plan: LivePlan, *, provider: Provider, model: str, out: Path) -> Li
     return result
 
 
+def _pair_level(result: LiveSummary, plan: LivePlan, library: Library, out: Path) -> None:
+    """Stages 2 and 4, which need no model call: the 2b threshold, arm 2's floor,
+    Figure 1 and Claim 2's verdict, from `library`'s own matchers on real sandboxes.
+
+    Filled in place, before any eval episode is sent, so a `--primary-only` run and a
+    full one report the primary metric from the same code.
+    """
+    faults = list(plan.faults)
+    result.soft_threshold = learn_soft_threshold(
+        soft_vote_outcomes(library, faults, plan.tune_seeds)
+    )
+    result.arm2_floor = baseline_floor(library)
+    outcomes = library_pair_outcomes(library, faults, plan.pair_seeds)
+    figure = primary_report(outcomes.arm2, outcomes.arm3, baselines=outcomes.baselines())
+    write_primary_report(figure, out / "primary")
+    verdict = claim2_verdict(sweep(outcomes.soft_vote), operating_point(outcomes.arm3))
+    result.artifacts["primary"] = "primary"
+    result.claim2 = verdict.claim
+    result.claim2_reason = verdict.reason
+    result.figure1 = summary(figure)
+
+
 def _measure(
     result: LiveSummary, plan: LivePlan, *, provider: Provider, model: str, out: Path
 ) -> None:
-    """Stages 2-4, against a library that admitted something; fills `result` in place."""
+    """Stage 3, the episodes, against a library that admitted something; fills `result`
+    in place. `_pair_level` has already set the 2b threshold the soft-vote arm uses."""
     faults = list(plan.faults)
     episode_seeds = list(plan.episode_seeds)
     two_sided, positive_only = out / "library-two-sided", out / "library-positive-only"
-    library = Library(two_sided, evaluate_preconditions=evaluate_preconditions)
-    soft_threshold = learn_soft_threshold(soft_vote_outcomes(library, faults, plan.tune_seeds))
-    result.arm2_floor = baseline_floor(library)
+    soft_threshold = result.soft_threshold
 
     frozen = _episodes(
         result,
@@ -368,22 +401,12 @@ def _measure(
     write_report(frozen, out / "report")
     result.bootstrap = cluster_bootstrap(read(frozen))
 
-    outcomes = library_pair_outcomes(library, faults, plan.pair_seeds)
-    figure = primary_report(outcomes.arm2, outcomes.arm3, baselines=outcomes.baselines())
-    write_primary_report(figure, out / "primary")
-    verdict = claim2_verdict(sweep(outcomes.soft_vote), operating_point(outcomes.arm3))
-
     result.artifacts.update(
         frozen_ledger=frozen.name,
         positive_only_ledger=ungated.name,
         factorial_ledger=factorial_ledger.name,
         report="report",
-        primary="primary",
     )
-    result.soft_threshold = soft_threshold
-    result.claim2 = verdict.claim
-    result.claim2_reason = verdict.reason
-    result.figure1 = summary(figure)
     result.factorial = [
         cell.model_dump(mode="json") for cell in admission_factorial(factorial_ledger)
     ]
@@ -416,11 +439,16 @@ def _text(result: LiveSummary) -> str:
             "",
             *_floor_lines(result.arm2_floor),
             "",
-            *_bootstrap_lines(result.plan.replicates, result.bootstrap),
-            "admission factorial:",
-            *(json.dumps(cell) for cell in result.factorial),
-            "",
         ]
+        if result.plan.episodes:
+            lines += [
+                *_bootstrap_lines(result.plan.replicates, result.bootstrap),
+                "admission factorial:",
+                *(json.dumps(cell) for cell in result.factorial),
+                "",
+            ]
+        else:
+            lines += ["episode stages skipped (--primary-only): no frozen benchmark", ""]
     lines += [
         "artifacts:",
         *(f"  {name}: {path}" for name, path in result.artifacts.items()),
@@ -491,6 +519,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--skip-online", action="store_true", help="skip arms 1 and 1b online")
     parser.add_argument(
+        "--primary-only",
+        action="store_true",
+        help="build, then only the stages that need no model call (Figure 1, arm 2's floor, "
+        "Claim 2); skips the frozen benchmark and the online arms",
+    )
+    parser.add_argument(
         "--replicates",
         type=int,
         default=1,
@@ -508,7 +542,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise SystemExit("--replicates must be at least 1")
     plan = LivePlan(
         episode_seeds=EVAL_SEEDS[: args.episode_seeds],
-        online=not args.skip_online,
+        online=not (args.skip_online or args.primary_only),
+        episodes=not args.primary_only,
         replicates=args.replicates,
     )
     api_key = (
