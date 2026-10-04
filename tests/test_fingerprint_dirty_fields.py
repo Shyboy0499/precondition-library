@@ -14,7 +14,7 @@ untracked files sit at a path upstream's tree holds. These tests pin:
 from __future__ import annotations
 
 from precondition_library.sandbox import run_git
-from precondition_library.signatures import StateFingerprint
+from precondition_library.signatures import _NOT_YET_RENDERED, StateFingerprint
 from precondition_library.tasks.state_grid import DIRTY_TREE_STATES
 
 
@@ -66,7 +66,8 @@ def test_arm_2_sees_them_now_the_intent_is_registered() -> None:
         untracked_upstream_collisions=["notes/tracked.txt"],
     )
     lines = seen.as_text().splitlines()
-    assert [line.split(":", 1)[0] for line in lines] == list(StateFingerprint.model_fields)
+    rendered = [name for name in StateFingerprint.model_fields if name not in _NOT_YET_RENDERED]
+    assert [line.split(":", 1)[0] for line in lines] == rendered
     assert lines[-2:] == ["dirty_files: app.py", "untracked_upstream_collisions: notes/tracked.txt"]
 
 
