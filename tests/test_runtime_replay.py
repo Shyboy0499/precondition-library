@@ -28,6 +28,7 @@ from precondition_library.runtime.guard import Verdict, screen
 from precondition_library.runtime.probes import (
     UnboundParameterError,
     evaluate_predicate,
+    placeholders,
     substitute,
 )
 from precondition_library.runtime.replay import replay
@@ -206,6 +207,19 @@ def test_substitute_replaces_named_placeholders_only() -> None:
         substitute("git fetch {remote} && echo ${HOME}", {"remote": "upstream"})
         == "git fetch upstream && echo ${HOME}"
     )
+
+
+def test_git_revision_syntax_is_not_a_placeholder() -> None:
+    """`@{u}` and friends are git's, as `${HOME}` is the shell's (#214).
+
+    A live build's compiled probe used `git rev-parse --abbrev-ref @{u}` and was refused
+    as naming an unknown placeholder `u`.
+    """
+    probe = "git rev-parse --abbrev-ref @{u} && git log -1 HEAD@{upstream} {upstream_remote}"
+    assert substitute(probe, {"upstream_remote": "upstream"}) == (
+        "git rev-parse --abbrev-ref @{u} && git log -1 HEAD@{upstream} upstream"
+    )
+    assert placeholders(probe) == ["upstream_remote"]
 
 
 def test_substitute_raises_on_an_unknown_placeholder() -> None:

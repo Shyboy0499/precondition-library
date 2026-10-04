@@ -72,10 +72,13 @@ class UnboundParameterError(KeyError):
     """
 
 
-# A `{name}` placeholder, but not `${name}`: the latter is a shell variable
-# expansion and belongs to the shell, not to us. Minimal on purpose -- this is
-# not a templating engine, and `{a,b}` / `{print $1}` must pass through intact.
-_PLACEHOLDER = re.compile(r"(?<!\$)\{([A-Za-z_][A-Za-z0-9_]*)\}")
+# A `{name}` placeholder, but not `${name}` or `@{name}`: the first is a shell
+# variable expansion and belongs to the shell, the second git's revision syntax
+# (`@{u}`, `@{upstream}`, `HEAD@{1}`) and belongs to git -- a live build's compiled
+# probe used `@{u}` and was refused as an unknown placeholder (#214). Minimal on
+# purpose -- this is not a templating engine, and `{a,b}` / `{print $1}` must pass
+# through intact.
+_PLACEHOLDER = re.compile(r"(?<![$@])\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 
 def _find_bash() -> str:
