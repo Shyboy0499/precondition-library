@@ -54,7 +54,7 @@ from ..agents.dispatch import (
     dispatch_soft_vote,
 )
 from ..agents.memory import SuccessMemory, render
-from ..agents.react import solve
+from ..agents.react import executed_tool_calls, solve
 from ..library import Library, ProgramIdCollisionError
 from ..program import EpisodeOutcome, Program, ProgramStatus, accepts
 from ..provider import Completion, Provider, ProviderError, ProviderTransportError
@@ -576,7 +576,7 @@ def run_episode(
             cached_tokens_in=accounting.cached_tokens_in,
             cache_write_tokens_in=accounting.cache_write_tokens_in,
             llm_calls=accounting.llm_calls,
-            tool_calls=_tool_calls(result.transcript),
+            tool_calls=executed_tool_calls(result.transcript),
             temperature=accounting.temperature,
             wall_clock_s=time.monotonic() - started,
             outcome=result.outcome,
@@ -876,14 +876,6 @@ def _run_gold(oracle: Program | None, box: Sandbox) -> _ArmResult:
         replay_failure_reason=replayed.reason if replayed.unbound_parameter else None,
         timed_out=replayed.timed_out,
         compilable=False,
-    )
-
-
-def _tool_calls(transcript: list[dict] | None) -> int:
-    """How many tool calls a transcript ran, refused ones included (issue #160)."""
-    # A call answered "not run" after the cap (issue #179) executed nothing.
-    return sum(
-        1 for entry in transcript or [] if entry.get("role") == "tool" and not entry.get("not_run")
     )
 
 

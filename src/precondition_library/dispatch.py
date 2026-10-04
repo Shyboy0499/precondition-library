@@ -32,7 +32,7 @@ from .library import Library
 from .program import Program, ProgramStatus
 from .runtime.probes import evaluate_preconditions, sandbox_state
 from .runtime.replay import ReplayResult, replay
-from .sandbox import Sandbox, run_git
+from .sandbox import Sandbox, git_out, run_git
 
 DRY_RUN_COPY = "dry-run"
 """The scratch directory the dry run replays in; distinct from the probing copy."""
@@ -143,16 +143,12 @@ def _dispatch(env: Sandbox, admitted: list[Program], request: str | None) -> Dis
     )
 
 
-def _head(work: Path) -> str:
-    return run_git(("rev-parse", "HEAD"), cwd=work).stdout.strip()
-
-
 def _dry_run(env: Sandbox, program: Program) -> DryRun:
     copy = snapshot(env, DRY_RUN_COPY)
     before_state = sandbox_state(copy)
-    head_before = _head(copy.work)
+    head_before = git_out("rev-parse", "HEAD", cwd=copy.work)
     result = replay(program, copy)
-    head_after = _head(copy.work)
+    head_after = git_out("rev-parse", "HEAD", cwd=copy.work)
     after_state = sandbox_state(copy)
     commits = run_git(
         ("log", "--oneline", f"{head_before}..{head_after}"), cwd=copy.work, check=False
