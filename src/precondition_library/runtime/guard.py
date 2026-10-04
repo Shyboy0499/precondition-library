@@ -116,17 +116,20 @@ _CREDENTIAL = re.compile(
 )
 
 _ENV_VAR = re.compile(r"\$[A-Za-z_][A-Za-z0-9_]*|\$\{[A-Za-z_][A-Za-z0-9_]*\}")
-# Where a statement may begin: the start of a line, or just after a separator or an
-# opening of a command substitution, subshell or group.
-_STATEMENT_START = r"(?:^|(?<=[;&|\n(`{]))\s*"
+# Where a statement may begin: the start of a line, or just after a separator, an
+# opening of a command substitution, subshell or group, or the `)` that ends a `case`
+# arm's pattern (`*.*) name=...`) -- then past any compound keyword (`then n=1`,
+# `do x=...`, `while read -r f`). Two forms the fifth live run's compiled body used and
+# the guard read as environment reads (#214).
+_STATEMENT_START = r"(?:^|(?<=[;&|\n(`{)]))\s*(?:(?:while|until|if|elif|then|do|else|!)\s+)*"
 _ASSIGNED_NAME = re.compile(
     _STATEMENT_START
     + r"(?:(?:local|export|readonly|declare|typeset)(?:\s+-\w+)*\s+)?([A-Za-z_][A-Za-z0-9_]*)=",
     re.MULTILINE,
 )
-# A `read` may follow a compound keyword (`while read -r x`, `if read -r x`) and its
-# own environment assignments (`IFS= read -r x`) and still assign its names (#214).
-_READ_PREFIX = r"(?:(?:while|until|if|elif|then|do|else|!)\s+)*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*"
+# A `read` may also follow its own environment assignments (`IFS= read -r x`) and still
+# assign its names (#214).
+_READ_PREFIX = r"(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*"
 _READ_NAMES = re.compile(
     _STATEMENT_START + _READ_PREFIX + r"read\b(?:\s+-\w+)*((?:\s+[A-Za-z_][A-Za-z0-9_]*)+)",
     re.MULTILINE,
