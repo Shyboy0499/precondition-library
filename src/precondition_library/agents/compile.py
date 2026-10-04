@@ -86,6 +86,11 @@ body: string -- the shell commands that do the work, using the `{placeholders}`.
 postconditions: list of mappings -- executable shell probes that must hold after
   the body runs. Same shape as a precondition.
 
+A probe holds when it exits with expect_exit (default 0) and, if expect_pattern is
+set, when that Python regular expression is found in its stdout. `{placeholders}`
+in expect_pattern are substituted, regex-escaped, as in the probe; POSIX classes
+such as `[[:space:]]` are understood.
+
 The validator that reads your reply rejects a wrong shape outright, so check
 these two before answering: `body` must be a single string (a list of commands
 is not accepted), and `parameters` must be a list of names (a bare string or a

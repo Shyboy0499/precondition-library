@@ -43,6 +43,7 @@ import hashlib
 import os
 import re
 import shutil
+import string
 from pathlib import Path
 
 from ..program import GroundTruthResult, Predicate, PredicateResult, Program
@@ -144,6 +145,41 @@ def substitute(text: str, parameters: dict[str, str]) -> str:
     return _PLACEHOLDER.sub(replace, text)
 
 
+_POSIX_CLASSES: dict[str, str] = {
+    "alnum": "a-zA-Z0-9",
+    "alpha": "a-zA-Z",
+    "blank": " \\t",
+    "digit": "0-9",
+    "lower": "a-z",
+    "punct": re.escape(string.punctuation),
+    "space": "\\s",
+    "upper": "A-Z",
+    "xdigit": "0-9A-Fa-f",
+}
+_POSIX_CLASS = re.compile(r"\[:(" + "|".join(_POSIX_CLASSES) + r"):\]")
+
+
+def pattern_for(expect_pattern: str, parameters: dict[str, str]) -> str:
+    """The Python regular expression a predicate's `expect_pattern` means.
+
+    Two readings a model reasonably writes, which `re` would otherwise get wrong:
+
+    * **A `{placeholder}` is bound, as in the probe.** The fourth live smoke run's
+      compiled postcondition `expect_pattern: ^refs/heads/{upstream_branch}$` was
+      matched with the braces literal, so a program that retracked the branch correctly
+      failed its own postcondition and was refused. The value is regex-escaped, so a
+      branch named `a.b` matches only itself. An unbound name is handled as `substitute`
+      handles it in a probe.
+    * **A POSIX bracket class (`[[:space:]]`) means its characters.** The pattern
+      language of `grep` and `[[ =~ ]]`, which a probe is written beside, has them;
+      `re` reads `[^[:space:]]` as a set followed by a literal `]`, which never matched
+      the four compiled `wip_present` checks that used it.
+    """
+    translated = _POSIX_CLASS.sub(lambda match: _POSIX_CLASSES[match.group(1)], expect_pattern)
+    escaped = {name: re.escape(value) for name, value in parameters.items()}
+    return substitute(translated, escaped)
+
+
 def placeholders(text: str) -> list[str]:
     """Every `{name}` placeholder in `text`, first-appearance order, deduplicated.
 
@@ -206,6 +242,11 @@ def evaluate_predicate(
     """
     try:
         probe = substitute(predicate.probe, parameters)
+        pattern = (
+            None
+            if predicate.expect_pattern is None
+            else pattern_for(predicate.expect_pattern, parameters)
+        )
     except UnboundParameterError as exc:
         return PredicateResult(name=predicate.name, ok=False, observed=f"not applicable: {exc}")
 
@@ -250,8 +291,8 @@ def evaluate_predicate(
 
     ok = completed.returncode == predicate.expect_exit
     observed = f"exit={completed.returncode} (expected {predicate.expect_exit})"
-    if predicate.expect_pattern is not None:
-        matched = re.search(predicate.expect_pattern, completed.stdout) is not None
+    if pattern is not None:
+        matched = re.search(pattern, completed.stdout) is not None
         ok = ok and matched
         verdict = "matched" if matched else "did not match"
         observed += f"; pattern {verdict} in stdout={_excerpt(completed.stdout)!r}"
