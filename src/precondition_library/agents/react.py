@@ -298,6 +298,18 @@ def _last_word(
     return EpisodeOutcome.FAIL, transcript
 
 
+def executed_tool_calls(transcript: list[dict] | None) -> int:
+    """How many tool calls a transcript ran, refused ones included (issue #160).
+
+    A call answered "not run" after the cap (issue #179) executed nothing, so it is not
+    counted. Defined here, beside the loop that writes the transcript, so every caller
+    reads the `not_run` marker the same way.
+    """
+    return sum(
+        1 for entry in transcript or [] if entry.get("role") == "tool" and not entry.get("not_run")
+    )
+
+
 def available_tools() -> list[dict]:
     """The one tool every arm gets, in the OpenAI/DeepSeek function-calling shape.
 

@@ -32,14 +32,14 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from .agents.compile import admit, compile_program
-from .agents.react import solve
+from .agents.react import executed_tool_calls, solve
 from .checkout import open_checkout, snapshot
 from .library import Library, ProgramIdCollisionError
 from .program import EpisodeOutcome, Program, ProgramStatus
 from .provider import Provider
 from .runtime.probes import evaluate_preconditions, sandbox_state
 from .runtime.replay import replay
-from .sandbox import Sandbox, run_git
+from .sandbox import Sandbox, git_out, run_git
 from .signatures import StateFingerprint, TaskSignature
 from .tasks.faults import FAULTS
 from .tasks.registry import ambiguous_intents
@@ -93,13 +93,9 @@ def _intent_names(fault: str) -> list[str]:
     raise ValueError(f"unknown family {fault!r}; a program can be learned for one of {families}")
 
 
-def _head(work: Path) -> str:
-    return run_git(("rev-parse", "HEAD"), cwd=work).stdout.strip()
-
-
 def _effect(copy: Sandbox, before: dict[str, str], head_before: str) -> SolveEffect:
     after = sandbox_state(copy)
-    head_after = _head(copy.work)
+    head_after = git_out("rev-parse", "HEAD", cwd=copy.work)
     commits = run_git(
         ("log", "--oneline", f"{head_before}..{head_after}"), cwd=copy.work, check=False
     ).stdout.splitlines()
@@ -110,10 +106,6 @@ def _effect(copy: Sandbox, before: dict[str, str], head_before: str) -> SolveEff
         status=run_git(("status", "--short"), cwd=copy.work).stdout,
         changed=[name for name in before if before[name] != after.get(name)],
     )
-
-
-def _tool_calls(transcript: list[dict]) -> int:
-    return sum(1 for e in transcript if e.get("role") == "tool" and not e.get("not_run"))
 
 
 def admission_seed(fault: str, variant: str | None) -> int | None:
@@ -167,10 +159,13 @@ def learn(
         signature = TaskSignature(
             intent=request, fingerprint=StateFingerprint.observe(copy), target=str(copy.work)
         )
-        before, head_before = sandbox_state(copy), _head(copy.work)
+        before, head_before = sandbox_state(copy), git_out("rev-parse", "HEAD", cwd=copy.work)
         outcome, transcript = solve(signature, copy, provider)
         result = LearnOutcome(
-            fault=fault, request=request, solve=outcome.value, tool_calls=_tool_calls(transcript)
+            fault=fault,
+            request=request,
+            solve=outcome.value,
+            tool_calls=executed_tool_calls(transcript),
         )
         if outcome is not EpisodeOutcome.SUCCESS:
             result.stopped = "the agent did not declare the task done, so there is nothing to learn"
