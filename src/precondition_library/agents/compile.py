@@ -501,9 +501,11 @@ def admit(
         for other in unrelated
         for seed in _state_seeds(FAULTS[other])
     ]
-    # Another fault's injector can produce a state this program's own intent labels:
-    # `lockfile_conflict` injects a diverged branch the sync intent calls `merge`. Such
-    # an **overlap state** is not unrelated -- firing there is right when the program
+    # Another fault's injector can produce a state this program's own intent labels --
+    # `lockfile_conflict`'s state was one, labelled `merge` by the sync intent, until
+    # #191 made that intent refuse a sync that would conflict. None does today; the
+    # class stays so a future overlap is judged correctly. Such an **overlap state**
+    # is not unrelated -- firing there is right when the program
     # implements the label and wrong otherwise -- so it is judged as a same-intent
     # state, by this intent's own decision rule (issue #158, ADR-0019). Only a state
     # the intent leaves unlabelled is unrelated, where any fire is a defect.

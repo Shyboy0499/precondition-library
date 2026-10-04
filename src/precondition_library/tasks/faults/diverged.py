@@ -226,9 +226,15 @@ def _has_local_commits_to_sync(state: StateFingerprint) -> bool:
     A branch following a name upstream renamed away is `branch_renamed`'s situation, not
     this one: every resolution here syncs the commits and leaves the wiring stale, which
     that fault's checker refuses (#190). No diverged state records an upstream default,
-    so the guard changes no label this family has ever had.
+    so the guard changes no label this family has ever had. Nor is a sync that conflicts
+    in a shared file (#191): a plain merge stops on it and leaves markers; no diverged
+    state conflicts, since its overlapping edits are in separate hunks.
     """
-    return state.has_local_only_commits and not state.follows_a_renamed_branch
+    return (
+        state.has_local_only_commits
+        and not state.follows_a_renamed_branch
+        and not state.sync_would_conflict
+    )
 
 
 def _is_empty_of_changes(state: StateFingerprint) -> bool:

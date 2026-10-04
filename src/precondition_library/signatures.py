@@ -210,6 +210,20 @@ class StateFingerprint(BaseModel):
         )
 
     @property
+    def sync_would_conflict(self) -> bool:
+        """Whether both sides committed and a three-way merge conflicts in some file.
+
+        Every intent whose resolutions sync commits by merging or rebasing must refuse
+        such a state: a plain merge stops on the conflict, and a marker left in a file
+        passes no checker (#191).
+        """
+        return (
+            bool(self.merge_conflicted_files)
+            and self.upstream_ahead > 0
+            and self.upstream_behind > 0
+        )
+
+    @property
     def has_local_only_commits(self) -> bool:
         """Whether the local branch is ahead of upstream at all.
 

@@ -1,15 +1,17 @@
-"""Admission judges an overlap state by the program's own intent (issue #158, ADR-0019).
+"""Admission's overlap class, and the one overlap state #191 retired (#158, ADR-0019).
 
-`lockfile_conflict` injects a diverged branch whose two sides touched the same file,
-and the sync intent's own decision rule labels that state `merge`. Admission used to
-count it as an *unrelated* state where any fire is a defect, so every compiled
-diverged program in the first live build was rejected on it -- the hand-written gold
-merge program passed only through an extra precondition added to dodge it.
+`lockfile_conflict` injects a branch whose two sides touched the same file, and the sync
+intent's decision rule used to label that state `merge`. #158 found admission counting
+it as an *unrelated* state where any fire is a defect, and ADR-0019 made it an
+**overlap state**, judged by the sync intent's own label.
 
-Now a state another fault injects is judged by this intent's label: firing there is
-correct when the program implements the label and a mismatch otherwise; only a state
-the intent leaves unlabelled is unrelated. These tests run the real gate on real
-sandboxes.
+#191 measured what the label claimed: on that state a plain merge stops on a conflict
+inside the lock file and fails the fault's checker, and so does every other `diverged`
+resolution. So `diverged`'s rules now refuse a state where a sync would conflict
+(`StateFingerprint.sync_would_conflict`), and the state is unrelated to a `diverged`
+program again -- this time because the program's resolution genuinely fails there.
+ADR-0019's overlap class stays in `admit`; no measured fault produces an overlap state
+today. These tests run the real gate on real sandboxes.
 """
 
 from __future__ import annotations
@@ -19,9 +21,11 @@ from conftest import gold_program
 from precondition_library.agents.compile import admit
 from precondition_library.program import Program
 from precondition_library.runtime.probes import evaluate_preconditions
+from precondition_library.runtime.replay import replay
 from precondition_library.signatures import StateFingerprint
 from precondition_library.tasks.faults import build_sandbox
 from precondition_library.tasks.faults.diverged import INTENT as SYNC_INTENT
+from precondition_library.tasks.faults.lockfile_conflict import SPEC as LOCK_SPEC
 from precondition_library.tasks.faults.submodule_moved import INTENT as SUBMODULE_INTENT
 
 MERGE_SEED = 0  # diverged seed 0 injects overlapping_files -> merge
@@ -35,47 +39,38 @@ def _merge_without_the_workaround(variant: str = "merge") -> Program:
     return program.model_copy(update={"preconditions": kept, "variant": variant})
 
 
-def test_lockfile_conflict_is_a_state_the_sync_intent_labels_merge() -> None:
-    """The overlap the issue found, pinned so the test below means what it says."""
+def test_the_sync_intent_no_longer_labels_the_lock_conflict_state() -> None:
     box = build_sandbox(0, ["lockfile_conflict"])
     try:
-        label = SYNC_INTENT.correct_variant(StateFingerprint.observe(box))
+        state = StateFingerprint.observe(box)
         fires = evaluate_preconditions(_merge_without_the_workaround(), box).ok
     finally:
         box.destroy()
-    assert label is not None and label.id == "merge"
-    assert fires, "without the workaround the merge program accepts the overlap state"
+    assert state.sync_would_conflict
+    assert SYNC_INTENT.correct_variant(state) is None
+    assert SYNC_INTENT.acceptable_variants(state) == ()
+    assert fires, "without the workaround the merge program still accepts the state"
 
 
-def test_a_program_firing_correctly_on_an_overlap_state_is_admitted() -> None:
+def test_a_merge_there_fails_the_faults_checker() -> None:
+    """Why the label had to go: the program the label endorsed does not fix the fault."""
+    box = build_sandbox(0, ["lockfile_conflict"])
+    try:
+        replay(_merge_without_the_workaround(), box)
+        verdict = LOCK_SPEC.check(box)
+    finally:
+        box.destroy()
+    assert not verdict.ok, verdict.detail
+
+
+def test_a_program_firing_on_the_lock_conflict_state_is_refused_as_unrelated() -> None:
     admitted, reason = admit(_merge_without_the_workaround(), "diverged", seeds=[MERGE_SEED])
-    assert admitted, reason
-    assert "overlap state" in reason, reason
-
-
-def test_rebase_on_a_merge_labelled_overlap_state_is_now_accepted() -> None:
-    """The second live run's case (#172, ADR-0023): the checker accepts rebase here.
-
-    Labelled `rebase`, the program fires where the intent's label is `merge`. Merge and
-    rebase are both acceptable on every diverged state, so this is not a mismatch.
-    """
-    admitted, reason = admit(
-        _merge_without_the_workaround(variant="rebase"), "diverged", seeds=[MERGE_SEED]
-    )
-    assert admitted, reason
-
-
-def test_a_program_firing_on_an_overlap_state_with_an_unacceptable_variant_is_rejected() -> None:
-    """Mislabelled `discard`, it fires where only merge and rebase are acceptable."""
-    admitted, reason = admit(
-        _merge_without_the_workaround(variant="discard"), "diverged", seeds=[MERGE_SEED]
-    )
     assert not admitted
-    assert "overlap state" in reason and "'merge'" in reason and "'discard'" in reason, reason
+    assert "lockfile_conflict" in reason and "unrelated" in reason, reason
 
 
 def test_the_gold_merge_program_is_still_admitted() -> None:
-    """The workaround precondition is now redundant, not wrong: gold still passes."""
+    """The workaround precondition is what keeps gold off the state, and it still does."""
     admitted, reason = admit(gold_program("merge"), "diverged", seeds=[MERGE_SEED])
     assert admitted, reason
 

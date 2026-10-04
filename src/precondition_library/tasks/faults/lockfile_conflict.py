@@ -49,7 +49,8 @@ measurement (issue #25).
 from __future__ import annotations
 
 from ...sandbox import Sandbox, git_out, record_base, run_git, tip_contained
-from ..intent import sample_index
+from ...signatures import StateFingerprint
+from ..intent import IntentSpec, ResolutionVariant, sample_index
 from ..spec import FaultSpec, GroundTruth
 
 # The generated file the sandbox itself creates. Lock-shaped: a version field
@@ -107,6 +108,79 @@ def state_for_seed(seed: int) -> str:
 def removable_dependency_for_seed(seed: int) -> str:
     """The base entry a side may drop, e.g. `zlib 0.1.0`."""
     return f"{_REMOVABLE_PACKAGE} {base_version_for_seed(seed)}"
+
+
+# --- the intent (#191), defined here and not yet registered ------------------------
+#
+# Not in `tasks.registry.INTENTS`, so nothing measured reads it: `variant_for_seed`
+# stays `None` and the fault stays excluded. Registering it is the step that changes
+# measurement (the owner approved it on #191); until then it exists so its acceptable
+# sets can be pinned against `check` by replay (`tests/test_lockfile_intent.py`).
+
+STATE_VARIANT = {
+    "additions_only": "take_upstream",
+    "upstream_removed": "take_upstream",
+    "local_removed": "keep_local",
+}
+"""Which resolution each injected state is labelled with; what `INTENT`'s rules decide."""
+
+
+def sync_conflicts_in_a_shared_file(state: StateFingerprint) -> bool:
+    """The family's situation: both sides committed, and a merge would conflict.
+
+    `StateFingerprint.sync_would_conflict` is the shared test; every other family that
+    syncs commits refuses it (#191).
+    """
+    return state.sync_would_conflict
+
+
+VARIANTS = [
+    ResolutionVariant(
+        id="take_upstream",
+        decided_by=lambda s: sync_conflicts_in_a_shared_file(s) and not s.local_dropped_lines,
+        accepted_by=lambda s: sync_conflicts_in_a_shared_file(s) and not s.local_dropped_lines,
+        rationale=(
+            "Upstream's file is the reference, and the local side removed nothing from it, "
+            "so rebuilding from upstream's file plus the local side's additions loses nothing."
+        ),
+    ),
+    ResolutionVariant(
+        id="keep_local",
+        decided_by=lambda s: (
+            sync_conflicts_in_a_shared_file(s)
+            and bool(s.local_dropped_lines)
+            and not s.upstream_dropped_lines
+        ),
+        accepted_by=lambda s: sync_conflicts_in_a_shared_file(s) and not s.upstream_dropped_lines,
+        rationale=(
+            "The local side removed a dependency upstream still lists, so the local file is "
+            "the one to rebuild from, adding upstream's new entries to it."
+        ),
+    ),
+]
+
+INTENT = IntentSpec(
+    name="sync_through_a_conflicting_lockfile",
+    fault="lockfile_conflict",
+    phrasings=[
+        "Bring this branch up to date with upstream. Both of us changed our dependencies.",
+        "Syncing with upstream stopped on a conflict. Get it through without losing any "
+        "dependency either side meant to have.",
+        "Merge upstream's latest in here and leave the dependency file consistent.",
+        "Upstream and I both moved our dependencies on. Catch my branch up properly.",
+        "The sync conflicts. Resolve it the way this project expects.",
+        "Get my fork current with upstream; our dependency changes collided.",
+        "Update this branch from upstream and make sure the dependency list still makes sense.",
+        "Catch up with upstream without losing what either side added, or reviving what "
+        "either side removed.",
+    ],
+    naming_markers=["lockfile", "lock file"],
+    variants=VARIANTS,
+    variant_phrasings={
+        "take_upstream": ["upstream's dependency list is the one to start from; I only added"],
+        "keep_local": ["I dropped a dependency on purpose, and upstream still lists it"],
+    },
+)
 
 
 def local_package_for_seed(seed: int) -> str:

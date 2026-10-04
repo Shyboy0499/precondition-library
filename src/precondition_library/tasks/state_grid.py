@@ -139,6 +139,38 @@ BRANCH_RENAMED_STATES = {
     ),
 }
 
+# sync_through_a_conflicting_lockfile (#191): two resolutions over three states, plus
+# the benign state. Declared for the intent `tasks.faults.lockfile_conflict.INTENT`,
+# which is defined but not yet registered, so it is deliberately not in `STATE_GRID`
+# below: everything that walks the grid reads registered intents.
+_LOCK_CONFLICT = {
+    "upstream_ahead": 1,
+    "upstream_behind": 1,
+    "local_touched_files": ["deps.lock"],
+    "upstream_touched_files": ["deps.lock"],
+    "tracked_branch": "main",
+    "local_branches": ["main"],
+}
+LOCKFILE_STATES = {
+    "benign_nothing_local": declared_state(
+        upstream_ahead=1,
+        upstream_touched_files=["deps.lock"],
+        tracked_branch="main",
+        local_branches=["main"],
+    ),
+    "additions_only": declared_state(**_LOCK_CONFLICT, merge_conflicted_files=["deps.lock"]),
+    "upstream_removed": declared_state(
+        **_LOCK_CONFLICT,
+        merge_conflicted_files=["deps.lock"],
+        upstream_dropped_lines=['    "zlib 0.1.0",'],
+    ),
+    "local_removed": declared_state(
+        **_LOCK_CONFLICT,
+        merge_conflicted_files=["deps.lock"],
+        local_dropped_lines=['    "zlib 0.1.0",'],
+    ),
+}
+
 STATE_GRID: dict[str, dict[str, StateFingerprint]] = {
     "sync_fork_with_upstream": DIVERGED_STATES,
     "restore_submodule_state": SUBMODULE_STATES,
