@@ -407,6 +407,10 @@ def prepare_dry_run(program, env) -> Decision:
     prospective consumer. Git has no general dry-run, so it is implemented by
     running the body against a copy of the environment and diffing -- the copy
     is discarded.
+
+    For an existing checkout that is now done by `dispatch` (#181), outside
+    `runtime` because only it can copy a checkout. This stub remains for a
+    harness-side consumer.
     """
     raise NotImplementedError(
         "no caller needs a dry run yet; the admission path (issue #4) is its "
