@@ -46,7 +46,7 @@ import shutil
 from pathlib import Path
 
 from ..program import GroundTruthResult, Predicate, PredicateResult, Program
-from ..sandbox import Sandbox, git_env, run_git, submodule_path
+from ..sandbox import Sandbox, run_env, run_git, submodule_path
 from .confine import run_confined
 from .guard import Verdict, screen
 
@@ -222,9 +222,7 @@ def evaluate_predicate(
     # Its own process group, killed whole on timeout, under the POSIX limits
     # (`runtime.confine`, issue #10). Output is decoded as UTF-8 with replacement there,
     # because the machine locale could otherwise turn `stdout` into `None`.
-    completed = run_confined(
-        [*SHELL, probe], cwd=env.work, env=git_env(home=env.root), timeout_s=timeout_s
-    )
+    completed = run_confined([*SHELL, probe], cwd=env.work, env=run_env(env), timeout_s=timeout_s)
     if completed.timed_out:
         changed = _changed_parts(before, sandbox_state(env))
         return PredicateResult(
@@ -329,13 +327,16 @@ def bindings(env: Sandbox) -> dict[str, str]:
     The binding is the sandbox's fixed vocabulary, not a general mechanism. A
     checkout the harness did not build derives the same names from its own
     remotes and `.gitmodules` with `repository_bindings` (#181); on a harness
-    sandbox the two agree.
+    sandbox the two agree. A checkout (`env.checkout`) carries those derived values,
+    and they are returned instead, so probes and bodies still share one mapping.
 
     Public and shared because a probe and a body are substituted from this one
     mapping. A second copy in a caller is how replay and dispatch would come to
     disagree about what `{upstream_branch}` means, which would show up in the
     ablation as a difference between the arms.
     """
+    if env.checkout is not None:
+        return dict(env.checkout.parameters)
     values = {
         "work_dir": str(env.work),
         "upstream_remote": "upstream",

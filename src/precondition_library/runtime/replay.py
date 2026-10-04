@@ -29,7 +29,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from ..program import GroundTruthResult, Program
-from ..sandbox import Sandbox, git_env
+from ..sandbox import Sandbox, run_env
 from .confine import network_isolation_available, run_confined
 from .guard import Verdict, screen
 from .probes import SHELL, UnboundParameterError, bindings, evaluate_predicates, substitute
@@ -140,16 +140,17 @@ def replay(program: Program, env: Sandbox, *, timeout_s: float = 60.0) -> Replay
             unbound_parameter=True,
             reason=f"the body could not be run: {exc}",
         )
-    # `git_env` inherits only the allowlisted variables (spec §9: the environment
+    # `run_env` -- `git_env`, plus a checkout's own identity and upstream mirror
+    # (#181) -- inherits only the allowlisted variables (spec §9: the environment
     # is scrubbed) and redirects `HOME` into the sandbox, so `~` resolves onto
     # nothing a credential read could use. The guard still screens explicit
     # paths; this only makes one class of miss harmless.
-    run_env = git_env(home=env.root)
+    environment = run_env(env)
 
     # Its own process group, killed whole on timeout, under the POSIX limits
     # (`runtime.confine`, issue #10): a body that backgrounds work cannot leave it
     # running after the timeout that was meant to stop it.
-    confined = run_confined([*SHELL, body], cwd=env.work, env=run_env, timeout_s=timeout_s)
+    confined = run_confined([*SHELL, body], cwd=env.work, env=environment, timeout_s=timeout_s)
     timed_out = confined.timed_out
     exit_code = -1 if confined.returncode is None else confined.returncode
     stdout, stderr = confined.stdout, confined.stderr

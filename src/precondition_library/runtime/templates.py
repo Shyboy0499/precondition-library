@@ -43,7 +43,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 from ..program import GroundTruthResult, Program
-from ..sandbox import Sandbox, git_env
+from ..sandbox import Sandbox, run_env
 from .confine import run_confined
 from .probes import bindings, evaluate_predicates
 
@@ -306,14 +306,14 @@ def run_steps(
         # path's refusal and unbound-parameter cases.
         return (False, -1, "", "", False, outcome.unbound, outcome.error, None)
 
-    run_env = git_env(home=env.root)
+    environment = run_env(env)
     stdout_parts: list[str] = []
     stderr_parts: list[str] = []
     exit_code = 0
     timed_out = False
     failed_step: str | None = None
     for plan in outcome.plans:
-        confined = run_confined(plan.argv, cwd=env.work, env=run_env, timeout_s=timeout_s)
+        confined = run_confined(plan.argv, cwd=env.work, env=environment, timeout_s=timeout_s)
         stdout_parts.append(confined.stdout)
         stderr_parts.append(confined.stderr)
         if confined.timed_out:
