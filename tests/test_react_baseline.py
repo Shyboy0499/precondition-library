@@ -35,7 +35,7 @@ from precondition_library.tasks.faults.dirty_tree import SPEC
 # The states stash-sync-restore resolves (see `state_for_seed`, #189): 5 is the
 # disjoint state -- a tracked edit to a file upstream left alone, plus an untracked
 # file -- and 0 the same-file state. The collision state needs the colliding file moved
-# aside, which the git-only tool cannot do; tests/test_sandbox_dirty_tree.py covers it.
+# aside, which takes the file tools (ADR-0031); tests/test_sandbox_dirty_tree.py covers it.
 DISJOINT = 5
 SAME_FILE = 0
 SEEDS = [DISJOINT, SAME_FILE]

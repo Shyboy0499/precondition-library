@@ -75,7 +75,7 @@ def _tool_entries(transcript: list[dict]) -> list[dict]:
 
 def test_the_agent_is_offered_finish_and_told_to_use_it() -> None:
     names = [tool["function"]["name"] for tool in available_tools()]
-    assert names == ["run_git", FINISH_TOOL]
+    assert names == ["run_git", "read_file", "write_file", FINISH_TOOL]
     assert "`finish`" in SYSTEM_PROMPT
 
 
