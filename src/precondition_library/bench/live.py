@@ -28,6 +28,16 @@ that Claim 2 may not be worded as a win over text similarity.
 5. **Online arms 1 and 1b** (ADR-0017), optional: ReAct with and without its memory,
    each growing its own library, into `online/online.jsonl`.
 
+**Replicates** (spec §7 item 2, #185). The registered plan runs the episodes as k = 3
+whole-run replicates; `--replicates K` asks for them. With K > 1 each episode stage goes
+through `bench.run.run_replicates`, writing `<stage>/replicate-r/ledger.jsonl` (the frozen
+libraries shared, each online replicate growing its own), and the stage's ledger above is
+then every replicate's rows concatenated, each row carrying its `replicate`. K = 1 keeps
+the single-ledger layout. Whatever K, the summary carries `cluster_bootstrap` over the
+frozen rows -- instances resampled with all their replicates (ADR-0012) -- because rows
+of one instance are repeats, not new observations. Figure 1 is pair-level and needs no
+replicate.
+
 **When the build admits nothing** (#173) the two-sided library is empty, and stages 2-4
 have nothing to dispatch, so they are skipped. Stage 5 needs no frozen library and still
 runs. The summary then records `stopped_after="build"` and why. Every summary carries
@@ -51,6 +61,7 @@ import json
 import os
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -67,11 +78,13 @@ from .primary import primary_report, summary, write_primary_report
 from .report import (
     ARM2_CANDIDATES_PER_DECISION,
     BaselineFloor,
+    ClusterBootstrap,
     admission_factorial,
     arm2_baseline_floor,
+    cluster_bootstrap,
     write_report,
 )
-from .run import run_benchmark
+from .run import DEFAULT_REPLICATES, run_benchmark, run_replicates
 from .similarity_probe import program_text_candidates, tune_baseline
 from .soft_vote import claim2_verdict, learn_soft_threshold, soft_vote_outcomes
 from .splits import EVAL_SEEDS, SMOKE_SEEDS, TUNE_SEEDS
@@ -102,6 +115,9 @@ class LivePlan(BaseModel):
     pair_seeds: tuple[int, ...] = EVAL_SEEDS
     episode_seeds: tuple[int, ...] = SMOKE_EPISODE_SEEDS
     online: bool = True
+    replicates: int = 1
+    """Whole-run replicates of every episode stage; the registered plan is
+    `DEFAULT_REPLICATES` (spec §7 item 2), the smoke default one."""
 
 
 class BuildEpisode(BaseModel):
@@ -138,6 +154,10 @@ class LiveSummary(BaseModel):
     """`bench.primary.summary` of Figure 1: the comparison, or why it is vacuous."""
     arm2_floor: BaselineFloor | None = None
     """Spec §7 item 11's verdict on arm 2 as the baseline, measured before any eval episode."""
+    bootstrap: ClusterBootstrap | None = None
+    """Arm 2 vs arm 3 over the frozen episodes, clustered on the instance (ADR-0012)."""
+    replicate_ledgers: dict[str, list[str]] = {}
+    """Each episode stage's per-replicate ledgers, relative to the run, when K > 1."""
     factorial: list[dict] = []
     artifacts: dict[str, str]
 
@@ -208,10 +228,36 @@ def baseline_floor(library: Library) -> BaselineFloor:
     return arm2_baseline_floor(row.decided, row.decidable)
 
 
+def _episodes(
+    result: LiveSummary, out: Path, directory: Path, stage: str, **run_kwargs: Any
+) -> Path:
+    """One episode stage's ledger, `<directory>/<stage>.jsonl`: every replicate's rows.
+
+    One replicate runs straight into that ledger, as before #185. More go through
+    `run_replicates` under `<directory>/<stage>/`, are listed in
+    `result.replicate_ledgers`, and their ledgers are concatenated, so the
+    report and the factorial read every replicate while each row keeps its `replicate`.
+    """
+    ledger = directory / f"{stage}.jsonl"
+    if result.plan.replicates == 1:
+        return run_benchmark(out=ledger, **run_kwargs)
+    ledgers = run_replicates(
+        out_dir=directory / stage, replicates=result.plan.replicates, **run_kwargs
+    )
+    result.replicate_ledgers[stage] = [str(path.relative_to(out)) for path in ledgers]
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    with ledger.open("wb") as handle:
+        for path in ledgers:
+            handle.write(path.read_bytes())
+    return ledger
+
+
 def run_live(plan: LivePlan, *, provider: Provider, model: str, out: Path) -> LiveSummary:
     """Run every stage in order; `out` must not exist yet, so nothing is mixed in."""
     if out.exists():
         raise ValueError(f"{out} already exists; a live run writes into a fresh directory")
+    if plan.replicates < 1:
+        raise ValueError(f"replicates must be at least 1, got {plan.replicates}")
     out.mkdir(parents=True)
     faults = list(plan.faults)
     two_sided, positive_only = out / "library-two-sided", out / "library-positive-only"
@@ -254,12 +300,15 @@ def run_live(plan: LivePlan, *, provider: Provider, model: str, out: Path) -> Li
     else:
         _measure(result, plan, provider=provider, model=model, out=out)
     if plan.online:
-        online = run_benchmark(
+        online = _episodes(
+            result,
+            out,
+            out / "online",
+            "online",
             arms=list(ONLINE_ARMS),
             faults=faults,
             occurrences=len(episode_seeds),
             seeds=episode_seeds,
-            out=out / "online" / "online.jsonl",
             model=model,
             provider=provider,
         )
@@ -281,23 +330,29 @@ def _measure(
     soft_threshold = learn_soft_threshold(soft_vote_outcomes(library, faults, plan.tune_seeds))
     result.arm2_floor = baseline_floor(library)
 
-    frozen = run_benchmark(
+    frozen = _episodes(
+        result,
+        out,
+        out,
+        "frozen",
         arms=list(FROZEN_ARMS),
         faults=faults,
         occurrences=len(episode_seeds),
         seeds=episode_seeds,
-        out=out / "frozen.jsonl",
         model=model,
         provider=provider,
         frozen_library=two_sided,
         soft_threshold=soft_threshold,
     )
-    ungated = run_benchmark(
+    ungated = _episodes(
+        result,
+        out,
+        out,
+        "positive-only",
         arms=list(FACTORIAL_ARMS),
         faults=faults,
         occurrences=len(episode_seeds),
         seeds=episode_seeds,
-        out=out / "positive-only.jsonl",
         model=model,
         provider=provider,
         frozen_library=positive_only,
@@ -307,6 +362,7 @@ def _measure(
         for ledger in (frozen, ungated):
             handle.write(ledger.read_bytes())
     write_report(frozen, out / "report")
+    result.bootstrap = cluster_bootstrap(read(frozen))
 
     outcomes = library_pair_outcomes(library, faults, plan.pair_seeds)
     figure = primary_report(outcomes.arm2, outcomes.arm3, baselines=outcomes.baselines())
@@ -356,6 +412,7 @@ def _text(result: LiveSummary) -> str:
             "",
             *_floor_lines(result.arm2_floor),
             "",
+            *_bootstrap_lines(result.plan.replicates, result.bootstrap),
             "admission factorial:",
             *(json.dumps(cell) for cell in result.factorial),
             "",
@@ -365,6 +422,23 @@ def _text(result: LiveSummary) -> str:
         *(f"  {name}: {path}" for name, path in result.artifacts.items()),
     ]
     return "\n".join(lines) + "\n"
+
+
+def _bootstrap_lines(replicates: int, bootstrap: ClusterBootstrap | None) -> list[str]:
+    if bootstrap is None:
+        return []
+    interval = (
+        f"[{bootstrap.interval.low:+.3f}, {bootstrap.interval.high:+.3f}]"
+        if bootstrap.interval is not None
+        else "no interval"
+    )
+    difference = "none" if bootstrap.difference is None else f"{bootstrap.difference:+.3f}"
+    return [
+        f"episodes, arm 2 minus arm 3 per-fire mismatch over {replicates} replicate(s): "
+        f"{difference} {interval}, {bootstrap.clusters} instance(s), {bootstrap.rows} row(s)",
+        f"  {bootstrap.note}",
+        "",
+    ]
 
 
 def _floor_lines(floor: BaselineFloor | None) -> list[str]:
@@ -412,6 +486,13 @@ def _parser() -> argparse.ArgumentParser:
         f"the full plan is {len(EVAL_SEEDS)})",
     )
     parser.add_argument("--skip-online", action="store_true", help="skip arms 1 and 1b online")
+    parser.add_argument(
+        "--replicates",
+        type=int,
+        default=1,
+        help=f"whole-run replicates of every episode stage (default 1; the registered plan "
+        f"is {DEFAULT_REPLICATES})",
+    )
     return parser
 
 
@@ -419,7 +500,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if not 1 <= args.episode_seeds <= len(EVAL_SEEDS):
         raise SystemExit(f"--episode-seeds must be between 1 and {len(EVAL_SEEDS)}")
-    plan = LivePlan(episode_seeds=EVAL_SEEDS[: args.episode_seeds], online=not args.skip_online)
+    if args.replicates < 1:
+        raise SystemExit("--replicates must be at least 1")
+    plan = LivePlan(
+        episode_seeds=EVAL_SEEDS[: args.episode_seeds],
+        online=not args.skip_online,
+        replicates=args.replicates,
+    )
     api_key = (
         read_api_key_env(args.api_key_env)
         if args.api_key_env is not None

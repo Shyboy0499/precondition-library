@@ -18,12 +18,13 @@ from conftest import gold_programs, make_record
 
 from precondition_library.agents.compile import AdmissionGate
 from precondition_library.bench import live
+from precondition_library.bench import run as run_module
 from precondition_library.bench.build_library import (
     BuildReport,
     BuiltProgram,
     _write_manifest,
 )
-from precondition_library.bench.ledger import Arm, EpisodeOutcome, append
+from precondition_library.bench.ledger import Arm, EpisodeOutcome, append, read
 from precondition_library.library import Library
 from precondition_library.program import ProgramStatus
 
@@ -126,10 +127,13 @@ def stubbed(monkeypatch):
         out: Path = kwargs["out"]
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text("", encoding="utf-8")
+        # One row per call, tagged with its replicate, so a concatenation is checkable.
+        append(out, make_record(arm=Arm.REACT, replicate=kwargs.get("replicate", 1)))
         return out
 
     monkeypatch.setattr(live, "build_library", fake_build)
     monkeypatch.setattr(live, "run_benchmark", fake_benchmark)
+    monkeypatch.setattr(run_module, "run_benchmark", fake_benchmark)
     monkeypatch.setattr(live, "write_report", lambda ledger, dest: calls["report"].append(ledger))
     return calls
 
@@ -311,3 +315,87 @@ def test_the_command_exits_1_with_a_message_when_it_stopped(monkeypatch, tmp_pat
     code = live.main(["--api-key-file", str(key_file), "--out", str(tmp_path / "o")])
     assert code == 1
     assert "stopped after build" in capsys.readouterr().out
+
+
+# --- replicates (issue #185) -------------------------------------------------
+
+
+def test_one_replicate_keeps_the_single_ledger_layout(stubbed, tmp_path) -> None:
+    result = live.run_live(PLAN, provider=object(), model="fake", out=tmp_path / "run")
+    assert result.plan.replicates == 1 and result.replicate_ledgers == {}
+    assert all("replicate" not in call for call in stubbed["benchmark"])
+    assert result.bootstrap is not None, "the clustered interval is reported whatever K is"
+
+
+def test_three_replicates_run_every_episode_stage_three_times(stubbed, tmp_path) -> None:
+    """Spec §7 item 2's registered plan: k = 3 whole-run replicates of every stage."""
+    out = tmp_path / "run"
+    plan = PLAN.model_copy(update={"replicates": 3})
+    result = live.run_live(plan, provider=object(), model="fake", out=out)
+
+    by_stage: dict[str, list[int]] = {}
+    for call in stubbed["benchmark"]:
+        stage = call["out"].parent.parent.name
+        by_stage.setdefault(stage, []).append(call["replicate"])
+    assert by_stage == {"frozen": [1, 2, 3], "positive-only": [1, 2, 3], "online": [1, 2, 3]}
+
+    assert set(result.replicate_ledgers) == {"frozen", "positive-only", "online"}
+    assert result.replicate_ledgers["frozen"] == [
+        f"frozen/replicate-{r}/ledger.jsonl" for r in (1, 2, 3)
+    ]
+    for stage, ledgers in result.replicate_ledgers.items():
+        assert all((out / path).is_file() for path in ledgers), stage
+
+    frozen = read(out / result.artifacts["frozen_ledger"])
+    assert [row.replicate for row in frozen] == [1, 2, 3], "the stage ledger holds every replicate"
+    online = read(out / result.artifacts["online_ledger"])
+    assert [row.replicate for row in online] == [1, 2, 3]
+    assert stubbed["report"] == [out / "frozen.jsonl"], "the report reads the concatenation"
+    assert (
+        "frozen"
+        in json.loads((out / "summary.json").read_text(encoding="utf-8"))["replicate_ledgers"]
+    )
+
+
+def test_the_frozen_library_is_shared_across_replicates(stubbed, tmp_path) -> None:
+    plan = PLAN.model_copy(update={"replicates": 2})
+    live.run_live(plan, provider=object(), model="fake", out=tmp_path / "run")
+    frozen = [call for call in stubbed["benchmark"] if call["arms"] == list(live.FROZEN_ARMS)]
+    assert len(frozen) == 2
+    assert {call["frozen_library"] for call in frozen} == {tmp_path / "run" / "library-two-sided"}
+    online = [call for call in stubbed["benchmark"] if call["arms"] == list(live.ONLINE_ARMS)]
+    assert all("frozen_library" not in call for call in online), "each online replicate learns"
+    assert len({call["out"].parent for call in online}) == 2, "in its own directory"
+
+
+def test_the_replicate_count_is_validated(tmp_path) -> None:
+    with pytest.raises(ValueError, match="replicates"):
+        live.run_live(
+            PLAN.model_copy(update={"replicates": 0}),
+            provider=object(),
+            model="fake",
+            out=tmp_path / "run",
+        )
+    key_file = tmp_path / "key"
+    key_file.write_text("k", encoding="utf-8")
+    with pytest.raises(SystemExit, match="replicates"):
+        live.main(
+            ["--api-key-file", str(key_file), "--out", str(tmp_path / "o"), "--replicates", "0"]
+        )
+
+
+def test_the_command_passes_the_replicate_count(monkeypatch, tmp_path) -> None:
+    key_file = tmp_path / "key"
+    key_file.write_text("k", encoding="utf-8")
+    seen: dict = {}
+
+    def fake_run(plan, **_):
+        seen["plan"] = plan
+        raise SystemExit(0)
+
+    monkeypatch.setattr(live, "run_live", fake_run)
+    with pytest.raises(SystemExit):
+        live.main(
+            ["--api-key-file", str(key_file), "--out", str(tmp_path / "o"), "--replicates", "3"]
+        )
+    assert seen["plan"].replicates == 3

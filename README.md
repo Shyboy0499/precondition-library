@@ -474,7 +474,10 @@ uv run python -m precondition_library.bench.live \
 
 You name where the key is, so the package still finds none on its own.
 `--episode-seeds` (default 4, the first live run's; the plan is 40) sizes the
-episode stages, and `--skip-online` drops arms 1 and 1b.
+episode stages, `--replicates` (default 1; the plan is 3) repeats each of them as a
+whole run, and `--skip-online` drops arms 1 and 1b. The registered plan is
+`--episode-seeds 40 --replicates 3`. The summary also carries arm 2's baseline floor
+(spec §7 item 11) and the instance-clustered interval over the episodes (ADR-0012).
 
 ## Prior work
 
