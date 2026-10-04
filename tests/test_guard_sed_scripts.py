@@ -68,3 +68,25 @@ def test_the_script_is_told_apart_from_the_files(
     args: list[str], scripts: list[str], files: list[str]
 ) -> None:
     assert _sed_arguments(args) == (scripts, files)
+
+
+LIVE_PROBE = (
+    "up=$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null) || exit 1\n"
+    '[ -n "$up" ] || exit 1\n'
+    "branch=$(printf '%s' \"$up\" | cut -d/ -f2-)\n"
+    '! git ls-remote --exit-code --heads upstream "$branch" >/dev/null 2>&1\n'
+)
+"""The fourth live smoke run's `tracked_branch_removed_upstream` probe, refused because the
+substitution's closing `)` stuck to `/dev/null`."""
+
+
+def test_a_redirect_to_dev_null_inside_a_substitution_is_not_a_write() -> None:
+    decision = screen(LIVE_PROBE, env_root=ROOT)
+    assert decision.verdict is Verdict.ALLOW, decision.reason
+
+
+@pytest.mark.parametrize("body", ["x=$(git log 2>/tmp/err)", "x=$(git log > ../out)"])
+def test_a_real_write_inside_a_substitution_is_still_refused(body: str) -> None:
+    decision = screen(body, env_root=ROOT)
+    assert decision.verdict is Verdict.REFUSE
+    assert decision.reason.startswith("refused write outside env_root")
