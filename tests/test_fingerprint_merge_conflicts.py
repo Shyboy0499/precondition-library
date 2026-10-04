@@ -1,4 +1,4 @@
-"""The fingerprint observes files a sync would conflict in, without rendering them (#191).
+"""The fingerprint observes files a sync would conflict in, and arm 2 sees them (#191).
 
 The lock-conflict intent's rules must read three facts the fingerprint did not have:
 which files both sides changed **so that a three-way merge conflicts**, and, in those
@@ -11,7 +11,7 @@ tests pin:
   not a conflict;
 * a line both sides changed is dropped by neither;
 * observing writes nothing to the repository, not even an object;
-* **none reaches `as_text`** until the intent is registered.
+* **all three reach `as_text`** now that the intent is registered (ADR-0029).
 """
 
 from __future__ import annotations
@@ -19,8 +19,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from precondition_library.sandbox import Sandbox, run_git
-from precondition_library.signatures import _NOT_YET_RENDERED, StateFingerprint
-from precondition_library.tasks.state_grid import STATE_GRID
+from precondition_library.signatures import StateFingerprint
+from precondition_library.tasks.state_grid import LOCKFILE_STATES
 
 FIELDS = {"merge_conflicted_files", "upstream_dropped_lines", "local_dropped_lines"}
 
@@ -97,8 +97,7 @@ def test_observing_writes_nothing_not_even_an_object(make_sandbox) -> None:
     assert after == before
 
 
-def test_arm_2_does_not_see_them_until_the_intent_is_registered() -> None:
-    assert _NOT_YET_RENDERED == FIELDS
-    for states in STATE_GRID.values():
-        for state in states.values():
-            assert not any(name in state.as_text() for name in FIELDS)
+def test_arm_2_sees_them_now_the_intent_is_registered() -> None:
+    text = LOCKFILE_STATES["local_removed"].as_text()
+    assert all(f"{name}: " in text for name in FIELDS)
+    assert 'local_dropped_lines:     "zlib 0.1.0",' in text

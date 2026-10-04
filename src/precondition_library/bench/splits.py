@@ -92,7 +92,7 @@ Four seeds, so the full repeat structure runs -- four occurrences, with
 family. Its job is to prove the harness runs end to end against a real model
 and to produce the first programs that `admit` gates into the library (spec
 section 7, "Design": the admit set builds the precondition vocabulary). 4 seeds
-x 4 measurable faults x 3 arms is 48 episodes.
+x 5 measurable faults x 3 arms is 60 episodes.
 
 The seeds are not `range(4)`: seed 3 injects `repin` for `submodule_moved`, which
 seed 2 already injects, so the block 0-3 would never show the `init` state and the

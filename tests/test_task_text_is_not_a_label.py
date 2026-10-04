@@ -379,6 +379,33 @@ def test_same_declared_phrasings_imply_same_text_for_every_seed(make_state) -> N
                 remotes=["origin"],
             ),
         ),
+        # Both `keep_local`: a conflicting sync where only the local side dropped lines.
+        "sync_through_a_conflicting_lockfile": (
+            make_state(
+                dirty_worktree=True,
+                branch="feature",
+                upstream_ahead=7,
+                upstream_behind=3,
+                has_locked_branch=True,
+                local_touched_files=["deps.lock", "docs/a.md"],
+                upstream_touched_files=["deps.lock"],
+                merge_conflicted_files=["deps.lock"],
+                local_dropped_lines=['    "zlib 1.0.0",'],
+                remotes=["origin", "upstream", "fork"],
+            ),
+            make_state(
+                dirty_worktree=False,
+                branch="main",
+                upstream_ahead=1,
+                upstream_behind=1,
+                has_locked_branch=False,
+                local_touched_files=["poetry.lock"],
+                upstream_touched_files=["poetry.lock", "src/app.py"],
+                merge_conflicted_files=["poetry.lock"],
+                local_dropped_lines=["six = 1.16"],
+                remotes=["origin"],
+            ),
+        ),
     }
     for intent in ambiguous_intents():
         left, right = pairs[intent.name]

@@ -614,10 +614,9 @@ def test_every_state_of_an_unrelated_fault_gets_a_seed() -> None:
     """The class probes one seed per distinct state, not one seed per fault (#75).
 
     `variant_for_seed` is the injector's own mapping, so the distinct values it
-    returns are the states the class can name; `dirty_tree`'s and `branch_renamed`'s are
-    their three resolutions since ADR-0027 and ADR-0028. `lockfile_conflict` exposes no
-    mapping -- its injected states are not declared resolutions -- so it is still
-    probed at seed 0 only. That remainder is
+    returns are the states the class can name; since ADR-0027, ADR-0028 and ADR-0029
+    every fault has one, so every fault is probed at one seed per resolution --
+    `lockfile_conflict`'s two, though it injects three states. That remainder is
     sampling, not coverage, and the rejection reason reports the count actually
     built so the two cannot be confused.
     """
@@ -625,7 +624,7 @@ def test_every_state_of_an_unrelated_fault_gets_a_seed() -> None:
     assert _state_seeds(FAULTS["submodule_moved"]) == [0, 1, 4]
     assert _state_seeds(FAULTS["dirty_tree"]) == [0, 2, 5]
     assert _state_seeds(FAULTS["branch_renamed"]) == [0, 1, 6]
-    assert _state_seeds(FAULTS["lockfile_conflict"]) == [0]
+    assert _state_seeds(FAULTS["lockfile_conflict"]) == [0, 2]
 
 
 def test_a_non_seed_0_state_of_an_unrelated_fault_is_rejected(make_sandbox) -> None:

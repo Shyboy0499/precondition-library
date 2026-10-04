@@ -120,8 +120,8 @@ resolution's `variant_phrasings`, wording that reveals the situation. A
 bag-of-words classifier trained on the text alone (`bench/textcontrol.py`, over
 the test state grid, train n=120 / eval n=120 on disjoint seed sets) reports **AUC
 0.500 for uninformed requests** on every converted intent and **0.962 / 0.945 /
-1.000 / 1.000 for informed requests** (`diverged`'s, `submodule_moved`'s,
-`dirty_tree`'s and `branch_renamed`'s intents, in that order). The uninformed figure is an identity, not a measurement: on that channel
+1.000 / 1.000 / 1.000 for informed requests** (`diverged`'s, `submodule_moved`'s,
+`dirty_tree`'s, `branch_renamed`'s and `lockfile_conflict`'s intents, in that order). The uninformed figure is an identity, not a measurement: on that channel
 the sampler never consults state, so every state receives the same text for a
 given seed, every positive has a negative with an identical score, and the AUC is
 0.500 for *any* classifier and *any* phrasing list — including a deliberately
@@ -305,8 +305,8 @@ places, both checked:
   (learning a program there).
   Which faults are still excluded from dispatch measurement is declared in code, not
   here: `tasks/registry.py`'s `EXCLUDED_FROM_BENCHMARK`, asserted against every fault
-  by a test. #189 and #190 brought `dirty_tree` and `branch_renamed` in (ADR-0027,
-  ADR-0028); #191 would bring the last, `lockfile_conflict`.
+  by a test. Since #189, #190 and #191 (ADR-0027 to ADR-0029) every fault is
+  measured, and the set is empty.
 
 ## First demonstration
 
@@ -453,8 +453,8 @@ before anything runs:
   ledger row; `bench/report.py` computes the cost curve over the replays and the
   mismatch comparison over the variants, says so in each figure, and carries the
   achieved instance count per resolution. The arithmetic for the eval set is in
-  the spec's §7: 32, 15, 14 and 30 variant occurrences (91 distinct environments
-  across the four faults), not forty seeds.
+  the spec's §7: 32, 15, 14, 30 and 28 variant occurrences (119 distinct
+  environments across the five faults), not forty seeds.
 - **The API key is the caller's.** `provider.py` reads no environment variables
   and no files; `DeepSeekProvider` takes the key at construction, and the spec's §7
   example is what passes `DEEPSEEK_API_KEY` into it. That is a deliberate boundary,

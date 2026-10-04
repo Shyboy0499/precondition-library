@@ -882,8 +882,15 @@ def test_correct_variant_is_identical_across_arms(tmp_path: Path) -> None:
 # --- excluded faults are refused, not skipped --------------------------------
 
 
-def test_an_excluded_fault_is_refused_loudly(tmp_path: Path) -> None:
-    """A fault with a fixed request sentence must never enter a measurement."""
+def test_an_excluded_fault_is_refused_loudly(tmp_path: Path, monkeypatch) -> None:
+    """A fault with a fixed request sentence must never enter a measurement.
+
+    No fault is excluded since ADR-0029, so the exclusion is set up for the test: the
+    refusal must still fire for a fault a later change lists there.
+    """
+    monkeypatch.setattr(
+        "precondition_library.bench.run.EXCLUDED_FROM_BENCHMARK", {"lockfile_conflict"}
+    )
     out = tmp_path / "ledger.jsonl"
     with pytest.raises(ValueError, match="excluded"):
         run_benchmark(

@@ -105,6 +105,7 @@
 | 95 | 2026-10-04 | **The fingerprint observes files a sync would conflict in, without rendering them (issue #191, step 1).** `StateFingerprint` gains `merge_conflicted_files` -- files both sides changed whose three-way merge conflicts, tried with `git merge-file -p` on the merge base's, HEAD's and upstream's blobs copied to a temporary directory outside the repository, so observing writes nothing, not even an object -- and, in those files, `upstream_dropped_lines` and `local_dropped_lines`: base lines one side removed while the other kept them. A line both sides changed, such as a version bump, is dropped by neither, so only real removals count. `diverged`'s overlapping state, where both sides changed `app.py` in separate hunks, is not a conflict. `as_text` leaves the three fields out (`signatures._NOT_YET_RENDERED`) until the intent is registered, so **every arm-2 text, and every measured number, is unchanged**. No result is claimed. |
 | 96 | 2026-10-04 | **`lockfile_conflict` injects three states, and its checker refuses resurrected dependencies and a doubled version line (issue #191, step 2).** The base lock now lists a removable dependency, and each seed selects `additions_only` (each side adds one entry and bumps the version), `upstream_removed` (upstream also drops the removable entry the local side kept) or `local_removed` (the mirror). `check` gains two clauses: a dependency one side removed must stay removed, and the file must have exactly one `version` line -- a union merge driver keeps both sides' lines, so both versions, a lock no real ecosystem could read, which the three-clause checker passed. Measured on real sandboxes (`tests/test_lockfile_states.py`): rebuilding from upstream's file plus the local side's additions passes `additions_only` and `upstream_removed`; rebuilding from the local file plus upstream's additions passes `additions_only` and `local_removed`; a union merge passes none. `variant_for_seed` stays `None`, so the fault stays excluded and admission still builds one state of it, at seed 0. No measured number changes and no result is claimed. |
 | 97 | 2026-10-04 | **The lock-conflict intent is defined, and its acceptable sets are pinned to the checker -- not yet registered (issue #191, step 3).** `tasks.faults.lockfile_conflict.INTENT` (`sync_through_a_conflicting_lockfile`) labels `additions_only` and `upstream_removed` `take_upstream` and `local_removed` `keep_local`, decided by `merge_conflicted_files`, the dropped-line fields and both sides having commits; no rule reads the request. Measured by replaying both gold bodies on every state with their conditions stripped, the checker accepts {keep_local, take_upstream} on `additions_only`, {take_upstream} on `upstream_removed` and {keep_local} on `local_removed`, and the declared sets equal that (`tests/test_lockfile_intent.py`). It is its own intent rather than more `sync_fork_with_upstream` states, settling #191's first question: every `diverged` resolution fails here, starting with a plain merge, and **`diverged`'s rules now refuse a state where a sync would conflict** (`StateFingerprint.sync_would_conflict`) -- #158 found them labelling this fault's state `merge`. No diverged state conflicts, so no label it has had changes. Gold bodies pass the other side's additions through a file under `.git/` and insert them with a `\\%...%`-addressed `sed`: the guard refuses a `while read` loop's variable and reads a `/`-addressed `sed -i` script as an absolute path, two limits recorded for the pre-live-run review rather than changed here. **One admission behaviour changes, and it narrows ADR-0019:** a `diverged` program whose preconditions accept the lock-conflict state is now refused at admission as firing on an unrelated state, where #158 and ADR-0019 had judged that state an overlap on which `merge` was correct -- the experiment shows a plain merge stops on the conflict and fails the fault's checker there (`tests/test_overlap_states.py`). The gold merge program's `local_work_beyond_the_overlap` precondition keeps it off the state, so gold is still admitted, and ADR-0019's overlap class stays in `admit` with no measured fault producing one today. The intent itself is not registered and `variant_for_seed` stays `None`. No eval episode has been run, and no result is claimed. |
+| 98 | 2026-10-04 | **The lock-conflict intent is registered, so every fault is measured (issue #191, ADR-0029).** `sync_through_a_conflicting_lockfile` joins `tasks.registry.INTENTS`, `EXCLUDED_FROM_BENCHMARK` is empty, and the four declared lock states join `STATE_GRID`. `as_text` now renders `merge_conflicted_files`, `upstream_dropped_lines` and `local_dropped_lines`, so **every arm-2 text gains three lines** and arm-2 numbers recorded before this revision are not comparable with later runs. The fault's Tier 1 axes are each side's package plus `removal`, which separates the two states `take_upstream` covers; the versions now follow from the package pair instead of being drawn on their own, because drawn independently no tune or eval seed ever repeated an instance and the cost curve is read from repeats. Measured from the declared draw: the eval set builds 28 `lockfile_conflict` environments (`take_upstream` 17, `keep_local` 11) with 12 replays, tune 14 with 2, smoke 3 with 1; 119 environments across the five faults; the text control's uninformed AUC is 0.500 by construction and informed 1.000; 0.000 of uninformed requests over seeds 0–199 name the fault. **Live corrections:** §3's intents and AUC tables and naming fractions, §7's demo arithmetic (the nominal 60 episodes is now the runnable grid), occurrence and instance tables and interval widths (Wilson ±8.8pp and TOST ±10.5pp at 119), §10's testing block, and **open risk 6, which is closed**. No eval episode has been run on the new grid, and no result is claimed. |
 
 ---
 
@@ -274,6 +275,7 @@ described by **intents**, each carrying a paraphrase distribution and one or mor
 | `restore_submodule_state` | init / repin / remove | whether the submodule is initialised, whether upstream still references it, whether the recorded pin matches |
 | `keep_uncommitted_work_and_sync` | stash / commit / aside | whether an untracked file sits where upstream now tracks one, and whether the uncommitted edits touch a file upstream changed (ADR-0027) |
 | `follow_renamed_upstream_branch` | rename / retrack / merge | whether the branch follows a name upstream no longer uses, whether local commits exist, and whether a local branch already has the new name (ADR-0028) |
+| `sync_through_a_conflicting_lockfile` | take_upstream / keep_local | whether a sync would conflict in a file both sides changed, and which side dropped lines the other kept (ADR-0029) |
 
 Only intents with two or more resolutions have an experimental surface, and
 `tasks/registry.py` is the single place that distinction lives, so an
@@ -302,8 +304,8 @@ state may reach the request only through that declared map. The fraction of
 sampled uninformed requests that name the fault is documented and asserted:
 `sync_fork_with_upstream` 0.000 over seeds 0–49, `restore_submodule_state`
 0.060 over 0–49 and 0.125 over 0–199, `keep_uncommitted_work_and_sync` 0.000
-over 0–199, and `follow_renamed_upstream_branch` 0.160 over 0–49 and 0.135 over
-0–199, all at ≤ 0.35
+over 0–199, `follow_renamed_upstream_branch` 0.160 over 0–49 and 0.135 over
+0–199, and `sync_through_a_conflicting_lockfile` 0.000 over 0–199, all at ≤ 0.35
 (`tests/test_intent_ambiguity.py`).
 
 #### The boundary condition
@@ -329,6 +331,7 @@ sets (overlap raises):
 | `restore_submodule_state` | 0.500 | 0.945 |
 | `keep_uncommitted_work_and_sync` | 0.500 | 1.000 |
 | `follow_renamed_upstream_branch` | 0.500 | 1.000 |
+| `sync_through_a_conflicting_lockfile` | 0.500 | 1.000 |
 
 **On uninformed requests the text cannot carry the resolution (AUC 0.500), by
 construction and not by measurement: the sampler never consults state, so every
@@ -755,16 +758,17 @@ rather than to fit a budget.
 **The episode loop is retained only as a demonstration, explicitly underpowered:**
 
 ```text
-4 measurable faults × 4 occurrences × 3 arms = 48 episodes   (demo, UNDERPOWERED)
-    (the nominal 5 faults × 4 × 3 = 60 is not runnable: the fifth fault
-     returns a single fixed sentence and is in EXCLUDED_FROM_BENCHMARK)
+5 measurable faults × 4 occurrences × 3 arms = 60 episodes   (demo, UNDERPOWERED)
+    (the nominal grid is now runnable: since ADR-0029 every fault has a
+     registered intent and EXCLUDED_FROM_BENCHMARK is empty)
 ```
 
 It is labelled underpowered wherever it appears and excluded from the primary
 claim. Its value is showing the harness works end to end, not producing a result.
-The 60-episode figure is the nominal grid; the runnable demo is 48 (24 before
-ADR-0027 registered `dirty_tree`, 36 before ADR-0028 registered `branch_renamed`), and
-an earlier draft stated the nominal figure as though it could run.
+The 60-episode figure is the nominal grid, and since ADR-0029 the runnable demo is
+all of it (24 before ADR-0027 registered `dirty_tree`, 36 before ADR-0028, 48 before
+ADR-0029). An earlier draft stated the nominal figure as though it could run before it
+could.
 
 Seeds are split into disjoint admit / tune / eval sets and every arm is routed
 through the same (fault, seed) pairs, so the comparison is paired rather than
@@ -979,14 +983,17 @@ ledger row; ADR-0005 decision 5):
 | smoke | 0, 1, 2, 4 | `submodule_moved` | 4 | 0 |
 | smoke | 0, 1, 2, 4 | `dirty_tree` | 4 | 0 |
 | smoke | 0, 1, 2, 4 | `branch_renamed` | 4 | 0 |
+| smoke | 0, 1, 2, 4 | `lockfile_conflict` | 3 | 1 |
 | tune | 1000-1015 | `diverged` | 15 | 1 |
 | tune | 1000-1015 | `submodule_moved` | 7 | 9 |
 | tune | 1000-1015 | `dirty_tree` | 10 | 6 |
 | tune | 1000-1015 | `branch_renamed` | 15 | 1 |
+| tune | 1000-1015 | `lockfile_conflict` | 14 | 2 |
 | eval | 2000-2039 | `diverged` | 32 | 8 |
 | eval | 2000-2039 | `submodule_moved` | 15 | 25 |
 | eval | 2000-2039 | `dirty_tree` | 14 | 26 |
 | eval | 2000-2039 | `branch_renamed` | 30 | 10 |
+| eval | 2000-2039 | `lockfile_conflict` | 28 | 12 |
 
 **The independent observations are the distinct instances, and the counts are
 measured, not inferred from the grid.** Each measurable fault now draws each state
@@ -1009,10 +1016,15 @@ breakdown the report carries (`bench.report.achieved_instances`) is:
 | `branch_renamed` | `merge` | 9 |
 | `branch_renamed` | `rename` | 12 |
 | `branch_renamed` | `retrack` | 9 |
+| `lockfile_conflict` | `keep_local` | 11 |
+| `lockfile_conflict` | `take_upstream` | 17 |
 
-The 40-seed eval set therefore builds **91 independent environments** -- 47 on the
-first two faults, up from 6, 14 on `dirty_tree` since ADR-0027 and 30 on
-`branch_renamed` since ADR-0028 -- and every resolution reaches the owner's target of 4. `dirty_tree/aside` sits exactly on it:
+The 40-seed eval set therefore builds **119 independent environments** -- 47 on the
+first two faults, up from 6, 14 on `dirty_tree` since ADR-0027, 30 on `branch_renamed`
+since ADR-0028 and 28 on `lockfile_conflict` since ADR-0029 -- and every resolution
+reaches the owner's target of 4. `lockfile_conflict`'s versions follow from its drawn
+package pair rather than being drawn on their own: drawn independently, no seed set
+ever repeated an instance, and the cost curve is read from repeats. `dirty_tree/aside` sits exactly on it:
 its only axis, the content flavour, has four values, so no seed set can draw a fifth.
 The smoke (admit) set draws no `stash` state, so a library built on it holds no
 `stash` program; a `stash` state accepts `commit` and `aside` too (ADR-0023), so a
@@ -1025,12 +1037,13 @@ measurement, including that distinct identities are distinct environments, with
 reason.** No interval could be attached at 6 environments. One arm's success
 rate now carries a real interval: its 95% Wilson half-width near 0.5 is about
 **±18.6pp** at the owner's target of 24, **±13.7pp** at the 47 the first two faults
-build, **±12.2pp** at the 61 three build and **±10.1pp** at the 91 all four build. But the
+build, **±12.2pp** at the 61 three build, **±10.1pp** at the 91 four build and **±8.8pp**
+at the 119 all five build. But the
 ±10pp margin (item 10) is applied to the **difference** between two arms' rates, by
 a TOST at a 90% interval, and that interval is wider. With `tost_equivalence` and
 both arms at the same observed 50% rate — the most favourable case — the difference's
-half-width is about **±22.5pp** at 24 per arm, **±16.5pp** at 47, **±14.6pp** at 61
-and **±12.0pp** at 91, and ±10pp first
+half-width is about **±22.5pp** at 24 per arm, **±16.5pp** at 47, **±14.6pp** at 61,
+**±12.0pp** at 91 and **±10.5pp** at 119, and ±10pp first
 becomes passable at **133 per arm** (87 at an 80% rate, 53 at 90%; any observed
 difference needs more). ADR-0006 keeps the margin at ±10pp, so at the achieved N the
 expected verdict is "comparable", which the report already produces for an
@@ -1226,8 +1239,8 @@ TEXT CONTROL    a bag-of-words classifier trained on the request text alone
                 and the mechanism is not needed. Pinned by a positive control
                 that fires on an intent whose informed wording fully determines
                 the answer, so the control cannot pass by being a no-op. Only
-                registered intents are measured; the one unconverted fault
-                returns a fixed sentence and is excluded (`EXCLUDED_FROM_BENCHMARK`).
+                registered intents are measured; since ADR-0029 every fault
+                has one, and `EXCLUDED_FROM_BENCHMARK` is empty.
 IMPORT GRAPH    replay cannot reach provider, directly or transitively.
                 IMPLEMENTED AND PASSING (tests/test_replay_isolated_from_provider.py)
 ZERO TOKEN      stronger than the import test: replay runs with a provider whose
@@ -1342,13 +1355,13 @@ claim.
 5. **Model drift.** Provider-side model updates mid-experiment would confound
    everything. `model` is recorded per episode; a version change invalidates the
    affected run and requires re-running that arm.
-6. **One of the five faults is not converted.** `lockfile_conflict` still returns a
-   single fixed request sentence (#191; `dirty_tree` and `branch_renamed` were
-   converted by #189 and #190 and registered by ADR-0027 and ADR-0028), so for it
-   the text remains a perfect class label — the original defect. It is scoped out
-   and **must not be included in any dispatch measurement** until it gains an
-   `IntentSpec` with two or more state-decided resolutions. Enforced rather than
-   merely stated: `EXCLUDED_FROM_BENCHMARK` in `tasks/registry.py` names it, and
+6. **Every fault is converted (closed by ADR-0029).** `dirty_tree`, `branch_renamed`
+   and `lockfile_conflict` were converted by #189, #190 and #191 and registered by
+   ADR-0027 to ADR-0029, so no fault's request is a fixed sentence any more. The
+   guard stays: a fault added later with a fixed sentence **must not be included in
+   any dispatch measurement** until it gains an `IntentSpec` with two or more
+   state-decided resolutions. Enforced rather than merely stated:
+   `EXCLUDED_FROM_BENCHMARK` in `tasks/registry.py` would name it, and
    a test asserts every fault is either intent-covered or listed there, so a fault
    cannot be silently absent from both.
 

@@ -11,12 +11,11 @@ is that measurement.
 
 The episode loop `bench.run` writes is retained only as a demonstration and is
 explicitly underpowered. The nominal grid is 5 faults x 4 occurrences x 3 arms,
-but only four of the five faults are measurable -- the fifth is a fixed single
-sentence and sits in `tasks.registry.EXCLUDED_FROM_BENCHMARK` -- so the runnable
-demo is 4 faults x 4 occurrences x 3 arms = **48 episodes**, and `bench.run`
-refuses the excluded one rather than skipping it. The issue #7 baselines are
-additional arms a run may include -- among them the zero-token gold **oracle
-floor** -- so a run that names them adds 4 x 4 episodes per baseline on the same
+and since ADR-0029 every fault is measurable -- `tasks.registry.EXCLUDED_FROM_BENCHMARK`
+is empty, and `bench.run` would refuse a fault listed there rather than skip it -- so the
+runnable demo is the whole **60 episodes**. The issue #7 baselines are additional arms a
+run may include -- among them the zero-token gold **oracle floor** -- so a run that
+names them adds 5 x 4 episodes per baseline on the same
 grid; the per-arm tables below carry each one without special-casing. Spec §7
 excludes the demo from the primary claim. So the two figures built here are:
 
