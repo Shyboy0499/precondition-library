@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -56,7 +57,9 @@ from precondition_library.provider import (
 )
 from precondition_library.runtime.probes import evaluate_preconditions
 from precondition_library.runtime.replay import replay
+from precondition_library.signatures import StateFingerprint
 from precondition_library.similarity import SimilarityUsage
+from precondition_library.tasks.faults import build_sandbox
 from precondition_library.tasks.faults.diverged import SPEC as DIVERGED
 from precondition_library.tasks.spec import GroundTruth
 
@@ -1700,6 +1703,43 @@ def test_a_refused_compile_is_revised_once_with_the_refusal(tmp_path: Path) -> N
     history = (library.root / stored.id / "history.jsonl").read_text(encoding="utf-8")
     (event,) = [json.loads(line) for line in history.splitlines() if '"revised"' in line]
     assert "rejected before any sandbox" in event["reason"]
+
+
+def test_a_revision_is_shown_the_state_its_program_fired_on(tmp_path: Path) -> None:
+    """A program whose lone precondition also accepts a sibling state is refused there;
+    the revision's payload carries that state as the probes see it (ADR-0030)."""
+    full = _discard_program()
+    permissive = _discard_program(id="permissive-discard", preconditions=full.preconditions[:1])
+    provider = FakeProvider(
+        *_resolves_discard(),
+        _completion(_reply_text(permissive)),
+        _completion(_reply_text(full)),
+    )
+    out = tmp_path / "ledger.jsonl"
+    run_benchmark(
+        arms=[Arm.PRECONDITION],
+        faults=["diverged"],
+        occurrences=1,
+        seeds=[DISCARD_SEED],
+        out=out,
+        model="fake",
+        provider=provider,
+    )
+    (row,) = read(out)
+    assert row.admitted is True and row.compile_attempts == 2
+
+    revision = provider.calls[-1]
+    assert "`refused_state`" in revision["system"]
+    payload = json.loads(revision["messages"][-1]["content"].split("\n", 1)[1].rsplit("\n", 1)[0])
+    named = re.search(r"\(([a-z_]+) seed (\d+)", payload["admission_refusal"])
+    assert named is not None, payload["admission_refusal"]
+    box = build_sandbox(int(named.group(2)), [named.group(1)])
+    try:
+        expected = StateFingerprint.observe(box).model_dump(mode="json")
+    finally:
+        box.destroy()
+    assert payload["refused_state"] == expected
+    assert payload["refused_state"] != payload["state_at_arrival"]
 
 
 def test_a_revision_that_is_refused_too_keeps_the_last_reason(tmp_path: Path) -> None:

@@ -211,3 +211,22 @@ def test_the_factorial_refuses_a_gate_spread_over_two_libraries(tmp_path: Path) 
     append(ledger, _row(Arm.PRECONDITION, "two_sided", "merge", library="precondition-lib"))
     with pytest.raises(ValueError, match="span 2 libraries"):
         admission_factorial(ledger)
+
+
+def test_admission_names_the_state_a_refused_program_fired_on() -> None:
+    """ADR-0030: the revision is shown the state, so admit reports which one it was."""
+    fired_on: list[tuple[tuple[str, ...], int]] = []
+    admitted, reason = admit(
+        _permissive_discard(), "diverged", seeds=[DISCARD_SEED], fired_on=fired_on
+    )
+    assert admitted is False
+    (((fault,), seed),) = fired_on
+    assert f"{fault} seed {seed}" in reason
+
+
+def test_an_admission_or_a_positive_side_refusal_names_no_state() -> None:
+    fired_on: list[tuple[tuple[str, ...], int]] = []
+    assert admit(_discard_program(), "diverged", seeds=[DISCARD_SEED], fired_on=fired_on)[0]
+    no_variant = _discard_program(id="no-variant", variant=None)
+    assert not admit(no_variant, "diverged", seeds=[DISCARD_SEED], fired_on=fired_on)[0]
+    assert fired_on == []

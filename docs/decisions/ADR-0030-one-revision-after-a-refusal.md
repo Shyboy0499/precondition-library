@@ -49,7 +49,16 @@ build's problem is that a refusal is a dead end.
    program's `history.jsonl` gains a `revised` event carrying the refused program and
    its reason (`Library.record_revision`). A rejected program is data
    (`library/README.md` rule 1), and nothing else would hold it.
-7. **The build's positive-only library is gated on the first compile**
+7. **The revision is shown the state it fired on.** When the refusal is a negative
+   state the preconditions accepted, `admit(fired_on=...)` reports it, and the revision
+   payload carries that state's observed fingerprint as `refused_state`, beside
+   `state_at_arrival`. A name like "branch_renamed seed 1" says which state, not what
+   tells it apart. The fingerprint does: the compiler can compare the two and add a
+   precondition on a field that differs. It is the one state the program fired on, so
+   the rest of the negative class stays unseen (the first alternative below). A
+   refusal on the positive side, the breadth cap or the contract names no state, and
+   the payload has none.
+8. **The build's positive-only library is gated on the first compile**
    (`Library.first_compile`). The revision is the two-sided gate's feedback: the
    positive-only gate has no negative side, so it never produced the refusal the
    revision answers. Gating the revision positive-only would give the ungated library

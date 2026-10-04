@@ -45,7 +45,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ..agents.compile import AdmissionGate, admit, compile_program
+from ..agents.compile import AdmissionGate, admit, compile_program, observe_negative_state
 from ..agents.dispatch import (
     Dispatch,
     dispatch_intent_key,
@@ -991,6 +991,7 @@ def _learn_from_solution(
     program: Program | None = None
     admitted, gate_reason = False, ""
     revision: tuple[Program, str] | None = None
+    refused_state: StateFingerprint | None = None
     first_refused: tuple[Program, str] | None = None
     for attempt in range(1, COMPILE_ATTEMPTS + 1):
         try:
@@ -1002,6 +1003,7 @@ def _learn_from_solution(
                 fault=fault_type,
                 variant_ids=[variant.id for variant in intent.variants],
                 revision=revision,
+                refused_state=refused_state,
             )
         except Exception as exc:
             if program is None:
@@ -1023,10 +1025,12 @@ def _learn_from_solution(
         program = compiled.program.model_copy(
             update={"id": _program_id(fault_type, occurrence, compiled.program.id)}
         )
-        admitted, gate_reason = admit(program, fault_type, seeds=[seed])
+        fired_on: list[tuple[tuple[str, ...], int]] = []
+        admitted, gate_reason = admit(program, fault_type, seeds=[seed], fired_on=fired_on)
         if admitted:
             break
         revision = (program, gate_reason)
+        refused_state = observe_negative_state(*fired_on[-1]) if fired_on else None
         first_refused = first_refused or revision
     assert program is not None  # the loop returns before here when no program parsed
     try:
