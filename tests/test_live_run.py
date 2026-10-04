@@ -400,3 +400,45 @@ def test_the_command_passes_the_replicate_count(monkeypatch, tmp_path) -> None:
             ["--api-key-file", str(key_file), "--out", str(tmp_path / "o"), "--replicates", "3"]
         )
     assert seen["plan"].replicates == 3
+
+
+def test_primary_only_measures_figure1_and_sends_no_episode(stubbed, tmp_path) -> None:
+    """`--primary-only`: the build, then the pair-level stages, and no episode at all."""
+    out = tmp_path / "run"
+    plan = PLAN.model_copy(update={"episodes": False, "online": False})
+    result = live.run_live(plan, provider=object(), model="fake", out=out)
+
+    assert len(stubbed["build"]) == 1
+    assert stubbed["benchmark"] == [] and stubbed["report"] == [], "no episode ran"
+    assert (out / "primary" / "figure1.csv").exists()
+    assert result.figure1 and result.arm2_floor is not None and result.claim2
+    assert result.soft_threshold is not None
+    assert set(result.artifacts) >= {"build_ledger", "primary"}
+    assert "frozen_ledger" not in result.artifacts and "online_ledger" not in result.artifacts
+    text = (out / "summary.txt").read_text(encoding="utf-8")
+    assert "episode stages skipped (--primary-only)" in text
+    assert "admission factorial" not in text
+
+
+def test_primary_only_and_a_full_run_report_the_same_figure1(stubbed, tmp_path) -> None:
+    full = live.run_live(PLAN, provider=object(), model="fake", out=tmp_path / "full")
+    plan = PLAN.model_copy(update={"episodes": False, "online": False})
+    primary = live.run_live(plan, provider=object(), model="fake", out=tmp_path / "primary")
+    assert primary.figure1 == full.figure1
+    assert primary.arm2_floor == full.arm2_floor
+    assert primary.soft_threshold == full.soft_threshold
+
+
+def test_the_command_passes_primary_only(monkeypatch, tmp_path) -> None:
+    key_file = tmp_path / "key"
+    key_file.write_text("k", encoding="utf-8")
+    seen: dict = {}
+
+    def fake_run(plan, **_):
+        seen["plan"] = plan
+        raise SystemExit(0)
+
+    monkeypatch.setattr(live, "run_live", fake_run)
+    with pytest.raises(SystemExit):
+        live.main(["--api-key-file", str(key_file), "--out", str(tmp_path / "o"), "--primary-only"])
+    assert seen["plan"].episodes is False and seen["plan"].online is False
