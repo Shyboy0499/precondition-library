@@ -1,0 +1,129 @@
+# Hand-written resolutions for the `keep_uncommitted_work_and_sync` intent (#189).
+#
+# The intent is defined in tasks/faults/dirty_tree.py and not yet registered: until
+# it is, nothing measured dispatches these, and the dirty_tree fault stays excluded
+# from the benchmark. They exist now so that the acceptable sets the intent declares
+# can be pinned against the fault's own checker by replay
+# (tests/test_dirty_tree_intent.py), the way ADR-0023 pins the measured intents'.
+#
+# Preconditions are probes, so they must agree with the intent's decision rules
+# (decided_by in tasks/faults/dirty_tree.py). They are written independently --
+# agreeing by construction would defeat the point of having a check.
+#
+# Descriptions state the applicability condition in the vocabulary a request would
+# use, without naming a resolution label.
+programs:
+  - id: keep-work-sync-in-place
+    intent: keep_uncommitted_work_and_sync
+    variant: stash
+    parameters: [work_dir, upstream_remote, upstream_branch]
+    preconditions:
+      - name: has_uncommitted_work
+        description: The working tree holds changes not yet recorded in git.
+        probe: 'test -n "$(git status --porcelain)"'
+      - name: upstream_has_new_commits
+        description: Upstream has commits the local branch lacks.
+        probe: 'test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0'
+      - name: no_local_only_commits
+        description: The local branch has no commits of its own that upstream lacks.
+        probe: 'test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -eq 0'
+      - name: no_unsaved_file_where_upstream_has_one
+        description: No unsaved local file sits at a path upstream now tracks.
+        probe: 'test -z "$(comm -12 <(git ls-files --others --exclude-standard | sort) <(git ls-tree -r --name-only {upstream_remote}/{upstream_branch} | sort))"'
+      - name: edits_avoid_upstream_files
+        description: The local edits are in files upstream's new commits did not change.
+        probe: 'test -z "$(comm -12 <(git diff --name-only HEAD | sort) <(git diff --name-only HEAD...{upstream_remote}/{upstream_branch} | sort))"'
+    body: |
+      git fetch -q {upstream_remote}
+      git stash push --include-untracked -q
+      git merge --ff-only {upstream_remote}/{upstream_branch}
+      git stash pop -q
+    postconditions:
+      - name: upstream_contained
+        description: The local branch now contains upstream's tip.
+        probe: 'git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD'
+      - name: work_still_in_progress
+        description: The local changes are back in the working tree, still unrecorded.
+        probe: 'test -n "$(git status --porcelain)"'
+    provenance:
+      compiled_from_task: hand-written gold resolution for benchmarking
+      model: human
+      compiler_version: human
+      episode_id: gold/keep_uncommitted_work_and_sync/stash
+      fault: dirty_tree
+    status: candidate
+
+  - id: keep-work-record-then-merge
+    intent: keep_uncommitted_work_and_sync
+    variant: commit
+    parameters: [work_dir, upstream_remote, upstream_branch]
+    preconditions:
+      - name: has_uncommitted_work
+        description: The working tree holds changes not yet recorded in git.
+        probe: 'test -n "$(git status --porcelain)"'
+      - name: upstream_has_new_commits
+        description: Upstream has commits the local branch lacks.
+        probe: 'test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0'
+      - name: no_local_only_commits
+        description: The local branch has no commits of its own that upstream lacks.
+        probe: 'test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -eq 0'
+      - name: no_unsaved_file_where_upstream_has_one
+        description: No unsaved local file sits at a path upstream now tracks.
+        probe: 'test -z "$(comm -12 <(git ls-files --others --exclude-standard | sort) <(git ls-tree -r --name-only {upstream_remote}/{upstream_branch} | sort))"'
+      - name: edits_touch_an_upstream_file
+        description: A local edit is in a file upstream's new commits also changed.
+        probe: 'test -n "$(comm -12 <(git diff --name-only HEAD | sort) <(git diff --name-only HEAD...{upstream_remote}/{upstream_branch} | sort))"'
+    body: |
+      git fetch -q {upstream_remote}
+      git add -A
+      git commit -q -m "Keep work in progress before syncing with upstream"
+      git merge --no-edit {upstream_remote}/{upstream_branch}
+    postconditions:
+      - name: upstream_contained
+        description: The local branch now contains upstream's tip.
+        probe: 'git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD'
+    provenance:
+      compiled_from_task: hand-written gold resolution for benchmarking
+      model: human
+      compiler_version: human
+      episode_id: gold/keep_uncommitted_work_and_sync/commit
+      fault: dirty_tree
+    status: candidate
+
+  - id: keep-work-move-colliding-files-aside
+    intent: keep_uncommitted_work_and_sync
+    variant: aside
+    parameters: [work_dir, upstream_remote, upstream_branch]
+    preconditions:
+      - name: has_uncommitted_work
+        description: The working tree holds changes not yet recorded in git.
+        probe: 'test -n "$(git status --porcelain)"'
+      - name: upstream_has_new_commits
+        description: Upstream has commits the local branch lacks.
+        probe: 'test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0'
+      - name: no_local_only_commits
+        description: The local branch has no commits of its own that upstream lacks.
+        probe: 'test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -eq 0'
+      - name: unsaved_file_where_upstream_has_one
+        description: An unsaved local file sits at a path upstream now tracks.
+        probe: 'test -n "$(comm -12 <(git ls-files --others --exclude-standard | sort) <(git ls-tree -r --name-only {upstream_remote}/{upstream_branch} | sort))"'
+    body: |
+      git fetch -q {upstream_remote}
+      for f in $(comm -12 <(git ls-files --others --exclude-standard | sort) <(git ls-tree -r --name-only {upstream_remote}/{upstream_branch} | sort)); do mv "$f" "$f.local"; done
+      git stash push --include-untracked -q
+      git merge --ff-only {upstream_remote}/{upstream_branch}
+      git stash pop -q
+    postconditions:
+      - name: upstream_contained
+        description: The local branch now contains upstream's tip.
+        probe: 'git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD'
+      - name: nothing_left_in_upstreams_way
+        description: No unsaved local file sits at a path upstream tracks any more.
+        probe: 'test -z "$(comm -12 <(git ls-files --others --exclude-standard | sort) <(git ls-tree -r --name-only {upstream_remote}/{upstream_branch} | sort))"'
+    provenance:
+      compiled_from_task: hand-written gold resolution for benchmarking
+      model: human
+      compiler_version: human
+      episode_id: gold/keep_uncommitted_work_and_sync/aside
+      fault: dirty_tree
+    status: candidate
