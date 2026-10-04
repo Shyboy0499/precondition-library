@@ -43,6 +43,15 @@ def _render(value: object) -> str:
     return str(value)
 
 
+_NOT_YET_RENDERED = frozenset({"dirty_files", "untracked_upstream_collisions"})
+"""Fields `as_text` leaves out until the dirty-tree intent is registered (#189).
+
+`as_text` is arm 2's whole view of state, so a field added to it changes every arm-2
+score in every measured family. These two exist for the dirty-tree intent, which is
+not yet measured; rendering them is part of the change that registers it, with the
+owner's sign-off, so until then every measured arm-2 text is byte-identical."""
+
+
 def _has_locked_branch(work: Path, branch: str) -> bool:
     """Whether git holds a lock file for the branch ref.
 
@@ -93,6 +102,15 @@ class StateFingerprint(BaseModel):
     upstream_still_references_submodule: bool = True
     """Whether upstream's tree still contains the submodule path at all:
     `git ls-tree upstream/main -- <submodule_path>` is non-empty when it does."""
+
+    # Discriminators for the dirty-tree intent (#189). Observed now, rendered by
+    # `as_text` only once that intent is registered: see `_NOT_YET_RENDERED`.
+    dirty_files: list[str] = []
+    """Tracked files with uncommitted changes, staged or not: `git diff --name-only HEAD`."""
+    untracked_upstream_collisions: list[str] = []
+    """Untracked files at a path upstream's tree holds: `git ls-files --others
+    --exclude-standard`, kept where `git ls-tree -r --name-only upstream/main` lists the
+    path. A sync cannot bring upstream's file in without displacing such a file."""
 
     @property
     def conflicting_files(self) -> set[str]:
@@ -163,6 +181,9 @@ class StateFingerprint(BaseModel):
             )
             upstream_references = bool(out("ls-tree", upstream, "--", path))
 
+        untracked = out("ls-files", "--others", "--exclude-standard").splitlines()
+        upstream_paths = set(out("ls-tree", "-r", "--name-only", upstream).splitlines())
+
         return cls(
             dirty_worktree=bool(out("status", "--porcelain")),
             branch=branch,
@@ -178,6 +199,8 @@ class StateFingerprint(BaseModel):
             submodule_initialised=submodule_initialised,
             submodule_pin_matches_upstream=pin_matches,
             upstream_still_references_submodule=upstream_references,
+            dirty_files=sorted(out("diff", "--name-only", "HEAD").splitlines()),
+            untracked_upstream_collisions=sorted(p for p in untracked if p in upstream_paths),
         )
 
     def as_text(self) -> str:
@@ -197,7 +220,9 @@ class StateFingerprint(BaseModel):
         signal compared with itself.
         """
         return "\n".join(
-            f"{name}: {_render(getattr(self, name))}" for name in type(self).model_fields
+            f"{name}: {_render(getattr(self, name))}"
+            for name in type(self).model_fields
+            if name not in _NOT_YET_RENDERED
         )
 
 
