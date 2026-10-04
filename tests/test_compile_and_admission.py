@@ -560,6 +560,14 @@ def _unrelated_state_coverage_program() -> Program:
                 ),
             ),
             Predicate(
+                name="tracks_upstreams_default",
+                description="The local branch follows the branch upstream uses now.",
+                probe=(
+                    "test \"$(git for-each-ref --format='%(upstream:short)' "
+                    '"$(git symbolic-ref -q HEAD)")" = "{upstream_remote}/{upstream_branch}"'
+                ),
+            ),
+            Predicate(
                 name="no_unsaved_file_where_upstream_has_one",
                 description="No unsaved local file sits at a path upstream now tracks.",
                 probe=(
