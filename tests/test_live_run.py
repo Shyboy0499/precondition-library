@@ -167,6 +167,10 @@ def test_figure1_and_the_summary_are_written_from_the_library(stubbed, tmp_path)
     assert result.admitted_two_sided == result.compiled
     written = json.loads((out / "summary.json").read_text(encoding="utf-8"))
     assert written["soft_threshold"] == result.soft_threshold
+    assert result.arm2_floor is not None and written["arm2_floor"]["decidable"] > 0, (
+        "item 11's floor is measured on the library before any eval episode (#184)"
+    )
+    assert "arm 2 baseline floor" in (out / "summary.txt").read_text(encoding="utf-8")
     assert (out / "summary.txt").read_text(encoding="utf-8").startswith("model: fake")
 
 
@@ -279,6 +283,7 @@ def test_an_empty_library_stops_cleanly_after_the_build(stubbed, tmp_path) -> No
     assert online["arms"] == [Arm.REACT, Arm.REACT_MEMORY], "the online arms need no library"
     assert stubbed["report"] == [] and not (out / "primary").exists()
     assert result.soft_threshold is None and result.figure1 is None
+    assert result.arm2_floor is None, "no library, so no floor to measure"
 
     text = (out / "summary.txt").read_text(encoding="utf-8")
     assert "STOPPED after build" in text and REJECTED in text
