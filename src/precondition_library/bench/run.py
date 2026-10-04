@@ -1180,13 +1180,23 @@ def _require_frozen_library(root: Path) -> str:
 
     A missing directory or one with no `admitted` program would make every dispatch a
     fallback, and the run would read as two arms that never fire rather than as a
-    library that was never built.
+    library that was never built. A library holding a program learned on a checkout is
+    refused too: measured libraries hold harness-compiled programs only (ADR-0026).
     """
     library = Library(root)
-    if not any(p.status is ProgramStatus.ADMITTED for p in library.load_all()):
+    admitted = [p for p in library.load_all() if p.status is ProgramStatus.ADMITTED]
+    if not admitted:
         raise ValueError(
             f"the frozen library at {root} holds no admitted program; build it first with "
             f"bench.build_library, or run without frozen_library to grow one per arm"
+        )
+    learned = sorted(p.id for p in admitted if p.provenance.learned_on is not None)
+    if learned:
+        raise ValueError(
+            f"the frozen library at {root} holds program(s) learned on a checkout "
+            f"({', '.join(learned)}); a measured library holds only harness-compiled "
+            f"programs, because a checkout-learned program was admitted partly on a "
+            f"person's confirmation (ADR-0026)"
         )
     return library.library_hash()
 
