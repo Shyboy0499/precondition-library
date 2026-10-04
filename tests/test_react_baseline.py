@@ -32,11 +32,13 @@ from precondition_library.sandbox import Sandbox
 from precondition_library.signatures import StateFingerprint, TaskSignature
 from precondition_library.tasks.faults.dirty_tree import SPEC
 
-# Both halves of the fault's seed space: 0 injects the tracked edit alone, 3 adds
-# the untracked file (see `state_for_seed`). Solving only one half would not show
-# the baseline can handle the branchy state the fault exists to model.
-SEEDS = [0, 3]
-MODIFIED_ONLY = 0
+# The states stash-sync-restore resolves (see `state_for_seed`, #189): 5 is the
+# disjoint state -- a tracked edit to a file upstream left alone, plus an untracked
+# file -- and 0 the same-file state. The collision state needs the colliding file moved
+# aside, which the git-only tool cannot do; tests/test_sandbox_dirty_tree.py covers it.
+DISJOINT = 5
+SAME_FILE = 0
+SEEDS = [DISJOINT, SAME_FILE]
 
 _CALL_IDS = itertools.count(1)
 
@@ -68,7 +70,7 @@ def _finish(text: str = "done") -> Completion:
     return _completion(text=text)
 
 
-def _signature(box: Sandbox, seed: int = MODIFIED_ONLY) -> TaskSignature:
+def _signature(box: Sandbox, seed: int = DISJOINT) -> TaskSignature:
     """A real signature: the fault's request plus the environment's fingerprint."""
     return TaskSignature(
         intent=SPEC.task_text(seed),
@@ -80,7 +82,7 @@ def _signature(box: Sandbox, seed: int = MODIFIED_ONLY) -> TaskSignature:
 def test_loop_runs_a_tool_and_finishes(make_sandbox) -> None:
     """One command, then a declaration: the transcript records both, in order,
     with the call kept in the API's own shape."""
-    box = make_sandbox(MODIFIED_ONLY, ["dirty_tree"])
+    box = make_sandbox(DISJOINT, ["dirty_tree"])
     fake = FakeProvider(_tool("git status --porcelain"), _finish())
     _, transcript = solve(_signature(box), box, fake)
 
@@ -92,7 +94,7 @@ def test_loop_runs_a_tool_and_finishes(make_sandbox) -> None:
         "assistant",
     ]
     assert transcript[0]["content"] == SYSTEM_PROMPT
-    assert transcript[1]["content"] == SPEC.task_text(MODIFIED_ONLY)
+    assert transcript[1]["content"] == SPEC.task_text(DISJOINT)
     call = transcript[2]["tool_calls"][0]
     assert call["function"]["name"] == "run_git"
     assert json.loads(call["function"]["arguments"])["command"] == "git status --porcelain"
@@ -111,7 +113,7 @@ def test_tool_results_are_answered_as_tool_messages(make_sandbox) -> None:
     turn carries its `tool_calls` and the result is a `role: "tool"` message
     keyed by `tool_call_id`. A text-protocol `user` message would leave the call
     unanswered, which the API rejects."""
-    box = make_sandbox(MODIFIED_ONLY, ["dirty_tree"])
+    box = make_sandbox(DISJOINT, ["dirty_tree"])
     fake = FakeProvider(_tool("git status --porcelain"), _finish())
     solve(_signature(box), box, fake)
 
@@ -132,7 +134,7 @@ def test_a_claim_of_finish_is_not_a_pass(make_sandbox) -> None:
     that is exactly the successful-but-uncorrect row the ledger exists to
     express. A solve that stopped on the checker would be reporting the oracle.
     """
-    box = make_sandbox(MODIFIED_ONLY, ["dirty_tree"])
+    box = make_sandbox(DISJOINT, ["dirty_tree"])
     fake = FakeProvider(_tool("git status --porcelain"), _finish())
     outcome, transcript = solve(_signature(box), box, fake)
 
@@ -173,7 +175,7 @@ def test_scripted_commands_genuinely_resolve_the_fault(seed: int, make_sandbox) 
 
 def test_a_non_git_command_is_refused_as_a_tool_result(make_sandbox) -> None:
     """A refusal is information for the model, not a crash for the episode."""
-    box = make_sandbox(MODIFIED_ONLY, ["dirty_tree"])
+    box = make_sandbox(DISJOINT, ["dirty_tree"])
     fake = FakeProvider(_tool("rm -rf /tmp/x"), _finish())
     _, transcript = solve(_signature(box), box, fake)
 
@@ -186,7 +188,7 @@ def test_a_non_git_command_is_refused_as_a_tool_result(make_sandbox) -> None:
 
 def test_max_steps_bounds_the_loop(make_sandbox) -> None:
     """A model that never finishes is cut off, and the transcript shows where."""
-    box = make_sandbox(MODIFIED_ONLY, ["dirty_tree"])
+    box = make_sandbox(DISJOINT, ["dirty_tree"])
     fake = FakeProvider(
         *[_tool("git status --porcelain") for _ in range(3)],
         _finish("still checking"),  # a plain reply as the last word: not a declaration
@@ -204,7 +206,7 @@ def test_max_steps_bounds_the_loop(make_sandbox) -> None:
 
 def test_provider_error_is_recorded_not_swallowed(make_sandbox) -> None:
     """Spec §8: a provider error is a FAIL that still carries its reason."""
-    box = make_sandbox(MODIFIED_ONLY, ["dirty_tree"])
+    box = make_sandbox(DISJOINT, ["dirty_tree"])
     fake = FakeProvider(raises=ProviderError("simulated outage"))
     outcome, transcript = solve(_signature(box), box, fake)
 

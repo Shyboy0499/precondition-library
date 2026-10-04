@@ -622,7 +622,10 @@ def test_a_non_seed_0_state_of_an_unrelated_fault_is_rejected(make_sandbox) -> N
     """
     program = _unrelated_state_coverage_program()
 
-    admitted, reason = admit(program, FAULTS["dirty_tree"], seeds=[0])
+    # Seed 5 is dirty_tree's disjoint state, where the body's fast-forward keeps the
+    # uncommitted work, so the positive side passes and the negative side is reached.
+    # (Seed 0 is now the same-file state, where `merge --ff-only` refuses: #189.)
+    admitted, reason = admit(program, FAULTS["dirty_tree"], seeds=[5])
 
     assert not admitted, "the new class must catch what a single seed missed"
     assert "negative side" in reason, reason
