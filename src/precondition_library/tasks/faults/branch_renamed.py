@@ -29,7 +29,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from ...sandbox import Sandbox, git_out, record_base, run_git, tip_contained
-from ..intent import sample_index
+from ...signatures import StateFingerprint
+from ..intent import IntentSpec, ResolutionVariant, sample_index
 from ..spec import FaultSpec, GroundTruth
 
 # The three live states a seed selects between, and the salt that chooses them.
@@ -69,6 +70,94 @@ def state_for_seed(seed: int) -> str:
     injected environment.
     """
     return INJECTED_STATES[sample_index(seed, _STATE_SALT, len(INJECTED_STATES))]
+
+
+# --- the intent (#190), defined here and not yet registered ------------------------
+#
+# Not in `tasks.registry.INTENTS`, so nothing measured reads it: `variant_for_seed`
+# stays `None` and the fault stays excluded. Registering it is the step that changes
+# measurement (the owner approved it on #190); until then it exists so its acceptable
+# sets can be pinned against `check` by replay (`tests/test_branch_renamed_intent.py`).
+
+STATE_VARIANT = {"plain": "rename", "local_work": "merge", "name_taken": "retrack"}
+"""Which resolution each injected state is labelled with; what `INTENT`'s rules decide."""
+
+
+def follows_a_renamed_branch(state: StateFingerprint) -> bool:
+    """The family's situation (`StateFingerprint.follows_a_renamed_branch`)."""
+    return state.follows_a_renamed_branch
+
+
+def _has_local_commits(state: StateFingerprint) -> bool:
+    return state.upstream_behind > 0
+
+
+def _new_name_taken(state: StateFingerprint) -> bool:
+    """A local branch other than the current one already has upstream's new name."""
+    name = state.upstream_default_branch
+    return name in state.local_branches and name != state.branch
+
+
+def _nothing_local(state: StateFingerprint) -> bool:
+    return follows_a_renamed_branch(state) and not _has_local_commits(state)
+
+
+VARIANTS = [
+    ResolutionVariant(
+        id="rename",
+        decided_by=lambda s: _nothing_local(s) and not _new_name_taken(s),
+        accepted_by=lambda s: _nothing_local(s) and not _new_name_taken(s),
+        rationale=(
+            "Nothing local stands in the way, so the local branch takes upstream's new "
+            "name and follows it, and the two stop disagreeing about what the branch is called."
+        ),
+    ),
+    ResolutionVariant(
+        id="retrack",
+        decided_by=lambda s: _nothing_local(s) and _new_name_taken(s),
+        accepted_by=_nothing_local,
+        rationale=(
+            "A local branch already has the new name, so the current branch keeps its own "
+            "name and is pointed at upstream's new one, then fast-forwarded."
+        ),
+    ),
+    ResolutionVariant(
+        id="merge",
+        decided_by=lambda s: follows_a_renamed_branch(s) and _has_local_commits(s),
+        accepted_by=follows_a_renamed_branch,
+        rationale=(
+            "Local commits upstream lacks mean a fast-forward cannot take upstream's work, "
+            "so the branch is pointed at the new name and upstream is merged in."
+        ),
+    ),
+]
+
+INTENT = IntentSpec(
+    name="follow_renamed_upstream_branch",
+    fault="branch_renamed",
+    phrasings=[
+        "My branch seems to follow something upstream no longer has. Point it at whatever "
+        "upstream uses now, and keep my work.",
+        "Pulling stopped working on this fork. Get it tracking upstream again without "
+        "losing anything.",
+        "Upstream changed something about its branches and my checkout is lost. Sort it out.",
+        "Make this branch follow upstream's current main line again, and catch it up.",
+        "I think upstream renamed things. Get this fork following it again.",
+        "This branch's upstream looks wrong now. Fix the tracking and bring in upstream's "
+        "latest work.",
+        "Git says my branch's upstream is gone. Hook it back up to the right one and update it.",
+        "Reconnect this branch to upstream and catch it up, without touching my other branches.",
+    ],
+    naming_markers=["renamed", "rename"],
+    variants=VARIANTS,
+    variant_phrasings={
+        "rename": [
+            "there is nothing of mine on this branch, and no branch here has upstream's new name"
+        ],
+        "retrack": ["I already have a local branch called what upstream uses now"],
+        "merge": ["I made commits of my own before upstream changed things"],
+    },
+)
 
 
 def _config(work: Path, key: str) -> str | None:

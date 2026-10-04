@@ -1,0 +1,115 @@
+# Hand-written resolutions for the `follow_renamed_upstream_branch` intent (#190).
+#
+# The intent is defined in tasks/faults/branch_renamed.py and not yet registered: until
+# it is, nothing measured dispatches these, and the branch_renamed fault stays excluded
+# from the benchmark. They exist now so that the acceptable sets the intent declares
+# can be pinned against the fault's own checker by replay
+# (tests/test_branch_renamed_intent.py), the way ADR-0023 pins the measured intents'.
+#
+# `{upstream_branch}` is upstream's default as the clone records it
+# (`sandbox.harness_upstream_branch`, or `repository_bindings` on a checkout), so after
+# a rename it is the new name; the stale old name is never bound.
+#
+# Preconditions are probes, so they must agree with the intent's decision rules
+# (decided_by in tasks/faults/branch_renamed.py). They are written independently --
+# agreeing by construction would defeat the point of having a check.
+#
+# Descriptions state the applicability condition in the vocabulary a request would
+# use, without naming a resolution label.
+programs:
+  - id: follow-upstream-under-its-new-name
+    intent: follow_renamed_upstream_branch
+    variant: rename
+    parameters: [upstream_remote, upstream_branch]
+    preconditions:
+      - name: follows_a_branch_upstream_no_longer_uses
+        description: The local branch follows a branch other than the one upstream now uses.
+        probe: 'test "$(git config "branch.$(git symbolic-ref --short HEAD).merge")" != "refs/heads/{upstream_branch}"'
+      - name: no_local_only_commits
+        description: The local branch has no commits of its own that upstream lacks.
+        probe: 'test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -eq 0'
+      - name: new_name_is_free
+        description: No local branch already has the name upstream uses now.
+        probe: '! git show-ref --verify --quiet refs/heads/{upstream_branch}'
+    body: |
+      git fetch -q {upstream_remote} &&
+      git branch -m {upstream_branch} &&
+      git branch --set-upstream-to={upstream_remote}/{upstream_branch} &&
+      git merge --ff-only {upstream_remote}/{upstream_branch}
+    postconditions:
+      - name: follows_upstreams_branch
+        description: The current branch follows the branch upstream uses now.
+        probe: 'test "$(git config "branch.$(git symbolic-ref --short HEAD).merge")" = "refs/heads/{upstream_branch}"'
+      - name: upstream_contained
+        description: The local branch now contains upstream's tip.
+        probe: 'git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD'
+    provenance:
+      compiled_from_task: hand-written gold resolution for benchmarking
+      model: human
+      compiler_version: human
+      episode_id: gold/follow_renamed_upstream_branch/rename
+      fault: branch_renamed
+    status: candidate
+
+  - id: point-the-branch-at-upstreams-new-name
+    intent: follow_renamed_upstream_branch
+    variant: retrack
+    parameters: [upstream_remote, upstream_branch]
+    preconditions:
+      - name: follows_a_branch_upstream_no_longer_uses
+        description: The local branch follows a branch other than the one upstream now uses.
+        probe: 'test "$(git config "branch.$(git symbolic-ref --short HEAD).merge")" != "refs/heads/{upstream_branch}"'
+      - name: no_local_only_commits
+        description: The local branch has no commits of its own that upstream lacks.
+        probe: 'test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -eq 0'
+      - name: new_name_already_taken
+        description: Another local branch already has the name upstream uses now.
+        probe: 'git show-ref --verify --quiet refs/heads/{upstream_branch}'
+    body: |
+      git fetch -q {upstream_remote} &&
+      git branch --set-upstream-to={upstream_remote}/{upstream_branch} &&
+      git merge --ff-only {upstream_remote}/{upstream_branch}
+    postconditions:
+      - name: follows_upstreams_branch
+        description: The current branch follows the branch upstream uses now.
+        probe: 'test "$(git config "branch.$(git symbolic-ref --short HEAD).merge")" = "refs/heads/{upstream_branch}"'
+      - name: upstream_contained
+        description: The local branch now contains upstream's tip.
+        probe: 'git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD'
+    provenance:
+      compiled_from_task: hand-written gold resolution for benchmarking
+      model: human
+      compiler_version: human
+      episode_id: gold/follow_renamed_upstream_branch/retrack
+      fault: branch_renamed
+    status: candidate
+
+  - id: follow-upstreams-new-name-and-bring-it-in
+    intent: follow_renamed_upstream_branch
+    variant: merge
+    parameters: [upstream_remote, upstream_branch]
+    preconditions:
+      - name: follows_a_branch_upstream_no_longer_uses
+        description: The local branch follows a branch other than the one upstream now uses.
+        probe: 'test "$(git config "branch.$(git symbolic-ref --short HEAD).merge")" != "refs/heads/{upstream_branch}"'
+      - name: has_local_only_commits
+        description: The local branch has commits of its own that upstream lacks.
+        probe: 'test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0'
+    body: |
+      git fetch -q {upstream_remote} &&
+      git branch --set-upstream-to={upstream_remote}/{upstream_branch} &&
+      git merge --no-edit {upstream_remote}/{upstream_branch}
+    postconditions:
+      - name: follows_upstreams_branch
+        description: The current branch follows the branch upstream uses now.
+        probe: 'test "$(git config "branch.$(git symbolic-ref --short HEAD).merge")" = "refs/heads/{upstream_branch}"'
+      - name: upstream_contained
+        description: The local branch now contains upstream's tip.
+        probe: 'git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD'
+    provenance:
+      compiled_from_task: hand-written gold resolution for benchmarking
+      model: human
+      compiler_version: human
+      episode_id: gold/follow_renamed_upstream_branch/merge
+      fault: branch_renamed
+    status: candidate

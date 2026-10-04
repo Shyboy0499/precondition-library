@@ -104,6 +104,44 @@ DIRTY_TREE_STATES = {
     ),
 }
 
+# follow_renamed_upstream_branch (#190): three resolutions, plus the benign state.
+# Declared for the intent `tasks.faults.branch_renamed.INTENT`, which is defined but not
+# yet registered, so it is deliberately not in `STATE_GRID` below: everything that walks
+# the grid reads registered intents, and adding these would put an unmeasured intent in
+# it. Upstream renamed `main` to `trunk` and moved on by one commit.
+BRANCH_RENAMED_STATES = {
+    "benign_not_renamed": declared_state(
+        upstream_ahead=1,
+        upstream_touched_files=["app.py"],
+        tracked_branch="main",
+        upstream_default_branch="main",
+        local_branches=["main"],
+    ),
+    "plain": declared_state(
+        upstream_ahead=1,
+        upstream_touched_files=["app.py"],
+        tracked_branch="main",
+        upstream_default_branch="trunk",
+        local_branches=["main"],
+    ),
+    "local_work": declared_state(
+        upstream_ahead=1,
+        upstream_behind=1,
+        local_touched_files=["docs/readme.md"],
+        upstream_touched_files=["app.py"],
+        tracked_branch="main",
+        upstream_default_branch="trunk",
+        local_branches=["main"],
+    ),
+    "name_taken": declared_state(
+        upstream_ahead=1,
+        upstream_touched_files=["app.py"],
+        tracked_branch="main",
+        upstream_default_branch="trunk",
+        local_branches=["main", "trunk"],
+    ),
+}
+
 STATE_GRID: dict[str, dict[str, StateFingerprint]] = {
     "sync_fork_with_upstream": DIVERGED_STATES,
     "restore_submodule_state": SUBMODULE_STATES,
