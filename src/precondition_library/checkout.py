@@ -143,8 +143,9 @@ def _redirects(work: Path, root: Path, upstream: str | None) -> tuple[tuple[str,
 def open_checkout(work: Path, *, fetch: bool = True, scratch: Path | None = None) -> Sandbox:
     """`work` as a `Sandbox` the runtime can probe and replay in; `destroy` it when done.
 
-    `fetch` runs the trusted pre-fetch of the derived upstream remote first; turn it
-    off to work from what the checkout already has. `scratch` is where the scratch root
+    `fetch` runs the trusted pre-fetch of the derived upstream remote first -- its refs
+    and its current default branch (`git remote set-head --auto`); turn it off to work
+    from what the checkout already has. `scratch` is where the scratch root
     goes (the system temporary directory by default). Raises `NotACheckoutError` when
     `work` is not the top level of a working tree, and `subprocess.CalledProcessError`
     when the pre-fetch fails -- dispatching against a stale remote would observe a
@@ -159,7 +160,12 @@ def open_checkout(work: Path, *, fetch: bool = True, scratch: Path | None = None
     remote = parameters.get("upstream_remote")
     if fetch and remote is not None:
         _user_git(work, "fetch", "--quiet", remote)
-        parameters = repository_bindings(work)  # a fetch can record the remote's HEAD
+        # A clone records the remote's HEAD once and no fetch updates it, so a default
+        # branch upstream renamed since would still be bound by its old name. Asking
+        # the remote is part of the same trusted step; a remote that reports no HEAD
+        # leaves the recorded one as it was.
+        _user_git(work, "remote", "set-head", remote, "--auto", check=False)
+        parameters = repository_bindings(work)
 
     root = Path(tempfile.mkdtemp(prefix="checkout-", dir=scratch))
     return Sandbox(
