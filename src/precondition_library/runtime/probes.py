@@ -326,9 +326,10 @@ def bindings(env: Sandbox) -> dict[str, str]:
     so a program that needs a submodule is inapplicable rather than broken on a
     repository that has none.
 
-    The binding is the sandbox's fixed vocabulary, not a general mechanism; a
-    fault that renamed the branch would need it derived from the sandbox, which
-    this runtime does not yet do.
+    The binding is the sandbox's fixed vocabulary, not a general mechanism. A
+    checkout the harness did not build derives the same names from its own
+    remotes and `.gitmodules` with `repository_bindings` (#181); on a harness
+    sandbox the two agree.
 
     Public and shared because a probe and a body are substituted from this one
     mapping. A second copy in a caller is how replay and dispatch would come to
@@ -341,6 +342,93 @@ def bindings(env: Sandbox) -> dict[str, str]:
         "upstream_branch": "main",
     }
     path = submodule_path(env)
+    if path is not None:
+        values["submodule_path"] = path
+    return values
+
+
+UPSTREAM_REMOTE_PREFERENCE = "upstream"
+"""The remote a fork conventionally names after the repository it tracks."""
+DEFAULT_BRANCH_FALLBACKS: tuple[str, ...] = ("main", "master")
+"""Branches tried, in order, when a remote records no `HEAD`."""
+
+
+def _git_out(work: Path, *args: str) -> str | None:
+    """`git args` in `work`, stripped stdout, or `None` on a non-zero exit or empty output."""
+    result = run_git(args, cwd=work, check=False)
+    out = result.stdout.strip()
+    return out if result.returncode == 0 and out else None
+
+
+def _upstream_remote(work: Path) -> str | None:
+    """The remote that tracks upstream: `upstream` if present, else the tracked or only one.
+
+    A fork usually has `origin` (the fork) and `upstream` (what it was forked from), and
+    syncing with upstream means the second; a plain clone has only `origin`. Failing
+    both, the remote the current branch tracks is the one its author pulls from.
+    Several remotes and none of those signals is ambiguous, so nothing is guessed.
+    """
+    remotes = (_git_out(work, "remote") or "").split()
+    if UPSTREAM_REMOTE_PREFERENCE in remotes:
+        return UPSTREAM_REMOTE_PREFERENCE
+    tracked = _git_out(work, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+    if tracked is not None:
+        remote = tracked.split("/", 1)[0]
+        if remote in remotes:
+            return remote
+    return remotes[0] if len(remotes) == 1 else None
+
+
+def _default_branch(work: Path, remote: str) -> str | None:
+    """`remote`'s default branch: its recorded `HEAD`, else the first fallback it has."""
+    head = _git_out(work, "symbolic-ref", "--short", f"refs/remotes/{remote}/HEAD")
+    if head is not None and head.startswith(f"{remote}/"):
+        return head[len(remote) + 1 :]
+    for branch in DEFAULT_BRANCH_FALLBACKS:
+        if _git_out(work, "rev-parse", "--verify", "--quiet", f"refs/remotes/{remote}/{branch}"):
+            return branch
+    return None
+
+
+def _gitmodules_path(work: Path) -> str | None:
+    """The first submodule path `.gitmodules` declares, as `submodule_path` reads it."""
+    out = _git_out(
+        work, "config", "--file", ".gitmodules", "--get-regexp", r"^submodule\..*\.path$"
+    )
+    return out.split()[-1] if out is not None else None
+
+
+def repository_bindings(work: Path) -> dict[str, str]:
+    """The declared parameter names' values, **derived** from an existing checkout (#181).
+
+    `bindings` is the harness's fixed vocabulary -- `upstream`, `main`, the recorded
+    submodule path -- because `sandbox.create` builds every sandbox that way. A real
+    repository is not built that way: a fork's upstream remote may be `upstream` or its
+    only `origin`, and its default branch may be `master` or anything else. This reads
+    each value from the repository instead:
+
+    * `upstream_remote` -- `upstream` if it exists, else the remote the current branch
+      tracks, else the only remote (`_upstream_remote`);
+    * `upstream_branch` -- that remote's recorded `HEAD`
+      (`git symbolic-ref refs/remotes/<remote>/HEAD`), else `main` or `master` if the
+      remote has it;
+    * `submodule_path` -- the first path `.gitmodules` declares.
+
+    A value that cannot be derived is **absent**, not guessed, exactly as `bindings`
+    leaves `submodule_path` absent: `substitute` then raises `UnboundParameterError`,
+    and a program that needs it is inapplicable here rather than run against a guess.
+    The harness keeps `bindings`; on a harness sandbox the two agree
+    (`tests/test_repository_bindings.py`), which is what makes a program compiled in
+    the harness meaningful on a checkout.
+    """
+    values = {"work_dir": str(work)}
+    remote = _upstream_remote(work)
+    if remote is not None:
+        values["upstream_remote"] = remote
+        branch = _default_branch(work, remote)
+        if branch is not None:
+            values["upstream_branch"] = branch
+    path = _gitmodules_path(work)
     if path is not None:
         values["submodule_path"] = path
     return values
