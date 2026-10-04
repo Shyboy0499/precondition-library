@@ -100,6 +100,17 @@ _DISCARD_BODY = (
 # --- scripted provider turns -------------------------------------------------
 
 
+def _sandboxes() -> set[str]:
+    """The sandbox roots under `.sandboxes/`, or none when it does not exist.
+
+    Compared before and after rather than asserted empty: a run interrupted earlier
+    (a killed suite, a crashed episode) can leave a root behind, and that is not
+    something the test in hand leaked.
+    """
+    root = ROOT / ".sandboxes"
+    return {path.name for path in root.iterdir()} if root.exists() else set()
+
+
 def _tool_call(command: str) -> dict:
     return {
         "id": f"call_{next(_CALL_IDS)}",
@@ -240,9 +251,12 @@ def _repository_is_untouched():
     import-time snapshot -- "unchanged", not "empty" -- so it still passes for a
     contributor whose branch has uncommitted work. The committed-library and
     `.sandboxes` assertions are this module's own, because the runner is the one
-    thing here that could write either.
+    thing here that could write either; the latter compares the roots before and
+    after (`_sandboxes`), so a root an earlier, interrupted run left is not blamed
+    on this one.
     """
     before_ids = [program.id for program in Library(COMMITTED_LIBRARY).load_all()]
+    before_sandboxes = _sandboxes()
     yield
     assert git_status_porcelain() == GIT_STATUS_AT_IMPORT, (
         "the runner changed the repository's working tree"
@@ -250,7 +264,7 @@ def _repository_is_untouched():
     assert [program.id for program in Library(COMMITTED_LIBRARY).load_all()] == before_ids, (
         "a test stored a program in the committed library/"
     )
-    assert not (ROOT / ".sandboxes").exists(), "a sandbox outlived the run"
+    assert _sandboxes() <= before_sandboxes, "a sandbox outlived the run"
 
 
 # --- a replay spends nothing -------------------------------------------------
@@ -1283,6 +1297,7 @@ def test_a_benchmark_writes_only_under_the_output_directory(tmp_path: Path) -> N
     before_tree = git_status_porcelain()
     before_ids = [program.id for program in Library(COMMITTED_LIBRARY).load_all()]
     before_bench = sorted(path.name for path in (ROOT / "bench").iterdir())
+    before_sandboxes = _sandboxes()
 
     run_benchmark(
         arms=[Arm.REACT],
@@ -1299,7 +1314,7 @@ def test_a_benchmark_writes_only_under_the_output_directory(tmp_path: Path) -> N
     assert sorted(path.name for path in (ROOT / "bench").iterdir()) == before_bench
     assert (tmp_path / "ledger.jsonl").is_file(), "the ledger belongs under the output"
     assert not (tmp_path / "library-react").exists(), "arm 1 compiles nothing, so writes no library"
-    assert not (ROOT / ".sandboxes").exists()
+    assert _sandboxes() <= before_sandboxes
 
 
 # --- a transient provider error is retried, visibly ---------------------------
