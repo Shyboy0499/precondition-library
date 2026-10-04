@@ -467,6 +467,41 @@ class Library:
                 count += 1
         return count
 
+    def record_revision(
+        self, program_id: str, *, refused: Program, reason: str, episode_id: str | None
+    ) -> None:
+        """Record that `program_id` revises `refused`, which admission refused for `reason`.
+
+        A refused compile is data (`library/README.md` rule 1), and when its revision is
+        what gets stored the first program would otherwise be lost (ADR-0030). It goes in
+        the stored program's own `history.jsonl` as an event, not a status change, and
+        `first_compile` reads it back.
+        """
+        self._load(program_id)
+        entry = {
+            "program_id": program_id,
+            "event": "revised",
+            "episode_id": episode_id,
+            "reason": reason,
+            "refused_program": refused.model_dump(mode="json"),
+        }
+        with (self.root / program_id / "history.jsonl").open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(entry, sort_keys=True) + "\n")
+
+    def first_compile(self, program_id: str) -> Program:
+        """The program the episode's first compile produced, as the `candidate` it was.
+
+        That is the refused program `record_revision` kept, when the stored one is a
+        revision, and otherwise the stored program itself: admission only ever changed
+        its status, so resetting the status recovers what the compile produced.
+        """
+        history = self.root / program_id / "history.jsonl"
+        if history.is_file():
+            for line in history.read_text(encoding="utf-8").splitlines():
+                if line.strip() and (entry := json.loads(line)).get("event") == "revised":
+                    return Program.model_validate(entry["refused_program"])
+        return self._load(program_id).model_copy(update={"status": ProgramStatus.CANDIDATE})
+
     def program_ids(self) -> list[str]:
         """Every stored program's id, sorted: what `library_hash` covers, by name."""
         return [program.id for program in self.load_all()]

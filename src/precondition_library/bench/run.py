@@ -991,6 +991,7 @@ def _learn_from_solution(
     program: Program | None = None
     admitted, gate_reason = False, ""
     revision: tuple[Program, str] | None = None
+    first_refused: tuple[Program, str] | None = None
     for attempt in range(1, COMPILE_ATTEMPTS + 1):
         try:
             compiled = compile_program(
@@ -1026,6 +1027,7 @@ def _learn_from_solution(
         if admitted:
             break
         revision = (program, gate_reason)
+        first_refused = first_refused or revision
     assert program is not None  # the loop returns before here when no program parsed
     try:
         library.add(program)
@@ -1040,6 +1042,9 @@ def _learn_from_solution(
         # keeps the cost of the compile that produced it.
         _record_compile_failure(result, str(exc))
         return
+    if first_refused is not None and first_refused[0] is not program:
+        refused, reason = first_refused
+        library.record_revision(program.id, refused=refused, reason=reason, episode_id=episode_id)
     if admitted:
         library.set_status(program.id, ProgramStatus.ADMITTED, episode_id=episode_id)
     else:

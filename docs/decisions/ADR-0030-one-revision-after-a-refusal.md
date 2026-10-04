@@ -3,7 +3,9 @@
 - **Status:** accepted (2026-10-04)
 - **Date:** 2026-10-04
 - **Supersedes:** nothing. It changes how a solution becomes a program (spec §6): one
-  compile, then at most one revision.
+  compile, then at most one revision. It narrows ADR-0010's "compiled once, gated
+  twice": the two libraries share each episode's first compile, and only the
+  two-sided one can hold a revision.
 - **Deciders:** repository owner (agreed after the fourth live smoke run's build);
   recorded so the choice can be challenged
 
@@ -43,6 +45,15 @@ build's problem is that a refusal is a dead end.
    (`None` when nothing was compiled, including on older rows).
 5. **It applies wherever a solution is compiled:** the build, and the online arms that
    grow their own library.
+6. **The refused first program is kept.** When a revision is stored, the stored
+   program's `history.jsonl` gains a `revised` event carrying the refused program and
+   its reason (`Library.record_revision`). A rejected program is data
+   (`library/README.md` rule 1), and nothing else would hold it.
+7. **The build's positive-only library is gated on the first compile**
+   (`Library.first_compile`). The revision is the two-sided gate's feedback: the
+   positive-only gate has no negative side, so it never produced the refusal the
+   revision answers. Gating the revision positive-only would give the ungated library
+   programs shaped by the gate it is the control for.
 
 ## Consequences
 
@@ -56,6 +67,14 @@ build's problem is that a refusal is a dead end.
 - **The online arms' cost curve moves.** A fallback that compiles twice spends more on
   the occurrence that pays. The cost is in the row, so the curve reports it rather
   than hiding it.
+
+- **The admission factor now measures the gate together with its feedback.** Where a
+  program was revised, the 2x2's two libraries hold different programs for that
+  episode, so a two-sided cell's difference includes what the revision changed. A
+  revision can also answer a positive-side refusal, which the positive-only gate
+  would have refused too and does not revise. The build's ledger rows give
+  `compile_attempts`, so a report can restrict the factor to first-attempt programs,
+  where the two libraries still hold the same program.
 
 **Gained:**
 - A refusal becomes information the compiler can act on. This is the mechanism the
@@ -72,6 +91,9 @@ build's problem is that a refusal is a dead end.
 | Alternative | Why rejected |
 | --- | --- |
 | Tell the compiler every negative state up front | It would put the whole negative class into every prompt, cost-heavy, and it turns admission's test set into training data. A refusal names only the state the program actually fired on. |
+| Compile the positive-only library separately | Two compiles per episode would put the model's run-to-run variation into the admission factor, which is what ADR-0010's single compile prevents. |
+| Gate the revision in both libraries | The positive-only library would hold programs shaped by the two-sided gate's refusals, so the control would carry part of the treatment. |
+| Revise only in the online arms | The build's 4-of-20 admission was the failure that prompted this; leaving the build without a revision leaves the frozen comparison with nearly empty libraries. |
 | Retry until admitted | Unbounded spend, and a gate passed by search rather than by understanding. One revision answers "can it act on the reason?"; more answers "can it guess?". |
 | Relax the gate for states another family owns | The refusals were correct: a diverged program that fires on a renamed-branch state does the wrong thing there. |
 

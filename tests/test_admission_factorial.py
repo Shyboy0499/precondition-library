@@ -7,7 +7,8 @@ identical positive-only gate" (spec §3). Pinned here:
   permissive for the two-sided gate is admitted, and the pre-sandbox contract checks
   still refuse what they refuse under both gates.
 * `build_library(positive_only_root=...)` compiles once and gates twice, so the two
-  libraries hold the same programs and differ only in what each gate admitted.
+  libraries hold the same first compiles and differ in what each gate admitted, and in
+  the revision a two-sided refusal may produce (ADR-0030).
 * A frozen run labels every dispatch row with its library's gate, and
   `admission_factorial` groups the rows into cells -- refusing rows it cannot place.
 """
@@ -20,6 +21,7 @@ from pathlib import Path
 import pytest
 from conftest import FakeProvider, make_record
 from test_episode_runner import (
+    _MALFORMED_REPLY,
     DISCARD_SEED,
     _completion,
     _discard_program,
@@ -72,9 +74,8 @@ def test_the_contract_checks_run_under_both_gates() -> None:
 # --- the build: compiled once, gated twice -----------------------------------------
 
 
-def test_the_build_gates_one_compile_into_two_libraries(tmp_path: Path) -> None:
-    provider = FakeProvider(*_resolves_discard(), _completion(_reply_text(_permissive_discard())))
-    report = build_library(
+def _build(tmp_path: Path, provider: FakeProvider):
+    return build_library(
         faults=["diverged"],
         root=tmp_path / "gated",
         ledger=tmp_path / "build.jsonl",
@@ -84,7 +85,17 @@ def test_the_build_gates_one_compile_into_two_libraries(tmp_path: Path) -> None:
         positive_only_root=tmp_path / "ungated",
     )
 
-    assert len(provider.calls) == 4, "one solve and one compile, shared by both gates"
+
+def test_the_build_gates_one_compile_into_two_libraries(tmp_path: Path) -> None:
+    """The revision does not parse, so both libraries hold the one first compile."""
+    provider = FakeProvider(
+        *_resolves_discard(),
+        _completion(_reply_text(_permissive_discard())),
+        _completion(_MALFORMED_REPLY),
+    )
+    report = _build(tmp_path, provider)
+
+    assert len(provider.calls) == 5, "one solve, one compile and a revision that did not parse"
     assert report.positive_only is not None
     (gated,), (ungated,) = report.programs, report.positive_only.programs
     assert gated.program_id == ungated.program_id
@@ -94,6 +105,31 @@ def test_the_build_gates_one_compile_into_two_libraries(tmp_path: Path) -> None:
     assert read_admission_gate(tmp_path / "gated") is AdmissionGate.TWO_SIDED
     assert read_admission_gate(tmp_path / "ungated") is AdmissionGate.POSITIVE_ONLY
     assert report.library_hash != report.positive_only.library_hash
+
+
+def test_a_revision_stays_in_the_two_sided_library(tmp_path: Path) -> None:
+    """The two-sided gate's refusal produced the revision; positive-only keeps the first.
+
+    ADR-0030: telling the compiler why is part of what the two-sided gate does. The
+    positive-only library must still hold what the episode compiled first, or the
+    admission factor would compare two gates over different compiles.
+    """
+    provider = FakeProvider(
+        *_resolves_discard(),
+        _completion(_reply_text(_permissive_discard())),
+        _completion(_reply_text(_discard_program())),
+    )
+    report = _build(tmp_path, provider)
+
+    assert report.positive_only is not None
+    (gated,), (ungated,) = report.programs, report.positive_only.programs
+    assert (gated.admitted, ungated.admitted) == (True, True)
+    (revised,) = Library(tmp_path / "gated").load_all()
+    (first,) = Library(tmp_path / "ungated").load_all()
+    assert len(revised.preconditions) == len(_discard_program().preconditions)
+    assert first.preconditions == _permissive_discard().preconditions
+    refused = Library(tmp_path / "gated").first_compile(revised.id)
+    assert refused.model_copy(update={"status": first.status}) == first
 
 
 def test_a_frozen_run_labels_its_rows_with_the_librarys_gate(tmp_path: Path) -> None:
