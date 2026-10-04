@@ -143,6 +143,22 @@ class StateFingerprint(BaseModel):
         return set(self.local_touched_files) & set(self.upstream_touched_files)
 
     @property
+    def follows_a_renamed_branch(self) -> bool:
+        """Whether the current branch follows a branch upstream no longer calls its default.
+
+        Both names must be known: a clone that records no upstream default -- every
+        state no rename touched -- is not in this situation, whatever it tracks. Every
+        intent whose resolutions leave the branch wiring alone must refuse such a state:
+        syncing against the new name while still following the old one passes no
+        checker (#190).
+        """
+        return bool(
+            self.tracked_branch
+            and self.upstream_default_branch
+            and self.tracked_branch != self.upstream_default_branch
+        )
+
+    @property
     def has_local_only_commits(self) -> bool:
         """Whether the local branch is ahead of upstream at all.
 

@@ -220,20 +220,31 @@ def _insert(path: Path, text: str, anchor: str) -> None:
     path.write_text("".join(lines), encoding="utf-8")
 
 
+def _has_local_commits_to_sync(state: StateFingerprint) -> bool:
+    """Local commits beside upstream's, on a branch that still follows upstream's default.
+
+    A branch following a name upstream renamed away is `branch_renamed`'s situation, not
+    this one: every resolution here syncs the commits and leaves the wiring stale, which
+    that fault's checker refuses (#190). No diverged state records an upstream default,
+    so the guard changes no label this family has ever had.
+    """
+    return state.has_local_only_commits and not state.follows_a_renamed_branch
+
+
 def _is_empty_of_changes(state: StateFingerprint) -> bool:
     """Local commits exist but change no files."""
-    return state.has_local_only_commits and not state.local_touched_files
+    return _has_local_commits_to_sync(state) and not state.local_touched_files
 
 
 def _overlaps_upstream(state: StateFingerprint) -> bool:
     """Both sides changed at least one of the same files."""
-    return state.has_local_only_commits and bool(state.conflicting_files)
+    return _has_local_commits_to_sync(state) and bool(state.conflicting_files)
 
 
 def _is_disjoint_from_upstream(state: StateFingerprint) -> bool:
     """Local commits change files, none of which upstream also changed."""
     return (
-        state.has_local_only_commits
+        _has_local_commits_to_sync(state)
         and bool(state.local_touched_files)
         and not state.conflicting_files
     )
