@@ -9,7 +9,8 @@ The guard's environment-read rule matched any `$NAME`. It now lets through a var
 the body assigned in an earlier statement, and still refuses everything the rule exists
 for: an unassigned variable, a read before the assignment (including `FOO=$FOO:x`), the
 environment dumpers, and credential-looking names. Since #214 a `read` after a compound
-keyword (`while read -r x`) or its own assignments (`IFS= read -r x`) assigns too.
+keyword (`while read -r x`) or its own assignments (`IFS= read -r x`) assigns too, and so
+does an assignment in a `case` arm or after `then`, `do` or `else`.
 """
 
 from __future__ import annotations
@@ -22,6 +23,18 @@ from precondition_library.runtime.probes import evaluate_preconditions
 from precondition_library.tasks.faults import build_sandbox
 
 ROOT = "/sandbox/root"
+
+LIVE_CASE_ARM = (
+    "f=notes/scratch.txt; dir=notes\n"
+    'base=$(basename "$f")\n'
+    'case "$base" in\n'
+    "  *.*) name=${base%.*}; ext=.${base##*.} ;;\n"
+    "  *)   name=$base; ext= ;;\n"
+    "esac\n"
+    'new="$dir/$name.local$ext"'
+)
+"""The fifth live run's compiled body, cut to the `case` that assigns `name` and `ext`. Its
+`$name` was refused as an environment read: the assignment follows a case arm's `)`."""
 
 LIVE_PROBE = (
     "a=$(git rev-parse HEAD:{submodule_path}); "
@@ -44,6 +57,10 @@ LIVE_PROBE = (
         'while IFS= read -r pkg; do test -n "$pkg"; done < .git/lock-additions',
         'until read -r n; do :; done; test -n "$n"',
         'if read -r first < deps.lock; then test -n "$first"; fi',
+        LIVE_CASE_ARM,
+        'if true; then n=1; fi; test "$n" = 1',
+        'while false; do x=1; done; echo "$x"',
+        'if false; then :; else y=2; fi; test "$y" = 2',
     ],
 )
 def test_a_variable_the_body_assigned_first_is_allowed(body: str) -> None:
@@ -61,6 +78,8 @@ def test_a_variable_the_body_assigned_first_is_allowed(body: str) -> None:
         ("echo ${PATH}", "${PATH}"),
         ("while read -r x; do echo $PATH; done", "$PATH"),
         ('echo "$x"; while read -r x; do :; done', "$x"),
+        ('case x in x) echo "$PATH";; esac', "$PATH"),
+        ('echo "$name"; case x in x) name=1;; esac', "$name"),
     ],
 )
 def test_an_unassigned_or_early_read_is_still_refused(body: str, named: str) -> None:
