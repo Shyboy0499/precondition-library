@@ -36,11 +36,11 @@ asks for temperature 0, pinned and recorded per episode). The provider reports t
 value it sent on each `Completion`, so the ledger records what the call used rather
 than what a configuration claimed.
 
-**Whether the endpoint honours it has not been verified against a live call** (none
-has been made; see tests/test_provider.py). An OpenAI-compatible endpoint accepts the
-field, but a reasoning model may ignore sampling parameters without an error, and
-temperature 0 is not a determinism guarantee on any hosted model. What is recorded is
-the value sent, which is what this code can know.
+**Whether the endpoint honours it is not known.** The live runs (#163) sent it on every
+call and the endpoint accepted it, but acceptance is all a call can show: a reasoning
+model may ignore sampling parameters without an error, and temperature 0 is not a
+determinism guarantee on any hosted model. What is recorded is the value sent, which is
+what this code can know.
 """
 
 DEFAULT_TIMEOUT_S = 300.0
@@ -168,13 +168,14 @@ class DeepSeekProvider:
     ----------------------
     A prompt-cache hit is read from ``usage.prompt_cache_hit_tokens``. That is
     DeepSeek's own field, not OpenAI's ``prompt_tokens_details.cached_tokens``.
-    The name is an **assumption that has not been verified against a live call**
-    (none has been made; see tests/test_provider.py, which never reaches the
-    network). If the field is absent or renamed, ``cached_tokens_in`` is 0: the
-    call still succeeds and its real token cost is still recorded, but cache
-    hits would go unaccounted. Verify with a live call by sending a repeated
-    long prompt and checking that the response's usage block contains that key
-    with a nonzero value.
+    The name is **confirmed by the live runs** (#163): the third run's ledgers
+    record a nonzero ``cached_tokens_in`` on 72 of their 223 rows, so the field
+    exists and is populated. ``tests/test_provider.py`` never reaches the
+    network, so it pins the parsing, not the field's presence. If DeepSeek
+    renames the field, ``cached_tokens_in`` falls back to 0: the call still
+    succeeds and its real token cost is still recorded, but cache hits would go
+    unaccounted, which a run whose ledger shows no cache read at all should
+    prompt someone to check.
     """
 
     def __init__(
