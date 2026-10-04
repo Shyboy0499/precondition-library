@@ -47,6 +47,12 @@ from .sandbox import CheckoutContext, Sandbox, run_git
 MIRROR_NAME = "upstream-mirror.git"
 """The bare repository under the scratch root that stands in for the upstream remote."""
 
+BLOCKED_NAME = "no-remote-reachable.git"
+"""A path under the scratch root that is never created. Every remote other than the
+upstream is redirected here, so model-authored git can neither fetch from it nor push to
+it -- in a fork, `origin` is the user's own repository on the network, and a solve on a
+disposable copy must not change it."""
+
 
 class NotACheckoutError(ValueError):
     """The path is not the top level of a git working tree."""
@@ -70,14 +76,26 @@ def _identity(work: Path) -> tuple[str, str] | None:
     return (name, email) if name and email else None
 
 
-def _mirror(work: Path, root: Path, remote: str) -> tuple[Path, str]:
-    """A local bare repository holding `remote`'s fetched branches; returns it and the URL.
+def _remote_urls(work: Path, remote: str) -> list[str]:
+    """Every URL git would use for `remote`: its fetch URLs and its push URLs, in order.
+
+    A push URL (`remote.<name>.pushurl`) can differ from the fetch URL, and a redirect that
+    covered only the fetch URL would leave `git push <remote>` reaching the real one.
+    """
+    urls: list[str] = []
+    for args in (("--all",), ("--push", "--all")):
+        listed = _user_git(work, "remote", "get-url", *args, remote, check=False).stdout
+        urls.extend(url for url in listed.splitlines() if url and url not in urls)
+    return urls
+
+
+def _mirror(work: Path, root: Path, remote: str) -> Path:
+    """A local bare repository holding `remote`'s fetched branches.
 
     The mirror borrows the checkout's objects through `alternates`, so only refs are
     written: `refs/remotes/<remote>/*` become the mirror's `refs/heads/*`, which is what
     the real remote's branches look like to a fetch.
     """
-    url = _user_git(work, "remote", "get-url", remote).stdout.strip()
     mirror = root / MIRROR_NAME
     run_git(("init", "-q", "--bare", str(mirror)), cwd=root)
     objects = run_git(("rev-parse", "--git-path", "objects"), cwd=work).stdout.strip()
@@ -92,7 +110,34 @@ def _mirror(work: Path, root: Path, remote: str) -> tuple[Path, str]:
     ).stdout.strip()
     if head.startswith(f"{remote}/"):
         run_git(("symbolic-ref", "HEAD", f"refs/heads/{head[len(remote) + 1 :]}"), cwd=mirror)
-    return mirror, url
+    return mirror
+
+
+def _redirects(work: Path, root: Path, upstream: str | None) -> tuple[tuple[str, str], ...]:
+    """Where each remote URL is read from during a run: the mirror, or nowhere.
+
+    The upstream remote's every URL -- fetch and push -- goes to the mirror, so a program
+    reads what the trusted pre-fetch brought down and a push lands in the mirror. Every
+    other remote's URLs go to `BLOCKED_NAME`, which does not exist, so they fail without
+    reaching the network. The first mapping of a URL wins, so an `origin` that shares the
+    upstream's URL still reads the mirror.
+    """
+    pairs: list[tuple[str, str]] = []
+    if upstream is not None:
+        mirror = _mirror(work, root, upstream)
+        pairs.extend((str(mirror), url) for url in _remote_urls(work, upstream))
+    blocked = str(root / BLOCKED_NAME)
+    remotes = _user_git(work, "remote", check=False).stdout.split()
+    for other in remotes:
+        if other != upstream:
+            pairs.extend((blocked, url) for url in _remote_urls(work, other))
+    seen: set[str] = set()
+    unique = []
+    for base, url in pairs:
+        if url not in seen:
+            seen.add(url)
+            unique.append((base, url))
+    return tuple(unique)
 
 
 def open_checkout(work: Path, *, fetch: bool = True, scratch: Path | None = None) -> Sandbox:
@@ -117,17 +162,14 @@ def open_checkout(work: Path, *, fetch: bool = True, scratch: Path | None = None
         parameters = repository_bindings(work)  # a fetch can record the remote's HEAD
 
     root = Path(tempfile.mkdtemp(prefix="checkout-", dir=scratch))
-    redirects: tuple[tuple[str, str], ...] = ()
-    upstream = root / MIRROR_NAME
-    if remote is not None:
-        mirror, url = _mirror(work, root, remote)
-        redirects = ((str(mirror), url),)
     return Sandbox(
         root=root,
         work=work,
-        upstream=upstream,
+        upstream=root / MIRROR_NAME,
         checkout=CheckoutContext(
-            parameters=parameters, identity=_identity(work), redirects=redirects
+            parameters=parameters,
+            identity=_identity(work),
+            redirects=_redirects(work, root, remote),
         ),
     )
 
