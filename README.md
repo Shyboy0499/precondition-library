@@ -479,6 +479,36 @@ whole run, and `--skip-online` drops arms 1 and 1b. The registered plan is
 `--episode-seeds 40 --replicates 3`. The summary also carries arm 2's baseline floor
 (spec §7 item 11) and the instance-clustered interval over the episodes (ADR-0012).
 
+## On your own repository
+
+The library can also be used outside the harness, on a repository you already have
+(issues #181 and #188). Nothing model-written ever reaches a real remote: the tool
+fetches your upstream once, with your own git, into a local mirror, and every probe,
+body and agent command then runs screened, without network where the host allows it,
+and with your upstream read from that mirror; every other remote -- your own fork
+included -- is unreachable. Commits it makes carry your git identity.
+
+**Dispatch** reports which admitted program would fire on your repository and why,
+probing a copy of it, and with `--replay` dry-runs it on a second copy, shows what it
+did, and replays on your repository only after you confirm:
+
+```bash
+uv run python -m precondition_library dispatch --repo PATH --library DIR [--replay]
+```
+
+**Learn** has the agent solve a copy of your repository for a request in one of the
+measured families, shows you what the solve did, and -- only if you confirm -- compiles
+it and admits it through the same two-sided gate the harness uses, plus a check that it
+fires where it was learned (ADR-0026). It calls a model, so it needs a key:
+
+```bash
+uv run python -m precondition_library learn --repo PATH --library DIR \
+  --fault diverged --request "sync my fork with upstream" --api-key-env DEEPSEEK_API_KEY
+```
+
+A learned program is marked `learned_on: checkout`, and a measured run refuses any
+library that holds one: the measurement stays harness-only.
+
 ## Prior work
 
 Every citation below was checked against the source before publication — title,
