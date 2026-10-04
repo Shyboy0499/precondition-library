@@ -43,6 +43,22 @@ def _render(value: object) -> str:
     return str(value)
 
 
+_NOT_YET_RENDERED = frozenset({"tracked_branch", "upstream_default_branch", "local_branches"})
+"""Fields `as_text` leaves out until the branch-renamed intent is registered (#190).
+
+`as_text` is arm 2's whole view of state, so a field added to it changes every arm-2
+score in every measured family. These exist for the branch-renamed intent, which is
+not yet measured; rendering them is part of the change that registers it (as
+ADR-0027 did for the dirty-tree fields), so until then every measured arm-2 text is
+byte-identical."""
+
+
+def _config(work: Path, key: str) -> str:
+    """A git config value, or "" when the key is unset (`git config --get` exits 1)."""
+    result = run_git(("config", "--get", key), cwd=work, check=False)
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
 def _has_locked_branch(work: Path, branch: str) -> bool:
     """Whether git holds a lock file for the branch ref.
 
@@ -101,6 +117,20 @@ class StateFingerprint(BaseModel):
     """Untracked files at a path upstream's tree holds: `git ls-files --others
     --exclude-standard`, kept where `git ls-tree -r --name-only upstream/main` lists the
     path. A sync cannot bring upstream's file in without displacing such a file."""
+
+    # Discriminators for the branch-renamed intent (#190). Observed now, rendered by
+    # `as_text` only once that intent is registered: see `_NOT_YET_RENDERED`.
+    tracked_branch: str = ""
+    """The upstream branch the current branch is configured to follow: `git config
+    branch.<branch>.merge`, without `refs/heads/`. Empty when it follows none."""
+    upstream_default_branch: str = ""
+    """The branch upstream calls its default: `git symbolic-ref --short
+    refs/remotes/<remote>/HEAD`, without the remote, where `<remote>` is upstream's
+    remote. A plain fetch never updates it, but the trusted pre-fetch does (`git
+    remote set-head --auto`, #205), and so does an injector that models a fetched
+    clone; empty when the clone records none."""
+    local_branches: list[str] = []
+    """Every local branch: `git for-each-ref --format=%(refname:short) refs/heads/`."""
 
     @property
     def conflicting_files(self) -> set[str]:
@@ -171,6 +201,12 @@ class StateFingerprint(BaseModel):
             )
             upstream_references = bool(out("ls-tree", upstream, "--", path))
 
+        remote = upstream.split("/", 1)[0]
+        default_ref = run_git(
+            ("symbolic-ref", "-q", "--short", f"refs/remotes/{remote}/HEAD"), cwd=work, check=False
+        ).stdout.strip()
+        merge_ref = _config(work, f"branch.{branch}.merge")
+
         untracked = out("ls-files", "--others", "--exclude-standard").splitlines()
         upstream_paths = set(out("ls-tree", "-r", "--name-only", upstream).splitlines())
 
@@ -191,6 +227,11 @@ class StateFingerprint(BaseModel):
             upstream_still_references_submodule=upstream_references,
             dirty_files=sorted(out("diff", "--name-only", "HEAD").splitlines()),
             untracked_upstream_collisions=sorted(p for p in untracked if p in upstream_paths),
+            tracked_branch=merge_ref.removeprefix("refs/heads/"),
+            upstream_default_branch=default_ref.removeprefix(f"{remote}/"),
+            local_branches=sorted(
+                out("for-each-ref", "--format=%(refname:short)", "refs/heads/").splitlines()
+            ),
         )
 
     def as_text(self) -> str:
@@ -210,7 +251,9 @@ class StateFingerprint(BaseModel):
         signal compared with itself.
         """
         return "\n".join(
-            f"{name}: {_render(getattr(self, name))}" for name in type(self).model_fields
+            f"{name}: {_render(getattr(self, name))}"
+            for name in type(self).model_fields
+            if name not in _NOT_YET_RENDERED
         )
 
 
