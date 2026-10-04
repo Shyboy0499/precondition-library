@@ -19,7 +19,7 @@ now differ in content. This module keeps the direct pin:
 * `test_every_resolution_reaches_four_real_environments` builds four real
   sandboxes per resolution, one per distinct drawn instance identity, and asserts
   they are four real environments. That is the owner's approved target (4 per
-  resolution, 48 across the four measurable faults) measured from sandboxes rather
+  resolution, 56 across the five measurable faults) measured from sandboxes rather
   than from the drawn identity alone.
 
 The signature is the working tree's file bodies, names and counts, the conflict
@@ -31,10 +31,7 @@ signature -- distinct `instance_for_seed` values build distinct real environment
 -- is the `bench/instance_diversity.py` measurement, run over all 60 plan seeds.
 
 Only the faults whose intent is ambiguous are covered, because they are the only
-ones with a resolution to be the same or different. The fault in
-`EXCLUDED_FROM_BENCHMARK` has no resolution (`variant_for_seed` is `None`), so
-grouping its seeds by one would assert a property about a label that does not
-exist.
+ones with a resolution to be the same or different -- since ADR-0029, every fault.
 """
 
 from __future__ import annotations
@@ -56,9 +53,9 @@ TARGET_INSTANCES_PER_RESOLUTION = 4
 """The owner's approved target: four independent instances per resolution.
 
 ADR-0005 fixes the approach and leaves the count to "whatever the declared draw
-yields"; the target is the number the work is judged against (4 x 12 resolutions =
-48 environments since `dirty_tree` and `branch_renamed` were registered, ADR-0027 and
-ADR-0028).
+yields"; the target is the number the work is judged against (4 x 14 resolutions =
+56 environments since `dirty_tree`, `branch_renamed` and `lockfile_conflict` were
+registered, ADR-0027 to ADR-0029).
 """
 
 

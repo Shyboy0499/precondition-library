@@ -12,12 +12,19 @@ from __future__ import annotations
 from .faults.branch_renamed import INTENT as BRANCH_RENAMED_INTENT
 from .faults.dirty_tree import INTENT as DIRTY_TREE_INTENT
 from .faults.diverged import INTENT as DIVERGED_INTENT
+from .faults.lockfile_conflict import INTENT as LOCKFILE_INTENT
 from .faults.submodule_moved import INTENT as SUBMODULE_INTENT
 from .intent import IntentSpec
 
 INTENTS: dict[str, IntentSpec] = {
     intent.name: intent
-    for intent in (DIVERGED_INTENT, SUBMODULE_INTENT, DIRTY_TREE_INTENT, BRANCH_RENAMED_INTENT)
+    for intent in (
+        DIVERGED_INTENT,
+        SUBMODULE_INTENT,
+        DIRTY_TREE_INTENT,
+        BRANCH_RENAMED_INTENT,
+        LOCKFILE_INTENT,
+    )
 }
 
 
@@ -29,8 +36,11 @@ def ambiguous_intents() -> list[IntentSpec]:
     )
 
 
-EXCLUDED_FROM_BENCHMARK: set[str] = {"lockfile_conflict"}
+EXCLUDED_FROM_BENCHMARK: set[str] = set()
 """Faults that must never be measured, because they return a fixed request sentence.
+
+Empty since ADR-0029: every fault now has a registered intent. Kept, with its test,
+so a fault added later with a fixed sentence has to be listed here or given an intent.
 
 Excluded explicitly rather than left merely absent, so that every fault is
 accounted for somewhere. A fault that is neither intent-covered nor listed here

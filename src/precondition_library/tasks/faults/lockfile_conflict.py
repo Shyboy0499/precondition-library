@@ -41,12 +41,14 @@ resolutions are right in different states, by this checker:
 * ``upstream_removed`` -- as well, upstream drops a dependency the local side kept;
 * ``local_removed`` -- as well, the local side drops one upstream kept.
 
-This fault is real but not yet measurable: it has no `IntentSpec`, so the
-request text still names the fault and it stays excluded from any dispatch
-measurement (issue #25).
+The fault is measured (ADR-0029): `INTENT` is registered in `tasks.registry`, so the
+request is one of its phrasings and `variant_for_seed` labels every seed with the
+resolution its state needs.
 """
 
 from __future__ import annotations
+
+from collections.abc import Mapping
 
 from ...sandbox import Sandbox, git_out, record_base, run_git, tip_contained
 from ...signatures import StateFingerprint
@@ -110,12 +112,10 @@ def removable_dependency_for_seed(seed: int) -> str:
     return f"{_REMOVABLE_PACKAGE} {base_version_for_seed(seed)}"
 
 
-# --- the intent (#191), defined here and not yet registered ------------------------
+# --- the intent (#191), registered in `tasks.registry` (ADR-0029) ---------------
 #
-# Not in `tasks.registry.INTENTS`, so nothing measured reads it: `variant_for_seed`
-# stays `None` and the fault stays excluded. Registering it is the step that changes
-# measurement (the owner approved it on #191); until then it exists so its acceptable
-# sets can be pinned against `check` by replay (`tests/test_lockfile_intent.py`).
+# Its acceptable sets are pinned against `check` by replay
+# (`tests/test_lockfile_intent.py`).
 
 STATE_VARIANT = {
     "additions_only": "take_upstream",
@@ -183,28 +183,74 @@ INTENT = IntentSpec(
 )
 
 
+# --- Tier 1 instance axes (ADR-0005) ---------------------------------------------
+#
+# Each side's package -- the versions follow from the pair -- plus `removal`, which
+# side (if either) dropped the removable dependency. `removal` separates the two
+# states `take_upstream` covers; `keep_local` has one state, so it does not vary there.
+# No draw moves an edit between sides, so no draw can relabel a state.
+
+AXES: Mapping[str, tuple[str, ...]] = {
+    "local_package": _PACKAGE_NAMES[:_HALF],
+    "upstream_package": _PACKAGE_NAMES[_HALF:],
+    "removal": ("none", "upstream"),
+}
+"""The Tier 1 axes this fault draws, with the values each may take. The versions are
+derived from the package pair (`_versions_for_seed`), so they are not axes of their own."""
+
+AXES_BY_RESOLUTION: Mapping[str, tuple[str, ...]] = {
+    "take_upstream": ("local_package", "upstream_package", "removal"),
+    "keep_local": ("local_package", "upstream_package"),
+}
+"""Which axes may vary for each resolution."""
+
+
+def drawn_axes(seed: int) -> dict[str, str]:
+    """Every axis's drawn value at `seed`; one definition for identity and the axes."""
+    state = state_for_seed(seed)
+    return {
+        "local_package": local_package_for_seed(seed),
+        "upstream_package": upstream_package_for_seed(seed),
+        "removal": state.removesuffix("_removed") if state != "additions_only" else "none",
+    }
+
+
 def local_package_for_seed(seed: int) -> str:
     """The package the local side adds. Deterministic, and never upstream's."""
-    index = sample_index(seed, f"{_PACKAGE_SALT}:local", _HALF)
-    return _PACKAGE_NAMES[index]
+    return _PACKAGE_NAMES[_package_indices(seed)[0]]
 
 
 def upstream_package_for_seed(seed: int) -> str:
     """The package the upstream side adds. Deterministic, and never local's."""
-    index = _HALF + sample_index(seed, f"{_PACKAGE_SALT}:upstream", len(_PACKAGE_NAMES) - _HALF)
-    return _PACKAGE_NAMES[index]
+    return _PACKAGE_NAMES[_HALF + _package_indices(seed)[1]]
+
+
+def _package_indices(seed: int) -> tuple[int, int]:
+    """(local, upstream) indices into each half of `_PACKAGE_NAMES`."""
+    return (
+        sample_index(seed, f"{_PACKAGE_SALT}:local", _HALF),
+        sample_index(seed, f"{_PACKAGE_SALT}:upstream", len(_PACKAGE_NAMES) - _HALF),
+    )
 
 
 def _versions_for_seed(seed: int) -> tuple[str, str]:
-    """(local version, upstream version), guaranteed distinct."""
-    local_index = sample_index(seed, f"{_VERSION_SALT}:local", len(VERSIONS))
-    offset = 1 + sample_index(seed, f"{_VERSION_SALT}:upstream", len(VERSIONS) - 1)
-    return VERSIONS[local_index], VERSIONS[(local_index + offset) % len(VERSIONS)]
+    """(local version, upstream version), guaranteed distinct.
+
+    Derived from the drawn package pair rather than drawn on their own (ADR-0029): an
+    independent version draw multiplied the instance space until no seed set ever
+    repeated an instance, and the cost curve is read from repeats.
+    """
+    local, upstream = _package_indices(seed)
+    offset = 1 + upstream % (len(VERSIONS) - 1)
+    return VERSIONS[local], VERSIONS[(local + offset) % len(VERSIONS)]
 
 
 def base_version_for_seed(seed: int) -> str:
-    """The version the injected file starts at, before either side changes it."""
-    return _BASE_VERSIONS[sample_index(seed, f"{_VERSION_SALT}:base", len(_BASE_VERSIONS))]
+    """The version the injected file starts at, before either side changes it.
+
+    Derived from the drawn upstream package, for the reason `_versions_for_seed` gives.
+    """
+    return _BASE_VERSIONS[_package_indices(seed)[1] % len(_BASE_VERSIONS)]
 
 
 def local_dependency_for_seed(seed: int) -> str:
@@ -312,10 +358,30 @@ class LockfileConflictFault(FaultSpec):
         run_git(("fetch", "-q", "upstream"), cwd=work)
 
     def task_text(self, seed: int) -> str:
-        return (
-            "The sync hit a conflict in the lockfile. Resolve it the way this project "
-            "expects, and leave dependency state consistent."
+        return INTENT.task_text(seed)
+
+    def variant_for_seed(self, seed: int) -> str:
+        """The resolution `state_for_seed` makes correct at `seed` (`STATE_VARIANT`)."""
+        return STATE_VARIANT[state_for_seed(seed)]
+
+    def instance_for_seed(self, seed: int) -> str:
+        """The instance identity: resolution plus every drawn axis value, in axis order."""
+        resolution = self.variant_for_seed(seed)
+        drawn = self.drawn_axes_for_seed(seed)
+        return "/".join(
+            ["lockfile_conflict", resolution, *(f"{axis}={value}" for axis, value in drawn.items())]
         )
+
+    def axes_for_resolution(self, resolution: str) -> Mapping[str, tuple[str, ...]]:
+        """The axes `resolution` may vary along, with their value pools (ADR-0005)."""
+        if resolution not in AXES_BY_RESOLUTION:
+            raise KeyError(f"lockfile_conflict declares no resolution {resolution!r}")
+        return {name: AXES[name] for name in AXES_BY_RESOLUTION[resolution]}
+
+    def drawn_axes_for_seed(self, seed: int) -> Mapping[str, str]:
+        """The drawn value of each declared axis at `seed` (ADR-0005 decision 2)."""
+        drawn = drawn_axes(seed)
+        return {axis: drawn[axis] for axis in AXES_BY_RESOLUTION[self.variant_for_seed(seed)]}
 
     def check(self, sandbox: Sandbox) -> GroundTruth:
         """Grade the outcome, not the method, in five clauses.

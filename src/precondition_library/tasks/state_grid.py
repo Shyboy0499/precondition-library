@@ -139,10 +139,8 @@ BRANCH_RENAMED_STATES = {
     ),
 }
 
-# sync_through_a_conflicting_lockfile (#191): two resolutions over three states, plus
-# the benign state. Declared for the intent `tasks.faults.lockfile_conflict.INTENT`,
-# which is defined but not yet registered, so it is deliberately not in `STATE_GRID`
-# below: everything that walks the grid reads registered intents.
+# sync_through_a_conflicting_lockfile (#191, ADR-0029): two resolutions over three
+# states, plus the benign state.
 _LOCK_CONFLICT = {
     "upstream_ahead": 1,
     "upstream_behind": 1,
@@ -176,4 +174,5 @@ STATE_GRID: dict[str, dict[str, StateFingerprint]] = {
     "restore_submodule_state": SUBMODULE_STATES,
     "keep_uncommitted_work_and_sync": DIRTY_TREE_STATES,
     "follow_renamed_upstream_branch": BRANCH_RENAMED_STATES,
+    "sync_through_a_conflicting_lockfile": LOCKFILE_STATES,
 }

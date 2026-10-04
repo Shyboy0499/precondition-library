@@ -140,7 +140,7 @@ def test_refusals(tmp_path) -> None:
         library_pair_outcomes(Library(tmp_path / "a"), FAULTS, SEEDS)
     evaluated = Library(tmp_path / "b", evaluate_preconditions=evaluate_preconditions)
     with pytest.raises(ValueError, match="cannot be measured"):
-        library_pair_outcomes(evaluated, ["lockfile_conflict"], SEEDS)
+        library_pair_outcomes(evaluated, ["not_a_fault"], SEEDS)
     with pytest.raises(ValueError, match="no seeds"):
         library_pair_outcomes(evaluated, FAULTS, [])
 

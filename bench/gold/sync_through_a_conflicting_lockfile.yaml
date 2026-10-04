@@ -1,10 +1,8 @@
 # Hand-written resolutions for the `sync_through_a_conflicting_lockfile` intent (#191).
 #
-# The intent is defined in tasks/faults/lockfile_conflict.py and not yet registered:
-# until it is, nothing measured dispatches these, and the lockfile_conflict fault stays
-# excluded from the benchmark. They exist now so that the acceptable sets the intent
-# declares can be pinned against the fault's own checker by replay
-# (tests/test_lockfile_intent.py), the way ADR-0023 pins the measured intents'.
+# The intent is defined in tasks/faults/lockfile_conflict.py and registered (ADR-0029).
+# The acceptable sets it declares are pinned against the fault's own checker by replay
+# (tests/test_lockfile_intent.py), the way ADR-0023 pins the other intents'.
 #
 # Each body merges, takes one side's lock-shaped file, and re-inserts the entries the
 # other side added since the merge base -- a stand-in for regeneration, since the

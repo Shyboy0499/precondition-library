@@ -57,6 +57,9 @@ DECLARED_ROLE_COUNTS = {
     ("smoke", "branch_renamed"): (4, 0),
     ("tune", "branch_renamed"): (15, 1),
     ("eval", "branch_renamed"): (30, 10),
+    ("smoke", "lockfile_conflict"): (3, 1),
+    ("tune", "lockfile_conflict"): (14, 2),
+    ("eval", "lockfile_conflict"): (28, 12),
 }
 
 
@@ -186,10 +189,14 @@ def test_a_set_long_enough_to_repeat_has_a_replay(name: str, fault: str) -> None
     and a flat curve reads like a result rather than like a plan that could not
     show amortization (issue #81). The smoke set is the exception and says so:
     its four seeds draw four distinct instances after ADR-0005, so it has no
-    replay and is a wiring check rather than a source of a cost curve.
+    replay and is a wiring check rather than a source of a cost curve -- except for
+    `lockfile_conflict`, whose smaller draw (ADR-0029) lets two smoke seeds share an
+    instance; that one replay is declared in `DECLARED_ROLE_COUNTS`, not hoped for.
     """
     roles = occurrence_roles(SETS[name], fault)
-    if name == "smoke":
+    if name == "smoke" and fault == "lockfile_conflict":
+        assert list(roles).count(OccurrenceRole.REPLAY) == 1
+    elif name == "smoke":
         assert OccurrenceRole.REPLAY not in roles, (
             f"smoke/{fault} now revisits an instance; if that is deliberate, update "
             f"the plan's arithmetic and this exception"
@@ -239,15 +246,22 @@ def test_the_role_keys_on_the_instance_not_on_the_resolution(fault: str) -> None
     ]
 
 
-def test_a_fault_with_no_resolution_mapping_is_refused() -> None:
+def test_a_fault_with_no_resolution_mapping_is_refused(monkeypatch) -> None:
     """No mapping means no resolution to recur, so a role would be invented.
 
     `bench.run` refuses these faults before any episode runs, so reaching this
     with one is a caller that skipped that check -- and a row labelled variant or
     replay on no evidence would be a fact about nothing.
     """
-    without_mapping = next(
-        name for name, spec in sorted(FAULTS.items()) if spec.variant_for_seed(0) is None
-    )
+
+    # Every registered fault has a mapping since ADR-0029, so one without is stood in.
+    class _NoMapping:
+        def variant_for_seed(self, seed: int) -> None:
+            return None
+
+        def instance_for_seed(self, seed: int) -> None:
+            return None
+
+    monkeypatch.setitem(FAULTS, "no_mapping", _NoMapping())
     with pytest.raises(ValueError, match="no seed-to-resolution mapping"):
-        occurrence_roles([0, 1], without_mapping)
+        occurrence_roles([0, 1], "no_mapping")

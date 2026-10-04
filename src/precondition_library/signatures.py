@@ -44,18 +44,6 @@ def _render(value: object) -> str:
     return str(value)
 
 
-_NOT_YET_RENDERED = frozenset(
-    {"merge_conflicted_files", "upstream_dropped_lines", "local_dropped_lines"}
-)
-"""Fields `as_text` leaves out until the lock-conflict intent is registered (#191).
-
-`as_text` is arm 2's whole view of state, so a field added to it changes every arm-2
-score in every measured family. These exist for the lock-conflict intent, which is not
-yet measured; rendering them is part of the change that registers it (as ADR-0027 and
-ADR-0028 did for the dirty-tree and branch-wiring fields), so until then every measured
-arm-2 text is byte-identical."""
-
-
 class _ThreeWay:
     """One file's three versions -- merge base, local, upstream -- read without writing.
 
@@ -173,8 +161,7 @@ class StateFingerprint(BaseModel):
     local_branches: list[str] = []
     """Every local branch: `git for-each-ref --format=%(refname:short) refs/heads/`."""
 
-    # Discriminators for the lock-conflict intent (#191). Observed now, rendered by
-    # `as_text` only once that intent is registered: see `_NOT_YET_RENDERED`.
+    # Discriminators for the lock-conflict intent (#191, ADR-0029).
     merge_conflicted_files: list[str] = []
     """Files both sides changed whose three-way merge conflicts: `git merge-file -p` on the
     merge base's, HEAD's and upstream's versions, tried outside the repository."""
@@ -350,9 +337,7 @@ class StateFingerprint(BaseModel):
         signal compared with itself.
         """
         return "\n".join(
-            f"{name}: {_render(getattr(self, name))}"
-            for name in type(self).model_fields
-            if name not in _NOT_YET_RENDERED
+            f"{name}: {_render(getattr(self, name))}" for name in type(self).model_fields
         )
 
 
