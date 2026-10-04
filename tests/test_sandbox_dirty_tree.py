@@ -18,13 +18,24 @@ import pytest
 
 from precondition_library.sandbox import Sandbox, run_git
 from precondition_library.signatures import StateFingerprint
-from precondition_library.tasks.faults.dirty_tree import SPEC, injects_untracked
+from precondition_library.tasks.faults.dirty_tree import (
+    ASIDE_SUFFIX,
+    SPEC,
+    injects_untracked,
+    state_for_seed,
+)
 
-# Seeds chosen because `sample_index(seed, "dirty_tree:untracked", 2)` selects
-# that injected half: 0 -> modified only, 3 -> modified plus an untracked file.
-MODIFIED_ONLY = 0
-WITH_UNTRACKED = 3
-SEEDS = [MODIFIED_ONLY, WITH_UNTRACKED]
+# One seed per injected state (#189), each verified by `test_the_seeds_select_their_states`.
+SAME_FILE = 0
+COLLISION = 2
+DISJOINT = 5
+SEEDS = [DISJOINT, SAME_FILE, COLLISION]
+# The states where stash-sync-restore keeps everything; on a collision it cannot.
+SYNCABLE = [DISJOINT, SAME_FILE]
+
+
+def test_the_seeds_select_their_states() -> None:
+    assert [state_for_seed(seed) for seed in SEEDS] == ["disjoint", "same_file", "collision"]
 
 
 def _sync_looks_fine(box: Sandbox) -> bool:
@@ -95,7 +106,8 @@ def test_observe_matches_injection(seed: int, make_sandbox) -> None:
     assert fingerprint.upstream_ahead == 1
     assert fingerprint.upstream_behind == 0
     assert fingerprint.local_touched_files == []
-    assert fingerprint.upstream_touched_files == ["app.py"]
+    expected = ["app.py", "notes/scratch.txt"] if seed == COLLISION else ["app.py"]
+    assert fingerprint.upstream_touched_files == expected
 
     status = run_git(("status", "--porcelain", "--untracked-files=all"), cwd=box.work).stdout
     assert ("notes/scratch.txt" in status) is injects_untracked(seed)
@@ -104,10 +116,10 @@ def test_observe_matches_injection(seed: int, make_sandbox) -> None:
 @pytest.mark.parametrize(
     ("seed", "resolve", "detail_fragment"),
     [
-        (MODIFIED_ONLY, _sync_then_reset_hard, "tracked changes"),
-        (MODIFIED_ONLY, _sync_then_checkout_dot, "tracked changes"),
-        (WITH_UNTRACKED, _sync_then_reset_hard, "tracked changes"),
-        (WITH_UNTRACKED, _sync_then_clean_untracked, "untracked work"),
+        (SAME_FILE, _sync_then_reset_hard, "tracked changes"),
+        (DISJOINT, _sync_then_checkout_dot, "tracked changes"),
+        (DISJOINT, _sync_then_reset_hard, "tracked changes"),
+        (DISJOINT, _sync_then_clean_untracked, "untracked work"),
     ],
     ids=["reset-hard", "checkout-dot", "reset-hard-untracked", "clean-fd-untracked"],
 )
@@ -127,7 +139,7 @@ def test_wrong_resolution_fails_check(seed, resolve, detail_fragment, make_sandb
     assert detail_fragment in result.detail
 
 
-@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("seed", SYNCABLE)
 def test_correct_resolution_passes_check(seed: int, make_sandbox) -> None:
     """Stash, sync, restore: not a gold program, just the honest minimum."""
     box = make_sandbox(seed, ["dirty_tree"])
@@ -169,9 +181,66 @@ def test_observe_does_not_mutate(seed: int, make_sandbox) -> None:
 
 
 def test_destroy_is_idempotent(make_sandbox) -> None:
-    box = make_sandbox(MODIFIED_ONLY, ["dirty_tree"])
+    box = make_sandbox(SAME_FILE, ["dirty_tree"])
     root = box.root
     assert root.exists()
     box.destroy()
     assert not root.exists()
     box.destroy()
+
+
+# --- the collision state (#189) -------------------------------------------------
+
+
+def _commit_then_merge(box: Sandbox) -> None:
+    run_git(("add", "-A"), cwd=box.work)
+    run_git(("commit", "-q", "-m", "wip"), cwd=box.work)
+    run_git(("merge", "--no-edit", "upstream/main"), cwd=box.work, check=False)
+
+
+def _move_aside_then_stash_sync_restore(box: Sandbox) -> None:
+    """The one resolution that keeps both: move the colliding file aside first."""
+    scratch = box.work / "notes" / "scratch.txt"
+    scratch.rename(scratch.with_name(scratch.name + ASIDE_SUFFIX))
+    _stash_sync_restore(box)
+
+
+def test_on_a_collision_stash_sync_restore_loses_the_untracked_work(make_sandbox) -> None:
+    box = make_sandbox(COLLISION, ["dirty_tree"])
+    run_git(("stash", "push", "-u", "-m", "pl-sync"), cwd=box.work)
+    run_git(("rebase", "upstream/main"), cwd=box.work)
+    run_git(("stash", "pop"), cwd=box.work, check=False)  # refuses: the path is taken
+    result = SPEC.check(box)
+    assert not result.ok and "untracked work" in result.detail
+
+
+def test_on_a_collision_commit_then_merge_cannot_absorb_upstream(make_sandbox) -> None:
+    box = make_sandbox(COLLISION, ["dirty_tree"])
+    _commit_then_merge(box)
+    result = SPEC.check(box)
+    assert not result.ok and "not contained" in result.detail
+
+
+def test_on_a_collision_moving_it_aside_keeps_both(make_sandbox) -> None:
+    box = make_sandbox(COLLISION, ["dirty_tree"])
+    _move_aside_then_stash_sync_restore(box)
+    result = SPEC.check(box)
+    assert result.ok, result.detail
+    tracked = (box.work / "notes" / "scratch.txt").read_text(encoding="utf-8")
+    assert "tracked upstream now" in tracked, "upstream's file is the one at the path"
+
+
+@pytest.mark.parametrize("seed", SYNCABLE)
+def test_commit_then_merge_keeps_the_work_where_nothing_collides(seed, make_sandbox) -> None:
+    box = make_sandbox(seed, ["dirty_tree"])
+    _commit_then_merge(box)
+    result = SPEC.check(box)
+    assert result.ok, result.detail
+
+
+def test_moving_aside_counts_only_on_a_collision(make_sandbox) -> None:
+    """Off a collision, `<path>.local` is not the work's place: the path was free."""
+    box = make_sandbox(DISJOINT, ["dirty_tree"])
+    _move_aside_then_stash_sync_restore(box)
+    result = SPEC.check(box)
+    assert not result.ok and "untracked work" in result.detail

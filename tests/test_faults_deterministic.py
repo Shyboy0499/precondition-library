@@ -53,7 +53,7 @@ DETERMINISM_SEED = 0
 # version of the claim. Each pair is verified by the test itself.
 DISTINGUISHING_SEEDS: dict[str, tuple[int, int]] = {
     "diverged": (0, 1),  # overlapping_files vs empty_local_commits
-    "dirty_tree": (0, 3),  # modified vs modified_with_untracked
+    "dirty_tree": (0, 2),  # same_file vs collision
     "branch_renamed": (0, 3),  # trunk vs develop
     "submodule_moved": (0, 4),  # remove vs init
     "lockfile_conflict": (0, 3),  # birch/elder vs dogwood/hazel
