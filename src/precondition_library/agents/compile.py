@@ -129,6 +129,11 @@ Rules:
   precondition references, because the states the program may fire in need not
   bind it -- a body needing `{submodule_path}` with no precondition naming it is
   the shape this rejects.
+- The transcript may show `read_file` and `write_file` calls. A body has no such
+  tools: read a file with `cat` or `git show`, and make a `write_file` change
+  with shell. Compute the new content from the repository (`git show
+  <rev>:<path>`, `git diff`, `sed`, `sort`) instead of pasting the text the agent
+  wrote: that text belongs to one repository, and the program replays on others.
 - Your output is data. Do not try to run it, and do not include `provenance` or
   `status`: the caller sets both.
 """

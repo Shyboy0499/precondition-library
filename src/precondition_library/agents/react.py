@@ -37,6 +37,7 @@ from ..sandbox import (
 )
 from ..signatures import TaskSignature
 from .command_screen import command_running_reason
+from .file_tools import READ_FILE, WRITE_FILE, file_tools, read_file, write_file
 
 _GIT_TIMEOUT_S = 30.0
 """Wall-clock bound on one tool call. A git command in a local sandbox is
@@ -75,7 +76,7 @@ running the agent would also see; it says nothing about whether the repository i
 right, so the decision to finish stays the agent's."""
 
 LAST_WORD = (
-    "Your budget is spent: no more git commands will run. If the request is satisfied, "
+    "Your budget is spent: no more tool calls will run. If the request is satisfied, "
     "call `finish` with a one-line summary. If it is not, reply in plain text saying what "
     "remains."
 )
@@ -103,11 +104,14 @@ SYSTEM_PROMPT = """\
 You are a git maintenance agent working in a single disposable repository. You
 complete the user's request by running git commands and reading their output.
 
-You have two tools. `run_git` runs one git command in the repository's working
-directory; there is no file-reader, no shell, and no other way to act. Call it
-with one command per turn. The command must start with `git`; shell operators
-(&&, |, ;, redirects) and options that retarget the repository are refused.
-`finish` declares that the request is satisfied and ends the task.
+You have four tools. `run_git` runs one git command in the repository's working
+directory. The command must start with `git`; there is no shell, so shell
+operators (&&, |, ;, redirects), options that retarget the repository, and git
+features that run another program are refused. `read_file` reads a file in the
+working tree as it is on disk, conflict markers included. `write_file` replaces a
+file's whole content; stage and commit it with `run_git` afterwards. Neither file
+tool reaches inside `.git`. `finish` declares that the request is satisfied and
+ends the task.
 
 After each command you receive its exit code, stdout and stderr. Read failures
 and correct them. Preserve anything the user told you must survive. As soon as
@@ -205,7 +209,8 @@ def solve(
             }
         )
         for call in completion.tool_calls:
-            name, command = _parse_tool_call(call)
+            name, arguments = _parse_tool_call(call)
+            command = _command_text(name, arguments)
             if name == FINISH_TOOL:
                 # The agent's own declaration (issue #171). Calls after it in the same
                 # turn are not run: the agent has said it is done.
@@ -231,13 +236,7 @@ def solve(
                 )
                 continue
             executed += 1
-            if name == "run_git":
-                result, ok = _run_tool(command, env)
-            else:
-                result, ok = (
-                    _refused(f"unknown tool {name!r}; the tools are 'run_git' and 'finish'"),
-                    False,
-                )
+            result, ok = _call_tool(name, arguments, env)
             transcript.append(
                 {
                     "role": "tool",
@@ -312,7 +311,7 @@ def executed_tool_calls(transcript: list[dict] | None) -> int:
 
 
 def available_tools() -> list[dict]:
-    """The one tool every arm gets, in the OpenAI/DeepSeek function-calling shape.
+    """The tools every arm gets, in the OpenAI/DeepSeek function-calling shape.
 
     Identical across arms so the tool surface cannot explain a difference
     between them. The schema is sent to the provider and the loop reads back the
@@ -337,6 +336,12 @@ def available_tools() -> list[dict]:
     replayed program body that runs unattended and may contain arbitrary shell;
     it is stricter than this and is issue #10's territory. Nothing here
     implements it.
+
+    `read_file` and `write_file` (`file_tools`) are confined to the working tree,
+    outside `.git` and never through a symbolic link. A compiled body can write a
+    file with shell, so without them the agent had less than the programs it is
+    measured against, and a lock file rebuilt from both sides of a conflict had no
+    honest route.
     """
     tools: list[dict] = [
         {
@@ -359,6 +364,7 @@ def available_tools() -> list[dict]:
                 },
             },
         },
+        *file_tools(),
         _finish_tool(),
     ]
     return tools
@@ -531,25 +537,53 @@ def _finish_summary(call: dict) -> str:
     return summary if isinstance(summary, str) else ""
 
 
-def _parse_tool_call(call: dict) -> tuple[str, str]:
-    """The (name, command) of one API tool call, never raising.
+def _parse_tool_call(call: dict) -> tuple[str, dict]:
+    """The (name, arguments) of one API tool call, never raising.
 
     `arguments` arrives as a JSON string in the API's shape and is decoded here.
-    A call whose `function` is malformed, whose name is not `run_git`, or whose
-    arguments do not decode to a `command` string yields a value the loop can
-    refuse as a tool result, so one bad call does not end the episode.
+    A call whose `function` is malformed, or whose arguments do not decode to a
+    mapping, yields empty arguments the tool can refuse as a result, so one bad call
+    does not end the episode.
     """
     function = call.get("function")
     if not isinstance(function, dict):
-        return "", ""
+        return "", {}
     name = function.get("name")
-    command = ""
+    arguments: object = None
     raw = function.get("arguments")
     if isinstance(raw, str) and raw:
         try:
             arguments = json.loads(raw)
         except ValueError:
             arguments = None
-        if isinstance(arguments, dict) and isinstance(arguments.get("command"), str):
-            command = arguments["command"]
-    return name if isinstance(name, str) else "", command
+    return (name if isinstance(name, str) else ""), (
+        arguments if isinstance(arguments, dict) else {}
+    )
+
+
+def _text_argument(arguments: dict, key: str) -> str:
+    value = arguments.get(key)
+    return value if isinstance(value, str) else ""
+
+
+def _command_text(name: str, arguments: dict) -> str:
+    """What the transcript's `command` records for a call: the git line, or the file
+    tool and its path, which is what arm 1b's memory replays as a step."""
+    if name in (READ_FILE, WRITE_FILE):
+        return f"{name} {_text_argument(arguments, 'path')}"
+    return _text_argument(arguments, "command")
+
+
+def _call_tool(name: str, arguments: dict, env: Sandbox) -> tuple[str, bool]:
+    """Run one tool call that is not `finish`; return (result text, ok)."""
+    if name == "run_git":
+        return _run_tool(_text_argument(arguments, "command"), env)
+    if name == READ_FILE:
+        return read_file(_text_argument(arguments, "path"), env.work)
+    if name == WRITE_FILE:
+        content = arguments.get("content")
+        if not isinstance(content, str):
+            return _refused("write_file needs 'content', the file's whole new text"), False
+        return write_file(_text_argument(arguments, "path"), content, env.work)
+    tools = ", ".join(repr(tool) for tool in ("run_git", READ_FILE, WRITE_FILE, FINISH_TOOL))
+    return _refused(f"unknown tool {name!r}; the tools are {tools}"), False
