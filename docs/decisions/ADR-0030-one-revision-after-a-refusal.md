@@ -41,6 +41,9 @@ build's problem is that a refusal is a dead end.
    - If the revision is admitted, it is the stored, admitted program.
    - If it is refused too, it is stored as a candidate, and the row keeps its reason.
    - If the revision does not parse, or raises, the first program and its reason stand.
+     The revision still counts in `compile_attempts`, and the row's reason adds why
+     it produced nothing. The fifth live run lost one revision without a trace
+     before this.
 4. **Every attempt's tokens are the episode's.** The ledger records `compile_attempts`
    (`None` when nothing was compiled, including on older rows).
 5. **It applies wherever a solution is compiled:** the build, and the online arms that

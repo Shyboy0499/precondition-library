@@ -1742,6 +1742,44 @@ def test_a_revision_is_shown_the_state_its_program_fired_on(tmp_path: Path) -> N
     assert payload["refused_state"] != payload["state_at_arrival"]
 
 
+@pytest.mark.parametrize(
+    ("revision_reply", "named"),
+    [
+        (None, "the revision raised AssertionError"),
+        (_MALFORMED_REPLY, "the revision did not parse"),
+    ],
+)
+def test_a_revision_that_produced_nothing_is_on_the_row(
+    tmp_path: Path, revision_reply: str | None, named: str
+) -> None:
+    """The fifth live run lost a revision without a trace: the row said one attempt.
+
+    A revision that raises (here the scripted provider has no reply left) or does not
+    parse still counts as an attempt, and the row's reason says why it produced nothing
+    after admission's reason for the program that stands.
+    """
+    always = Predicate(name="always", description="holds anywhere", probe="true")
+    replies = [_completion(_reply_text(_discard_program(preconditions=[always])))]
+    if revision_reply is not None:
+        replies.append(_completion(revision_reply))
+    out = tmp_path / "ledger.jsonl"
+    run_benchmark(
+        arms=[Arm.PRECONDITION],
+        faults=["diverged"],
+        occurrences=1,
+        seeds=[DISCARD_SEED],
+        out=out,
+        model="fake",
+        provider=FakeProvider(*_resolves_discard(), *replies),
+    )
+    (row,) = read(out)
+    assert row.admitted is False and row.compile_attempts == 2
+    assert row.compile_failure_reason is not None
+    reason = row.compile_failure_reason
+    assert reason.startswith("rejected before any sandbox"), "admission's reason comes first"
+    assert f"; {named}" in reason, reason
+
+
 def test_a_revision_that_is_refused_too_keeps_the_last_reason(tmp_path: Path) -> None:
     always = Predicate(name="always", description="holds anywhere", probe="true")
     broad = _reply_text(_discard_program(preconditions=[always]))
