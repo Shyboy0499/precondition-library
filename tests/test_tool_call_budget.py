@@ -46,6 +46,11 @@ def _batch(*commands: str) -> Completion:
     return Completion(tool_calls=calls, usage=_USAGE, model="fake")
 
 
+def _not_done() -> Completion:
+    """A last word that does not declare the task done (issue #179)."""
+    return Completion(text="not done yet", usage=_USAGE, model="fake")
+
+
 def _finish() -> Completion:
     return Completion(text="done", usage=_USAGE, model="fake")
 
@@ -60,14 +65,18 @@ def test_a_batched_turn_cannot_run_past_the_tool_call_budget() -> None:
         signature = TaskSignature(
             intent="sync", fingerprint=StateFingerprint.observe(box), target=str(box.work)
         )
-        provider = FakeProvider(_batch(*["git status"] * 30))
+        provider = FakeProvider(_batch(*["git status"] * 30), _not_done())
         outcome, transcript = solve(signature, box, provider)
     finally:
         box.destroy()
     assert outcome is EpisodeOutcome.FAIL
-    assert sum(1 for entry in transcript if entry["role"] == "tool") == DEFAULT_MAX_TOOL_CALLS
-    assert "tool-call budget exhausted" in transcript[-1]["content"]
-    assert len(provider.calls) == 1, "one turn was enough to exhaust it"
+    tools = [entry for entry in transcript if entry["role"] == "tool"]
+    assert sum(1 for entry in tools if not entry.get("not_run")) == DEFAULT_MAX_TOOL_CALLS
+    assert sum(1 for entry in tools if entry.get("not_run")) == 30 - DEFAULT_MAX_TOOL_CALLS, (
+        "every call past the cap is answered, not run, so the conversation stays valid"
+    )
+    assert "tool-call budget of 24 spent" in transcript[-1]["content"]
+    assert len(provider.calls) == 2, "one turn was enough to exhaust it; then the last word"
 
 
 def test_every_row_records_the_tool_calls_its_agent_ran(tmp_path: Path) -> None:
@@ -91,7 +100,7 @@ def test_every_row_records_the_tool_calls_its_agent_ran(tmp_path: Path) -> None:
 
 def test_a_failed_solve_is_not_compiled(tmp_path: Path) -> None:
     """The agent never declared done, so no compile call is made or charged."""
-    provider = FakeProvider(_batch(*["git status"] * 30))  # nothing queued for a compile
+    provider = FakeProvider(_batch(*["git status"] * 30), _not_done())  # no compile queued
     record = run_episode(
         Arm.PRECONDITION,
         "diverged",
@@ -103,7 +112,8 @@ def test_a_failed_solve_is_not_compiled(tmp_path: Path) -> None:
         model="fake",
     )
     assert record.outcome is EpisodeOutcome.FAIL
-    assert len(provider.calls) == 1, "no compile call followed the failed solve"
+    assert record.tool_calls == 24, "the calls past the cap were not run, so not counted"
+    assert len(provider.calls) == 2, "the solve and its last word; no compile call followed"
     assert record.compile_failure_reason is None
     assert record.admitted is None
     assert Library(tmp_path / "lib").load_all() == []
