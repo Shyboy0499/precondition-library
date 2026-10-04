@@ -26,10 +26,13 @@ import subprocess
 
 from ..program import EpisodeOutcome
 from ..provider import Provider
+from ..runtime.confine import run_confined
+from ..runtime.guard import Verdict, screen
 from ..sandbox import (
     ALLOWED_GIT_CONFIG_OVERRIDES,
     Sandbox,
     disallowed_git_config_overrides,
+    run_env,
     run_git,
 )
 from ..signatures import TaskSignature
@@ -404,11 +407,42 @@ def _run_tool(command: str, env: Sandbox) -> tuple[str, bool]:
             False,
         )
 
+    if env.checkout is not None:
+        return _run_on_checkout(command, argv[1:], env)
     try:
         result = run_git(argv[1:], cwd=env.work, check=False, timeout=_GIT_TIMEOUT_S)
     except subprocess.TimeoutExpired:
         return f"timed out after {_GIT_TIMEOUT_S:.0f}s", False
     return _format_output(result), result.returncode == 0
+
+
+def _run_on_checkout(command: str, args: list[str], env: Sandbox) -> tuple[str, bool]:
+    """One tool call on an existing checkout: screened, `run_env`, confined.
+
+    On a checkout (#181) the remote is real and on the network, and the agent's commands
+    are model-authored like any body, so they run the way every model-authored command on
+    a checkout runs. They pass `runtime.guard.screen`, the screen bodies pass, which
+    refuses an explicit URL or `git@host:` target, a credential path, a write outside the
+    checkout and a force-push -- on a host with no network namespace that screen is what
+    stops `git push https://...` from carrying the user's code away. They run under
+    `sandbox.run_env`, so the remote's URL reads the trusted pre-fetch's mirror and a
+    commit carries the user's identity, and through `runtime.confine.run_confined`, so
+    there is no network where the host allows that. A harness sandbox keeps the direct,
+    unscreened `run_git` its measurements ran under: its remote is a local path, and it
+    holds nothing to take.
+    """
+    decision = screen(command, env_root=str(env.work))
+    if decision.verdict is Verdict.REFUSE:
+        return _refused(f"guard {decision.reason}"), False
+    confined = run_confined(
+        ["git", *args], cwd=env.work, env=run_env(env), timeout_s=_GIT_TIMEOUT_S
+    )
+    if confined.timed_out or confined.returncode is None:
+        return f"timed out after {_GIT_TIMEOUT_S:.0f}s", False
+    result = subprocess.CompletedProcess(
+        ["git", *args], confined.returncode, confined.stdout, confined.stderr
+    )
+    return _format_output(result), confined.returncode == 0
 
 
 def _refused(reason: str) -> str:
