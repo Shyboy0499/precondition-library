@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from conftest import FakeProvider, gold_program
+from conftest import FakeProvider, gold_program, gold_programs
 from pydantic import BaseModel
 
 from precondition_library.agents.compile import (
@@ -37,6 +37,7 @@ from precondition_library.runtime.replay import replay
 from precondition_library.sandbox import Sandbox
 from precondition_library.signatures import StateFingerprint, TaskSignature
 from precondition_library.tasks.faults import FAULTS
+from precondition_library.tasks.faults.dirty_tree import SPEC as DIRTY_TREE_SPEC
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 COMMITTED_LIBRARY = REPO_ROOT / "library"
@@ -997,3 +998,16 @@ def test_sandboxes_are_cleaned_up() -> None:
         check=True,
     )
     assert ".sandboxes" not in status.stdout
+
+
+def test_a_mislabelled_program_is_told_its_variant_is_what_is_wrong() -> None:
+    """The fifth live run compiled an `aside` body from the aside state and labelled it
+    `stash`. Its preconditions rightly fire on that state, so the refusal names the
+    declared variant rather than sending a revision after the preconditions."""
+    aside = next(p for p in gold_programs("keep_uncommitted_work_and_sync") if p.variant == "aside")
+    seed = next(s for s in range(40) if DIRTY_TREE_SPEC.variant_for_seed(s) == "aside")
+    mislabelled = aside.model_copy(update={"variant": "stash", "status": ProgramStatus.CANDIDATE})
+    admitted, reason = admit(mislabelled, "dirty_tree", seeds=[seed])
+    assert admitted is False
+    assert "same-intent" in reason and "state the program was compiled from" in reason
+    assert "declares variant 'stash'" in reason and "'aside' resolution" in reason
