@@ -95,10 +95,16 @@ def test_the_tracked_remote_decides_among_several(tmp_path) -> None:
     _git(work, "remote", "add", "beta", str(second))
     _git(work, "fetch", "-q", "beta")
     _git(work, "checkout", "-q", "-b", "feature", "--track", "beta/develop")
+    # git >= 2.48 records a fetched remote's HEAD; drop it so the case is "no HEAD"
+    # on every git version (`remote set-head -d` is a no-op where none was recorded).
+    _git(work, "remote", "set-head", "beta", "-d")
 
     found = repository_bindings(work)
     assert found["upstream_remote"] == "beta"
     assert "upstream_branch" not in found, "beta records no HEAD and has no main or master"
+
+    _git(work, "remote", "set-head", "beta", "develop")
+    assert repository_bindings(work)["upstream_branch"] == "develop", "a recorded HEAD decides"
 
 
 def test_nothing_is_guessed_when_the_repository_does_not_say(tmp_path) -> None:
