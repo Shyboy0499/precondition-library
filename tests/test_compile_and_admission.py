@@ -531,17 +531,18 @@ def test_repository_content_travels_in_a_framed_untrusted_block(make_sandbox) ->
 
 
 def _unrelated_state_coverage_program() -> Program:
-    """A `dirty_tree` program whose preconditions accept one submodule state.
+    """A `dirty_tree` `stash` program whose preconditions accept one submodule state.
 
-    Its fault has no ambiguous intent, so it has no siblings, and it rejects every
-    seed-0 unrelated state -- under the old one-seed-per-fault class the gate
-    admitted it. `submodule_moved` seed 1 injects `repin`, which the class now
-    builds and this program accepts.
+    It refuses its sibling `collision` state and fires on `same_file`, which accepts
+    `stash` (ADR-0023), so the sibling class passes it. It rejects every seed-0
+    unrelated state -- under the old one-seed-per-fault class the gate admitted it.
+    `submodule_moved` seed 1 injects `repin`, which the class now builds and this
+    program accepts.
     """
     return Program(
         id="unrelated-state-coverage",
         intent="keep the local work and sync with upstream",
-        variant=None,
+        variant="stash",
         parameters=["upstream_remote", "upstream_branch"],
         preconditions=[
             Predicate(
@@ -556,6 +557,14 @@ def _unrelated_state_coverage_program() -> Program:
                 description="HEAD has no commits upstream lacks.",
                 probe=(
                     'test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -eq 0'
+                ),
+            ),
+            Predicate(
+                name="no_unsaved_file_where_upstream_has_one",
+                description="No unsaved local file sits at a path upstream now tracks.",
+                probe=(
+                    'test -z "$(comm -12 <(git ls-files --others --exclude-standard | sort) '
+                    '<(git ls-tree -r --name-only {upstream_remote}/{upstream_branch} | sort))"'
                 ),
             ),
             Predicate(
@@ -597,15 +606,16 @@ def test_every_state_of_an_unrelated_fault_gets_a_seed() -> None:
     """The class probes one seed per distinct state, not one seed per fault (#75).
 
     `variant_for_seed` is the injector's own mapping, so the distinct values it
-    returns are the states the class can name. `dirty_tree`, `branch_renamed` and
-    `lockfile_conflict` expose no mapping -- their injected states are not declared
-    resolutions -- so they are still probed at seed 0 only. That remainder is
+    returns are the states the class can name; `dirty_tree`'s are its three
+    resolutions since ADR-0027. `branch_renamed` and `lockfile_conflict` expose no
+    mapping -- their injected states are not declared resolutions -- so they are
+    still probed at seed 0 only. That remainder is
     sampling, not coverage, and the rejection reason reports the count actually
     built so the two cannot be confused.
     """
     assert _state_seeds(FAULTS["diverged"]) == [0, 1, 2]
     assert _state_seeds(FAULTS["submodule_moved"]) == [0, 1, 4]
-    assert _state_seeds(FAULTS["dirty_tree"]) == [0]
+    assert _state_seeds(FAULTS["dirty_tree"]) == [0, 2, 5]
     assert _state_seeds(FAULTS["branch_renamed"]) == [0]
     assert _state_seeds(FAULTS["lockfile_conflict"]) == [0]
 
@@ -613,8 +623,8 @@ def test_every_state_of_an_unrelated_fault_gets_a_seed() -> None:
 def test_a_non_seed_0_state_of_an_unrelated_fault_is_rejected(make_sandbox) -> None:
     """Issue #75: a program the old single-seed class admitted is now refused.
 
-    This program's fault has no ambiguous intent, so it has no siblings, and it
-    rejects every seed-0 unrelated state -- the old class built only those, so the
+    This program passes its own fault's sibling class, and it rejects every seed-0
+    unrelated state -- the old class built only those, so the
     gate admitted it. It accepts `submodule_moved` seed 1 (`repin`), which the
     per-state class now builds and rejects. The direct verdicts below are the
     falsification: the seed the class used to check rejects the program, so it was

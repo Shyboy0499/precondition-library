@@ -80,10 +80,7 @@ SUBMODULE_STATES = {
     ),
 }
 
-# keep_uncommitted_work_and_sync (#189): three resolutions, plus the benign state.
-# Declared for the intent `tasks.faults.dirty_tree.INTENT`, which is defined but not yet
-# registered, so it is deliberately not in `STATE_GRID` below: everything that walks the
-# grid reads registered intents, and adding these would put an unmeasured intent in it.
+# keep_uncommitted_work_and_sync (#189, ADR-0027): three resolutions, plus the benign state.
 DIRTY_TREE_STATES = {
     "benign_clean": declared_state(upstream_ahead=1, upstream_touched_files=["app.py"]),
     "disjoint": declared_state(
@@ -110,4 +107,5 @@ DIRTY_TREE_STATES = {
 STATE_GRID: dict[str, dict[str, StateFingerprint]] = {
     "sync_fork_with_upstream": DIVERGED_STATES,
     "restore_submodule_state": SUBMODULE_STATES,
+    "keep_uncommitted_work_and_sync": DIRTY_TREE_STATES,
 }

@@ -4,9 +4,9 @@ Hand-written, obviously-correct resolutions, one per declared variant of the
 ambiguous intents. They exist for a single purpose: to prove the ground-truth
 checkers work before any agent result is believed.
 
-What runs today for the two ambiguous intents is form validation only: gold
-resolutions live in `sync_fork_with_upstream.yaml` and
-`restore_submodule_state.yaml`, and `tests/test_gold_programs.py` validates that
+What runs today for the three ambiguous intents is form validation only: gold
+resolutions live in `sync_fork_with_upstream.yaml`,
+`restore_submodule_state.yaml` and `keep_uncommitted_work_and_sync.yaml`, and `tests/test_gold_programs.py` validates that
 they parse, are well-formed, cover every declared resolution, have distinct
 bodies, and describe themselves without naming a resolution — a description is
 part of the text arm 2 compares a request against (`library._program_text`), so a

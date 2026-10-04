@@ -888,7 +888,7 @@ def test_an_excluded_fault_is_refused_loudly(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="excluded"):
         run_benchmark(
             arms=[Arm.REACT],
-            faults=["dirty_tree"],
+            faults=["branch_renamed"],
             occurrences=1,
             seeds=[0],
             out=out,
@@ -900,7 +900,7 @@ def test_an_excluded_fault_is_refused_loudly(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="excluded"):
         run_episode(
             Arm.REACT,
-            "dirty_tree",
+            "branch_renamed",
             0,
             1,
             role=OccurrenceRole.VARIANT,

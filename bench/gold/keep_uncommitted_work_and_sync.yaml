@@ -1,10 +1,8 @@
 # Hand-written resolutions for the `keep_uncommitted_work_and_sync` intent (#189).
 #
-# The intent is defined in tasks/faults/dirty_tree.py and not yet registered: until
-# it is, nothing measured dispatches these, and the dirty_tree fault stays excluded
-# from the benchmark. They exist now so that the acceptable sets the intent declares
-# can be pinned against the fault's own checker by replay
-# (tests/test_dirty_tree_intent.py), the way ADR-0023 pins the measured intents'.
+# The intent is defined in tasks/faults/dirty_tree.py and registered (ADR-0027). The
+# acceptable sets it declares are pinned against the fault's own checker by replay
+# (tests/test_dirty_tree_intent.py), the way ADR-0023 pins the other intents'.
 #
 # Preconditions are probes, so they must agree with the intent's decision rules
 # (decided_by in tasks/faults/dirty_tree.py). They are written independently --

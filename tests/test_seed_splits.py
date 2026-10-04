@@ -51,6 +51,9 @@ DECLARED_ROLE_COUNTS = {
     ("tune", "submodule_moved"): (7, 9),
     ("eval", "diverged"): (32, 8),
     ("eval", "submodule_moved"): (15, 25),
+    ("smoke", "dirty_tree"): (4, 0),
+    ("tune", "dirty_tree"): (10, 6),
+    ("eval", "dirty_tree"): (14, 26),
 }
 
 

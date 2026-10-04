@@ -28,9 +28,10 @@ from precondition_library.library import Library
 from precondition_library.program import Program, ProgramStatus
 from precondition_library.runtime.probes import evaluate_preconditions
 from precondition_library.tasks.faults.diverged import INTENT as SYNC_INTENT
+from precondition_library.tasks.registry import ambiguous_intents
 from precondition_library.tasks.state_grid import STATE_GRID
 
-FAULTS = ["diverged", "submodule_moved"]
+FAULTS = sorted(intent.fault for intent in ambiguous_intents())
 SEEDS = [0, 1]
 
 
@@ -44,8 +45,8 @@ def _admit(library: Library, program: Program, **provenance: str) -> None:
 
 def _gold_library(root: Path, **kwargs) -> Library:
     library = Library(root, evaluate_preconditions=evaluate_preconditions, **kwargs)
-    for intent in ("sync_fork_with_upstream", "restore_submodule_state"):
-        for program in gold_programs(intent):
+    for intent in ambiguous_intents():
+        for program in gold_programs(intent.name):
             _admit(library, program)
     return library
 
@@ -72,13 +73,13 @@ def test_each_intent_is_paired_with_its_own_state_and_the_fault_free_sandbox(
 
 
 def test_another_faults_unlabelled_state_is_not_a_pair(gold_outcomes) -> None:
-    """Neither measured intent labels the other's states, so none is paired with it.
+    """No measured intent labels another's states, so none is paired with them.
 
     Pairing a submodule request with a diverged repository would score arm 3 -- which
     reads only the environment, by design -- for firing `merge` where no episode would
     ever ask it to choose (ADR-0022).
     """
-    own = {"sync_fork_with_upstream": "diverged", "restore_submodule_state": "submodule_moved"}
+    own = {intent.name: intent.fault for intent in ambiguous_intents()}
     for entry in gold_outcomes.pairs:
         if entry.environment == FAULT_FREE:
             assert entry.pair.correct_variant is None, entry

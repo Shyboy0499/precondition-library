@@ -29,17 +29,22 @@ from precondition_library.program import Predicate
 def test_the_universe_is_clean_plus_every_faults_distinct_states() -> None:
     universe = sampled_states()
     assert universe[0] == ("", 0), "the clean sandbox is first"
-    assert len(universe) == 10, "clean + 3 diverged + 3 submodule + 3 single-state faults"
+    assert len(universe) == 12, (
+        "clean + 3 diverged + 3 submodule + 3 dirty_tree + 2 single-state faults"
+    )
     # No duplicate (fault, seed) entries -- each sampled state is distinct.
     assert len(set(universe)) == len(universe)
 
 
-@pytest.mark.parametrize("intent", ["sync_fork_with_upstream", "restore_submodule_state"])
+@pytest.mark.parametrize(
+    "intent",
+    ["sync_fork_with_upstream", "restore_submodule_state", "keep_uncommitted_work_and_sync"],
+)
 def test_a_gold_program_fires_on_exactly_its_own_state(intent: str) -> None:
-    """Each gold resolution matches one sampled state -- its own -- so breadth is 0.10."""
+    """Each gold resolution matches one sampled state -- its own -- so breadth is 1/12."""
     for program in gold_programs(intent):
         fired, total, where = precondition_breadth(program)
-        assert total == 10
+        assert total == 12
         assert fired == 1, f"{program.id} fired on {where}, expected only its own state"
         assert fired <= BREADTH_CAP * total
 
@@ -47,7 +52,7 @@ def test_a_gold_program_fires_on_exactly_its_own_state(intent: str) -> None:
 def test_an_over_broad_precondition_is_measured_over_cap_and_refused() -> None:
     """A precondition that holds everywhere fires on the whole universe and is refused.
 
-    `true` holds in every sandbox, so the set matches all ten sampled states --
+    `true` holds in every sandbox, so the set matches all twelve sampled states --
     far over the cap. The measurement sees that, and admission refuses the program
     (here on the clean-sandbox class, which is the sharpest reason; the breadth cap
     is the holistic backstop behind it).
@@ -58,7 +63,7 @@ def test_an_over_broad_precondition_is_measured_over_cap_and_refused() -> None:
         }
     )
     fired, total, _where = precondition_breadth(program)
-    assert fired == total == 10
+    assert fired == total == 12
     assert fired > BREADTH_CAP * total
 
     admitted, reason = admit(program, "diverged", seeds=[1])

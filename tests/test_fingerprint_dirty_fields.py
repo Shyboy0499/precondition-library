@@ -1,4 +1,4 @@
-"""The fingerprint observes uncommitted work and untracked collisions, without rendering them yet.
+"""The fingerprint observes uncommitted work and untracked collisions, and arm 2 sees both.
 
 #189 gives the dirty-tree fault an intent whose rules must read two facts the
 fingerprint did not have: which tracked files carry uncommitted changes, and which
@@ -6,15 +6,16 @@ untracked files sit at a path upstream's tree holds. These tests pin:
 
 * both are observed from git on a repository built by hand to have each;
 * both are empty where there is nothing uncommitted;
-* **neither reaches `as_text`**, arm 2's whole view of state, until the intent is
-  registered -- so every measured arm-2 text, and every measured number, is unchanged.
+* **both reach `as_text`**, arm 2's whole view of state, now that the intent is
+  registered (ADR-0027): a field the rules decide on and arm 2 cannot read would make
+  arm 2 blind by construction rather than by its mechanism.
 """
 
 from __future__ import annotations
 
 from precondition_library.sandbox import run_git
-from precondition_library.signatures import _NOT_YET_RENDERED, StateFingerprint
-from precondition_library.tasks.state_grid import STATE_GRID
+from precondition_library.signatures import StateFingerprint
+from precondition_library.tasks.state_grid import DIRTY_TREE_STATES
 
 
 def _git(cwd, *args: str) -> str:
@@ -53,12 +54,7 @@ def test_a_clean_tree_has_neither(make_sandbox) -> None:
     assert state.dirty_files == [] and state.untracked_upstream_collisions == []
 
 
-def test_arm_2_does_not_see_them_until_the_intent_is_registered() -> None:
-    assert _NOT_YET_RENDERED == {"dirty_files", "untracked_upstream_collisions"}
-    for states in STATE_GRID.values():
-        for state in states.values():
-            text = state.as_text()
-            assert "dirty_files" not in text and "untracked_upstream_collisions" not in text
+def test_arm_2_sees_them_now_the_intent_is_registered() -> None:
     seen = StateFingerprint(
         dirty_worktree=True,
         branch="main",
@@ -69,4 +65,15 @@ def test_arm_2_does_not_see_them_until_the_intent_is_registered() -> None:
         dirty_files=["app.py"],
         untracked_upstream_collisions=["notes/tracked.txt"],
     )
-    assert "notes/tracked.txt" not in seen.as_text(), "observed, not shown to arm 2"
+    lines = seen.as_text().splitlines()
+    assert [line.split(":", 1)[0] for line in lines] == list(StateFingerprint.model_fields)
+    assert lines[-2:] == ["dirty_files: app.py", "untracked_upstream_collisions: notes/tracked.txt"]
+
+
+def test_every_dirty_tree_state_renders_what_decides_it() -> None:
+    """The fields the intent's rules read are in each declared state's text."""
+    collision = DIRTY_TREE_STATES["collision"].as_text()
+    assert "untracked_upstream_collisions: notes/scratch.txt" in collision
+    assert "dirty_files: app.py" in DIRTY_TREE_STATES["same_file"].as_text()
+    assert "dirty_files: docs/readme.md" in DIRTY_TREE_STATES["disjoint"].as_text()
+    assert "untracked_upstream_collisions: (none)" in DIRTY_TREE_STATES["disjoint"].as_text()

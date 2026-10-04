@@ -19,7 +19,7 @@ now differ in content. This module keeps the direct pin:
 * `test_every_resolution_reaches_four_real_environments` builds four real
   sandboxes per resolution, one per distinct drawn instance identity, and asserts
   they are four real environments. That is the owner's approved target (4 per
-  resolution, 24 across the two measurable faults) measured from sandboxes rather
+  resolution, 36 across the three measurable faults) measured from sandboxes rather
   than from the drawn identity alone.
 
 The signature is the working tree's file bodies, names and counts, the conflict
@@ -30,12 +30,11 @@ must not be satisfiable by re-stamping commits. The sandbox's
 signature -- distinct `instance_for_seed` values build distinct real environments
 -- is the `bench/instance_diversity.py` measurement, run over all 60 plan seeds.
 
-Only the two faults whose intent is ambiguous are covered, because they are the
-only ones with a resolution to be the same or different. The three faults in
+Only the faults whose intent is ambiguous are covered, because they are the only
+ones with a resolution to be the same or different. The two faults in
 `EXCLUDED_FROM_BENCHMARK` have no resolution (`variant_for_seed` is `None`), so
 grouping their seeds by one would assert a property about a label that does not
-exist -- and two of those faults already vary content by seed, which would make
-the assertion pass for a reason unrelated to resolution diversity.
+exist.
 """
 
 from __future__ import annotations
@@ -57,8 +56,8 @@ TARGET_INSTANCES_PER_RESOLUTION = 4
 """The owner's approved target: four independent instances per resolution.
 
 ADR-0005 fixes the approach and leaves the count to "whatever the declared draw
-yields"; the target is the number the work is judged against (4 x 6 resolutions =
-24 environments, up from 6).
+yields"; the target is the number the work is judged against (4 x 9 resolutions =
+36 environments since `dirty_tree` was registered, ADR-0027).
 """
 
 
@@ -78,8 +77,19 @@ def _same_resolution_cases() -> list[tuple[str, str, int, int]]:
             if resolution is not None:
                 by_resolution[resolution].append(seed)
         for resolution, seeds in sorted(by_resolution.items()):
-            if len(seeds) >= 2:
-                cases.append((fault, resolution, seeds[0], seeds[1]))
+            # The first later seed that draws a different instance: one that draws the
+            # same identity is a replay of the same environment by design (ADR-0005),
+            # which `dirty_tree/aside`'s four-value draw makes likely among few seeds.
+            other = next(
+                (
+                    s
+                    for s in seeds[1:]
+                    if spec.instance_for_seed(s) != spec.instance_for_seed(seeds[0])
+                ),
+                None,
+            )
+            if other is not None:
+                cases.append((fault, resolution, seeds[0], other))
     return cases
 
 
@@ -142,7 +152,9 @@ def test_same_resolution_seeds_build_different_environments(
     environment, so a signature that moved only when a SHA did would let cosmetic
     variation pass as diversity. The property is what the mismatch comparison's
     unit of analysis needs: a second observation of a resolution has to be a second
-    environment, or it is the same observation counted twice.
+    environment, or it is the same observation counted twice. The pair is two seeds
+    whose drawn instance identities differ; a seed repeating an identity is a replay
+    of the same environment by design, and `occurrence_roles` counts it as one.
 
     This passed as a strict `xfail` before the axis draw landed; the marker was
     deleted in the change that made it pass, and it passes for the real reason --
