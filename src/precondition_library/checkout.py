@@ -35,8 +35,10 @@ history. `destroy` removes the scratch root and never the checkout.
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import tempfile
+from dataclasses import replace
 from pathlib import Path
 
 from .runtime.probes import repository_bindings
@@ -128,3 +130,32 @@ def open_checkout(work: Path, *, fetch: bool = True, scratch: Path | None = None
             parameters=parameters, identity=_identity(work), redirects=redirects
         ),
     )
+
+
+SNAPSHOT_NAME = "snapshot"
+"""The directory under the scratch root that holds a checkout's copy for probing."""
+
+
+def snapshot(env: Sandbox) -> Sandbox:
+    """A copy of the checkout `env` to probe, so a probe that writes cannot touch the original.
+
+    A probe that writes is refused but not undone (`runtime.probes`), so dispatching on a
+    checkout probes this copy. It copies the whole working tree with its `.git` -- the
+    uncommitted state is part of what a precondition reads, and a fresh clone would lose
+    it -- into the scratch root, so `env.destroy` removes it too. The copy keeps the
+    checkout's upstream mirror and identity, and binds `work_dir` to itself.
+
+    A linked worktree (whose `.git` is a file pointing into another repository's git
+    directory) is refused: its copy would still write into that shared directory.
+    """
+    context = env.checkout
+    if context is None:
+        raise ValueError("snapshot copies an existing checkout; a harness sandbox is disposable")
+    if (env.work / ".git").is_file():
+        raise NotACheckoutError(
+            f"{env.work} is a linked worktree; its copy would share the original git directory"
+        )
+    copy = env.root / SNAPSHOT_NAME
+    shutil.copytree(env.work, copy, symlinks=True)
+    parameters = {**context.parameters, "work_dir": str(copy)}
+    return replace(env, work=copy, checkout=replace(context, parameters=parameters))
