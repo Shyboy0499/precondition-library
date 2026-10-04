@@ -280,11 +280,13 @@ sandbox, one arm acts, the fault's own checker grades the result, and a ledger r
 is written; `bench/report.py` turns the ledger into the ablation table and the two
 demo figures. The suite covering that path is green in
 [CI](https://github.com/Shyboy0499/precondition-library/actions/workflows/ci.yml),
-and the seed sets a run would use are already fixed in `bench/splits.py`. **One
-smoke run against a real model has happened** (see
-[First demonstration](#first-demonstration)); it demonstrates the mechanism, but
-the pre-registered comparison has not been run and nothing it produced is a result
-for the primary claim.
+and the seed sets a run would use are already fixed in `bench/splits.py`. **Three
+live runs against a real model have happened**, all at smoke scale and all tracked
+on #163 (the first is written up under
+[First demonstration](#first-demonstration)). They exercise the whole pipeline --
+build, frozen benchmark, Figure 1 from a compiled library, the online arms -- and each
+found defects that were then fixed. None is the pre-registered full-scale run, so
+nothing they produced is a result for the primary claim.
 
 What is done is deliberately not tracked here: a table in this file went stale the
 last time a module moved, which is why it is gone. Status is recorded in two
@@ -296,16 +298,14 @@ places, both checked:
   fails when the declaration and the code disagree.
 - **What is outstanding.** The
   [issue tracker](https://github.com/Shyboy0499/precondition-library/issues). The
-  detail lives there, not here: #4 and #5 gate the primary comparison (arm
-  admission against one frozen library, and the dispatch-level harness and
-  coverage sweep); #6 owns the held-out axes beyond Tier 1 (file names, submodule
-  paths, branch names), which need probe and body parameter binding first — the
-  unit of analysis is now the environment ADR-0005 parameterised, not the fault
-  seed; #7, #8, #9 and #10
-  are the control baselines, cost ledger, ground-truth decoupling and safety
-  hardening behind them. Which faults are still excluded from dispatch
-  measurement is declared in code, not here: `tasks/registry.py`'s
-  `EXCLUDED_FROM_BENCHMARK`, asserted against every fault by a test.
+  detail lives there, not here. The primary comparison's code is in place and #5
+  stays open until the pre-registered full-scale run exists (the one command is in
+  [Running it](#running-it)); #163 records the live runs so far. Using the library on
+  a repository of your own is #181 (dispatch, and replay on confirmation) and #188
+  (learning a program there).
+  Which faults are still excluded from dispatch measurement is declared in code, not
+  here: `tasks/registry.py`'s `EXCLUDED_FROM_BENCHMARK`, asserted against every fault
+  by a test; #189, #190 and #191 would bring the three excluded ones in.
 
 ## First demonstration
 
