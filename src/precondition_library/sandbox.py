@@ -238,6 +238,38 @@ def git_env(home: Path | None = None) -> dict[str, str]:
     return env
 
 
+HARNESS_UPSTREAM_REF = "upstream/main"
+"""The ref standing for upstream's tip in a sandbox `create` built: remote `upstream`, branch
+`main`, the same fixed vocabulary `runtime.probes.bindings` supplies."""
+
+
+class NoUpstreamError(ValueError):
+    """A checkout whose upstream remote or branch could not be derived, so nothing compares."""
+
+
+def upstream_ref(env: Sandbox) -> str:
+    """The remote-tracking ref that stands for upstream's tip in `env`.
+
+    `upstream/main` in a harness sandbox. On a checkout (#181), `<remote>/<branch>` from the
+    parameters `runtime.probes.repository_bindings` derived -- a fork's `origin/trunk` is
+    what its upstream is, and reading `upstream/main` there would compare against a ref
+    that does not exist, or worse, one that exists and is not upstream. Raises
+    `NoUpstreamError` when the checkout settles no upstream remote or branch: every
+    comparison against upstream is then undefined, and a fingerprint that guessed would
+    label a state the repository is not in.
+    """
+    if env.checkout is None:
+        return HARNESS_UPSTREAM_REF
+    remote = env.checkout.parameters.get("upstream_remote")
+    branch = env.checkout.parameters.get("upstream_branch")
+    if remote is None or branch is None:
+        raise NoUpstreamError(
+            f"{env.work} has no derivable upstream (remote {remote!r}, branch {branch!r}); "
+            f"nothing in it can be compared against upstream"
+        )
+    return f"{remote}/{branch}"
+
+
 _PINNED_DATES = ("GIT_AUTHOR_DATE", "GIT_COMMITTER_DATE")
 
 
