@@ -190,3 +190,25 @@ def test_the_turn_budget_also_ends_in_a_last_word() -> None:
     outcome, transcript = _solve(provider, max_steps=2)
     assert outcome is EpisodeOutcome.SUCCESS
     assert transcript[-1]["last_word"] is True
+
+
+# --- the budget, told up front (eighth live run) -----------------------------
+
+
+def test_the_prompt_states_the_budget_the_solve_runs_with() -> None:
+    """An agent that spent 20 of 24 calls exploring was refused the end of its fix."""
+    provider = FakeProvider(_turn(_finish()))
+    _, transcript = _solve(provider, max_tool_calls=10)
+    assert "at most 10 tool calls" in transcript[0]["content"]
+    assert "at most 10 tool calls" in provider.calls[0]["system"]
+    assert "at most 24 tool calls" in SYSTEM_PROMPT, "the default every arm uses"
+
+
+def test_the_reminder_leaves_room_for_a_fix_of_several_steps() -> None:
+    """With eight calls left, not four: the eighth run's agent needed six to finish."""
+    provider = FakeProvider(
+        _turn(*[_git("git status") for _ in range(16)]),
+        _turn(_finish()),
+    )
+    _, transcript = _solve(provider, max_steps=12, max_tool_calls=24)
+    assert sum(1 for entry in transcript if entry.get("nudge")) == 1
