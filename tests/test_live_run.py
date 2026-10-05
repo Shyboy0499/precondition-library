@@ -202,7 +202,7 @@ def test_the_key_comes_from_a_file_and_is_never_printed(monkeypatch, tmp_path, c
 
     seen: dict = {}
 
-    def fake_run(plan, *, provider, model, out):
+    def fake_run(plan, *, provider, model, out, resume=False):
         seen.update(plan=plan, provider=provider, model=model)
         return live.LiveSummary(
             model=model,

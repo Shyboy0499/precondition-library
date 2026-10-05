@@ -30,6 +30,15 @@ feedback, so it stays in the two-sided library and the positive-only one keeps t
 compile. Each root gets a `build.json` naming its gate; the runner reads it to label
 rows.
 
+**Resuming an interrupted build.** A live build is two hours of model calls, and the
+fifth and ninth live runs' containers restarted part-way through. Each finished episode
+is therefore committed to `<ledger stem>.progress.jsonl` -- its programs as built, once
+they are in both roots -- and `resume=True` skips every committed episode, re-reading
+its programs from there, so the fallback seeds and the report come out as one
+uninterrupted build would make them. An episode cut off mid-way left no commit, so it
+runs again; the programs it copied, if any, are removed first. Its ledger row stays if
+it was written: the row is what the attempt spent.
+
 Building needs a model: the solves and compiles are LLM calls. This module takes the
 `provider` as the runner does and reads no environment, so it runs wherever a key is
 configured; `tests/test_build_library.py` exercises it with a scripted provider.
@@ -96,6 +105,7 @@ def build_library(
     model: str,
     seeds: tuple[int, ...] | None = None,
     positive_only_root: Path | None = None,
+    resume: bool = False,
 ) -> BuildReport:
     """Solve, compile and gate every `(fault, seed)` into one frozen library at `root`.
 
@@ -113,17 +123,29 @@ def build_library(
     (ADR-0030), the two-sided library holds the revision: telling the compiler why is
     part of what that gate does, and the positive-only gate has no negative side to
     tell it anything.
+
+    `resume` continues a build that was interrupted, from the episodes its progress file
+    committed; see the module docstring.
     """
     _require_measurable(faults)
-    for target in (root, positive_only_root):
+    progress = progress_path(ledger)
+    committed = _read_progress(progress) if resume else {}
+    if not resume and progress.exists():
+        raise ValueError(f"{progress} records an earlier build; pass resume=True to continue it")
+    for target, key in ((root, "programs"), (positive_only_root, "ungated")):
         if target is None:
             continue
-        existing = Library(target).load_all()
-        if existing:
-            raise ValueError(
-                f"{target} already holds {len(existing)} program(s); a frozen library is built "
-                f"once into a directory with none, so its contents are exactly this build's"
-            )
+        if resume:
+            kept = {p["program_id"] for entry in committed.values() for p in entry[key]}
+            _remove_uncommitted(target, kept)
+        else:
+            existing = Library(target).load_all()
+            if existing:
+                raise ValueError(
+                    f"{target} already holds {len(existing)} program(s); a frozen library is "
+                    f"built once into a directory with none, so its contents are exactly this "
+                    f"build's"
+                )
         target.mkdir(parents=True, exist_ok=True)
 
     built: list[BuiltProgram] = []
@@ -137,6 +159,15 @@ def build_library(
             for seed, resolution, request in group:
                 run_seeds.append(seed)
                 occurrence = len(run_seeds)
+                done = committed.get((fault, seed))
+                if done is not None:
+                    built.extend(BuiltProgram.model_validate(p) for p in done["programs"])
+                    ungated.extend(BuiltProgram.model_validate(p) for p in done["ungated"])
+                    if any(p["admitted"] for p in done["programs"]):
+                        break
+                    continue
+                episode_built: list[BuiltProgram] = []
+                episode_ungated: list[BuiltProgram] = []
                 with tempfile.TemporaryDirectory(prefix="build-library-") as scratch:
                     library = Library(Path(scratch), evaluate_preconditions=evaluate_preconditions)
                     record = run_episode(
@@ -157,7 +188,7 @@ def build_library(
                         shutil.copytree(Path(scratch) / program.id, root / program.id)
                         admitted = program.status is ProgramStatus.ADMITTED
                         admitted_here = admitted_here or admitted
-                        built.append(
+                        episode_built.append(
                             BuiltProgram(
                                 fault=fault,
                                 seed=seed,
@@ -168,11 +199,14 @@ def build_library(
                         )
                         if positive_only_root is not None:
                             first = library.first_compile(program.id)
-                            ungated.append(
+                            episode_ungated.append(
                                 _gate_positive_only(
                                     first, fault, seed, positive_only_root
                                 ).model_copy(update={"resolution": resolution})
                             )
+                _commit(progress, fault, seed, episode_built, episode_ungated)
+                built.extend(episode_built)
+                ungated.extend(episode_ungated)
                 if admitted_here:
                     break
 
@@ -195,6 +229,65 @@ def build_library(
         library_hash=Library(root).library_hash(),
         positive_only=second,
     )
+
+
+def progress_path(ledger: Path) -> Path:
+    """Where a build commits each finished episode, beside its ledger."""
+    return ledger.with_name(f"{ledger.stem}.progress.jsonl")
+
+
+def _commit(
+    progress: Path,
+    fault: str,
+    seed: int,
+    programs: list[BuiltProgram],
+    ungated: list[BuiltProgram],
+) -> None:
+    """Record that `(fault, seed)` finished, with what it put in each root."""
+    entry = {
+        "fault": fault,
+        "seed": seed,
+        "programs": [program.model_dump() for program in programs],
+        "ungated": [program.model_dump() for program in ungated],
+    }
+    with progress.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(entry) + "\n")
+
+
+def _read_progress(progress: Path) -> dict[tuple[str, int], dict]:
+    """Each committed episode's entry, by `(fault, seed)`. A last line cut off by the
+    interruption was never a commit, so it is ignored."""
+    if not progress.is_file():
+        return {}
+    committed: dict[tuple[str, int], dict] = {}
+    for line in progress.read_text(encoding="utf-8").splitlines():
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        committed[(entry["fault"], entry["seed"])] = entry
+    return committed
+
+
+_PROGRAM_FILES = frozenset({"program.yaml", "history.jsonl"})
+
+
+def _remove_uncommitted(root: Path, kept: set[str]) -> None:
+    """Remove the program directories under `root` that no committed episode built: what
+    an interrupted episode had copied. Anything that is not a program directory is left,
+    and a directory holding other files is refused rather than deleted."""
+    if not root.is_dir():
+        return
+    for path in sorted(root.iterdir()):
+        if not path.is_dir() or path.name in kept:
+            continue
+        names = {child.name for child in path.iterdir()}
+        if not names <= _PROGRAM_FILES:
+            raise ValueError(
+                f"{path} is not a program this build committed, and holds {sorted(names)}; "
+                "a resumed build removes only the program directories it wrote"
+            )
+        shutil.rmtree(path)
 
 
 def _gate_positive_only(candidate: Program, fault: str, seed: int, root: Path) -> BuiltProgram:
