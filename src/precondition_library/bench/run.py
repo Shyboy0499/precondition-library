@@ -994,6 +994,7 @@ def _learn_from_solution(
     refused_states: list[StateFingerprint] = []
     first_refused: tuple[Program, str] | None = None
     revision_failure: str | None = None
+    unparsed: tuple[str, str] | None = None
     for attempt in range(1, COMPILE_ATTEMPTS + 1):
         try:
             compiled = compile_program(
@@ -1005,11 +1006,15 @@ def _learn_from_solution(
                 variant_ids=[variant.id for variant in intent.variants],
                 revision=revision,
                 refused_states=refused_states,
+                unparsed=unparsed,
             )
         except Exception as exc:
             result.compile_attempts = attempt
             if program is None:
-                _record_compile_failure(result, f"compile raised {type(exc).__name__}: {exc}")
+                raised = f"compile raised {type(exc).__name__}: {exc}"
+                if unparsed is not None:
+                    raised = f"{unparsed[1]}; the repair {raised.removeprefix('compile ')}"
+                _record_compile_failure(result, raised)
                 return
             # The revision failed; the refused program and its reason stand, and the row
             # says the revision was tried and why it produced nothing.
@@ -1017,10 +1022,16 @@ def _learn_from_solution(
             break
         result.compile_attempts = attempt
         if not compiled.ok or compiled.program is None:
+            reason = compiled.reason or "the compile returned no program"
             if program is None:
-                _record_compile_failure(
-                    result, compiled.reason or "the compile returned no program"
-                )
+                if attempt < COMPILE_ATTEMPTS:
+                    # A reply that did not parse gets the one retry, shown what it wrote
+                    # and why it was not a program (ADR-0030).
+                    unparsed = (compiled.reply, reason)
+                    continue
+                if unparsed is not None:
+                    reason = f"{unparsed[1]}; the repair did not parse either: {reason}"
+                _record_compile_failure(result, reason)
                 return
             revision_failure = (
                 f"the revision did not parse: {compiled.reason or 'no program returned'}"
