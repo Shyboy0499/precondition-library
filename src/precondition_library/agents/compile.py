@@ -131,9 +131,21 @@ Rules:
   the shape this rejects.
 - A pattern can only require that something is present. To check that something is
   absent, write the probe so it exits 0 only then, e.g.
-  `! git stash list | grep -q 'wip'`, and leave expect_pattern unset. Many git
+  `! git stash list | grep -q 'wip'` (quoted in YAML, as the next rule says), and
+  leave expect_pattern unset. Many git
   commands exit 0 whether or not they print anything (`git stash list`,
   `git status --porcelain`), so their exit code alone says nothing.
+- Shell is not YAML-safe. A probe that starts with `!`, `[`, `{`, `"`, `'`, `*`,
+  `&`, `%`, `@`, `|`, `>` or a backtick, or that contains `: ` or ` #`, means
+  something else to YAML: a leading `!` is a tag and is silently DROPPED, which
+  inverts the check, `[` starts a list, ` #` starts a comment that cuts the
+  command short. Write such a probe as a block scalar, the command on the next
+  line, indented:
+
+      probe: |-
+        ! git stash list | grep -q 'wip'
+
+  A reply that uses a YAML tag, anchor or alias is refused.
 - A probe -- a precondition or a postcondition -- must only read. It runs between
   two snapshots of the repository, and a probe that changes a ref, the index, the
   config or a file (`git fetch`, `git add`, a redirect into the tree) is refused,
@@ -390,11 +402,11 @@ def compile_program(
         ],
     )
 
-    document = _parse_document(completion.text)
+    document, unreadable = _parse_document(completion.text)
     if document is None:
         return CompileResult(
             ok=False,
-            reason="the reply was not a YAML mapping, so it is not a Program",
+            reason=f"the reply was not a YAML mapping, so it is not a Program: {unreadable}",
             usage=completion.usage,
             reply=completion.text[:_REPLY_CAP],
         )
@@ -959,13 +971,20 @@ def _declared_variant_ids(fault_name: str) -> set[str] | None:
     return None if intent is None else {variant.id for variant in intent.variants}
 
 
-def _parse_document(text: str) -> dict[str, Any] | None:
-    """The YAML mapping in `text`, or None when there is not one.
+def _parse_document(text: str) -> tuple[dict[str, Any] | None, str]:
+    """The YAML mapping in `text`, or None and why there is not one.
 
     Fenced replies are unwrapped because a model asked for "a YAML document"
     often wraps it in a markdown fence anyway. Any parse error or non-mapping
     top level returns None so the caller records a failed compile rather than
-    raising.
+    raising, and the reason -- YAML's own message, with its line -- goes to the
+    repair retry, which cannot fix a reply it is only told "did not parse".
+
+    **A tag, anchor or alias is refused** rather than resolved. Shell reads
+    `! cmd` as "cmd fails"; YAML reads a plain `! cmd` as the non-specific tag `!`
+    on the scalar `cmd`, and drops the `!`. The probe then checks the opposite of
+    what the model wrote, and nothing downstream can see it. No field of a
+    program is a tag, anchor or alias, so refusing them all costs nothing.
     """
     stripped = text.strip()
     if stripped.startswith("```"):
@@ -974,7 +993,21 @@ def _parse_document(text: str) -> dict[str, Any] | None:
             lines = lines[:-1]
         stripped = "\n".join(lines)
     try:
+        for event in yaml.parse(stripped, Loader=yaml.SafeLoader):
+            mark = event.start_mark.line + 1
+            if isinstance(event, yaml.AliasEvent):
+                return None, f"line {mark} uses a YAML alias (`*`); quote it as a block scalar"
+            if getattr(event, "anchor", None) is not None:
+                return None, f"line {mark} uses a YAML anchor (`&`); quote it as a block scalar"
+            if isinstance(event, (yaml.ScalarEvent, yaml.CollectionStartEvent)) and event.tag:
+                return None, (
+                    f"line {mark} uses the YAML tag `{event.tag}`, which YAML drops from the "
+                    "value -- a probe starting with `!` loses its negation; write it as a "
+                    "block scalar (`probe: |-`)"
+                )
         document = yaml.safe_load(stripped)
-    except yaml.YAMLError:
-        return None
-    return document if isinstance(document, dict) else None
+    except yaml.YAMLError as error:
+        return None, " ".join(str(error).split())
+    if not isinstance(document, dict):
+        return None, f"its top level is a {type(document).__name__}, not a mapping"
+    return document, ""
