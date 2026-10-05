@@ -24,14 +24,15 @@ from precondition_library.agents.compile import (
     sampled_states,
 )
 from precondition_library.program import Predicate
+from precondition_library.tasks.faults import FAULTS
 
 
 def test_the_universe_is_clean_plus_every_faults_distinct_states() -> None:
     universe = sampled_states()
     assert universe[0] == ("", 0), "the clean sandbox is first"
-    assert len(universe) == 15, (
-        "clean + 3 each for diverged, submodule, dirty_tree and branch_renamed "
-        "+ 2 for lockfile_conflict, one per resolution"
+    assert len(universe) == 16, (
+        "clean + 3 each for diverged, submodule, dirty_tree, branch_renamed and "
+        "lockfile_conflict: every injected state, not one per label"
     )
     # No duplicate (fault, seed) entries -- each sampled state is distinct.
     assert len(set(universe)) == len(universe)
@@ -48,18 +49,29 @@ def test_the_universe_is_clean_plus_every_faults_distinct_states() -> None:
     ],
 )
 def test_a_gold_program_fires_on_exactly_its_own_state(intent: str) -> None:
-    """Each gold resolution matches one sampled state -- its own -- so breadth is 1/15."""
+    """Each gold resolution matches the sampled states labelled with it, and no other.
+
+    One state for most; lockfile's `take_upstream` labels two (`additions_only` and
+    `upstream_removed`), both of which the universe now builds.
+    """
+    universe = sampled_states()
     for program in gold_programs(intent):
+        own = sum(
+            1
+            for fault, seed in universe
+            if fault == program.provenance.fault
+            and FAULTS[fault].variant_for_seed(seed) == program.variant
+        )
         fired, total, where = precondition_breadth(program)
-        assert total == 15
-        assert fired == 1, f"{program.id} fired on {where}, expected only its own state"
+        assert total == 16
+        assert fired == own, f"{program.id} fired on {where}, expected only its own states"
         assert fired <= BREADTH_CAP * total
 
 
 def test_an_over_broad_precondition_is_measured_over_cap_and_refused() -> None:
     """A precondition that holds everywhere fires on the whole universe and is refused.
 
-    `true` holds in every sandbox, so the set matches all fifteen sampled states --
+    `true` holds in every sandbox, so the set matches all sixteen sampled states --
     far over the cap. The measurement sees that, and admission refuses the program
     (here on the clean-sandbox class, which is the sharpest reason; the breadth cap
     is the holistic backstop behind it).
@@ -70,7 +82,7 @@ def test_an_over_broad_precondition_is_measured_over_cap_and_refused() -> None:
         }
     )
     fired, total, _where = precondition_breadth(program)
-    assert fired == total == 15
+    assert fired == total == 16
     assert fired > BREADTH_CAP * total
 
     admitted, reason = admit(program, "diverged", seeds=[1])

@@ -94,6 +94,19 @@ class FaultSpec:
         """
         return None
 
+    def state_for_seed(self, seed: int) -> str | None:
+        """Which injected state this fault's injector builds at `seed`, if it says.
+
+        Finer than `variant_for_seed` where two states share a label: lockfile's
+        `additions_only` and `upstream_removed` both resolve to `take_upstream`, but
+        `keep_local` is acceptable in the first and wrong in the second. Admission
+        enumerates states with this, so it builds both (the eighth live run admitted a
+        `keep_local` program that fired on every `upstream_removed` eval state, because
+        admission had built only `additions_only`). A fault that returns None is
+        enumerated by its labels, as before.
+        """
+        return None
+
     def instance_for_seed(self, seed: int) -> str | None:
         """The instance identity this fault's injector builds at `seed`, if any.
 

@@ -394,6 +394,9 @@ class DivergedFault(FaultSpec):
         """Delegate to the intent so there is one source of truth for phrasing."""
         return INTENT.task_text(seed)
 
+    def state_for_seed(self, seed: int) -> str:
+        return state_for_seed(seed)
+
     def variant_for_seed(self, seed: int) -> str:
         """The resolution `state_for_seed` makes correct at `seed`.
 

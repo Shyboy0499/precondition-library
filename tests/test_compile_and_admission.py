@@ -625,7 +625,7 @@ def test_every_state_of_an_unrelated_fault_gets_a_seed() -> None:
     assert _state_seeds(FAULTS["submodule_moved"]) == [0, 1, 4]
     assert _state_seeds(FAULTS["dirty_tree"]) == [0, 2, 5]
     assert _state_seeds(FAULTS["branch_renamed"]) == [0, 1, 6]
-    assert _state_seeds(FAULTS["lockfile_conflict"]) == [0, 2]
+    assert _state_seeds(FAULTS["lockfile_conflict"]) == [0, 2, 5], "every state, not every label"
 
 
 def test_a_non_seed_0_state_of_an_unrelated_fault_is_rejected(make_sandbox) -> None:
@@ -1011,3 +1011,21 @@ def test_a_mislabelled_program_is_told_its_variant_is_what_is_wrong() -> None:
     assert admitted is False
     assert "same-intent" in reason and "state the program was compiled from" in reason
     assert "declares variant 'stash'" in reason and "'aside' resolution" in reason
+
+
+def test_admission_builds_a_state_that_shares_its_label_with_another() -> None:
+    """The eighth live run admitted a lockfile `keep_local` program that fired on every
+    `upstream_removed` eval state: that state shares the label `take_upstream` with
+    `additions_only`, and admission built one seed per label, never it."""
+    keep_local = next(
+        p for p in gold_programs("sync_through_a_conflicting_lockfile") if p.variant == "keep_local"
+    )
+    broad = keep_local.model_copy(
+        update={"preconditions": keep_local.preconditions[:2], "status": ProgramStatus.CANDIDATE}
+    )
+    seed = next(
+        s for s in range(40) if FAULTS["lockfile_conflict"].variant_for_seed(s) == "keep_local"
+    )
+    admitted, reason = admit(broad, "lockfile_conflict", seeds=[seed])
+    assert admitted is False
+    assert "lockfile_conflict seed 5" in reason, reason
