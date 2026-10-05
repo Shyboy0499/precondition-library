@@ -129,6 +129,11 @@ Rules:
   precondition references, because the states the program may fire in need not
   bind it -- a body needing `{submodule_path}` with no precondition naming it is
   the shape this rejects.
+- A pattern can only require that something is present. To check that something is
+  absent, write the probe so it exits 0 only then, e.g.
+  `! git stash list | grep -q 'wip'`, and leave expect_pattern unset. Many git
+  commands exit 0 whether or not they print anything (`git stash list`,
+  `git status --porcelain`), so their exit code alone says nothing.
 - A probe -- a precondition or a postcondition -- must only read. It runs between
   two snapshots of the repository, and a probe that changes a ref, the index, the
   config or a file (`git fetch`, `git add`, a redirect into the tree) is refused,
