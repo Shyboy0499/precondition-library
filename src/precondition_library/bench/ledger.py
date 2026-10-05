@@ -383,7 +383,13 @@ def transcripts_path(ledger: Path) -> Path:
     return ledger.with_name(f"{ledger.stem}.transcripts.jsonl")
 
 
-def append_transcript(path: Path, record: EpisodeRecord, transcript: list[dict]) -> None:
+def append_transcript(
+    path: Path,
+    record: EpisodeRecord,
+    transcript: list[dict],
+    *,
+    unparsed: list[dict] | None = None,
+) -> None:
     """Append one agent transcript, keyed the way its ledger row is (issue #171).
 
     The ledger stores numbers, not what the agent did, so diagnosing #171 -- an agent
@@ -393,6 +399,9 @@ def append_transcript(path: Path, record: EpisodeRecord, transcript: list[dict])
     flushed like `append`, so a killed run keeps what it finished. Transcripts hold
     the system prompt, the request, the commands and their output -- sandbox paths, no
     credentials, since the provider's key never enters a transcript.
+
+    `unparsed`, when not empty, is written as `unparsed_compile_replies`: each compile
+    reply that was not a program, with its attempt and the reason.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     line = {
@@ -405,6 +414,8 @@ def append_transcript(path: Path, record: EpisodeRecord, transcript: list[dict])
         "outcome": record.outcome.value,
         "transcript": transcript,
     }
+    if unparsed:
+        line["unparsed_compile_replies"] = unparsed
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(line, default=str))
         handle.write("\n")

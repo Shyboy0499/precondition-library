@@ -41,7 +41,7 @@ from __future__ import annotations
 import json
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -245,6 +245,10 @@ class _ArmResult:
     compile_attempts: int | None = None
     """How many compiles this episode's solution took, `COMPILE_ATTEMPTS` at most;
     `None` when nothing was compiled (ADR-0030)."""
+    unparsed_replies: list[dict] = field(default_factory=list)
+    """Each compile reply that did not parse, with its attempt and why: the transcript log
+    keeps them, so a failed compile can be diagnosed from the run (the tenth live run's
+    first episode lost both its reply and its repair to "not a YAML mapping")."""
 
 
 def run_benchmark(
@@ -622,7 +626,9 @@ def run_episode(
         )
         if transcript_log is not None and result.transcript is not None:
             # Every solve's transcript, beside its row (issue #171); a replay ran no agent.
-            append_transcript(transcript_log, record, result.transcript)
+            append_transcript(
+                transcript_log, record, result.transcript, unparsed=result.unparsed_replies
+            )
         return record
     finally:
         if box is not None:
@@ -1037,6 +1043,10 @@ def _learn_from_solution(
         result.compile_attempts = attempt
         if not compiled.ok or compiled.program is None:
             reason = compiled.reason or "the compile returned no program"
+            if compiled.reply:
+                result.unparsed_replies.append(
+                    {"attempt": attempt, "reason": reason, "reply": compiled.reply}
+                )
             if program is None:
                 if attempt < COMPILE_ATTEMPTS:
                     # A reply that did not parse gets the one retry, shown what it wrote
