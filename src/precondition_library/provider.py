@@ -146,6 +146,20 @@ class ProviderTransportError(ProviderError):
     """
 
 
+class ProviderEmptyCompletionError(ProviderError):
+    """A well-formed response whose message carries neither text nor a tool call.
+
+    Not a malformed body: the eleventh live run's compile of a lockfile `keep_local`
+    solution got one, and the same request is not known to return it again, so the
+    retry policy treats it as transient (`bench.run._is_retryable`). It carries the
+    call's `usage`, because the endpoint charged for it and the ledger must say so.
+    """
+
+    def __init__(self, message: str, *, usage: TokenUsage) -> None:
+        super().__init__(message)
+        self.usage = usage
+
+
 class ProviderAuthError(ProviderError):
     """The endpoint refused the account: HTTP 401, 402 or 403.
 
@@ -292,21 +306,22 @@ class DeepSeekProvider:
         tool_calls = message.get("tool_calls") or []
         if not isinstance(tool_calls, list) or (text is not None and not isinstance(text, str)):
             raise ProviderError(f"malformed DeepSeek completion response: {message!r}")
+        spent = TokenUsage(
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
+            uncached_tokens_in=uncached,
+            cached_tokens_in=cached,
+            cache_write_tokens_in=cache_write,
+        )
         if not text and not tool_calls:
-            raise ProviderError(
-                "malformed DeepSeek completion response: message has neither content nor tool_calls"
+            raise ProviderEmptyCompletionError(
+                "DeepSeek returned a message with neither content nor tool_calls", usage=spent
             )
 
         return Completion(
             text=text or "",
             tool_calls=tool_calls,
-            usage=TokenUsage(
-                tokens_in=tokens_in,
-                tokens_out=tokens_out,
-                uncached_tokens_in=uncached,
-                cached_tokens_in=cached,
-                cache_write_tokens_in=cache_write,
-            ),
+            usage=spent,
             model=body.get("model") or self._model,
             temperature=self._temperature,
         )
