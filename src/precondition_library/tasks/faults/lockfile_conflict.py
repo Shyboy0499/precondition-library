@@ -360,6 +360,9 @@ class LockfileConflictFault(FaultSpec):
     def task_text(self, seed: int) -> str:
         return INTENT.task_text(seed)
 
+    def state_for_seed(self, seed: int) -> str:
+        return state_for_seed(seed)
+
     def variant_for_seed(self, seed: int) -> str:
         """The resolution `state_for_seed` makes correct at `seed` (`STATE_VARIANT`)."""
         return STATE_VARIANT[state_for_seed(seed)]

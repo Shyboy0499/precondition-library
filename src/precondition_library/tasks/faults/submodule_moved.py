@@ -384,6 +384,9 @@ class SubmoduleMovedFault(FaultSpec):
     def task_text(self, seed: int) -> str:
         return INTENT.task_text(seed)
 
+    def state_for_seed(self, seed: int) -> str:
+        return state_for_seed(seed)
+
     def variant_for_seed(self, seed: int) -> str:
         """The resolution the state injected at `seed` is correct in.
 

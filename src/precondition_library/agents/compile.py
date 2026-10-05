@@ -782,7 +782,7 @@ def sampled_states() -> list[tuple[str, int]]:
     """The deterministic state universe the breadth cap measures over (issue #10).
 
     The clean sandbox, then one sandbox per distinct injected state of every fault
-    at the first seed that selects it (`_state_seeds`, via `variant_for_seed`) --
+    at the first seed that selects it (`_state_seeds`, via `state_for_seed`) --
     the same enumeration the negative side uses, taken over all faults. Each entry
     is `(fault_name, seed)`; an empty fault name is the clean sandbox. Fixed and
     reproducible, so the breadth fraction is a property of the program, not of a
@@ -822,13 +822,16 @@ def precondition_breadth(program: Program) -> tuple[int, int, list[str]]:
 def _sibling_seeds(
     name: str, variant: str | None, declared: set[str] | None
 ) -> list[tuple[int, str]]:
-    """`(seed, resolution)` for each other resolution of this program's intent.
+    """`(seed, resolution)` for every state of this fault labelled with another resolution.
 
     Empty when the fault has no ambiguous intent (`declared is None`) or the
-    intent declares only the program's own resolution. Each seed is the first one
-    whose injector selects that sibling, read through `FaultSpec.variant_for_seed`
-    -- the same mapping `inject` uses -- so the sandbox really is the sibling
-    state rather than an assumption that seed 0, say, is one.
+    intent declares only the program's own resolution. One seed per injected
+    **state** (`_state_seeds`), not per label: two states can share a label while
+    accepting different resolutions (lockfile's `additions_only` and
+    `upstream_removed` are both `take_upstream`, and only the first accepts
+    `keep_local`), and a state admission never builds is a state a program may
+    wrongly fire on unseen -- as the eighth live run's `keep_local` program did. Each
+    is judged by the state's own acceptable set when the program fires there.
 
     Raises when no seed in the bound selects a declared resolution. That means the
     injector does not expose its seed-to-state mapping, which admission's
@@ -843,42 +846,38 @@ def _sibling_seeds(
         return []
 
     spec = FAULTS[name]
-    found: dict[str, int] = {}
-    for seed in range(_SEED_SEARCH_LIMIT):
-        selected = spec.variant_for_seed(seed)
-        if selected in wanted and selected not in found:
-            found[selected] = seed
-        if len(found) == len(wanted):
-            break
-
-    missing = [item for item in wanted if item not in found]
+    siblings = [
+        (seed, label)
+        for seed in _state_seeds(spec)
+        if (label := spec.variant_for_seed(seed)) in wanted
+    ]
+    missing = [item for item in wanted if item not in {label for _, label in siblings}]
     if missing:
         raise ValueError(
             f"cannot build the same-intent negative class for {name!r}: no seed in "
             f"0..{_SEED_SEARCH_LIMIT - 1} selects {missing}; the injector must "
             "expose which resolution a seed selects or the gate cannot be deterministic"
         )
-    return [(found[item], item) for item in wanted]
+    return siblings
 
 
 def _state_seeds(spec: FaultSpec) -> list[int]:
     """One seed per distinct state `spec`'s injector can select, seed 0 first.
 
-    `variant_for_seed` is the injector's own seed-to-state mapping, so the distinct
-    values it returns are the states admission can name and probe. The first seed
-    at which each value appears is the one built, in first-appearance order, so the
-    unrelated-fault class probes every state a fault has rather than one fixed
-    seed -- the whole result of issue #75.
+    A state is what `state_for_seed` names, or, for a fault that names none, what
+    `variant_for_seed` returns. The first seed at which each appears is the one
+    built, in first-appearance order, so the negative classes and the breadth cap
+    probe every state a fault has rather than one fixed seed (#75) -- and every
+    state, not one per label (two states sharing a label can accept different
+    resolutions).
 
-    A fault that exposes no mapping (returns None for every seed) yields `[0]`:
-    one state, the seed the class has always probed. Its injector may still vary
-    in ways the mapping does not surface (a state that is not a declared
-    resolution), and that remainder is sampling, not coverage; the rejection
-    reason reports the count actually built so the two cannot be confused.
+    A fault that exposes neither mapping yields `[0]`: one state, the seed the class
+    has always probed.
     """
     found: dict[str | None, int] = {}
     for seed in range(_SEED_SEARCH_LIMIT):
-        selected = spec.variant_for_seed(seed)
+        state = spec.state_for_seed(seed)
+        selected = state if state is not None else spec.variant_for_seed(seed)
         if selected not in found:
             found[selected] = seed
     return list(found.values())
