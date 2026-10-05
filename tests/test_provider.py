@@ -24,6 +24,7 @@ from precondition_library.provider import (
     DeepSeekProvider,
     Provider,
     ProviderAuthError,
+    ProviderEmptyCompletionError,
     ProviderError,
     ProviderTransportError,
     TokenUsage,
@@ -281,6 +282,17 @@ def test_malformed_body_raises_rather_than_zeroing_usage(body: dict) -> None:
     transport, _ = _capturing(body)
     with pytest.raises(ProviderError):
         _provider(transport).complete(system="s", messages=[])
+
+
+def test_an_empty_message_is_its_own_error_and_carries_what_it_cost() -> None:
+    body = {
+        "usage": {"prompt_tokens": 7, "completion_tokens": 3},
+        "choices": [{"message": {"role": "assistant", "content": ""}}],
+    }
+    transport, _ = _capturing(body)
+    with pytest.raises(ProviderEmptyCompletionError) as excinfo:
+        _provider(transport).complete(system="s", messages=[])
+    assert (excinfo.value.usage.tokens_in, excinfo.value.usage.tokens_out) == (7, 3)
 
 
 def test_fake_provider_is_usable_wherever_a_provider_is_expected() -> None:

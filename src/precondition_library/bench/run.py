@@ -61,8 +61,10 @@ from ..provider import (
     Completion,
     Provider,
     ProviderAuthError,
+    ProviderEmptyCompletionError,
     ProviderError,
     ProviderTransportError,
+    TokenUsage,
 )
 from ..runtime.probes import evaluate_preconditions
 from ..runtime.replay import ReplayResult, replay
@@ -148,19 +150,25 @@ class _AccountingProvider:
                 completion = self._provider.complete(system=system, messages=messages, tools=tools)
             except ProviderError as error:
                 self.llm_calls += 1
+                if isinstance(error, ProviderEmptyCompletionError):
+                    self._add(error.usage)
                 if attempt == _MAX_RETRY_ATTEMPTS or not _is_retryable(error):
                     raise
                 time.sleep(_retry_delay_s(attempt))
                 continue
-            self.tokens_in += completion.usage.tokens_in
-            self.tokens_out += completion.usage.tokens_out
-            self.uncached_tokens_in += completion.usage.uncached_tokens_in
-            self.cached_tokens_in += completion.usage.cached_tokens_in
-            self.cache_write_tokens_in += completion.usage.cache_write_tokens_in
+            self._add(completion.usage)
             self.llm_calls += completion.llm_calls
             self._record_temperature(completion.temperature)
             return completion
         raise AssertionError("unreachable: the loop returns or raises")
+
+    def _add(self, usage: TokenUsage) -> None:
+        """Add one call's tokens to the episode's totals."""
+        self.tokens_in += usage.tokens_in
+        self.tokens_out += usage.tokens_out
+        self.uncached_tokens_in += usage.uncached_tokens_in
+        self.cached_tokens_in += usage.cached_tokens_in
+        self.cache_write_tokens_in += usage.cache_write_tokens_in
 
     def _record_temperature(self, temperature: float | None) -> None:
         """Keep the episode's one temperature, or raise if its calls disagree."""
@@ -181,10 +189,12 @@ def _is_retryable(error: ProviderError) -> bool:
     it would only spend more of the budget on the same failure. A transport failure
     -- a timeout, a dropped connection (`ProviderTransportError`) -- never reached a
     response and is transient by nature, so it is retried under the same cap (issue
-    #157). Any other `ProviderError` with no status is a malformed body, which is
-    deterministic for the same reply, and is not retried.
+    #157), and so is an empty completion (`ProviderEmptyCompletionError`), which a
+    repeat of the same request is not known to return. Any other `ProviderError` with
+    no status is a malformed body, which is deterministic for the same reply, and is
+    not retried.
     """
-    if isinstance(error, ProviderTransportError):
+    if isinstance(error, (ProviderTransportError, ProviderEmptyCompletionError)):
         return True
     status = error.status_code
     return status is not None and (status == _RATE_LIMIT_STATUS or status >= _SERVER_ERROR_FLOOR)

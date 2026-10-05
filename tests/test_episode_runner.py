@@ -60,6 +60,7 @@ from precondition_library.program import (
 from precondition_library.provider import (
     Completion,
     ProviderAuthError,
+    ProviderEmptyCompletionError,
     ProviderError,
     ProviderTransportError,
     TokenUsage,
@@ -1389,6 +1390,48 @@ def test_a_rate_limited_call_is_retried_and_counted_on_the_row(tmp_path, monkeyp
     assert record.llm_calls == 4, "the failed attempt must appear in the ledger"
     assert record.tokens_in == 30, "a request that failed has no usage to add"
     assert record.succeeded is True
+
+
+class _EmptyFirst:
+    """Answer the first call with an empty message, then serve the completions."""
+
+    def __init__(self, *completions: Completion) -> None:
+        self._inner = FakeProvider(*completions)
+        self.calls = 0
+
+    def complete(
+        self, *, system: str, messages: list[dict], tools: list[dict] | None = None
+    ) -> Completion:
+        self.calls += 1
+        if self.calls == 1:
+            raise ProviderEmptyCompletionError(
+                "DeepSeek returned a message with neither content nor tool_calls",
+                usage=TokenUsage(tokens_in=5, tokens_out=1, uncached_tokens_in=5),
+            )
+        return self._inner.complete(system=system, messages=messages, tools=tools)
+
+
+def test_an_empty_completion_is_retried_and_its_tokens_counted(tmp_path, monkeypatch) -> None:
+    """The eleventh live run lost a compile to one empty message. It is retried like a
+    transient error, and what it cost is on the row with the call."""
+    monkeypatch.setattr("precondition_library.bench.run.time.sleep", lambda _seconds: None)
+    provider = _EmptyFirst(*_resolves_discard())
+
+    record = run_episode(
+        Arm.REACT,
+        "diverged",
+        DISCARD_SEED,
+        1,
+        role=OccurrenceRole.VARIANT,
+        provider=provider,
+        library=Library(tmp_path / "lib"),
+        model="fake",
+    )
+
+    assert provider.calls == 4, "the empty reply is retried once"
+    assert record.outcome is EpisodeOutcome.SUCCESS
+    assert record.llm_calls == 4
+    assert record.tokens_in == 30 + 5, "the empty reply's tokens are paid for and recorded"
 
 
 def test_a_client_error_is_not_retried(tmp_path, monkeypatch) -> None:
