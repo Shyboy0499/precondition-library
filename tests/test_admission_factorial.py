@@ -220,8 +220,20 @@ def test_admission_names_the_state_a_refused_program_fired_on() -> None:
         _permissive_discard(), "diverged", seeds=[DISCARD_SEED], fired_on=fired_on
     )
     assert admitted is False
-    (((fault,), seed),) = fired_on
-    assert f"{fault} seed {seed}" in reason
+    (fault,), seed = fired_on[0]
+    assert f"{fault} seed {seed}" in reason, "the first state named is the first reported"
+
+
+def test_admission_names_every_state_a_broad_program_fired_on() -> None:
+    """One revision can only fix what it is told about (the sixth live run's `diverged`
+    revisions fixed the state they were shown and fired on the next)."""
+    fired_on: list[tuple[tuple[str, ...], int]] = []
+    program = _permissive_discard()
+    admitted, reason = admit(program, "diverged", seeds=[DISCARD_SEED], fired_on=fired_on)
+    assert admitted is False and len(fired_on) >= 2
+    assert f"It also accepted {len(fired_on) - 1} more state(s)" in reason
+    for (fault,), seed in fired_on:
+        assert f"{fault} seed {seed}" in reason
 
 
 def test_an_admission_or_a_positive_side_refusal_names_no_state() -> None:

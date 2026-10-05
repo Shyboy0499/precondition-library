@@ -991,7 +991,7 @@ def _learn_from_solution(
     program: Program | None = None
     admitted, gate_reason = False, ""
     revision: tuple[Program, str] | None = None
-    refused_state: StateFingerprint | None = None
+    refused_states: list[StateFingerprint] = []
     first_refused: tuple[Program, str] | None = None
     revision_failure: str | None = None
     for attempt in range(1, COMPILE_ATTEMPTS + 1):
@@ -1004,7 +1004,7 @@ def _learn_from_solution(
                 fault=fault_type,
                 variant_ids=[variant.id for variant in intent.variants],
                 revision=revision,
-                refused_state=refused_state,
+                refused_states=refused_states,
             )
         except Exception as exc:
             result.compile_attempts = attempt
@@ -1037,7 +1037,7 @@ def _learn_from_solution(
         if admitted:
             break
         revision = (program, gate_reason)
-        refused_state = observe_negative_state(*fired_on[-1]) if fired_on else None
+        refused_states = [observe_negative_state(*fired) for fired in fired_on]
         first_refused = first_refused or revision
     assert program is not None  # the loop returns before here when no program parsed
     try:
