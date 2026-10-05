@@ -1729,7 +1729,7 @@ def test_a_revision_is_shown_the_state_its_program_fired_on(tmp_path: Path) -> N
     assert row.admitted is True and row.compile_attempts == 2
 
     revision = provider.calls[-1]
-    assert "`refused_state`" in revision["system"]
+    assert "`refused_states`" in revision["system"]
     payload = json.loads(revision["messages"][-1]["content"].split("\n", 1)[1].rsplit("\n", 1)[0])
     named = re.search(r"\(([a-z_]+) seed (\d+)", payload["admission_refusal"])
     assert named is not None, payload["admission_refusal"]
@@ -1738,8 +1738,8 @@ def test_a_revision_is_shown_the_state_its_program_fired_on(tmp_path: Path) -> N
         expected = StateFingerprint.observe(box).model_dump(mode="json")
     finally:
         box.destroy()
-    assert payload["refused_state"] == expected
-    assert payload["refused_state"] != payload["state_at_arrival"]
+    assert payload["refused_states"][0] == expected, "the first state the refusal names"
+    assert expected != payload["state_at_arrival"]
 
 
 @pytest.mark.parametrize(
