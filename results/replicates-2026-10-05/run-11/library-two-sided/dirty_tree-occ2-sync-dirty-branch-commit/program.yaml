@@ -1,0 +1,67 @@
+id: dirty_tree-occ2-sync-dirty-branch-commit
+intent: commit uncommitted work first, then bring the branch up to date with upstream
+  while keeping those changes
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: has_committable_changes
+  description: the working tree has tracked, staged, or untracked changes that a commit
+    will record
+  probe: test -n "$(git diff --name-only; git diff --cached --name-only; git ls-files
+    --others --exclude-standard)"
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_behind_upstream
+  description: upstream has commits the current branch does not contain
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_exists
+  description: the upstream remote-tracking branch resolves to a commit
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: on_a_branch
+  description: HEAD is a branch reference, not detached
+  probe: git symbolic-ref --quiet HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_file_collides_with_upstream
+  description: no untracked working-tree file would be overwritten by the incoming
+    upstream commits, so committing everything and rebasing can succeed
+  probe: test -z "$(git diff --name-only HEAD..{upstream_remote}/{upstream_branch}
+    | while IFS= read -r p; do if [ -e "$p" ] && ! git ls-files --error-unmatch --
+    "$p" >/dev/null 2>&1; then printf '%s\n' "$p"; fi; done)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git add -A
+  git commit -m "chore: commit local changes before syncing with upstream"
+  git rebase {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: worktree_clean
+  description: no uncommitted changes remain
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: the branch now includes upstream's commit
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+variant: commit
+provenance:
+  compiled_from_task: My working tree has changes and the branch is behind upstream.
+    Fix that and keep my changes. Commit my uncommitted work first, then bring the
+    branch up to date.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: My working tree has changes and the branch is behind upstream. Fix that
+    and keep my changes. Commit my uncommitted work first, then bring the branch up
+    to date./seed-0-dirty_tree-27781
+  fault: dirty_tree
+status: admitted

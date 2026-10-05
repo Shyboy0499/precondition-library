@@ -1,0 +1,2 @@
+{"episode_id": "I think upstream renamed things. Get this fork following it again. Rename my branch to upstream's new name and track it./seed-0-branch_renamed-12673", "from": null, "program_id": "branch_renamed-occ1-rename-fork-branch-to-upstream", "to": "candidate"}
+{"episode_id": "branch_renamed/seed-0/occurrence-1", "from": "candidate", "program_id": "branch_renamed-occ1-rename-fork-branch-to-upstream", "to": "admitted"}

@@ -1,0 +1,152 @@
+id: lockfile_conflict-occ1-lockfile-conflict-take-upstream
+intent: Catch up with upstream by merging it into the local branch, resolving the
+  conflicted dependency file by starting from upstream's version of that file and
+  re-adding the lines only the local branch added, so neither side's additions are
+  lost and no line either side removed is revived.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_present
+  description: the upstream remote-tracking branch is already known locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_diverged
+  description: local and upstream have each advanced past their merge base
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0 -a "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt
+    0
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: nothing uncommitted that the merge could clobber
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_would_conflict
+  description: merging upstream into HEAD really produces a content conflict, so a
+    plain merge cannot resolve it and a hand resolution of the file is needed
+  probe: |-
+    b=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    shared() { comm -12 <(git diff --name-only "$b" HEAD | sort) <(git diff --name-only "$b" {upstream_remote}/{upstream_branch} | sort); }
+    touched_lines() { git diff --no-color -U0 "$1" "$2" -- "$3" | awk '/^@@/{split($2,a,",");s=substr(a[1],2)+0;c=(a[2]==""?1:a[2]+0);for(i=0;i<c;i++)print s+i}' | sort -u; }
+    if git merge-tree "$b" HEAD "{upstream_remote}/{upstream_branch}" 2>/dev/null | grep -q '<<<<<<<'; then exit 0; fi
+    for f in $(shared); do
+      if comm -12 <(touched_lines "$b" HEAD "$f") <(touched_lines "$b" "{upstream_remote}/{upstream_branch}" "$f") | grep -q .; then exit 0; fi
+    done
+    exit 1
+  expect_exit: 0
+  expect_pattern: null
+- name: local_removals_not_revived
+  description: no line the local branch deleted from a file both sides changed is
+    still present in upstream's version of that file, so starting from upstream's
+    file cannot revive anything the local side removed
+  probe: |-
+    b=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    for f in $(comm -12 <(git diff --name-only "$b" HEAD | sort) <(git diff --name-only "$b" {upstream_remote}/{upstream_branch} | sort)); do
+      if git diff --no-color -U0 "$b" HEAD -- "$f" | awk '/^--- /{next} /^\+\+\+ /{next} /^-/{print substr($0,2)}' | grep -q -F -x -f <(git show "{upstream_remote}/{upstream_branch}:$f"); then exit 1; fi
+    done
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote} {upstream_branch}
+  git merge --no-commit --no-ff {upstream_remote}/{upstream_branch} || true
+  tmp=$(mktemp -d)
+  for f in $(git diff --name-only --diff-filter=U); do
+    git show :1:"$f" > "$tmp/base" 2>/dev/null || true
+    git show :2:"$f" > "$tmp/ours" 2>/dev/null || true
+    git show :3:"$f" > "$tmp/up" 2>/dev/null || true
+    git diff --no-color -U0 --no-index "$tmp/base" "$tmp/ours" 2>/dev/null | awk '
+      function flush() {
+        k = (nm < np) ? nm : np
+        for (i = k + 1; i <= np; i++) print pm[i]
+        nm = 0
+        np = 0
+      }
+      /^---/ { next }
+      /^\+\+\+/ { next }
+      /^@@/ { flush(); next }
+      /^-/ { nm++; next }
+      /^\+/ { pm[++np] = substr($0, 2); next }
+      END { flush() }
+    ' > "$tmp/added"
+    awk -v up="$tmp/up" '
+      BEGIN {
+        while ((getline l < up) > 0) {
+          if (!(l in seen)) { seen[l] = 1; content[++m] = l }
+        }
+        close(up)
+      }
+      FNR == NR {
+        if (length($0) > 0) { add[$0] = 1 }
+        next
+      }
+      {
+        if ($0 in add) {
+          if (!($0 in seen)) { j = ++pc[anchor]; pl[anchor, j] = $0 }
+        } else if ($0 in seen) {
+          anchor = $0
+        }
+      }
+      END {
+        for (i = 1; i <= m; i++) {
+          l = content[i]
+          print l
+          if ((l in pc) && !(l in done)) {
+            for (j = 1; j <= pc[l]; j++) print pl[l, j]
+            done[l] = 1
+          }
+        }
+        for (a in pc) {
+          if (!(a in done)) {
+            for (j = 1; j <= pc[a]; j++) print pl[a, j]
+            done[a] = 1
+          }
+        }
+      }
+    ' "$tmp/added" "$tmp/ours" > "$f"
+  done
+  git add -A
+  git commit --no-edit
+  rm -rf "$tmp"
+steps: null
+postconditions:
+- name: upstream_is_ancestor
+  description: the merge brought upstream's tip into local history
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_commit_created
+  description: HEAD is a two-parent merge commit
+  probe: test "$(git rev-list --parents -n 1 HEAD | wc -w)" -ge 3
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: no conflict state or uncommitted changes remain
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: no conflict markers survived into the tree
+  probe: '! git grep -q -e ''^<<<<<<< '' -e ''^>>>>>>> '''
+  expect_exit: 0
+  expect_pattern: null
+- name: local_additions_preserved
+  description: the result carries lines upstream does not have, the local additions
+  probe: git diff --no-color {upstream_remote}/{upstream_branch} HEAD | grep -q '^+[^+]'
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: Catch up with upstream without losing what either side added,
+    or reviving what either side removed. Start from upstream's dependency file and
+    add back what I added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Catch up with upstream without losing what either side added, or reviving
+    what either side removed. Start from upstream's dependency file and add back what
+    I added./seed-5-lockfile_conflict-12673
+  fault: lockfile_conflict
+status: admitted

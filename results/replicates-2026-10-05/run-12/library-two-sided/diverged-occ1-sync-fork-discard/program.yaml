@@ -1,0 +1,85 @@
+id: diverged-occ1-sync-fork-discard
+intent: sync the fork with upstream by making the local branch match upstream exactly,
+  discarding the commits only the local branch has
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: remote_exists
+  description: the upstream remote is configured in this repository
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_present
+  description: a remote-tracking ref for the upstream branch already exists locally,
+    so the divergence can be measured without fetching
+  probe: git rev-parse --verify --quiet refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_tracks_upstream
+  description: HEAD is an attached branch whose configured upstream is exactly the
+    upstream branch being synced (a fork of a differently named upstream branch is
+    not this case)
+  probe: test "$(git rev-parse --abbrev-ref --symbolic-full-name @{upstream})" = "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: there are no staged, unstaged or untracked changes that a hard reset
+    would destroy
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_entries
+  description: the index holds no conflicted (unmerged) entries
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_carry_no_changes
+  description: the commits only this branch has change no tracked file, so discarding
+    them loses no content; a local-only commit that touched files would have to be
+    merged or rebased instead
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+    test -n "$base" &&
+    test -z "$(git diff --name-only "$base" HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_diverged_from_upstream
+  description: the branch has commits upstream lacks (there is something to discard)
+    and upstream has commits the branch lacks (there is something to sync)
+  probe: |-
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -ge 1 &&
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -ge 1
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git reset --hard {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: matches_upstream
+  description: HEAD is the same commit as the upstream branch
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_local_only_commits
+  description: the branch has no commits that upstream does not have
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    = 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_reset
+  description: the working tree is clean after the reset
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: discard
+provenance:
+  compiled_from_task: 'Get this fork back in sync with upstream without losing my
+    commits. My local commits can go: make my branch match upstream exactly.'
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: 'Get this fork back in sync with upstream without losing my commits.
+    My local commits can go: make my branch match upstream exactly./seed-1-diverged-12673'
+  fault: diverged
+status: admitted

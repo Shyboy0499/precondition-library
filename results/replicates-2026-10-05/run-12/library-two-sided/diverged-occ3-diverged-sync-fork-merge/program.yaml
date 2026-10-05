@@ -1,0 +1,103 @@
+id: diverged-occ3-diverged-sync-fork-merge
+intent: merge the upstream branch into the current branch so both histories are kept
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: worktree_clean
+  description: there are no staged, unstaged or conflicted changes that a merge could
+    disturb
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_remote_configured
+  description: the remote named by upstream_remote is configured in this repository
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_exists
+  description: the upstream remote-tracking branch is present so it can be read and
+    merged
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: local_is_ahead
+  description: the current branch has commits upstream does not have
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ahead
+  description: upstream has commits the current branch does not have, so the two histories
+    have diverged
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_not_already_merged
+  description: upstream is not already an ancestor of HEAD, so a merge is still needed
+  probe: '! git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: no merge is half-finished in this repository
+  probe: '! test -e "$(git rev-parse --git-path MERGE_HEAD)"'
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_would_be_clean
+  description: merging the upstream branch into HEAD would not conflict, so the merge
+    can finish unattended instead of needing per-file conflict resolution
+  probe: git merge-tree --write-tree HEAD {upstream_remote}/{upstream_branch} >/dev/null
+    2>&1
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_target_is_the_recorded_default
+  description: the recorded default branch of the upstream remote, when it has one,
+    is the branch being merged, not a differently named branch upstream has renamed
+    to
+  probe: |-
+    h=$(git symbolic-ref -q --short refs/remotes/{upstream_remote}/HEAD || true)
+    test -z "$h" || test "$h" = "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_branch_matches_merge_target
+  description: the checked-out branch is the local counterpart of the upstream branch
+    being merged, not a branch upstream has renamed away from
+  probe: test "$(git rev-parse --abbrev-ref HEAD)" = "{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch --no-tags {upstream_remote} {upstream_branch}
+  git merge --no-edit {upstream_remote}/{upstream_branch} || { git merge --abort 2>/dev/null || true; exit 1; }
+steps: null
+postconditions:
+- name: merge_commit_created
+  description: HEAD is a merge commit with two parents, so both histories survive
+  probe: git rev-list --parents -n 1 HEAD
+  expect_exit: 0
+  expect_pattern: ^[0-9a-f]+ [0-9a-f]+ [0-9a-f]+
+- name: upstream_in_history
+  description: the upstream branch is now an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_second_parent
+  description: the merge commit's second parent is the upstream tip that was merged
+  probe: test "$(git rev-parse HEAD^2)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after
+  description: the merge left no uncommitted or conflicted changes behind
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: This branch and upstream have both changed. Bring it back into
+    line. Merge upstream into my branch and keep both histories.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: This branch and upstream have both changed. Bring it back into line.
+    Merge upstream into my branch and keep both histories./seed-0-diverged-12673
+  fault: diverged
+status: admitted

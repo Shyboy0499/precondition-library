@@ -1,0 +1,106 @@
+id: branch_renamed-occ2-fork-follow-upstream-branch-rename
+intent: Upstream renamed its default branch, so the fork's local branch no longer
+  follows it; prune the stale remote-tracking ref, rename the local branch to upstream's
+  new name, and make it track that branch again, but only when the fork is merely
+  behind and has no local-only history to reconcile.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: in_git_worktree
+  description: the working directory is inside a git work tree
+  probe: git rev-parse --is-inside-work-tree
+  expect_exit: 0
+  expect_pattern: ^true$
+- name: head_is_a_local_branch
+  description: HEAD is a symbolic ref to a local branch rather than detached
+  probe: git symbolic-ref --quiet HEAD
+  expect_exit: 0
+  expect_pattern: ^refs/heads/
+- name: worktree_is_clean
+  description: no staged, unstaged or untracked change could be disturbed
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: head_branch_name_differs_from_upstream
+  description: the checked-out branch still carries the pre-rename name
+  probe: test "$(git rev-parse --abbrev-ref HEAD)" != "{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: target_local_branch_name_is_free
+  description: no local branch already occupies upstream's new name
+  probe: '! git show-ref --verify --quiet refs/heads/{upstream_branch}'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_exists
+  description: upstream's renamed branch is already known as a remote-tracking ref
+  probe: git rev-parse --verify --quiet refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_head_is_the_new_branch
+  description: upstream's HEAD points at the branch the fork has to follow now
+  probe: git symbolic-ref --quiet refs/remotes/{upstream_remote}/HEAD
+  expect_exit: 0
+  expect_pattern: ^refs/remotes/{upstream_remote}/{upstream_branch}$
+- name: head_tracks_same_named_branch_on_upstream
+  description: the checked-out branch is configured to track a same-named branch on
+    the upstream remote, the signature of a fork whose upstream branch was renamed
+  probe: b=$(git rev-parse --abbrev-ref HEAD); test "$(git config --get branch.$b.remote)"
+    = "{upstream_remote}" && test "$(git config --get branch.$b.merge)" = "refs/heads/$b"
+  expect_exit: 0
+  expect_pattern: null
+- name: fork_is_only_behind_upstream
+  description: HEAD is an ancestor of upstream's renamed branch, so the fork has no
+    local-only commits to reconcile and a plain rename is the whole task; a diverged
+    fork needs a merge resolution instead
+  probe: git merge-base --is-ancestor HEAD refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: no_local_only_commits
+  description: none of the local branch's commits are absent from upstream's renamed
+    branch
+  probe: test "$(git rev-list --count refs/remotes/{upstream_remote}/{upstream_branch}..HEAD)"
+    = "0"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch --prune {upstream_remote}
+  git branch -m {upstream_branch}
+  git branch --set-upstream-to={upstream_remote}/{upstream_branch} {upstream_branch}
+steps: null
+postconditions:
+- name: head_is_on_renamed_branch
+  description: the checked-out branch now carries upstream's new name
+  probe: git rev-parse --abbrev-ref HEAD
+  expect_exit: 0
+  expect_pattern: ^{upstream_branch}$
+- name: renamed_branch_tracks_upstream_remote
+  description: the renamed branch's configured upstream remote is the upstream remote
+  probe: git config --get branch.{upstream_branch}.remote
+  expect_exit: 0
+  expect_pattern: ^{upstream_remote}$
+- name: renamed_branch_tracks_upstream_branch
+  description: the renamed branch merges from upstream's branch of the same name
+  probe: git config --get branch.{upstream_branch}.merge
+  expect_exit: 0
+  expect_pattern: ^refs/heads/{upstream_branch}$
+- name: old_branch_name_is_gone
+  description: the pre-rename local branch no longer exists
+  probe: '! git show-ref --verify --quiet refs/heads/{tracked_branch}'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_still_clean
+  description: the rename and retrack left the working tree untouched
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: I think upstream renamed things. Get this fork following it
+    again. Rename my branch to upstream's new name and track it.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: I think upstream renamed things. Get this fork following it again. Rename
+    my branch to upstream's new name and track it./seed-4-branch_renamed-28393
+  fault: branch_renamed
+status: candidate

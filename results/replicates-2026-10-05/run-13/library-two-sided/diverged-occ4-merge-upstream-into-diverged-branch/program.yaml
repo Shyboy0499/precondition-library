@@ -1,0 +1,99 @@
+id: diverged-occ4-merge-upstream-into-diverged-branch
+intent: Bring a local branch that has diverged from its upstream back into line by
+  merging the upstream branch into it, keeping both lines of history.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_tracking_ref_exists
+  description: the remote-tracking ref for the upstream branch is present
+  probe: git rev-parse --verify "refs/remotes/{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: on_a_branch
+  description: HEAD is attached to a local branch rather than detached
+  probe: git symbolic-ref -q HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: there are no staged, unstaged or untracked changes to lose
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: the repository is not already in the middle of a merge
+  probe: '! test -e "$(git rev-parse --git-dir)/MERGE_HEAD"'
+  expect_exit: 0
+  expect_pattern: null
+- name: histories_have_diverged
+  description: both HEAD and the upstream branch carry commits the other lacks
+  probe: |-
+    [ "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0 ] &&
+    [ "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_would_be_free_of_conflicts
+  description: a three-way merge of the upstream branch into HEAD conflicts in no
+    path
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    if out=$(git merge-tree "$base" HEAD {upstream_remote}/{upstream_branch} 2>/dev/null); then
+      case "$out" in
+        *'<<<<<<<'*) exit 1 ;;
+      esac
+      exit 0
+    fi
+    git merge-tree --write-tree HEAD {upstream_remote}/{upstream_branch} >/dev/null 2>&1
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_default_branch_is_the_merged_branch
+  description: if the clone records the upstream's default branch, it is the branch
+    being merged
+  probe: |-
+    default_ref=$(git symbolic-ref -q --short "refs/remotes/{upstream_remote}/HEAD")
+    [ -z "$default_ref" ] || [ "$default_ref" = "{upstream_remote}/{upstream_branch}" ]
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_tracks_the_upstream_branch
+  description: the current branch's configured upstream is the remote branch being
+    merged
+  probe: '[ "$(git rev-parse --abbrev-ref ''@{upstream}'' 2>/dev/null)" = "{upstream_remote}/{upstream_branch}"
+    ]'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git merge --no-edit {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: head_is_a_merge_commit
+  description: HEAD has a second parent, so both lines of history are preserved
+  probe: git rev-parse --verify -q HEAD^2
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tip_is_second_parent
+  description: the merge's second parent is the upstream branch tip
+  probe: '[ "$(git rev-parse HEAD^2)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+    ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor_of_head
+  description: the upstream tip is contained in HEAD's history
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_merge
+  description: the merge left no conflicts or leftover changes behind
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: This branch and upstream have both changed. Bring it back into
+    line. Merge upstream into my branch and keep both histories.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: This branch and upstream have both changed. Bring it back into line.
+    Merge upstream into my branch and keep both histories./seed-0-diverged-28393
+  fault: diverged
+status: admitted

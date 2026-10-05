@@ -1,0 +1,85 @@
+id: diverged-occ3-diverged-rebase-local-onto-upstream
+intent: replay the local commits on top of upstream so the history stays linear
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: worktree_clean
+  description: no uncommitted changes that the replay could lose or drag along
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_entries
+  description: no merge or rebase is already part-way through, leaving unmerged entries
+    in the index
+  probe: '! git ls-files -u | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: local_has_own_commits
+  description: the checked-out branch has commits that upstream does not have
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: '[1-9][0-9]*'
+- name: upstream_has_new_commits
+  description: the upstream branch has commits the local branch does not have
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: '[1-9][0-9]*'
+- name: touched_files_are_disjoint
+  description: the local commits and the upstream commits change different files,
+    so replaying them cannot conflict
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    ! { git diff --name-only "$base" HEAD; git diff --name-only "$base" {upstream_remote}/{upstream_branch}; } | sort | uniq -d | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_head_is_local_branch
+  description: the remote does not advertise a default branch other than the one that
+    is checked out
+  probe: |-
+    head=$(git symbolic-ref -q --short refs/remotes/{upstream_remote}/HEAD || true)
+    [ -z "$head" ] || [ "$head" = "{upstream_remote}/$(git rev-parse --abbrev-ref HEAD)" ]
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_branch_is_local_branch
+  description: the upstream branch being replayed onto bears the name of the local
+    branch, rather than a renamed one
+  probe: '[ "$(git rev-parse --abbrev-ref HEAD)" = "{upstream_branch}" ]'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git rebase {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: upstream_is_ancestor_of_head
+  description: HEAD now sits on top of the upstream tip
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_replayed
+  description: the local commits are still there, ahead of upstream
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: '[1-9][0-9]*'
+- name: history_is_linear
+  description: no merge commits were introduced between upstream and HEAD
+  probe: '! git rev-list --merges {upstream_remote}/{upstream_branch}..HEAD | grep
+    -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_still_clean
+  description: the replay left no dirty or conflicted files behind
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+variant: rebase
+provenance:
+  compiled_from_task: I have local work and upstream has new commits. Untangle it.
+    Replay my local commits on top of upstream so the history stays linear.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: I have local work and upstream has new commits. Untangle it. Replay
+    my local commits on top of upstream so the history stays linear./seed-5-diverged-28393
+  fault: diverged
+status: admitted

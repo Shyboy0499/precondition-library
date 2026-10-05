@@ -1,0 +1,85 @@
+id: branch_renamed-occ1-follow-upstream-renamed-branch
+intent: 'Get the fork following upstream again after upstream renamed its branch:
+  fetch and prune the upstream remote, rename the checked-out local branch to upstream''s
+  new branch name, point its tracking at the renamed upstream branch, and fast-forward
+  so the fork is aligned with upstream.'
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_configured
+  description: the upstream remote exists in this repository
+  probe: git config --get remote.{upstream_remote}.url
+  expect_exit: 0
+  expect_pattern: null
+- name: renamed_upstream_branch_exists
+  description: upstream already publishes the new branch name as a remote-tracking
+    ref
+  probe: git rev-parse --verify --quiet refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: on_a_local_branch
+  description: HEAD is an attached local branch, not a detached HEAD
+  probe: git symbolic-ref --quiet HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_name_differs_from_upstream
+  description: the checked-out branch still carries the old name, so a rename is needed
+  probe: test "$(git symbolic-ref --short HEAD)" != "{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: tracks_upstream_remote
+  description: the checked-out branch already tracks a branch of the upstream remote
+  probe: |-
+    up=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null) || exit 1
+    case "$up" in
+      {upstream_remote}/*) exit 0;;
+      *) exit 1;;
+    esac
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_files_clean
+  description: there are no uncommitted changes to tracked files that a rename or
+    fast-forward could disturb
+  probe: test -z "$(git status --porcelain --untracked-files=no)"
+  expect_exit: 0
+  expect_pattern: null
+- name: fast_forward_possible
+  description: the local branch carries no commits of its own, so it can fast-forward
+    onto the renamed upstream branch
+  probe: git merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch --prune {upstream_remote}
+  old_branch=$(git symbolic-ref --short HEAD)
+  git branch -m "$old_branch" {upstream_branch}
+  git branch --set-upstream-to={upstream_remote}/{upstream_branch} {upstream_branch}
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: branch_renamed
+  description: the checked-out branch now carries upstream's new branch name
+  probe: git symbolic-ref --short HEAD
+  expect_exit: 0
+  expect_pattern: ^{upstream_branch}$
+- name: tracking_updated
+  description: the checked-out branch tracks the renamed upstream branch
+  probe: git rev-parse --abbrev-ref --symbolic-full-name '@{u}'
+  expect_exit: 0
+  expect_pattern: ^{upstream_remote}/{upstream_branch}$
+- name: aligned_with_upstream
+  description: HEAD is the commit of the renamed upstream branch
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: I think upstream renamed things. Get this fork following it
+    again. Rename my branch to upstream's new name and track it.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: I think upstream renamed things. Get this fork following it again. Rename
+    my branch to upstream's new name and track it./seed-0-branch_renamed-28393
+  fault: branch_renamed
+status: candidate

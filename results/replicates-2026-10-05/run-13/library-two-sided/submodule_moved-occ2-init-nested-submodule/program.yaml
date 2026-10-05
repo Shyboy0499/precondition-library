@@ -1,0 +1,48 @@
+id: submodule_moved-occ2-init-nested-submodule
+intent: initialise the nested submodule repository and check it out at the commit
+  the superproject records
+parameters:
+- submodule_path
+preconditions:
+- name: submodule_declared_in_gitmodules
+  description: .gitmodules declares a submodule whose path is the bound submodule_path
+  probe: git config -f .gitmodules --get-regexp path
+  expect_exit: 0
+  expect_pattern: '{submodule_path}'
+- name: submodule_gitlink_in_head
+  description: HEAD records a gitlink (mode 160000) entry at the submodule path
+  probe: git ls-tree HEAD -- {submodule_path}
+  expect_exit: 0
+  expect_pattern: 160000 commit
+- name: submodule_not_initialised
+  description: the nested repository exists in the tree but is not yet checked out
+    (git submodule status marks it with a leading '-')
+  probe: git submodule status {submodule_path} | grep -q '^-'
+  expect_exit: 0
+  expect_pattern: null
+body: git submodule update --init {submodule_path}
+steps: null
+postconditions:
+- name: submodule_initialised
+  description: the nested repository is populated, so git submodule status reports
+    a plain checked-out commit with no '-' or '+' marker
+  probe: git submodule status {submodule_path} | grep -q '^ [0-9a-f]'
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_at_pinned_commit
+  description: the nested repository's HEAD equals the gitlink commit recorded in
+    the superproject's HEAD
+  probe: test "$(git ls-tree HEAD -- {submodule_path} | awk '{print $3}')" = "$(git
+    -C {submodule_path} rev-parse HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+variant: init
+provenance:
+  compiled_from_task: A nested repository in this project needs bringing into line.
+    Initialise the nested repository and check it out.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: A nested repository in this project needs bringing into line. Initialise
+    the nested repository and check it out./seed-4-submodule_moved-28393
+  fault: submodule_moved
+status: admitted

@@ -1,0 +1,205 @@
+id: lockfile_conflict-occ2-merge-upstream-lockfile-keep-local
+intent: Merge the upstream branch into the current branch and resolve the dependency-file
+  conflict so that the locally removed entries stay removed while the upstream-added
+  entries are brought in.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_exists
+  description: the upstream remote-tracking branch is present locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ahead
+  description: upstream has at least one commit that is not in HEAD
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: '[1-9]'
+- name: local_ahead
+  description: HEAD has at least one commit that is not in upstream
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: '[1-9]'
+- name: shared_modified_file
+  description: at least one file was modified on both sides since the merge base
+  probe: b=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) && comm -12
+    <(git diff --name-only "$b" HEAD | sort) <(git diff --name-only "$b" {upstream_remote}/{upstream_branch}
+    | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: there is no merge in progress and the index has no unmerged entries
+  probe: '! git rev-parse -q --verify MERGE_HEAD >/dev/null && ! git ls-files --unmerged
+    | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: the working tree and index are clean
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch {upstream_remote} || true
+  upstream_ref="{upstream_remote}/{upstream_branch}"
+  base=$(git merge-base HEAD "$upstream_ref")
+  git merge --no-ff --no-commit "$upstream_ref" || true
+  tmpd=$(mktemp -d)
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    git show "$base:$f" > "$tmpd/base" 2>/dev/null || true
+    git show ":2:$f" > "$tmpd/ours"
+    git show ":3:$f" > "$tmpd/theirs"
+    python3 - "$tmpd/base" "$tmpd/ours" "$tmpd/theirs" "$f" <<'PY'
+  import difflib, sys
+
+
+  def read_lines(path):
+      with open(path, 'r', encoding='utf-8', errors='surrogateescape') as fh:
+          return fh.read().splitlines()
+
+
+  def edits(base, other):
+      sm = difflib.SequenceMatcher(a=base, b=other, autojunk=False)
+      out = []
+      for tag, i1, i2, j1, j2 in sm.get_opcodes():
+          if tag != 'equal':
+              out.append([i1, i2, other[j1:j2]])
+      return out
+
+
+  def merge3(base, ours, theirs):
+      eo = edits(base, ours)
+      et = edits(base, theirs)
+      res = []
+      i = 0
+      a = 0
+      b = 0
+      while a < len(eo) or b < len(et):
+          no = eo[a] if a < len(eo) else None
+          nt = et[b] if b < len(et) else None
+          if no is not None and no[0] < i:
+              a += 1
+              continue
+          if nt is not None and nt[0] < i:
+              b += 1
+              continue
+          starts = []
+          if no is not None:
+              starts.append(no[0])
+          if nt is not None:
+              starts.append(nt[0])
+          s = min(starts)
+          if s > i:
+              res.extend(base[i:s])
+              i = s
+          so = no[0] if no is not None else None
+          st = nt[0] if nt is not None else None
+          if no is not None and nt is not None and so == st:
+              if no[0] == no[1] and nt[0] == nt[1]:
+                  res.extend(no[2])
+                  res.extend(nt[2])
+                  a += 1
+                  b += 1
+              elif no[1] == nt[1] and no[2] == nt[2]:
+                  res.extend(no[2])
+                  i = no[1]
+                  a += 1
+                  b += 1
+              else:
+                  end = max(no[1], nt[1])
+                  res.extend(nt[2])
+                  i = end
+                  a += 1
+                  b += 1
+          elif no is not None and (nt is None or so < st):
+              res.extend(no[2])
+              i = no[1]
+              a += 1
+          else:
+              res.extend(nt[2])
+              i = nt[1]
+              b += 1
+      res.extend(base[i:])
+      return res
+
+
+  base_lines = read_lines(sys.argv[1])
+  our_lines = read_lines(sys.argv[2])
+  their_lines = read_lines(sys.argv[3])
+  merged = merge3(base_lines, our_lines, their_lines)
+  with open(sys.argv[4], 'w', encoding='utf-8', errors='surrogateescape') as fh:
+      fh.write('\n'.join(merged) + '\n')
+  PY
+    git add "$f"
+  done < <(git diff --name-only --diff-filter=U)
+  rm -rf "$tmpd"
+  git commit -m "Merge $upstream_ref into $(git rev-parse --abbrev-ref HEAD)"
+steps: null
+postconditions:
+- name: merge_commit_created
+  description: HEAD is a merge commit with a second parent
+  probe: git rev-parse --verify --quiet HEAD^2
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_merged
+  description: the upstream branch is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: no conflict markers remain in the tracked files
+  probe: '! git grep -q -e ''^<<<<<<< '' -e ''^>>>>>>> '''
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: the working tree is clean after the merge
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: resolution_keeps_local_removals_and_upstream_additions
+  description: for every file both parents changed since their merge base, lines the
+    upstream side added are present and lines the local side removed are absent in
+    the merged result
+  probe: |-
+    python3 - <<'PY'
+    import subprocess, sys
+
+
+    def out(cmd):
+        r = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        return r.stdout
+
+
+    base = out('git merge-base HEAD^1 HEAD^2').strip()
+    if not base:
+        sys.exit(1)
+    f1 = set(out('git diff --name-only ' + base + ' HEAD^1').split())
+    f2 = set(out('git diff --name-only ' + base + ' HEAD^2').split())
+    ok = True
+    for f in sorted(f1 & f2):
+        b = set(out('git show ' + base + ':' + f).splitlines())
+        o = set(out('git show HEAD^1:' + f).splitlines())
+        t = set(out('git show HEAD^2:' + f).splitlines())
+        m = set(out('git show HEAD:' + f).splitlines())
+        missing = (t - b - o) - m
+        reintroduced = (b - o) & m
+        if missing or reintroduced:
+            ok = False
+    sys.exit(0 if ok else 1)
+    PY
+  expect_exit: 0
+  expect_pattern: null
+variant: keep_local
+provenance:
+  compiled_from_task: Update this branch from upstream and make sure the dependency
+    list still makes sense. Keep my dependency file, with what I removed still removed,
+    and add what upstream added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Update this branch from upstream and make sure the dependency list still
+    makes sense. Keep my dependency file, with what I removed still removed, and add
+    what upstream added./seed-2-lockfile_conflict-28393
+  fault: lockfile_conflict
+status: candidate

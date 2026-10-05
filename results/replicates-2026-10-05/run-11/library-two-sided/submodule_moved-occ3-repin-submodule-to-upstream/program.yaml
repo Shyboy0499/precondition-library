@@ -1,0 +1,72 @@
+id: submodule_moved-occ3-repin-submodule-to-upstream
+intent: Upstream and this clone disagree about a nested repository. Reconcile them
+  by fast-forwarding the branch to upstream and checking the nested repository out
+  at the commit upstream now pins.
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: upstream_tracking_ref_present
+  description: the remote-tracking ref for upstream's branch already exists locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}^{commit}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ahead_and_fast_forwardable
+  description: upstream's tip is strictly ahead of HEAD while HEAD holds no commit
+    upstream lacks
+  probe: '[ "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt
+    0 ] && [ "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -eq
+    0 ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: nested_repo_pin_differs_from_upstream
+  description: the nested repository's gitlink in HEAD differs from the commit upstream
+    records for that path
+  probe: a=$(git rev-parse --verify --quiet HEAD:{submodule_path}) && b=$(git rev-parse
+    --verify --quiet {upstream_remote}/{upstream_branch}:{submodule_path}) && [ -n
+    "$a" ] && [ -n "$b" ] && [ "$a" != "$b" ]
+  expect_exit: 0
+  expect_pattern: null
+- name: nested_repo_already_at_head_pin
+  description: the nested repository worktree already matches the gitlink HEAD records
+    so the fast-forward cannot be blocked
+  probe: '[ "$(git -C {submodule_path} rev-parse HEAD)" = "$(git rev-parse HEAD:{submodule_path})"
+    ]'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+  git submodule update --init --recursive -- {submodule_path}
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: the branch tip is exactly upstream's tip
+  probe: '[ "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+    ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: nested_repo_at_recorded_pin
+  description: the nested repository is checked out at the commit the superproject
+    now records
+  probe: '[ "$(git -C {submodule_path} rev-parse HEAD)" = "$(git rev-parse HEAD:{submodule_path})"
+    ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_pending_change_for_nested_repo
+  description: the superproject records no outstanding change for the nested repository
+    path
+  probe: git diff --quiet -- {submodule_path}
+  expect_exit: 0
+  expect_pattern: null
+variant: repin
+provenance:
+  compiled_from_task: Upstream and this clone disagree about a nested repository.
+    Reconcile them. Check the nested repository out at the commit upstream now pins.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Upstream and this clone disagree about a nested repository. Reconcile
+    them. Check the nested repository out at the commit upstream now pins./seed-1-submodule_moved-401
+  fault: submodule_moved
+status: admitted

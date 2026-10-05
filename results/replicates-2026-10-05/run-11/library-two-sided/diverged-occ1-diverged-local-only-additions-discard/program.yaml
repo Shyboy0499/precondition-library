@@ -1,0 +1,106 @@
+id: diverged-occ1-diverged-local-only-additions-discard
+intent: Bring a fork that has diverged from upstream back in sync by discarding its
+  local-only commits when those commits do not touch any path the upstream branch
+  carries, so the checked-out branch matches the upstream branch exactly.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_configured
+  description: the upstream remote is configured in this repository
+  probe: git remote get-url '{upstream_remote}'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_present
+  description: a remote-tracking ref for the upstream branch already exists locally
+  probe: git rev-parse --verify --quiet '{upstream_remote}/{upstream_branch}'
+  expect_exit: 0
+  expect_pattern: null
+- name: head_attached_to_branch
+  description: HEAD is attached to a branch, so the hard reset moves that branch ref
+  probe: git symbolic-ref --quiet HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_default_branch_is_the_synced_branch
+  description: when the remote-tracking HEAD ref is present it names the upstream
+    branch this branch is synced with, so a renamed upstream default branch is not
+    reset to
+  probe: '[ "$(git symbolic-ref --quiet ''refs/remotes/{upstream_remote}/HEAD'' 2>/dev/null
+    || echo ''refs/remotes/{upstream_remote}/{upstream_branch}'')" = ''refs/remotes/{upstream_remote}/{upstream_branch}''
+    ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_tracked_worktree
+  description: there are no uncommitted tracked changes that the hard reset would
+    destroy
+  probe: '! git status --porcelain --untracked-files=no | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_index_entries
+  description: the index holds no unresolved merge entries; a state with conflicted
+    files needs a side taken, not a discard
+  probe: '! git ls-files --unmerged | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers_in_tracked_files
+  description: no tracked file carries conflict markers, which a hard reset would
+    drop without resolving
+  probe: '! git grep -l -e ''^<<<<<<< '' -e ''^>>>>>>> '' -- . | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_has_local_commits
+  description: the current branch has commits upstream lacks, so there is something
+    to discard
+  probe: git rev-list --count '{upstream_remote}/{upstream_branch}..HEAD'
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: upstream_has_commits_the_branch_lacks
+  description: upstream has commits the branch lacks, so the histories genuinely diverged
+  probe: git rev-list --count 'HEAD..{upstream_remote}/{upstream_branch}'
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: local_commits_touch_no_path_upstream_carries
+  description: no path changed by the local-only commits exists in the upstream branch's
+    tree, so discarding those commits gives up nothing upstream would have to reconcile;
+    where they do change such a path the right resolution is a merge or a rebase
+  probe: '! git diff --name-only ''{upstream_remote}/{upstream_branch}...HEAD'' |
+    while IFS= read -r p; do git cat-file -e "{upstream_remote}/{upstream_branch}:$p"
+    2>/dev/null && printf ''%s\n'' "$p"; done | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git reset --hard {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: head_is_upstream_commit
+  description: HEAD is exactly the upstream branch's commit
+  probe: '[ "$(git rev-parse HEAD)" = "$(git rev-parse ''{upstream_remote}/{upstream_branch}'')"
+    ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_local_only_commits
+  description: HEAD no longer contains commits that upstream lacks
+  probe: git rev-list --count '{upstream_remote}/{upstream_branch}..HEAD'
+  expect_exit: 0
+  expect_pattern: ^0$
+- name: not_behind_upstream
+  description: HEAD no longer misses commits that upstream has
+  probe: git rev-list --count 'HEAD..{upstream_remote}/{upstream_branch}'
+  expect_exit: 0
+  expect_pattern: ^0$
+- name: clean_tracked_worktree
+  description: the reset left no uncommitted tracked changes behind
+  probe: '! git status --porcelain --untracked-files=no | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+variant: discard
+provenance:
+  compiled_from_task: 'Get this fork back in sync with upstream without losing my
+    commits. My local commits can go: make my branch match upstream exactly.'
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: 'Get this fork back in sync with upstream without losing my commits.
+    My local commits can go: make my branch match upstream exactly./seed-1-diverged-27781'
+  fault: diverged
+status: admitted

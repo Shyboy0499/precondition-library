@@ -1,0 +1,165 @@
+id: lockfile_conflict-occ2-lockfile-merge-keep-local-removals
+intent: merge the upstream branch into the current branch and resolve the dependency-file
+  conflict so the lines the local branch removed stay removed while the lines upstream
+  added are kept
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: worktree_clean
+  description: the working tree has no uncommitted or unmerged changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: head_not_contained_in_upstream
+  description: the current branch has at least one commit the upstream branch does
+    not have
+  probe: git merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch}
+  expect_exit: 1
+  expect_pattern: null
+- name: upstream_not_contained_in_head
+  description: the upstream branch tip is not already reachable from HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 1
+  expect_pattern: null
+- name: three_way_merge_conflicts
+  description: merging the upstream branch into HEAD really conflicts in a file both
+    sides modified, so a resolution has to be chosen
+  probe: |-
+    mb=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    for f in $(comm -12 <(git diff --name-only "$mb" HEAD | sort) <(git diff --name-only "$mb" {upstream_remote}/{upstream_branch} | sort)); do
+      out=$(git merge-file -p --quiet <(git show "$mb:$f" 2>/dev/null) <(git show "HEAD:$f" 2>/dev/null) <(git show "{upstream_remote}/{upstream_branch}:$f" 2>/dev/null) 2>/dev/null)
+      case "$out" in
+        *'<<<<<<< '*) exit 0 ;;
+      esac
+    done
+    exit 1
+  expect_exit: 0
+  expect_pattern: null
+- name: local_removal_retained_upstream
+  description: in a file both sides modified the local branch deleted lines (a deletion
+    hunk with nothing inserted beside it) that the upstream version still contains,
+    so keeping the local removals is the resolution this program implements
+  probe: |-
+    mb=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    for f in $(comm -12 <(git diff --name-only "$mb" HEAD | sort) <(git diff --name-only "$mb" {upstream_remote}/{upstream_branch} | sort)); do
+      del=$(git diff -U0 "$mb" HEAD -- "$f" | awk '/^@@/ { if (h && d > 0 && a == 0) printf "%s", b; h = 1; d = 0; a = 0; b = ""; next } h && /^\+/ { a++; next } h && /^-/ { d++; b = b substr($0, 2) "\n"; next } { if (h && d > 0 && a == 0) printf "%s", b; h = 0 }')
+      if [ -n "$del" ] && comm -12 <(printf '%s\n' "$del" | sort -u) <(git show "{upstream_remote}/{upstream_branch}:$f" 2>/dev/null | sort -u) | grep -q .; then
+        exit 0
+      fi
+    done
+    exit 1
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git merge --no-edit {upstream_remote}/{upstream_branch} || true
+  tmp=$(mktemp -d)
+  for f in $(git diff --name-only --diff-filter=U); do
+    git show ":1:$f" > "$tmp/base"
+    git show ":2:$f" > "$tmp/ours"
+    git show ":3:$f" > "$tmp/theirs"
+    awk -v bf="$tmp/base" -v of="$tmp/ours" -v tf="$tmp/theirs" '
+    function key(s,   p) {
+      p = index(s, "=")
+      if (p > 0) s = substr(s, 1, p - 1)
+      gsub(/^[ \t]+/, "", s)
+      gsub(/[ \t]+$/, "", s)
+      return s
+    }
+    BEGIN {
+      while ((getline l < bf) > 0) b[l] = 1
+      close(bf)
+      while ((getline l < of) > 0) { o[++on] = l; os[l] = 1 }
+      close(of)
+      while ((getline l < tf) > 0) t[++tn] = l
+      close(tf)
+      for (i = 1; i <= tn; i++) {
+        l = t[i]
+        if ((l in b) && !(l in os)) continue
+        r[++rn] = l
+        if (!(l in rs)) { rs[l] = 1; rk[key(l)] = 1 }
+      }
+      last = ""
+      for (i = 1; i <= on; i++) {
+        l = o[i]
+        if (l in rs) { last = l; continue }
+        if (l in b) continue
+        if (key(l) in rk) continue
+        if (last == "") pre[++pn] = l
+        else { na[last]++; ins[last, na[last]] = l }
+      }
+      for (i = 1; i <= pn; i++) print pre[i]
+      for (i = 1; i <= rn; i++) {
+        print r[i]
+        if (r[i] in na) for (j = 1; j <= na[r[i]]; j++) print ins[r[i], j]
+      }
+    }
+    ' > "$f"
+    git add "$f"
+  done
+  if git rev-parse -q --verify MERGE_HEAD > /dev/null; then
+    git commit --no-edit
+  fi
+  rm -rf "$tmp"
+steps: null
+postconditions:
+- name: merge_completed
+  description: no merge is left in progress in the repository
+  probe: git rev-parse -q --verify MERGE_HEAD
+  expect_exit: 1
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: the index has no conflicted entries left
+  probe: test -z "$(git diff --name-only --diff-filter=U)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: no conflict markers remain in the committed content
+  probe: test -z "$(git grep -n '^<<<<<<< ' HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_merged
+  description: the upstream branch tip is reachable from HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_second_parent
+  description: HEAD is a merge commit whose second parent is the upstream tip
+  probe: test "$(git rev-parse HEAD^2)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_removals_stay_removed
+  description: lines the local branch dropped relative to the merge base are not back
+    in the working tree
+  probe: |-
+    mb=$(git merge-base HEAD^1 HEAD^2) || exit 1
+    for f in $(comm -12 <(git diff --name-only "$mb" HEAD^1 | sort) <(git diff --name-only "$mb" HEAD^2 | sort)); do
+      comm -23 <(git show "$mb:$f" 2>/dev/null | sort -u) <(git show "HEAD^1:$f" 2>/dev/null | sort -u) | comm -12 - <(sort -u "$f") | grep -q . && exit 1
+    done
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_additions_present
+  description: lines the upstream branch added relative to the merge base are present
+    in the working tree
+  probe: |-
+    mb=$(git merge-base HEAD^1 HEAD^2) || exit 1
+    for f in $(comm -12 <(git diff --name-only "$mb" HEAD^1 | sort) <(git diff --name-only "$mb" HEAD^2 | sort)); do
+      comm -23 <(git show "HEAD^2:$f" 2>/dev/null | sort -u) <(git show "$mb:$f" 2>/dev/null | sort -u) | comm -23 - <(sort -u "$f") | grep -q . && exit 1
+    done
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+variant: keep_local
+provenance:
+  compiled_from_task: Update this branch from upstream and make sure the dependency
+    list still makes sense. Keep my dependency file, with what I removed still removed,
+    and add what upstream added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Update this branch from upstream and make sure the dependency list still
+    makes sense. Keep my dependency file, with what I removed still removed, and add
+    what upstream added./seed-2-lockfile_conflict-12673
+  fault: lockfile_conflict
+status: admitted

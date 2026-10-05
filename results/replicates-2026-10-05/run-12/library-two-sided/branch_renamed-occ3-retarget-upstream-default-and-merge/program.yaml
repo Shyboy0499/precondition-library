@@ -1,0 +1,65 @@
+id: branch_renamed-occ3-retarget-upstream-default-and-merge
+intent: Make the current branch follow upstream's current main line again, and merge
+  that upstream branch into the local commits.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_configured
+  description: the remote that holds upstream's main line is configured
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_has_upstream
+  description: the current branch has a configured upstream branch that can be retargeted
+  probe: git rev-parse --abbrev-ref '@{upstream}'
+  expect_exit: 0
+  expect_pattern: null
+- name: tracking_is_outdated
+  description: the branch still follows a different branch than upstream's current
+    main line
+  probe: test "$(git rev-parse --abbrev-ref '@{upstream}')" != "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_branch_tracking_ref_exists
+  description: upstream's current main line is already known as a remote-tracking
+    ref
+  probe: git rev-parse --verify --quiet refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: no uncommitted changes that the merge would disturb
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git branch --set-upstream-to={upstream_remote}/{upstream_branch}
+  git merge --no-edit {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: tracks_upstream_main
+  description: the current branch now tracks upstream's current main line
+  probe: git rev-parse --abbrev-ref '@{upstream}'
+  expect_exit: 0
+  expect_pattern: ^{upstream_remote}/{upstream_branch}$
+- name: upstream_merged
+  description: upstream's current main line is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_still_clean
+  description: the merge finished without leaving uncommitted changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: Make this branch follow upstream's current main line again,
+    and catch it up. Track upstream's new branch and merge it into my own commits.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Make this branch follow upstream's current main line again, and catch
+    it up. Track upstream's new branch and merge it into my own commits./seed-1-branch_renamed-12673
+  fault: branch_renamed
+status: admitted

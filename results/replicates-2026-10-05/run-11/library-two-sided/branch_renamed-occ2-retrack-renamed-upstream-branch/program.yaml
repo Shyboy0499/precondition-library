@@ -1,0 +1,90 @@
+id: branch_renamed-occ2-retrack-renamed-upstream-branch
+intent: 'Make the checked-out branch follow upstream''s renamed default branch again:
+  keep the local branch''s own name, point its upstream tracking at the new upstream
+  branch, and fast-forward the branch to catch up with it.'
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: clean_worktree
+  description: no modified, staged or untracked collisions, so a fast-forward cannot
+    clobber local work
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: on_a_local_branch
+  description: HEAD is a symbolic ref to a local branch, not a detached HEAD
+  probe: git symbolic-ref -q HEAD
+  expect_exit: 0
+  expect_pattern: ^refs/heads/\S+$
+- name: tracks_upstream_remote
+  description: the checked-out branch is configured to track the upstream remote
+  probe: test "$(git config branch.$(git symbolic-ref --short HEAD).remote)" = "{upstream_remote}"
+  expect_exit: 0
+  expect_pattern: null
+- name: tracking_target_is_stale
+  description: the branch still tracks a branch other than upstream's current default
+    branch
+  probe: test "$(git config branch.$(git symbolic-ref --short HEAD).merge)" != "refs/heads/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: new_upstream_branch_known
+  description: the remote-tracking ref for upstream's current default branch exists
+    locally
+  probe: git rev-parse --verify --quiet refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: behind_new_upstream
+  description: the branch is not already at upstream's current tip; there is a catch-up
+    to do
+  probe: test "$(git rev-parse HEAD)" != "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: fast_forwardable
+  description: the branch carries no commits of its own, so the new upstream tip can
+    fast-forward it
+  probe: git merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch --prune {upstream_remote}
+  git branch --set-upstream-to={upstream_remote}/{upstream_branch}
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: head_matches_new_upstream
+  description: HEAD is exactly upstream's current default branch tip
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: tracking_retargeted
+  description: the checked-out branch now tracks the upstream remote's current default
+    branch
+  probe: |-
+    test "$(git config branch.$(git symbolic-ref --short HEAD).remote)" = "{upstream_remote}" &&
+    test "$(git config branch.$(git symbolic-ref --short HEAD).merge)" = "refs/heads/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_name_preserved
+  description: the branch is still checked out under a local branch name, not renamed
+    away or detached
+  probe: git symbolic-ref -q HEAD
+  expect_exit: 0
+  expect_pattern: ^refs/heads/\S+$
+- name: worktree_clean
+  description: the working tree is clean after the fast-forward
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: retrack
+provenance:
+  compiled_from_task: Make this branch follow upstream's current main line again,
+    and catch it up. Keep my branch's name, point its tracking at upstream's new branch
+    and catch up.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Make this branch follow upstream's current main line again, and catch
+    it up. Keep my branch's name, point its tracking at upstream's new branch and
+    catch up./seed-6-branch_renamed-27781
+  fault: branch_renamed
+status: admitted

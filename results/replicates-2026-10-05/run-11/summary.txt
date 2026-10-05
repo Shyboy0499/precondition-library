@@ -1,0 +1,46 @@
+model: deepseek-flash
+compiled 16; admitted two-sided 13, positive-only 14
+library hash: d8db771131354cf1b84e27bd19a0d83a126d1a712928737323e79cb11b26c572
+
+build episodes:
+  branch_renamed seed 0: fallback, 9 tool calls, checker ok, admitted True
+  branch_renamed seed 6: fallback, 14 tool calls, checker ok, admitted True
+  branch_renamed seed 1: fallback, 13 tool calls, checker ok, admitted False -- negative side failed: preconditions accepted 1 of 2 same-intent states (branch_renamed seed 1 resolves to 'merge', which accepts ['merge']), and that is the state the program was compiled from: it declares variant 'retrack', but the solution it was compiled from is a 'merge' resolution there, so the declared variant, not the preconditions, is what is wrong
+  branch_renamed seed 2: fallback, 17 tool calls, checker ok, admitted True
+  dirty_tree seed 5: fallback, 12 tool calls, checker ok, admitted True
+  dirty_tree seed 0: fallback, 11 tool calls, checker ok, admitted True
+  dirty_tree seed 2: fallback, 20 tool calls, checker ok, admitted True
+  diverged seed 1: fallback, 10 tool calls, checker ok, admitted True
+  diverged seed 2: fallback, 8 tool calls, checker ok, admitted True
+  diverged seed 0: fallback, 13 tool calls, checker ok, admitted True
+  lockfile_conflict seed 5: fallback, 13 tool calls, checker ok, admitted False -- negative side failed: preconditions could not be evaluated ("no value bound for placeholder 'next'; substituting an empty string would ask a different question")
+  lockfile_conflict seed 6: fallback, 24 tool calls, checker ok, admitted True
+  lockfile_conflict seed 2: fallback, 21 tool calls, checker ok, admitted False -- compile raised ProviderError: malformed DeepSeek completion response: message has neither content nor tool_calls
+  lockfile_conflict seed 3: fallback, 19 tool calls, checker ok, admitted False -- positive side failed: unknown placeholder in the program ("no value bound for placeholder 'next'; substituting an empty string would ask a different question"); the revision did not parse: the reply was not a YAML mapping, so it is not a Program: mapping values are not allowed here in "<unicode string>", line 2, column 3: id: merge-upstream-keep-local-depe ... ^
+  submodule_moved seed 0: fallback, 23 tool calls, checker ok, admitted True
+  submodule_moved seed 4: fallback, 8 tool calls, checker ok, admitted True
+  submodule_moved seed 1: fallback, 18 tool calls, checker ok, admitted True
+
+2b threshold (tune seeds): 1.0
+claim 2: at matched dispatch coverage, executable-precondition dispatch mis-fires less often than text-similarity dispatch (at arm 3's coverage the soft vote's matched point is the hard rule itself (threshold >= 1.0), so it makes arm 3's decisions and cannot show that requiring every probe adds nothing; the registered claim keeps its wording)
+
+Primary metric, uninformed regime, 400 labelled pairs (spec §7 item 1, ADR-0008)
+  arm 3 (pre-registered coverage point): coverage 187/400, mismatch 0/187
+  arm 2 curve: 107 operating point(s), each with a 95% Wilson interval in figure1.csv
+  at matched coverage arm 2 (threshold 0.1342281879194631) has mismatch 148/187; coverage gap +0.000; mismatch difference (arm 2 - arm 3) +0.7914
+  power (item 3): with 187 and 187 fires, alpha 0.05 two-sided and power 0.8, the smallest detectable mismatch difference is 0.145 at a 50% base rate and 0.142 at the observed 0.396
+  baseline arm 2b (soft vote): curve, 3 operating point(s) -- context, not part of the claim
+  baseline arm 2c (intent key): point, 1 operating point(s) -- context, not part of the claim
+
+
+arm 2 baseline floor (spec §7 item 11): not measurable, so not usable: an intent needs two or more candidate resolutions for arm 2 to choose between, and the library's admitted programs give sync_through_a_conflicting_lockfile has ['take_upstream']
+  arm 2 is not a usable baseline (spec §7 item 11), so this run may not say that precondition dispatch beats text similarity; the comparison is reported, not claimed
+
+episode stages skipped (--primary-only): no frozen benchmark
+
+artifacts:
+  build_ledger: build.jsonl
+  build_transcripts: build.transcripts.jsonl
+  library_two_sided: library-two-sided
+  library_positive_only: library-positive-only
+  primary: primary

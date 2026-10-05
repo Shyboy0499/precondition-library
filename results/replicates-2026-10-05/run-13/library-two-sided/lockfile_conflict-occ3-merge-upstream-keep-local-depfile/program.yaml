@@ -1,0 +1,195 @@
+id: lockfile_conflict-occ3-merge-upstream-keep-local-depfile
+intent: Merge the upstream branch into the local branch; where the dependency file
+  collides, keep the local file (what the local side removed stays removed) and fold
+  in the lines upstream added.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_exists
+  description: the named upstream remote is configured in this repository
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: local_has_commits_upstream_lacks
+  description: the local branch has diverged ahead of the upstream branch
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_has_commits_local_lacks
+  description: the upstream branch has commits the local branch lacks
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: both_sides_touch_same_file
+  description: the local branch and the upstream branch both changed at least one
+    of the same files, so the merge can collide
+  probe: |-
+    mb=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    comm -12 <(git diff --name-only "$mb" HEAD | sort -u) <(git diff --name-only "$mb" {upstream_remote}/{upstream_branch} | sort -u) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_before_merge
+  description: the working tree and index are clean, so a merge can be started
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_side_drops_lines_in_shared_file
+  description: the local branch deletes lines (a pure removal, not just an edit) in
+    a file the upstream branch also changed, so the local removals are exactly what
+    must survive the merge instead of upstream taking the file wholesale
+  probe: |-
+    mb=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    u={upstream_remote}/{upstream_branch}
+    files=$(comm -12 <(git diff --name-only "$mb" HEAD | sort -u) <(git diff --name-only "$mb" "$u" | sort -u))
+    [ -n "$files" ] || exit 1
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      dropped=$(git diff --unified=0 "$mb" HEAD -- "$f" | awk '
+        /^@@/ { if (h && d && !a) printf "%s", b; h=1; d=0; a=0; b=""; next }
+        !h { next }
+        /^---/ { next }
+        /^\+\+\+/ { next }
+        /^\+/ { a=1; next }
+        /^-/ { d=1; b = b substr($0,2) "\n"; next }
+        END { if (h && d && !a) printf "%s", b }')
+      [ -n "$dropped" ] || continue
+      exit 0
+    done <<EOF
+    $files
+    EOF
+    exit 1
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  # Refresh the upstream remote-tracking ref the merge is based on.
+  git fetch {upstream_remote} {upstream_branch}
+
+  # A clean merge already keeps both sides; nothing left to resolve.
+  if git merge --no-edit {upstream_remote}/{upstream_branch}; then
+    exit 0
+  fi
+
+  tmp=$(mktemp -d)
+  git diff --name-only --diff-filter=U > "$tmp/conflicts"
+
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+
+    if ! git show ":2:$path" > "$tmp/ours" 2>/dev/null; then
+      # The local side deleted this file: keep the deletion.
+      git rm -q -f -- "$path"
+      continue
+    fi
+    if ! git show ":3:$path" > "$tmp/theirs" 2>/dev/null; then
+      # Upstream deleted it while the local side changed it: keep ours.
+      git add -- "$path"
+      continue
+    fi
+    if ! git show ":1:$path" > "$tmp/base" 2>/dev/null; then
+      : > "$tmp/base"
+    fi
+
+    # Lines upstream added on top of the merge base: pure insertions only, so
+    # upstream rewrites of lines the local side also touched are left out.
+    git diff --no-index --unified=0 "$tmp/base" "$tmp/theirs" | awk '
+      /^@@/ { if (h && d && !a) for (i = 1; i <= n; i++) print p[i]; h = 1; d = 0; a = 0; n = 0; next }
+      !h { next }
+      /^---/ { next }
+      /^\+\+\+/ { next }
+      /^\+/ { n++; p[n] = substr($0, 2); next }
+      /^-/ { d = 1; next }
+      END { if (h && d && !a) for (i = 1; i <= n; i++) print p[i] }
+    ' > "$tmp/adds"
+
+    # Start from the local file (local removals and local edits win) and slot
+    # upstream's added lines back in next to the lines the two sides share.
+    awk -v A="$tmp/ours" -v B="$tmp/theirs" -v C="$tmp/adds" '
+      FILENAME == A { o[++no] = $0; if (!($0 in oidx)) oidx[$0] = no; next }
+      FILENAME == B { t[++nt] = $0; next }
+      FILENAME == C { a[++na] = $0; next }
+      END {
+        ti = 1
+        for (k = 1; k <= na; k++) {
+          while (ti <= nt && t[ti] != a[k]) ti++
+          tpos[k] = ti
+          if (ti <= nt) ti++
+        }
+        for (k = 1; k <= na; k++) {
+          anch = 0
+          for (j = tpos[k] + 1; j <= nt; j++) if (t[j] in oidx) { anch = oidx[t[j]]; break }
+          if (anch == 0) for (j = tpos[k] - 1; j >= 1; j--) if (t[j] in oidx) { anch = oidx[t[j]] + 1; break }
+          if (anch == 0) anch = 1
+          ins[anch] = ins[anch] a[k] "\n"
+        }
+        for (i = 1; i <= no + 1; i++) {
+          if (i in ins) printf "%s", ins[i]
+          if (i <= no) print o[i]
+        }
+      }
+    ' "$tmp/ours" "$tmp/theirs" "$tmp/adds" > "$tmp/result"
+
+    cp -- "$tmp/result" "$path"
+    git add -- "$path"
+  done < "$tmp/conflicts"
+
+  rm -rf "$tmp"
+
+  # Record the merge once every conflict has been resolved.
+  if [ -e "$(git rev-parse --git-dir)/MERGE_HEAD" ]; then
+    git commit --no-edit
+  fi
+steps: null
+postconditions:
+- name: no_unmerged_paths
+  description: no conflicted paths remain in the index
+  probe: test -z "$(git diff --name-only --diff-filter=U)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: no tracked working-tree file still contains merge conflict markers
+  probe: '! git grep -q -e ''^<<<<<<< '' -e ''^>>>>>>> '''
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_finished
+  description: no merge is left in progress
+  probe: test ! -e "$(git rev-parse --git-dir)/MERGE_HEAD"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_merge
+  description: the working tree and index have no outstanding changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_merged
+  description: upstream's tip is an ancestor of HEAD, so nothing upstream is left
+    out
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: head_is_merge_commit
+  description: HEAD has two or more parents, so upstream was merged in rather than
+    dropped
+  probe: test "$(git rev-list --parents -n 1 HEAD | wc -w)" -ge 3
+  expect_exit: 0
+  expect_pattern: null
+- name: local_work_survives
+  description: the merged tree still differs from upstream's tip, so the local side
+    was kept
+  probe: test -n "$(git diff --name-only {upstream_remote}/{upstream_branch} HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+variant: keep_local
+provenance:
+  compiled_from_task: Get my fork current with upstream; our dependency changes collided.
+    Keep my dependency file, with what I removed still removed, and add what upstream
+    added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get my fork current with upstream; our dependency changes collided.
+    Keep my dependency file, with what I removed still removed, and add what upstream
+    added./seed-3-lockfile_conflict-28393
+  fault: lockfile_conflict
+status: admitted

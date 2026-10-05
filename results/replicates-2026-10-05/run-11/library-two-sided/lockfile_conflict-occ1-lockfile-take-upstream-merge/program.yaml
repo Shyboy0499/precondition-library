@@ -1,0 +1,148 @@
+id: lockfile_conflict-occ1-lockfile-take-upstream-merge
+intent: Catch up with upstream without losing what either side added or reviving what
+  either side removed by merging the upstream branch in and resolving each conflicting
+  dependency lock file starting from upstream's version, re-adding the lines the local
+  branch added that upstream did not remove.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_exists
+  description: the configured upstream remote is present
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_exists
+  description: the upstream branch is already available as a remote-tracking ref
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_diverged
+  description: the local branch and upstream each hold commits the other lacks
+  probe: |-
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0 &&
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_not_in_progress
+  description: no merge is already in progress
+  probe: test ! -e "$(git rev-parse --git-path MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: nothing is staged or modified before the merge
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: both_sides_changed_a_dependency_file
+  description: both sides modified the same lock or dependency file, so the two versions
+    must be reconciled
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    while IFS= read -r f; do
+      case "$f" in
+        *[Ll]ock*|*deps*|*requirement*|go.sum|pom.xml|Cargo.toml|package.json|pyproject.toml|Gemfile*) exit 0;;
+      esac
+    done < <(comm -12 <(git diff --name-only "$base" HEAD | sort) <(git diff --name-only "$base" {upstream_remote}/{upstream_branch} | sort))
+    exit 1
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_dropped_lines_in_that_file
+  description: upstream's version of the shared dependency file deletes at least one
+    line, so the resolution has to start from upstream's file rather than keep the
+    local file wholesale
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    while IFS= read -r f; do
+      case "$f" in
+        *[Ll]ock*|*deps*|*requirement*|go.sum|pom.xml|Cargo.toml|package.json|pyproject.toml|Gemfile*)
+          if git diff -U0 "$base" {upstream_remote}/{upstream_branch} -- "$f" | awk '/^--- / {next} /^-/ {found=1} END {exit !found}'; then exit 0; fi
+          ;;
+      esac
+    done < <(comm -12 <(git diff --name-only "$base" HEAD | sort) <(git diff --name-only "$base" {upstream_remote}/{upstream_branch} | sort))
+    exit 1
+  expect_exit: 0
+  expect_pattern: null
+- name: no_local_deletion_revived_by_upstream
+  description: no line the local branch deleted from the shared dependency file is
+    still present upstream, so starting from upstream's file cannot revive a local
+    removal
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    while IFS= read -r f; do
+      case "$f" in
+        *[Ll]ock*|*deps*|*requirement*|go.sum|pom.xml|Cargo.toml|package.json|pyproject.toml|Gemfile*)
+          if git diff -U0 "$base" HEAD -- "$f" | awk '/^--- / {next} /^-/ {sub(/^-/, ""); print}' | grep -F -x -q -f - <(git show {upstream_remote}/{upstream_branch}:"$f"); then exit 1; fi
+          ;;
+      esac
+    done < <(comm -12 <(git diff --name-only "$base" HEAD | sort) <(git diff --name-only "$base" {upstream_remote}/{upstream_branch} | sort))
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote} || true
+  git merge --no-edit {upstream_remote}/{upstream_branch} || true
+  if test -f "$(git rev-parse --git-path MERGE_HEAD)"; then
+    for f in $(git diff --name-only --diff-filter=U); do
+      git checkout --conflict=diff3 -- "$f"
+      awk '
+        /^<<<<<<</ { inblk = 1; sec = "ours"; no = 0; nb = 0; nt = 0; next }
+        inblk && /^\|\|\|\|\|\|\|/ { sec = "base"; next }
+        inblk && /^=======$/ { sec = "theirs"; next }
+        inblk && /^>>>>>>>/ {
+          for (i = 1; i <= nt; i++) print T[i]
+          for (i = nb + 1; i <= no; i++) print O[i]
+          inblk = 0; sec = ""; next
+        }
+        inblk {
+          if (sec == "ours") O[++no] = $0
+          else if (sec == "base") B[++nb] = $0
+          else if (sec == "theirs") T[++nt] = $0
+          next
+        }
+        { print }
+      ' "$f" > "$f.merge-resolved"
+      mv "$f.merge-resolved" "$f"
+      git add -- "$f"
+    done
+    git commit --no-edit
+  fi
+steps: null
+postconditions:
+- name: no_unmerged_paths
+  description: the merge left no conflicted index entries
+  probe: test -z "$(git diff --name-only --diff-filter=U)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: no conflict markers remain in the tracked files
+  probe: '! git grep -q -e ''^<<<<<<< '' -e ''^||||||| '' -e ''^>>>>>>> '''
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: the upstream branch is now part of the history of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: head_is_merge_commit
+  description: HEAD is the merge commit that joined the two histories
+  probe: git rev-parse --quiet --verify HEAD^2
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after
+  description: the resolution is committed and the working tree is clean
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: Catch up with upstream without losing what either side added,
+    or reviving what either side removed. Start from upstream's dependency file and
+    add back what I added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Catch up with upstream without losing what either side added, or reviving
+    what either side removed. Start from upstream's dependency file and add back what
+    I added./seed-5-lockfile_conflict-27781
+  fault: lockfile_conflict
+status: candidate

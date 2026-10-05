@@ -1,0 +1,142 @@
+id: lockfile_conflict-occ1-lockfile-conflict-merge-take-upstream
+intent: 'Catch up with upstream by merging it in and resolving the conflicted dependency
+  file: start from upstream''s version of that file and re-add the lines the local
+  side added, without reviving lines either side removed.'
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: branches_diverged
+  description: both the local branch and upstream have commits the other lacks
+  probe: git rev-list --count --left-right {upstream_remote}/{upstream_branch}...HEAD
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*[[:space:]]+[1-9][0-9]*$
+- name: same_file_changed_on_both_sides
+  description: at least one file is changed on both sides since the merge base, so
+    a conflicted integration is possible
+  probe: |-
+    mb=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+    common=$(comm -12 <(git diff --name-only "$mb" HEAD | sort -u) <(git diff --name-only "$mb" {upstream_remote}/{upstream_branch} | sort -u))
+    test -n "$common"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_dropped_lines_local_still_has
+  description: upstream's version of a commonly changed file drops a line that the
+    merge base and the local branch still carry, so the resolution has to be based
+    on upstream's text rather than the local text
+  probe: |-
+    mb=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+    while IFS= read -r f; do
+      base=$(git show "$mb:$f" 2>/dev/null) || continue
+      ours=$(git show "HEAD:$f" 2>/dev/null) || continue
+      theirs=$(git show "{upstream_remote}/{upstream_branch}:$f" 2>/dev/null) || continue
+      dropped=$(comm -12 <(printf '%s\n' "$base" | sort -u) <(printf '%s\n' "$ours" | sort -u) | comm -23 - <(printf '%s\n' "$theirs" | sort -u))
+      if [ -n "$dropped" ]; then
+        exit 0
+      fi
+    done < <(comm -12 <(git diff --name-only "$mb" HEAD | sort -u) <(git diff --name-only "$mb" {upstream_remote}/{upstream_branch} | sort -u))
+    exit 1
+  expect_exit: 0
+  expect_pattern: null
+- name: local_dropped_no_lines_upstream_still_has
+  description: the local version of every commonly changed file still carries every
+    line the merge base and upstream carry, so basing the resolution on upstream's
+    text revives nothing the local side removed
+  probe: |-
+    mb=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+    while IFS= read -r f; do
+      base=$(git show "$mb:$f" 2>/dev/null) || continue
+      ours=$(git show "HEAD:$f" 2>/dev/null) || continue
+      theirs=$(git show "{upstream_remote}/{upstream_branch}:$f" 2>/dev/null) || continue
+      dropped=$(comm -12 <(printf '%s\n' "$base" | sort -u) <(printf '%s\n' "$theirs" | sort -u) | comm -23 - <(printf '%s\n' "$ours" | sort -u))
+      if [ -n "$dropped" ]; then
+        exit 1
+      fi
+    done < <(comm -12 <(git diff --name-only "$mb" HEAD | sort -u) <(git diff --name-only "$mb" {upstream_remote}/{upstream_branch} | sort -u))
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: the working tree and the index have no pending changes
+  probe: git diff --quiet && git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: the repository is not already part way through a merge
+  probe: '! git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -eu
+  up="{upstream_remote}/{upstream_branch}"
+  git fetch {upstream_remote} >/dev/null 2>&1 || true
+  git merge --no-edit "$up" >/dev/null 2>&1 || true
+  tmp=$(mktemp -d)
+  mb=$(git merge-base HEAD "$up")
+  git diff --name-only --diff-filter=U > "$tmp/conflicted" || true
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    git show "$up:$f" > "$tmp/theirs" 2>/dev/null || : > "$tmp/theirs"
+    git diff -U3 --no-color "$mb" HEAD -- "$f" > "$tmp/local.diff" || true
+    awk '
+      /^@@/ { inhunk = 1; pend = 0; n = 0; next }
+      !inhunk { next }
+      /^---/ { next }
+      /^-/ { pend++; next }
+      /^\+/ { if (pend > 0) { pend--; next } p[n++] = substr($0, 2); next }
+      /^ / { if (n > 0) { c = substr($0, 2); for (i = 0; i < n; i++) { print c; print p[i] } n = 0 } pend = 0; next }
+      END { if (n > 0) { for (i = 0; i < n; i++) { print ""; print p[i] } } }
+    ' "$tmp/local.diff" > "$tmp/pairs"
+    : > "$tmp/filtered"
+    while IFS= read -r anchor; do
+      IFS= read -r text || break
+      if grep -F -x -q -- "$text" "$tmp/theirs"; then continue; fi
+      printf '%s\n' "$anchor" >> "$tmp/filtered"
+      printf '%s\n' "$text" >> "$tmp/filtered"
+    done < "$tmp/pairs"
+    awk -v rules="$tmp/filtered" '
+      BEGIN { na = 0; while ((getline a < rules) > 0) { if ((getline t < rules) <= 0) break; anc[na] = a; txt[na] = t; na++ } }
+      { for (j = 0; j < na; j++) if (!done[j] && anc[j] != "" && anc[j] == $0) { print txt[j]; done[j] = 1 } print }
+      END { for (j = 0; j < na; j++) if (!done[j]) print txt[j] }
+    ' "$tmp/theirs" > "$tmp/resolved"
+    cp "$tmp/resolved" "$f"
+    git add -- "$f"
+  done < "$tmp/conflicted"
+  if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+    git commit --no-edit >/dev/null
+  fi
+  rm -rf "$tmp"
+steps: null
+postconditions:
+- name: upstream_is_ancestor
+  description: the upstream tip is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_commit_created
+  description: HEAD is a merge commit with two parents
+  probe: test "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 3
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: no staged or unstaged changes remain after the merge
+  probe: git diff --quiet && git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: no conflict markers remain in the working tree
+  probe: '! grep -rIq ''^<<<<<<< '' --exclude-dir=.git .'
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: Catch up with upstream without losing what either side added,
+    or reviving what either side removed. Start from upstream's dependency file and
+    add back what I added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Catch up with upstream without losing what either side added, or reviving
+    what either side removed. Start from upstream's dependency file and add back what
+    I added./seed-5-lockfile_conflict-28393
+  fault: lockfile_conflict
+status: admitted
