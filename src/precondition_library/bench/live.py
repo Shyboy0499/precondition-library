@@ -52,6 +52,11 @@ and its reasons live in those rows.
 
 `summary.json` and `summary.txt` record what ran and where each artifact is.
 
+**`--resume`** continues a run that was interrupted during its build, with the same
+options: `plan.json`, written first, must match, and every build episode the run
+committed is kept (`build_library`'s `resume`). A run that got past its build is
+refused: its later stages are measurements, and one is never stitched from two processes.
+
 **The key.** Nothing in the package finds a key on its own (`provider.DeepSeekProvider`
 takes it at construction). The caller names where it is, with exactly one of
 `--api-key-env NAME` (the spec's §7 example, `DEEPSEEK_API_KEY`) or `--api-key-file PATH`.
@@ -267,13 +272,43 @@ def _episodes(
     return ledger
 
 
-def run_live(plan: LivePlan, *, provider: Provider, model: str, out: Path) -> LiveSummary:
-    """Run every stage in order; `out` must not exist yet, so nothing is mixed in."""
-    if out.exists():
-        raise ValueError(f"{out} already exists; a live run writes into a fresh directory")
+_PLAN = "plan.json"
+"""The run's plan and model, written first, so a resumed run can be held to them."""
+_BUILD_FILES = frozenset(
+    {
+        _PLAN,
+        "build.jsonl",
+        "build.transcripts.jsonl",
+        "build.progress.jsonl",
+        "library-two-sided",
+        "library-positive-only",
+    }
+)
+"""What a run holds while it is still building: all a resumed run may find."""
+
+
+def run_live(
+    plan: LivePlan, *, provider: Provider, model: str, out: Path, resume: bool = False
+) -> LiveSummary:
+    """Run every stage in order; `out` must not exist yet, so nothing is mixed in.
+
+    `resume` continues a run in `out` that was interrupted during its build -- the fifth
+    and ninth live runs lost theirs to a container restart -- keeping every build episode
+    it committed (`build_library`'s `resume`). It must be the same plan and model, and
+    nothing after the build may have started: a later stage is a measurement of the
+    finished library, which is cheap to run again, and is never stitched from two
+    processes.
+    """
     if plan.replicates < 1:
         raise ValueError(f"replicates must be at least 1, got {plan.replicates}")
-    out.mkdir(parents=True)
+    recorded = {"model": model, "plan": plan.model_dump(mode="json")}
+    if resume:
+        _check_resumable(out, recorded)
+    else:
+        if out.exists():
+            raise ValueError(f"{out} already exists; a live run writes into a fresh directory")
+        out.mkdir(parents=True)
+        (out / _PLAN).write_text(json.dumps(recorded, indent=2) + "\n", encoding="utf-8")
     faults = list(plan.faults)
     two_sided, positive_only = out / "library-two-sided", out / "library-positive-only"
 
@@ -285,6 +320,7 @@ def run_live(plan: LivePlan, *, provider: Provider, model: str, out: Path) -> Li
         model=model,
         seeds=plan.build_seeds,
         positive_only_root=positive_only,
+        resume=resume,
     )
     if build.positive_only is None:
         raise RuntimeError("the build returned no positive-only library; the factorial needs it")
@@ -335,6 +371,22 @@ def run_live(plan: LivePlan, *, provider: Provider, model: str, out: Path) -> Li
     (out / "summary.json").write_text(result.model_dump_json(indent=2), encoding="utf-8")
     (out / "summary.txt").write_text(_text(result), encoding="utf-8")
     return result
+
+
+def _check_resumable(out: Path, recorded: dict) -> None:
+    """Refuse to resume anything but this plan's run, interrupted during its build."""
+    if not (out / _PLAN).is_file():
+        raise ValueError(f"{out} holds no {_PLAN}; there is no interrupted run there to resume")
+    if (out / "summary.json").exists():
+        raise ValueError(f"{out} already finished; its summary is written")
+    previous = json.loads((out / _PLAN).read_text(encoding="utf-8"))
+    if previous != recorded:
+        raise ValueError(f"{out} was started with a different plan or model: {previous}")
+    later = sorted(path.name for path in out.iterdir() if path.name not in _BUILD_FILES)
+    if later:
+        raise ValueError(
+            f"{out} got past its build ({', '.join(later)}); only an interrupted build resumes"
+        )
 
 
 def _pair_level(result: LiveSummary, plan: LivePlan, library: Library, out: Path) -> None:
@@ -511,6 +563,12 @@ def _parser() -> argparse.ArgumentParser:
     key.add_argument("--api-key-env", metavar="NAME", help="environment variable holding the key")
     key.add_argument("--api-key-file", type=Path, metavar="PATH", help="file holding the key")
     parser.add_argument("--out", type=Path, required=True, help="fresh output directory")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="continue the run in --out that was interrupted during its build, with the "
+        "same options; its committed build episodes are kept",
+    )
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument(
         "--episode-seeds",
@@ -555,7 +613,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     provider = DeepSeekProvider(api_key=api_key, model=args.model)
     try:
-        result = run_live(plan, provider=provider, model=args.model, out=args.out)
+        result = run_live(
+            plan, provider=provider, model=args.model, out=args.out, resume=args.resume
+        )
     except BaseException as error:
         # A half-written run is not a run; keep it for debugging, but say so.
         if args.out.exists() and not (args.out / "summary.json").exists():
