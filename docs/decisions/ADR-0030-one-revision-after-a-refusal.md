@@ -69,6 +69,11 @@ build's problem is that a refusal is a dead end.
    positive-only gate has no negative side, so it never produced the refusal the
    revision answers. Gating the revision positive-only would give the ungated library
    programs shaped by the gate it is the control for.
+9. **A reply that does not parse gets the same one retry, as a repair.** The
+   compile is retried with `previous_reply` and `parse_failure` in the payload and a
+   repair note. It shares the budget of two compiles, so a program that needed a
+   repair has no revision left. The fourth and sixth live runs each lost a build
+   program to a first reply that was not a valid program.
 
 ## Consequences
 

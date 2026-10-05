@@ -1780,6 +1780,51 @@ def test_a_revision_that_produced_nothing_is_on_the_row(
     assert f"; {named}" in reason, reason
 
 
+def test_an_unparsable_compile_is_repaired_once(tmp_path: Path) -> None:
+    """A first reply that is not a program gets the one retry, shown what it wrote."""
+    provider = FakeProvider(
+        *_resolves_discard(),
+        _completion(_MALFORMED_REPLY),
+        _completion(_reply_text(_discard_program())),
+    )
+    out = tmp_path / "ledger.jsonl"
+    run_benchmark(
+        arms=[Arm.PRECONDITION],
+        faults=["diverged"],
+        occurrences=1,
+        seeds=[DISCARD_SEED],
+        out=out,
+        model="fake",
+        provider=provider,
+    )
+    (row,) = read(out)
+    assert row.admitted is True and row.compile_attempts == 2
+    repair = provider.calls[-1]
+    assert "REPAIR" in repair["system"] and "REVISION" not in repair["system"]
+    request = repair["messages"][-1]["content"]
+    assert '"parse_failure"' in request and "not a YAML mapping" in request
+    assert '"previous_reply"' in request and "[unclosed" in request
+
+
+def test_a_repair_that_does_not_parse_either_names_both(tmp_path: Path) -> None:
+    provider = FakeProvider(
+        *_resolves_discard(), _completion(_MALFORMED_REPLY), _completion(_MALFORMED_REPLY)
+    )
+    out = tmp_path / "ledger.jsonl"
+    run_benchmark(
+        arms=[Arm.PRECONDITION],
+        faults=["diverged"],
+        occurrences=1,
+        seeds=[DISCARD_SEED],
+        out=out,
+        model="fake",
+        provider=provider,
+    )
+    (row,) = read(out)
+    assert not row.admitted and row.compile_attempts == 2
+    assert "the repair did not parse either" in (row.compile_failure_reason or "")
+
+
 def test_a_revision_that_is_refused_too_keeps_the_last_reason(tmp_path: Path) -> None:
     always = Predicate(name="always", description="holds anywhere", probe="true")
     broad = _reply_text(_discard_program(preconditions=[always]))
