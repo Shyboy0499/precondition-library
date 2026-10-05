@@ -27,6 +27,7 @@ from precondition_library.bench.build_library import (
 from precondition_library.bench.ledger import Arm, EpisodeOutcome, append, read
 from precondition_library.library import Library
 from precondition_library.program import ProgramStatus
+from precondition_library.provider import ProviderAuthError
 from precondition_library.tasks.registry import ambiguous_intents
 
 _ONE_SEED = {fault: [[(0, None, None)]] for fault in live.MEASURED_FAULTS}
@@ -319,6 +320,26 @@ def test_the_command_exits_1_with_a_message_when_it_stopped(monkeypatch, tmp_pat
     code = live.main(["--api-key-file", str(key_file), "--out", str(tmp_path / "o")])
     assert code == 1
     assert "stopped after build" in capsys.readouterr().out
+
+
+def test_a_refused_account_stops_the_command_without_a_summary(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    """The tenth live run's revoked key wrote 28 failed rows and a summary. Now the
+    command stops at the first refusal, says so, and leaves no summary behind."""
+    key_file = tmp_path / "key"
+    key_file.write_text("k", encoding="utf-8")
+    out = tmp_path / "o"
+
+    def refused(plan, **_):
+        out.mkdir()
+        raise ProviderAuthError("DeepSeek request failed with HTTP 401", status_code=401)
+
+    monkeypatch.setattr(live, "run_live", refused)
+    with pytest.raises(SystemExit, match="refused the account"):
+        live.main(["--api-key-file", str(key_file), "--out", str(out)])
+    assert f"incomplete run left in {out}" in capsys.readouterr().out
+    assert not (out / "summary.json").exists()
 
 
 # --- replicates (issue #185) -------------------------------------------------
