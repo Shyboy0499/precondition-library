@@ -232,6 +232,35 @@ def test_git_peel_syntax_is_not_a_placeholder() -> None:
     assert placeholders("git cat-file -t HEAD^{tree} && git rev-parse v1^{}") == []
 
 
+def test_awk_actions_are_not_placeholders() -> None:
+    """The eleventh live run's compiled lockfile probe was refused as naming an unknown
+    placeholder `next`: awk's actions are braces too."""
+    probe = (
+        "git diff -U0 HEAD {upstream_remote}/{upstream_branch} -- f | "
+        "awk '/^--- / {next} /^-/ {found=1} END {exit !found}'"
+    )
+    bound = {"upstream_remote": "upstream", "upstream_branch": "main"}
+    assert substitute(probe, bound) == (
+        "git diff -U0 HEAD upstream/main -- f | "
+        "awk '/^--- / {next} /^-/ {found=1} END {exit !found}'"
+    )
+    assert placeholders(probe) == ["upstream_remote", "upstream_branch"]
+    assert placeholders("awk '{getline} {nextfile}'") == []
+
+
+@pytest.mark.parametrize(
+    "probe",
+    [
+        pytest.param("git fetch {upstream_brnch}", id="misspelt-parameter"),
+        pytest.param("git fetch {branch}", id="a-word-of-a-parameter"),
+        pytest.param("git fetch {upstream}", id="another-word-of-a-parameter"),
+    ],
+)
+def test_a_name_reaching_for_a_parameter_still_raises(probe: str) -> None:
+    with pytest.raises(KeyError):
+        substitute(probe, {"upstream_remote": "upstream", "upstream_branch": "main"})
+
+
 def test_substitute_raises_on_an_unknown_placeholder() -> None:
     """A name outside the vocabulary is a program defect and must not be silent."""
     with pytest.raises(KeyError):

@@ -82,6 +82,23 @@ class UnboundParameterError(KeyError):
 # and `{a,b}` / `{print $1}` must pass through intact.
 _PLACEHOLDER = re.compile(r"(?<![$@^])\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
+_VOCABULARY_WORDS: frozenset[str] = frozenset(
+    word for name in VOCABULARY for word in name.split("_")
+)
+
+
+def _is_placeholder(name: str) -> bool:
+    """Whether a `{name}` the pattern found is the program's, or another language's.
+
+    awk's actions are braces too: the eleventh live run's lockfile probe
+    `awk '/^--- / {next} /^-/ {found=1} END {exit !found}'` was refused for naming an
+    unknown placeholder `next`. So a word that cannot be a misspelt parameter is left
+    to the shell: one outside `VOCABULARY`, with no underscore (every parameter has
+    one), that is not itself a word of a parameter (`{branch}` and `{upstream}` are a
+    model reaching for a parameter, and stay a defect). `{upstream_brnch}` still raises.
+    """
+    return name in VOCABULARY or "_" in name or name in _VOCABULARY_WORDS
+
 
 def _find_bash() -> str:
     """Resolve a `bash` that can actually run a probe on this platform.
@@ -122,9 +139,10 @@ _MAX_EXCERPT = 160
 def substitute(text: str, parameters: dict[str, str]) -> str:
     """Replace `{name}` placeholders in `text` from `parameters`.
 
-    A name outside `VOCABULARY` raises `KeyError` -- an unknown placeholder is a
-    defect in the program, and running the probe with the literal braces would
-    ask a different (often falsely-holding) question. A declared name that this
+    A word that cannot be a parameter (`_is_placeholder`: awk's `{next}`) is left as
+    written. Any other name outside `VOCABULARY` raises `KeyError` -- an unknown
+    placeholder is a defect in the program, and running the probe with the literal
+    braces would ask a different (often falsely-holding) question. A declared name that this
     environment cannot bind raises `UnboundParameterError`, which callers that
     evaluate preconditions turn into a failed result rather than a crash.
     """
@@ -133,6 +151,8 @@ def substitute(text: str, parameters: dict[str, str]) -> str:
         name = match.group(1)
         if name in parameters:
             return parameters[name]
+        if not _is_placeholder(name):
+            return match.group(0)
         if name in VOCABULARY:
             raise UnboundParameterError(
                 f"the environment cannot bind {name!r}; a precondition that needs it "
@@ -193,7 +213,8 @@ def placeholders(text: str) -> list[str]:
     """
     seen: dict[str, None] = {}
     for match in _PLACEHOLDER.finditer(text):
-        seen.setdefault(match.group(1), None)
+        if _is_placeholder(match.group(1)):
+            seen.setdefault(match.group(1), None)
     return list(seen)
 
 
