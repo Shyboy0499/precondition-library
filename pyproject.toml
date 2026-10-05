@@ -23,6 +23,7 @@ dev = [
     "mypy>=1.10",
     "pandas>=2.2",
     "matplotlib>=3.9",
+    "pytest-xdist>=3.6",
 ]
 # Arm 2's optional embedding scorer (#104). A separate extra rather than a core
 # dependency: the shipped seam is lexical (ADR-0003), so an install that never fills

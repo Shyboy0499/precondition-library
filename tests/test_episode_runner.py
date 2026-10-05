@@ -33,6 +33,7 @@ import pytest
 import yaml
 from conftest import GIT_STATUS_AT_IMPORT, FakeProvider, git_status_porcelain, gold_program
 
+from precondition_library import sandbox as sandbox_module
 from precondition_library.bench.ledger import Arm, EpisodeRecord, OccurrenceRole, read
 from precondition_library.bench.run import (
     _AccountingProvider,
@@ -104,14 +105,18 @@ _DISCARD_BODY = (
 
 
 def _sandboxes() -> set[str]:
-    """The sandbox roots under `.sandboxes/`, or none when it does not exist.
+    """This process's sandbox roots under `.sandboxes/`, or none when it does not exist.
 
     Compared before and after rather than asserted empty: a run interrupted earlier
     (a killed suite, a crashed episode) can leave a root behind, and that is not
-    something the test in hand leaked.
+    something the test in hand leaked. Only this process's roots count -- each name
+    ends in its pid -- because a parallel worker's sandbox is not this test's leak.
     """
     root = ROOT / ".sandboxes"
-    return {path.name for path in root.iterdir()} if root.exists() else set()
+    if not root.exists():
+        return set()
+    mine = f"-{sandbox_module._PROCESS_TOKEN}"
+    return {path.name for path in root.iterdir() if path.name.endswith(mine)}
 
 
 def _tool_call(command: str) -> dict:
