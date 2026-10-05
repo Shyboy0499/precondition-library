@@ -92,7 +92,7 @@ from .report import (
 from .run import DEFAULT_REPLICATES, run_benchmark, run_replicates
 from .similarity_probe import program_text_candidates, tune_baseline
 from .soft_vote import claim2_verdict, learn_soft_threshold, soft_vote_outcomes
-from .splits import EVAL_SEEDS, SMOKE_SEEDS, TUNE_SEEDS
+from .splits import EVAL_SEEDS, TUNE_SEEDS
 
 MEASURED_FAULTS: tuple[str, ...] = tuple(sorted(intent.fault for intent in ambiguous_intents()))
 """Every fault an ambiguous intent covers (`tasks.registry`), by name. Derived, so that
@@ -119,7 +119,9 @@ class LivePlan(BaseModel):
     and `branch_renamed`."""
 
     faults: tuple[str, ...] = MEASURED_FAULTS
-    build_seeds: tuple[int, ...] = SMOKE_SEEDS
+    build_seeds: tuple[int, ...] | None = None
+    """`None` builds the registered admit set, one episode per resolution (ADR-0032); a
+    tuple builds those seeds for every fault with the fault's own requests."""
     tune_seeds: tuple[int, ...] = TUNE_SEEDS
     pair_seeds: tuple[int, ...] = EVAL_SEEDS
     episode_seeds: tuple[int, ...] = SMOKE_EPISODE_SEEDS

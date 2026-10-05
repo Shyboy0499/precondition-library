@@ -5,9 +5,11 @@ committed; every arm dispatches against that one artifact." Until now each arm g
 own library online (`library-{arm}`), so an arm-2-versus-arm-3 difference could come
 from different libraries rather than from different dispatch functions.
 
-**Built from the admit set, and neutral between the arms.** Every `(fault, seed)` in
-the admit set (`bench.splits.SMOKE_SEEDS`, spec §7) is solved by the agent and its
-solution compiled and gated by the same `admit` the online runner uses. Each seed runs
+**Built from the admit set, and neutral between the arms.** Every episode of the admit
+set (`bench.admit_set.ADMIT_SET`, ADR-0032: one per declared resolution, its request
+asking for that resolution) is solved by the agent and its solution compiled and gated
+by the same `admit` the online runner uses. A caller may pass `seeds` instead, which
+runs those seeds for every fault with the fault's own requests, as builds did before. Each seed runs
 against its **own empty scratch library**, so nothing is ever dispatched during the
 build: which programs end up in the artifact cannot depend on either arm's dispatch
 decisions. An admitted program's whole directory -- `program.yaml` and the
@@ -47,9 +49,10 @@ from ..library import Library
 from ..program import Program, ProgramStatus
 from ..provider import Provider
 from ..runtime.probes import evaluate_preconditions
+from .admit_set import ADMIT_SET, admit_request
 from .ledger import Arm, append, transcripts_path
 from .run import MANIFEST, _require_measurable, run_episode
-from .splits import SMOKE_SEEDS, occurrence_roles
+from .splits import occurrence_roles
 
 _BUILD_ARM = Arm.PRECONDITION
 """The arm named on build rows. Against an empty library both dispatch arms fall back to
@@ -63,6 +66,8 @@ class BuiltProgram(BaseModel):
     seed: int
     program_id: str
     admitted: bool
+    resolution: str | None = None
+    """The resolution the admit-set episode asked for (ADR-0032); `None` for `seeds`."""
 
 
 class BuildReport(BaseModel):
@@ -89,7 +94,7 @@ def build_library(
     ledger: Path,
     provider: Provider,
     model: str,
-    seeds: tuple[int, ...] = SMOKE_SEEDS,
+    seeds: tuple[int, ...] | None = None,
     positive_only_root: Path | None = None,
 ) -> BuildReport:
     """Solve, compile and gate every `(fault, seed)` into one frozen library at `root`.
@@ -123,9 +128,11 @@ def build_library(
 
     built: list[BuiltProgram] = []
     ungated: list[BuiltProgram] = []
+    plan = _episode_plan(faults, seeds)
     for fault in faults:
-        roles = occurrence_roles(list(seeds), fault)
-        for occurrence, seed in enumerate(seeds, start=1):
+        episodes = plan[fault]
+        roles = occurrence_roles([seed for seed, _, _ in episodes], fault)
+        for occurrence, (seed, resolution, request) in enumerate(episodes, start=1):
             with tempfile.TemporaryDirectory(prefix="build-library-") as scratch:
                 library = Library(Path(scratch), evaluate_preconditions=evaluate_preconditions)
                 record = run_episode(
@@ -138,6 +145,7 @@ def build_library(
                     library=library,
                     model=model,
                     transcript_log=transcripts_path(ledger),
+                    request=request,
                 )
                 append(ledger, record)
                 for program in library.load_all():
@@ -148,16 +156,21 @@ def build_library(
                             seed=seed,
                             program_id=program.id,
                             admitted=program.status is ProgramStatus.ADMITTED,
+                            resolution=resolution,
                         )
                     )
                     if positive_only_root is not None:
                         first = library.first_compile(program.id)
-                        ungated.append(_gate_positive_only(first, fault, seed, positive_only_root))
+                        ungated.append(
+                            _gate_positive_only(first, fault, seed, positive_only_root).model_copy(
+                                update={"resolution": resolution}
+                            )
+                        )
 
-    _write_manifest(root, AdmissionGate.TWO_SIDED, faults, seeds)
+    _write_manifest(root, AdmissionGate.TWO_SIDED, faults, plan)
     second: BuildReport | None = None
     if positive_only_root is not None:
-        _write_manifest(positive_only_root, AdmissionGate.POSITIVE_ONLY, faults, seeds)
+        _write_manifest(positive_only_root, AdmissionGate.POSITIVE_ONLY, faults, plan)
         second = BuildReport(
             root=positive_only_root,
             ledger=ledger,
@@ -187,8 +200,36 @@ def _gate_positive_only(candidate: Program, fault: str, seed: int, root: Path) -
     return BuiltProgram(fault=fault, seed=seed, program_id=candidate.id, admitted=admitted)
 
 
+_Episode = tuple[int, str | None, str | None]
+"""One build episode: its seed, the resolution it asks for, and its request (`None`
+for the fault's own)."""
+
+
+def _episode_plan(faults: list[str], seeds: tuple[int, ...] | None) -> dict[str, list[_Episode]]:
+    """Each fault's build episodes: the admit set's (ADR-0032), or `seeds` with the fault's
+    own requests."""
+    if seeds is not None:
+        return {fault: [(seed, None, None) for seed in seeds] for fault in faults}
+    missing = sorted(set(faults) - set(ADMIT_SET))
+    if missing:
+        raise ValueError(f"the admit set has no episodes for {missing}; pass `seeds` instead")
+    return {
+        fault: [
+            (episode.seed, episode.resolution, admit_request(fault, episode))
+            for episode in ADMIT_SET[fault]
+        ]
+        for fault in faults
+    }
+
+
 def _write_manifest(
-    root: Path, gate: AdmissionGate, faults: list[str], seeds: tuple[int, ...]
+    root: Path, gate: AdmissionGate, faults: list[str], plan: dict[str, list[_Episode]]
 ) -> None:
-    manifest = {"admission_gate": gate.value, "faults": faults, "seeds": list(seeds)}
+    """`build.json`: the gate, and per fault the episodes the build ran -- each seed with
+    the resolution it asked for, or `null` when it used the fault's own request."""
+    episodes = {
+        fault: [{"seed": seed, "resolution": resolution} for seed, resolution, _ in plan[fault]]
+        for fault in faults
+    }
+    manifest = {"admission_gate": gate.value, "faults": faults, "episodes": episodes}
     (root / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
