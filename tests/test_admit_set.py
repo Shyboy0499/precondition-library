@@ -32,6 +32,7 @@ from precondition_library.tasks.state_grid import STATE_GRID
 
 _INTENT_OF = {intent.fault: intent for intent in INTENTS.values()}
 EPISODES = [(fault, episode) for fault, episodes in ADMIT_SET.items() for episode in episodes]
+SEEDS = [(fault, episode, seed) for fault, episode in EPISODES for seed in episode.seeds]
 
 
 def test_every_resolution_of_every_measured_intent_is_covered_once() -> None:
@@ -39,17 +40,18 @@ def test_every_resolution_of_every_measured_intent_is_covered_once() -> None:
     for fault, episodes in ADMIT_SET.items():
         declared = [variant.id for variant in _INTENT_OF[fault].variants]
         assert sorted(episode.resolution for episode in episodes) == sorted(declared), fault
-        assert len(set(admit_seeds(fault))) == len(episodes), f"{fault}: a seed is repeated"
+        assert len(set(admit_seeds(fault))) == len(admit_seeds(fault)), f"{fault}: repeated seed"
+        assert all(len(episode.seeds) == 2 for episode in episodes), "a first seed and a fallback"
 
 
-@pytest.mark.parametrize(("fault", "episode"), EPISODES, ids=lambda item: str(item))
-def test_each_seed_is_labelled_with_its_resolution(fault, episode) -> None:
-    assert FAULTS[fault].variant_for_seed(episode.seed) == episode.resolution
-    assert episode.seed not in TUNE_SEEDS and episode.seed not in EVAL_SEEDS
+@pytest.mark.parametrize(("fault", "episode", "seed"), SEEDS, ids=lambda item: str(item))
+def test_each_seed_is_labelled_with_its_resolution(fault, episode, seed) -> None:
+    assert FAULTS[fault].variant_for_seed(seed) == episode.resolution
+    assert seed not in TUNE_SEEDS and seed not in EVAL_SEEDS
 
 
-@pytest.mark.parametrize(("fault", "episode"), EPISODES, ids=lambda item: str(item))
-def test_a_resolution_some_state_forces_is_built_on_such_a_state(fault, episode) -> None:
+@pytest.mark.parametrize(("fault", "episode", "seed"), SEEDS, ids=lambda item: str(item))
+def test_a_resolution_some_state_forces_is_built_on_such_a_state(fault, episode, seed) -> None:
     """Where a declared state accepts this resolution alone, the episode is on one: there
     the agent's solution must be this resolution, whatever the request says."""
     intent = _INTENT_OF[fault]
@@ -57,20 +59,20 @@ def test_a_resolution_some_state_forces_is_built_on_such_a_state(fault, episode)
         intent.acceptable_variants(state) == (episode.resolution,)
         for state in STATE_GRID[intent.name].values()
     )
-    box = build_sandbox(episode.seed, [fault])
+    box = build_sandbox(seed, [fault])
     try:
         acceptable = intent.acceptable_variants(StateFingerprint.observe(box))
     finally:
         box.destroy()
     assert episode.resolution in acceptable
     if forcing:
-        assert acceptable == (episode.resolution,), f"{fault} seed {episode.seed}: {acceptable}"
+        assert acceptable == (episode.resolution,), f"{fault} seed {seed}: {acceptable}"
 
 
-@pytest.mark.parametrize(("fault", "episode"), EPISODES, ids=lambda item: str(item))
-def test_the_request_is_the_faults_phrasing_then_a_directive(fault, episode) -> None:
-    request = admit_request(fault, episode)
-    own = FAULTS[fault].task_text(episode.seed)
+@pytest.mark.parametrize(("fault", "episode", "seed"), SEEDS, ids=lambda item: str(item))
+def test_the_request_is_the_faults_phrasing_then_a_directive(fault, episode, seed) -> None:
+    request = admit_request(fault, episode, seed)
+    own = FAULTS[fault].task_text(seed)
     assert request == f"{own} {episode.directive}"
     intent = _INTENT_OF[fault]
     measured = [*intent.phrasings, *(p for ps in intent.variant_phrasings.values() for p in ps)]
@@ -98,7 +100,7 @@ class _FinishThenNoProgram:
         return Completion(text="not a program", usage=usage, model="fake")
 
 
-def test_a_build_with_no_seeds_runs_the_admit_set(tmp_path: Path) -> None:
+def test_a_build_that_admits_nothing_tries_every_fallback(tmp_path: Path) -> None:
     provider = _FinishThenNoProgram()
     report = build_library(
         faults=["diverged"],
@@ -109,11 +111,13 @@ def test_a_build_with_no_seeds_runs_the_admit_set(tmp_path: Path) -> None:
     )
     rows = read(tmp_path / "build.jsonl")
     assert [row.seed for row in rows] == list(admit_seeds("diverged"))
-    assert provider.requests == [admit_request("diverged", e) for e in ADMIT_SET["diverged"]]
+    assert provider.requests == [
+        admit_request("diverged", e, seed) for e in ADMIT_SET["diverged"] for seed in e.seeds
+    ]
     assert report.programs == [], "no reply was a program"
     manifest = json.loads((tmp_path / "library" / MANIFEST).read_text(encoding="utf-8"))
     assert manifest["episodes"]["diverged"] == [
-        {"seed": e.seed, "resolution": e.resolution} for e in ADMIT_SET["diverged"]
+        {"resolution": e.resolution, "seeds": list(e.seeds)} for e in ADMIT_SET["diverged"]
     ]
 
 
@@ -128,3 +132,36 @@ def test_a_build_with_seeds_keeps_the_faults_own_requests(tmp_path: Path) -> Non
         seeds=(0, 1),
     )
     assert provider.requests == [FAULTS["diverged"].task_text(seed) for seed in (0, 1)]
+
+
+def test_a_resolution_whose_first_episode_admits_skips_its_fallback(tmp_path, monkeypatch):
+    """The fallback is for a resolution the build has not covered; a covered one stops."""
+    from conftest import gold_programs, make_record
+
+    from precondition_library.bench import build_library as build_module
+    from precondition_library.program import ProgramStatus
+
+    ran: list[int] = []
+    gold = {p.variant: p for p in gold_programs("sync_fork_with_upstream")}
+
+    def fake_episode(arm, fault, seed, occurrence, *, library, request, **_):
+        ran.append(seed)
+        if seed in (1, 0):  # discard's and merge's first seeds admit; rebase's does not
+            variant = FAULTS[fault].variant_for_seed(seed)
+            program = gold[variant].model_copy(
+                update={"id": f"{variant}-{seed}", "status": ProgramStatus.CANDIDATE}
+            )
+            library.add(program)
+            library.set_status(program.id, ProgramStatus.ADMITTED)
+        return make_record(seed=seed, fault_type=fault)
+
+    monkeypatch.setattr(build_module, "run_episode", fake_episode)
+    report = build_library(
+        faults=["diverged"],
+        root=tmp_path / "library",
+        ledger=tmp_path / "build.jsonl",
+        provider=object(),
+        model="fake",
+    )
+    assert ran == [1, 2, 5, 0], "discard and merge stop at their first seed; rebase falls back"
+    assert sorted(p.resolution for p in report.programs if p.admitted) == ["discard", "merge"]

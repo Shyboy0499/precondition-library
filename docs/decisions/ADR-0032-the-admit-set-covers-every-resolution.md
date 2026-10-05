@@ -42,7 +42,8 @@ detectable. The comparison exists; the rule that lets it be stated does not hold
 ## Decision
 
 1. **The admit set is `bench.admit_set.ADMIT_SET`:** for each measured fault, one build
-   episode per declared resolution. That is 14 episodes, against 20 before.
+   episode per declared resolution. That is 14 episodes, against 20 before, plus the
+   fallbacks of decision 5.
 2. **Each episode's seed is a state labelled with its resolution**, and, where some state
    accepts that resolution alone, such a state. `tests/test_admit_set.py` pins both by
    building every seed's sandbox.
@@ -54,8 +55,14 @@ detectable. The comparison exists; the rule that lets it be stated does not hold
    - the phrasings the pairs and episodes draw from, and their test that no phrasing names
      a resolution, are untouched;
    - the dispatch arms never read a build request.
-5. **`build.json` records each episode's seed and the resolution it asked for.**
-   `build_library(seeds=...)` still runs the old shape, every seed with the fault's own
+5. **Each resolution has a fallback seed** at the same kind of state, run only when the
+   first episode admitted no program. With one episode per resolution, a single failed
+   solve or refused program lost the resolution: in the eighth live run, `dirty_tree`
+   lost `stash` to an inexpressible postcondition and `aside` to the tool budget, and
+   was left with one. The build stops a resolution at its first admitted program, so it
+   runs at most 28 episodes and, when most first episodes admit, close to 14.
+6. **`build.json` records each resolution and the seeds it may try**; the build ledger
+   records which ran. `build_library(seeds=...)` still runs the old shape, every seed with the fault's own
    request, for tests and for comparison with earlier runs.
 
 ## Consequences

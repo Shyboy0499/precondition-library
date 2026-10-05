@@ -130,42 +130,51 @@ def build_library(
     ungated: list[BuiltProgram] = []
     plan = _episode_plan(faults, seeds)
     for fault in faults:
-        episodes = plan[fault]
-        roles = occurrence_roles([seed for seed, _, _ in episodes], fault)
-        for occurrence, (seed, resolution, request) in enumerate(episodes, start=1):
-            with tempfile.TemporaryDirectory(prefix="build-library-") as scratch:
-                library = Library(Path(scratch), evaluate_preconditions=evaluate_preconditions)
-                record = run_episode(
-                    _BUILD_ARM,
-                    fault,
-                    seed,
-                    occurrence,
-                    role=roles[occurrence - 1],
-                    provider=provider,
-                    library=library,
-                    model=model,
-                    transcript_log=transcripts_path(ledger),
-                    request=request,
-                )
-                append(ledger, record)
-                for program in library.load_all():
-                    shutil.copytree(Path(scratch) / program.id, root / program.id)
-                    built.append(
-                        BuiltProgram(
-                            fault=fault,
-                            seed=seed,
-                            program_id=program.id,
-                            admitted=program.status is ProgramStatus.ADMITTED,
-                            resolution=resolution,
-                        )
+        run_seeds: list[int] = []
+        for group in plan[fault]:
+            # A resolution's seeds are tried in order until one admits a program (ADR-0032):
+            # the fallback runs only when the episode before it admitted nothing.
+            for seed, resolution, request in group:
+                run_seeds.append(seed)
+                occurrence = len(run_seeds)
+                with tempfile.TemporaryDirectory(prefix="build-library-") as scratch:
+                    library = Library(Path(scratch), evaluate_preconditions=evaluate_preconditions)
+                    record = run_episode(
+                        _BUILD_ARM,
+                        fault,
+                        seed,
+                        occurrence,
+                        role=occurrence_roles(run_seeds, fault)[-1],
+                        provider=provider,
+                        library=library,
+                        model=model,
+                        transcript_log=transcripts_path(ledger),
+                        request=request,
                     )
-                    if positive_only_root is not None:
-                        first = library.first_compile(program.id)
-                        ungated.append(
-                            _gate_positive_only(first, fault, seed, positive_only_root).model_copy(
-                                update={"resolution": resolution}
+                    append(ledger, record)
+                    admitted_here = False
+                    for program in library.load_all():
+                        shutil.copytree(Path(scratch) / program.id, root / program.id)
+                        admitted = program.status is ProgramStatus.ADMITTED
+                        admitted_here = admitted_here or admitted
+                        built.append(
+                            BuiltProgram(
+                                fault=fault,
+                                seed=seed,
+                                program_id=program.id,
+                                admitted=admitted,
+                                resolution=resolution,
                             )
                         )
+                        if positive_only_root is not None:
+                            first = library.first_compile(program.id)
+                            ungated.append(
+                                _gate_positive_only(
+                                    first, fault, seed, positive_only_root
+                                ).model_copy(update={"resolution": resolution})
+                            )
+                if admitted_here:
+                    break
 
     _write_manifest(root, AdmissionGate.TWO_SIDED, faults, plan)
     second: BuildReport | None = None
@@ -204,18 +213,25 @@ _Episode = tuple[int, str | None, str | None]
 """One build episode: its seed, the resolution it asks for, and its request (`None`
 for the fault's own)."""
 
+_Group = list[_Episode]
+"""One resolution's episodes, tried in order until one admits a program."""
 
-def _episode_plan(faults: list[str], seeds: tuple[int, ...] | None) -> dict[str, list[_Episode]]:
-    """Each fault's build episodes: the admit set's (ADR-0032), or `seeds` with the fault's
-    own requests."""
+
+def _episode_plan(faults: list[str], seeds: tuple[int, ...] | None) -> dict[str, list[_Group]]:
+    """Each fault's build episodes, grouped by resolution: the admit set's (ADR-0032), each
+    resolution's seeds in order, or `seeds`, each its own group with the fault's own
+    request."""
     if seeds is not None:
-        return {fault: [(seed, None, None) for seed in seeds] for fault in faults}
+        return {fault: [[(seed, None, None)] for seed in seeds] for fault in faults}
     missing = sorted(set(faults) - set(ADMIT_SET))
     if missing:
         raise ValueError(f"the admit set has no episodes for {missing}; pass `seeds` instead")
     return {
         fault: [
-            (episode.seed, episode.resolution, admit_request(fault, episode))
+            [
+                (seed, episode.resolution, admit_request(fault, episode, seed))
+                for seed in episode.seeds
+            ]
             for episode in ADMIT_SET[fault]
         ]
         for fault in faults
@@ -223,12 +239,16 @@ def _episode_plan(faults: list[str], seeds: tuple[int, ...] | None) -> dict[str,
 
 
 def _write_manifest(
-    root: Path, gate: AdmissionGate, faults: list[str], plan: dict[str, list[_Episode]]
+    root: Path, gate: AdmissionGate, faults: list[str], plan: dict[str, list[_Group]]
 ) -> None:
-    """`build.json`: the gate, and per fault the episodes the build ran -- each seed with
-    the resolution it asked for, or `null` when it used the fault's own request."""
+    """`build.json`: the gate, and per fault the registered plan -- each resolution with
+    the seeds it may try, in order, or `null` for a seed run with the fault's own request.
+    Which of them ran is in the build ledger."""
     episodes = {
-        fault: [{"seed": seed, "resolution": resolution} for seed, resolution, _ in plan[fault]]
+        fault: [
+            {"resolution": group[0][1], "seeds": [seed for seed, _, _ in group]}
+            for group in plan[fault]
+        ]
         for fault in faults
     }
     manifest = {"admission_gate": gate.value, "faults": faults, "episodes": episodes}

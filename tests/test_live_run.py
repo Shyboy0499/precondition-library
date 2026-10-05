@@ -29,7 +29,7 @@ from precondition_library.library import Library
 from precondition_library.program import ProgramStatus
 from precondition_library.tasks.registry import ambiguous_intents
 
-_ONE_SEED = {fault: [(0, None, None)] for fault in live.MEASURED_FAULTS}
+_ONE_SEED = {fault: [[(0, None, None)]] for fault in live.MEASURED_FAULTS}
 """The build plan the stand-in records: seed 0, with each fault's own request."""
 
 PLAN = live.LivePlan(
