@@ -6,22 +6,20 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2EA44F?style=flat" alt="MIT License"></a>
-  <img src="https://img.shields.io/badge/status-mechanism%20demonstrated%20%C2%B7%20primary%20claim%20unmeasured-B8860B?style=flat" alt="Status: mechanism demonstrated, primary claim unmeasured">
+  <img src="https://img.shields.io/badge/status-primary%20claim%20measured%20%C2%B7%203%20replicates-2EA44F?style=flat" alt="Status: primary claim measured over three replicate builds">
   <img src="https://img.shields.io/badge/python-3.12%2B-3776AB?style=flat" alt="Python 3.12+">
 </p>
 
-> **Status: the mechanism is demonstrated; the primary claim is not measured.**
-> One smoke pass has run against a real model and is reported in
-> [First demonstration](#first-demonstration): a compiled program is replayed with
-> zero LLM calls on a later occurrence of the same state, and the compiled arms'
-> cost falls while the baseline stays flat. That demonstrates the mechanism, not
-> the claim — the pre-registered comparison (mismatch at matched coverage over
-> labelled dispatch pairs, issue #5) has not been run, and the seeds are the smoke
-> set rather than the eval set. Nothing below should be read as a result, and
-> everything else here is a hypothesis with a stated way to falsify it. The
-> apparatus is implemented and its suite is green in
-> [CI](https://github.com/Shyboy0499/precondition-library/actions/workflows/ci.yml)
-> — but an implemented apparatus is not a result.
+> **Status: the primary claim is measured, at pair level, over three replicate builds.**
+> At matched dispatch coverage, executable-precondition dispatch mis-fired on **0 of 563**
+> fires across the three libraries, against text-similarity dispatch's **76–81%**; arm 2
+> cleared its pre-registered baseline floor in the two replicates built on the final
+> code. The numbers, their provenance and their limits are in
+> [Primary result](#primary-result). What is **not** measured yet is everything at
+> episode level -- the frozen benchmark, the admission factorial and the online arms --
+> and an earlier smoke pass, [First demonstration](#first-demonstration), is kept as
+> the record of the mechanism, not of the claim. The apparatus's suite is green in
+> [CI](https://github.com/Shyboy0499/precondition-library/actions/workflows/ci.yml).
 >
 > Per-module status is deliberately not restated below, because prose that
 > describes the code drifts the moment the code moves (CONTRIBUTING rule 5).
@@ -44,7 +42,8 @@ Stated first, because the prior art is real and the honest framing depends on it
 | That dispatching a cached plan by testing **executable preconditions** is a new mechanism | It is MACROPS, 1972: a cached generalized plan is dispatched by testing precondition *kernels* against live state, with an explicit replan fallback. |
 | That "the most similar case is not the most reusable" is a new insight | Smyth & Keane argued it in 1998, in a peer-reviewed journal, at length. |
 | That these token counts are a **cost** | They are tokens. Pricing input needs a rate table, and the provider's rates differ by peak and off-peak hours, so no currency figure is reported — input is metered as uncached, cache-read and cache-write so one can be computed once rates exist. |
-| That a dispatch comparison has been made, or that any number here is a result for the primary claim | No dispatch comparison has been run. One smoke pass has (see [First demonstration](#first-demonstration)), and it demonstrates the mechanism rather than measuring the claim; the text-only control's informed AUC below is the other genuine measurement, and the uninformed 0.500 is an identity of the construction, not a measurement. |
+| That an episode-level comparison has been made | Only the pair-level primary metric has been measured ([Primary result](#primary-result)). The frozen benchmark, the admission factorial and the online arms have not been run at scale; the one smoke pass that ran them ([First demonstration](#first-demonstration)) demonstrates the mechanism and measures nothing. |
+| That precondition dispatch beats text similarity by a margin a stronger arm 2 would keep | Arm 2 here is lexical (ADR-0003) and clears its floor only modestly -- a 95% lower bound of 0.401 against chance 0.333. A better text scorer narrows the gap by an unknown amount; that is the measurement an embedding arm (#104) would make. |
 
 Amortization is still what makes the project *useful* — it is an engineering
 assumption here, not a finding. It is reported as a cost model, never as a
@@ -281,13 +280,13 @@ sandbox, one arm acts, the fault's own checker grades the result, and a ledger r
 is written; `bench/report.py` turns the ledger into the ablation table and the two
 demo figures. The suite covering that path is green in
 [CI](https://github.com/Shyboy0499/precondition-library/actions/workflows/ci.yml),
-and the seed sets a run would use are already fixed in `bench/splits.py`. **Three
-live runs against a real model have happened**, all at smoke scale and all tracked
-on #163 (the first is written up under
-[First demonstration](#first-demonstration)). They exercise the whole pipeline --
-build, frozen benchmark, Figure 1 from a compiled library, the online arms -- and each
-found defects that were then fixed. None is the pre-registered full-scale run, so
-nothing they produced is a result for the primary claim.
+and the seed sets a run would use are already fixed in `bench/splits.py`. Live runs
+against a real model are tracked on #163 and #214. The early ones exercised the whole
+pipeline -- build, frozen benchmark, Figure 1 from a compiled library, the online arms
+-- at smoke scale, and each found defects that were then fixed; the first is written
+up under [First demonstration](#first-demonstration). The eleventh to thirteenth are
+the three replicate builds behind [Primary result](#primary-result). The episode-level
+stages have not been run at the registered scale (`--episode-seeds 40 --replicates 3`).
 
 What is done is deliberately not tracked here: a table in this file went stale the
 last time a module moved, which is why it is gone. Status is recorded in two
@@ -308,6 +307,50 @@ places, both checked:
   here: `tasks/registry.py`'s `EXCLUDED_FROM_BENCHMARK`, asserted against every fault
   by a test. Since #189, #190 and #191 (ADR-0027 to ADR-0029) every fault is
   measured, and the set is empty.
+
+## Primary result
+
+**The question**, as [The open question](#the-open-question) states it, measured as the
+spec registers it (ADR-0022): Figure 1 over **400 labelled dispatch pairs** from the
+eval seeds, uninformed regime, each arm's fires judged against the pair's acceptable
+resolutions, arm 2 swept to arm 3's coverage. Three whole-run replicates (spec §7 item
+2), each building its own library from the admit set (ADR-0032) with `bench.live
+--primary-only`; no model call is made after the build.
+
+| | replicate 1 (run 11) | replicate 2 (run 12) | replicate 3 (run 13) |
+| --- | --- | --- | --- |
+| programs admitted (two-sided) | 13 | 14 | 13 |
+| arm 2's baseline floor (spec §7 item 11) | not measurable | **usable** (top-1 111/240, lower bound 0.401 > 0.333) | **usable** (111/240, 0.401) |
+| arm 3: coverage, mis-fires | 187/400, **0/187** | 187/400, **0/187** | 189/400, **0/189** |
+| arm 2 at matched coverage: mis-fires | 148/187 | 149/185 | 143/187 |
+| difference (arm 2 − arm 3) | +0.79 | **+0.81** | **+0.76** |
+| smallest detectable difference | 0.145 | 0.145 | 0.144 |
+
+**What it shows.** Precondition dispatch never fired a program that the pair's state
+did not accept; text similarity, at the same coverage, did so on roughly four fires in
+five. The difference is about five times the smallest one the pair count can detect,
+and it holds in every replicate. Where arm 2's floor is usable -- replicates 2 and 3 --
+the claim may be worded as registered: a win over text similarity.
+
+**What it does not show.**
+
+- **Replicate 1 may not be worded as a win.** Its library held one lockfile
+  resolution, so arm 2 had nothing to choose between there and the floor could not be
+  measured. It was also built on earlier code, before the fixes in #244 and #245;
+  re-gated offline under the final admission, its figure is 0/187 against 141/186.
+- **Arm 2 is a weak baseline.** It is lexical, and its floor's lower bound sits only
+  0.07 above chance. The size of the gap is a statement about this arm 2.
+- **Nothing at episode level.** Mis-fires that end in a wrong repository, cost, the
+  admission factorial and the online arms are separate stages, not run here.
+- **Arm 2b cannot separate the two.** At arm 3's coverage the soft vote's matched point
+  is the hard rule itself, so Claim 2 keeps its wording without showing that requiring
+  every probe adds anything over a vote.
+
+**Provenance.** `deepseek-flash`; builds of 14–17 episodes spending 144k–204k uncached
+input, 280k–372k cached input and 402k–539k output tokens each. Code: run 11 on main
+`a6ff042`, run 12 on `d524978`, run 13 on `44a1ffc`. The per-run table, the re-gate and
+the defects found on the way are in
+[#214](https://github.com/Shyboy0499/precondition-library/issues/214#issuecomment-5999250801).
 
 ## First demonstration
 
@@ -375,7 +418,7 @@ demonstrated end to end against a real model.
 - **It is not a result for the primary claim.** The pre-registered comparison
   (mismatch at matched coverage over labelled dispatch pairs, issue #5) did not
   run here, and these are the smoke seeds, not eval. No figure above measures
-  the claim.
+  the claim; [Primary result](#primary-result) does.
 - **Five fires per compiled arm is not evidence of anything.** Of `semantic`'s
   five fires, four selected a resolution other than the episode's own correct
   one, and one of those ended in the wrong state (`semantic`, occurrence 7).
