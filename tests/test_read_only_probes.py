@@ -83,3 +83,12 @@ def test_admission_rejects_a_program_whose_precondition_writes() -> None:
     admitted, reason = admit(program, "diverged", seeds=[DISCARD_SEED])
     assert admitted is False
     assert "was refused" in reason and "changed the sandbox" in reason
+
+
+def test_the_compile_prompt_states_the_rule() -> None:
+    """The seventh live run's first program fetched with `--prune` in a precondition and
+    was refused; the model is told the rule it is held to, and who fetches."""
+    from precondition_library.agents.compile import SYSTEM_PROMPT
+
+    assert "must only read" in SYSTEM_PROMPT
+    assert "Fetching is the body's job" in SYSTEM_PROMPT

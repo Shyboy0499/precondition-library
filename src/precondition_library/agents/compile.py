@@ -129,6 +129,11 @@ Rules:
   precondition references, because the states the program may fire in need not
   bind it -- a body needing `{submodule_path}` with no precondition naming it is
   the shape this rejects.
+- A probe -- a precondition or a postcondition -- must only read. It runs between
+  two snapshots of the repository, and a probe that changes a ref, the index, the
+  config or a file (`git fetch`, `git add`, a redirect into the tree) is refused,
+  and the program with it. Fetching is the body's job; a probe reads the
+  remote-tracking refs that are already there.
 - The transcript may show `read_file` and `write_file` calls. A body has no such
   tools: read a file with `cat` or `git show`, and make a `write_file` change
   with shell. Compute the new content from the repository (`git show
