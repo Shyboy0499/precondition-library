@@ -69,6 +69,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -285,6 +286,9 @@ _BUILD_FILES = frozenset(
     }
 )
 """What a run holds while it is still building: all a resumed run may find."""
+_PAIR_LEVEL = frozenset({"primary"})
+"""What the model-free pair-level stages write. A run interrupted there -- the eleventh
+live run's Figure 1 plot crashed after its build -- resumes by recomputing them."""
 
 
 def run_live(
@@ -294,10 +298,10 @@ def run_live(
 
     `resume` continues a run in `out` that was interrupted during its build -- the fifth
     and ninth live runs lost theirs to a container restart -- keeping every build episode
-    it committed (`build_library`'s `resume`). It must be the same plan and model, and
-    nothing after the build may have started: a later stage is a measurement of the
-    finished library, which is cheap to run again, and is never stitched from two
-    processes.
+    it committed (`build_library`'s `resume`). It must be the same plan and model. Of
+    the stages after the build, only the pair-level ones, which call no model, may have
+    started: they are recomputed whole (`_PAIR_LEVEL`). An episode stage is a
+    measurement never stitched from two processes, so a run that reached one is refused.
     """
     if plan.replicates < 1:
         raise ValueError(f"replicates must be at least 1, got {plan.replicates}")
@@ -383,6 +387,12 @@ def _check_resumable(out: Path, recorded: dict) -> None:
     if previous != recorded:
         raise ValueError(f"{out} was started with a different plan or model: {previous}")
     later = sorted(path.name for path in out.iterdir() if path.name not in _BUILD_FILES)
+    if later and set(later) <= _PAIR_LEVEL:
+        # Interrupted in the stages that call no model: they are recomputed whole from
+        # the finished library, so nothing is stitched from two processes.
+        for name in later:
+            shutil.rmtree(out / name)
+        return
     if later:
         raise ValueError(
             f"{out} got past its build ({', '.join(later)}); only an interrupted build resumes"
