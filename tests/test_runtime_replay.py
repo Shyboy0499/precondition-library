@@ -28,6 +28,7 @@ from precondition_library.runtime.guard import Verdict, screen
 from precondition_library.runtime.probes import (
     UnboundParameterError,
     evaluate_predicate,
+    pattern_for,
     placeholders,
     substitute,
 )
@@ -230,6 +231,18 @@ def test_git_peel_syntax_is_not_a_placeholder() -> None:
         'git rev-parse --verify --quiet "upstream/main^{commit}"'
     )
     assert placeholders("git cat-file -t HEAD^{tree} && git rev-parse v1^{}") == []
+
+
+def test_a_placeholder_after_a_regex_anchor_is_substituted() -> None:
+    """#236's peel exemption covered every `^{name}`, so the twelfth live run's compiled
+    `expect_pattern: ^{upstream_branch}$` stayed literal and a correct `rename` program
+    failed its own postcondition on `trunk`. Only git's peel types are git's."""
+    assert pattern_for("^{upstream_branch}$", {"upstream_branch": "trunk"}) == "^trunk$"
+    assert placeholders("^{upstream_remote}/{upstream_branch}$") == [
+        "upstream_remote",
+        "upstream_branch",
+    ]
+    assert placeholders("git rev-parse HEAD^{object} v1^{blob} t^{tag}") == []
 
 
 def test_awk_actions_are_not_placeholders() -> None:

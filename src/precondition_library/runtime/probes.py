@@ -73,18 +73,36 @@ class UnboundParameterError(KeyError):
     """
 
 
-# A `{name}` placeholder, but not `${name}`, `@{name}` or `^{name}`: the first is a
-# shell variable expansion and belongs to the shell, the others git's revision syntax
-# -- `@{u}`, `@{upstream}`, `HEAD@{1}`, and the peel `rev^{commit}`, `^{tree}` -- and
+# A `{name}` placeholder, but not `${name}` or `@{name}`, nor a `^{type}` peel: the
+# first is a shell variable expansion and belongs to the shell, the others git's
+# revision syntax -- `@{u}`, `@{upstream}`, `HEAD@{1}`, and the peel `rev^{commit}`,
+# `^{tree}` (`_GIT_PEEL_TYPES`; a `^` before any other name is a regex anchor) -- and
 # belong to git. Live builds' compiled probes used `@{u}` (#214) and
 # `{upstream_remote}/{upstream_branch}^{commit}` (the eighth run) and were refused as
 # naming an unknown placeholder. Minimal on purpose -- this is not a templating engine,
 # and `{a,b}` / `{print $1}` must pass through intact.
-_PLACEHOLDER = re.compile(r"(?<![$@^])\{([A-Za-z_][A-Za-z0-9_]*)\}")
+_PLACEHOLDER = re.compile(r"(?<![$@])\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+_GIT_PEEL_TYPES: frozenset[str] = frozenset({"commit", "tree", "blob", "tag", "object"})
+"""The types git's peel syntax names: `rev^{commit}`. Only these, after a `^`, are git's.
+
+A `^` before any other name is a regex anchor -- `expect_pattern: ^{upstream_branch}$`
+-- and #236's blanket `^` exemption left that placeholder unsubstituted, so the
+pattern could never match: the twelfth live run's first episode refused a correct
+`rename` program for it."""
 
 _VOCABULARY_WORDS: frozenset[str] = frozenset(
     word for name in VOCABULARY for word in name.split("_")
 )
+
+
+def _names_a_parameter(text: str, match: re.Match[str]) -> bool:
+    """Whether `match`, a `{name}` in `text`, is a program placeholder: not git's peel
+    (`^{commit}`) and a name that could be a parameter (`_is_placeholder`)."""
+    name = match.group(1)
+    if match.start() > 0 and text[match.start() - 1] == "^" and name in _GIT_PEEL_TYPES:
+        return False
+    return _is_placeholder(name)
 
 
 def _is_placeholder(name: str) -> bool:
@@ -151,7 +169,7 @@ def substitute(text: str, parameters: dict[str, str]) -> str:
         name = match.group(1)
         if name in parameters:
             return parameters[name]
-        if not _is_placeholder(name):
+        if not _names_a_parameter(text, match):
             return match.group(0)
         if name in VOCABULARY:
             raise UnboundParameterError(
@@ -213,7 +231,7 @@ def placeholders(text: str) -> list[str]:
     """
     seen: dict[str, None] = {}
     for match in _PLACEHOLDER.finditer(text):
-        if _is_placeholder(match.group(1)):
+        if _names_a_parameter(text, match):
             seen.setdefault(match.group(1), None)
     return list(seen)
 
