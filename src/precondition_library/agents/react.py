@@ -61,8 +61,12 @@ it had already fixed until the budget ran out -- so "no tool call means done" le
 reliably calls a tool; calling `finish` is the same declaration, made in the form the
 model actually produces. It is still the agent's own verdict, never the checker's."""
 
-NUDGE_TOOL_CALL_MARGIN = 4
-"""Remaining tool calls at which the one-time budget reminder is sent (issue #171)."""
+NUDGE_TOOL_CALL_MARGIN = 8
+"""Remaining tool calls at which the one-time budget reminder is sent (issue #171).
+
+Eight since the eighth live run, where it was four: an agent reminded with four calls
+left had written two `.local` files when its `git clean`, `git restore` and merge were
+refused, and a resolution of several steps needs room after the reminder to finish."""
 
 BUDGET_NUDGE = (
     "Budget check: you are about to run out of turns or tool calls. If the request is "
@@ -100,7 +104,7 @@ would otherwise reach git as literal arguments and produce a confusing error."""
 _REPO_RETARGETING = ("-C", "--git-dir", "--work-tree")
 """git options that point the command at a repository other than `env.work`."""
 
-SYSTEM_PROMPT = """\
+_PROMPT = """\
 You are a git maintenance agent working in a single disposable repository. You
 complete the user's request by running git commands and reading their output.
 
@@ -116,7 +120,25 @@ ends the task.
 After each command you receive its exit code, stdout and stderr. Read failures
 and correct them. Preserve anything the user told you must survive. As soon as
 the request is satisfied, call `finish` with a one-line summary of what you did;
-do not keep re-checking a repository that is already right."""
+do not keep re-checking a repository that is already right.
+
+You may make at most {max_tool_calls} tool calls in this task, counted across all
+turns, and the task ends when they are spent. Investigate only what the request
+needs, then act, and leave room to finish the change you start."""
+
+
+def system_prompt(max_tool_calls: int = DEFAULT_MAX_TOOL_CALLS) -> str:
+    """The system prompt for a solve with `max_tool_calls`, which it states.
+
+    The budget is told to the agent because it is part of the task: in the eighth live
+    run an agent spent 20 of its 24 calls exploring and was refused the last steps of a
+    fix it had started. Every arm solves with the same prompt for the same budget.
+    """
+    return _PROMPT.format(max_tool_calls=max_tool_calls)
+
+
+SYSTEM_PROMPT = system_prompt()
+"""The prompt at the default budget, which every arm uses."""
 
 
 def solve(
@@ -167,10 +189,11 @@ def solve(
     text, every model turn (with the tool calls it returned, in the API's own
     shape), and every tool result, in order.
     """
+    system = system_prompt(max_tool_calls)
     task_text = signature.intent
     user_content = task_text if prelude is None else f"{prelude}\n\n{task_text}"
     transcript: list[dict] = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": system},
         {"role": "user", "content": user_content},
     ]
     tools = available_tools()
@@ -187,7 +210,7 @@ def solve(
             nudged = True
         try:
             completion = provider.complete(
-                system=SYSTEM_PROMPT, messages=_api_messages(transcript), tools=tools
+                system=system, messages=_api_messages(transcript), tools=tools
             )
         except Exception as exc:  # provider errors are recorded, never swallowed
             transcript.append(
@@ -253,15 +276,19 @@ def solve(
                 transcript,
                 provider,
                 f"tool-call budget of {max_tool_calls} spent without a finish declaration",
+                system,
             )
 
     return _last_word(
-        transcript, provider, f"step budget of {max_steps} turns spent without a finish declaration"
+        transcript,
+        provider,
+        f"step budget of {max_steps} turns spent without a finish declaration",
+        system,
     )
 
 
 def _last_word(
-    transcript: list[dict], provider: Provider, spent: str
+    transcript: list[dict], provider: Provider, spent: str, system: str
 ) -> tuple[EpisodeOutcome, list[dict]]:
     """One more turn once a budget is spent, with only `finish` on offer (issue #179).
 
@@ -271,7 +298,7 @@ def _last_word(
     transcript.append({"role": "user", "content": LAST_WORD, "last_word": True})
     try:
         completion = provider.complete(
-            system=SYSTEM_PROMPT, messages=_api_messages(transcript), tools=[_finish_tool()]
+            system=system, messages=_api_messages(transcript), tools=[_finish_tool()]
         )
     except Exception as exc:  # provider errors are recorded, never swallowed
         transcript.append(
