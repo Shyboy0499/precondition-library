@@ -656,7 +656,14 @@ def wilson_interval(successes: int, n: int, z: float = Z_95) -> Interval | None:
     margin = (z / denominator) * (
         (proportion * (1 - proportion) / n + z_squared / (4 * n * n)) ** 0.5
     )
-    return Interval(low=max(0.0, centre - margin), high=min(1.0, centre + margin))
+    # The interval always contains its point; at 0 and 1 the two terms cancel exactly,
+    # and floating point can leave a bound a rounding error on the wrong side of it
+    # (0/11's low came out above 0, 6/6's high below 1), which a plot's error bar
+    # refuses. So the point bounds the interval, as it does mathematically.
+    return Interval(
+        low=max(0.0, min(proportion, centre - margin)),
+        high=min(1.0, max(proportion, centre + margin)),
+    )
 
 
 def _graded(records: Iterable[EpisodeRecord]) -> list[EpisodeRecord]:

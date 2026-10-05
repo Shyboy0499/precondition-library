@@ -160,9 +160,25 @@ def test_a_live_run_resumes_only_its_own_plan(stubbed, tmp_path, monkeypatch) ->
 def test_a_live_run_past_its_build_does_not_resume(stubbed, tmp_path, monkeypatch) -> None:  # noqa: F811
     out = tmp_path / "run"
     _interrupted_run(out, monkeypatch)
-    (out / "primary").mkdir()
+    (out / "frozen.jsonl").write_text("", encoding="utf-8")
     with pytest.raises(ValueError, match="got past its build"):
         live.run_live(PLAN, provider=object(), model="fake", out=out, resume=True)
+
+
+def test_a_live_run_interrupted_in_its_pair_level_stage_recomputes_it(
+    stubbed,  # noqa: F811
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """The eleventh live run's Figure 1 plot crashed after its build. The pair-level
+    stages call no model, so a resume recomputes them whole."""
+    out = tmp_path / "run"
+    _interrupted_run(out, monkeypatch)
+    (out / "primary").mkdir()
+    (out / "primary" / "half-written.csv").write_text("x\n", encoding="utf-8")
+    result = live.run_live(PLAN, provider=object(), model="fake", out=out, resume=True)
+    assert result.figure1 is not None
+    assert not (out / "primary" / "half-written.csv").exists()
 
 
 def test_nothing_to_resume_is_refused(tmp_path) -> None:

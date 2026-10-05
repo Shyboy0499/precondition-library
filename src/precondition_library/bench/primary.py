@@ -286,13 +286,20 @@ def write_primary_report(report: PrimaryReport, dest: Path, *, plot: bool = True
 
 
 def _errors(points: Sequence[OperatingPoint]) -> tuple[list[float], list[float], list[float]]:
+    """Each point's mismatch and its interval as error-bar lengths, never negative.
+
+    A Wilson bound can sit a rounding error on the wrong side of its point -- at 0 wrong
+    fires the low bound computes as a hair above 0 -- and matplotlib refuses a negative
+    bar. The eleventh live run's arm 3, 0 wrong of its fires, crashed `_plot` there,
+    after the build, and lost the run's summary.
+    """
     values = [point.mismatch.value or 0.0 for point in points]
     low = [
-        value - (point.mismatch_interval.low if point.mismatch_interval else value)
+        max(0.0, value - (point.mismatch_interval.low if point.mismatch_interval else value))
         for value, point in zip(values, points, strict=True)
     ]
     high = [
-        (point.mismatch_interval.high if point.mismatch_interval else value) - value
+        max(0.0, (point.mismatch_interval.high if point.mismatch_interval else value) - value)
         for value, point in zip(values, points, strict=True)
     ]
     return values, low, high

@@ -402,6 +402,17 @@ def test_the_floor_rejects_a_single_candidate() -> None:
         arm2_baseline_floor(3, 5, candidates=1)
 
 
+def test_wilson_interval_always_contains_its_point() -> None:
+    """At 0 and 1 floating point left a bound on the wrong side of the point -- 0/11's
+    low above 0, 6/6's high below 1 -- and the eleventh live run's Figure 1 plot
+    crashed on the negative error bar that made."""
+    for n in range(1, 200):
+        for successes in range(n + 1):
+            interval = wilson_interval(successes, n)
+            assert interval is not None
+            assert interval.low <= successes / n <= interval.high, (successes, n)
+
+
 def test_wilson_interval_is_none_at_n_zero() -> None:
     """There is no interval over no observations; a naive formula divides by zero."""
     assert wilson_interval(0, 0) is None

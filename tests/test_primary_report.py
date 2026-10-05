@@ -126,3 +126,20 @@ def test_the_report_writes_figure_1_and_its_text(tmp_path: Path) -> None:
     assert all(row["wilson_low"] != "" for row in rows if row["fires"] != "0")
     assert "power (item 3)" in (dest / "primary.txt").read_text(encoding="utf-8")
     assert (dest / "figure1.png").stat().st_size > 0
+
+
+def test_an_error_bar_is_never_negative_even_from_an_interval_off_its_point() -> None:
+    """A bound a rounding error on the wrong side of its point made a negative error bar,
+    and the eleventh live run's Figure 1 plot crashed on it after the build."""
+    from precondition_library.bench.coverage import OperatingPoint
+    from precondition_library.bench.primary import _errors
+    from precondition_library.bench.report import Interval, Rate
+
+    off = OperatingPoint(
+        threshold=0.5,
+        coverage=Rate(numerator=6, denominator=10),
+        mismatch=Rate(numerator=6, denominator=6),
+        mismatch_interval=Interval(low=0.6, high=0.9999999999999999),
+    )
+    _, low, high = _errors([off])
+    assert low[0] >= 0 and high[0] >= 0
