@@ -29,6 +29,9 @@ from precondition_library.library import Library
 from precondition_library.program import ProgramStatus
 from precondition_library.tasks.registry import ambiguous_intents
 
+_ONE_SEED = {fault: [(0, None, None)] for fault in live.MEASURED_FAULTS}
+"""The build plan the stand-in records: seed 0, with each fault's own request."""
+
 PLAN = live.LivePlan(
     build_seeds=(0,), tune_seeds=(0, 1), pair_seeds=(0, 1), episode_seeds=(2000, 2001)
 )
@@ -47,7 +50,7 @@ def _fill(root: Path, gate: AdmissionGate) -> list[BuiltProgram]:
                     fault=program.provenance.fault, seed=0, program_id=program.id, admitted=True
                 )
             )
-    _write_manifest(root, gate, list(live.MEASURED_FAULTS), (0,))
+    _write_manifest(root, gate, list(live.MEASURED_FAULTS), _ONE_SEED)
     return built
 
 
@@ -95,7 +98,7 @@ def stubbed(monkeypatch):
                 (ungated, AdmissionGate.POSITIVE_ONLY),
             ):
                 target.mkdir(parents=True)
-                _write_manifest(target, gate, list(live.MEASURED_FAULTS), (0,))
+                _write_manifest(target, gate, list(live.MEASURED_FAULTS), _ONE_SEED)
             empty = dict(
                 ledger=kwargs["ledger"], programs=[], library_hash=Library(root).library_hash()
             )

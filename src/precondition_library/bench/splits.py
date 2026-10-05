@@ -85,7 +85,9 @@ from .ledger import OccurrenceRole
 __all__ = ["EVAL_SEEDS", "SMOKE_SEEDS", "TUNE_SEEDS", "occurrence_roles"]
 
 SMOKE_SEEDS: tuple[int, ...] = (0, 1, 2, 4)
-"""Pipeline shake-out, and the admit set for the precondition vocabulary.
+"""Pipeline shake-out. Until ADR-0032 it was also the build's admit set; the build now
+uses `bench.admit_set.ADMIT_SET`, one episode per resolution, and takes these seeds only
+when a caller passes them.
 
 Four seeds, so the full repeat structure runs -- four occurrences, with
 `occurrence_index` reaching 4 -- through every arm and every measurable fault

@@ -417,6 +417,7 @@ def run_episode(
     memory: SuccessMemory | None = None,
     replicate: int = 1,
     transcript_log: Path | None = None,
+    request: str | None = None,
 ) -> EpisodeRecord:
     """One episode: build a sandbox, let the arm act, check ground truth, record.
 
@@ -447,6 +448,10 @@ def run_episode(
     fire is not counted toward quarantine. The row still records the fire, the
     misfire and the fallback's cost; only the library's evolution is withheld, so
     every arm dispatching against one frozen artifact sees the same files.
+
+    `request` replaces the fault's own request text. Only the build's admit set passes
+    one, to ask for the resolution an episode covers (ADR-0032); every measured run
+    leaves it `None`, so the request is the fault's phrasing for the seed.
     """
     intent = _intent_for(fault_type)
     fault = FAULTS[fault_type]
@@ -486,7 +491,8 @@ def run_episode(
                 replicate=replicate,
             )
 
-        request = fault.task_text(seed)
+        if request is None:
+            request = fault.task_text(seed)
         correct = intent.correct_variant(state)
         acceptable = intent.acceptable_variants(state)
         signature = TaskSignature(intent=request, fingerprint=state, target=str(box.work))
