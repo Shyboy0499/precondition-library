@@ -72,7 +72,7 @@ from pydantic import BaseModel
 
 from ..library import Library
 from ..program import ProgramStatus
-from ..provider import DEFAULT_MODEL, DeepSeekProvider, Provider
+from ..provider import DEFAULT_MODEL, DeepSeekProvider, Provider, ProviderAuthError
 from ..runtime.probes import evaluate_preconditions
 from ..tasks.registry import ambiguous_intents
 from .build_library import build_library
@@ -556,10 +556,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     provider = DeepSeekProvider(api_key=api_key, model=args.model)
     try:
         result = run_live(plan, provider=provider, model=args.model, out=args.out)
-    except BaseException:
+    except BaseException as error:
         # A half-written run is not a run; keep it for debugging, but say so.
         if args.out.exists() and not (args.out / "summary.json").exists():
             print(f"incomplete run left in {args.out}")
+        if isinstance(error, ProviderAuthError):
+            # The endpoint refused the account, so no later call can succeed.
+            raise SystemExit(f"stopped: the provider refused the account: {error}") from error
         raise
     print(_text(result), end="")
     if result.stopped_after is not None:

@@ -57,7 +57,13 @@ from ..agents.memory import SuccessMemory, render
 from ..agents.react import executed_tool_calls, solve
 from ..library import Library, ProgramIdCollisionError
 from ..program import EpisodeOutcome, Program, ProgramStatus, accepts
-from ..provider import Completion, Provider, ProviderError, ProviderTransportError
+from ..provider import (
+    Completion,
+    Provider,
+    ProviderAuthError,
+    ProviderError,
+    ProviderTransportError,
+)
 from ..runtime.probes import evaluate_preconditions
 from ..runtime.replay import ReplayResult, replay
 from ..sandbox import Sandbox
@@ -1014,6 +1020,8 @@ def _learn_from_solution(
                 refused_states=refused_states,
                 unparsed=unparsed,
             )
+        except ProviderAuthError:
+            raise  # not this program's failure: the run stops (`ProviderAuthError`)
         except Exception as exc:
             result.compile_attempts = attempt
             if program is None:

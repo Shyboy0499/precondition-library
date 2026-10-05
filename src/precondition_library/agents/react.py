@@ -25,7 +25,7 @@ import shlex
 import subprocess
 
 from ..program import EpisodeOutcome
-from ..provider import Provider
+from ..provider import Provider, ProviderAuthError
 from ..runtime.confine import run_confined
 from ..runtime.guard import Verdict, screen
 from ..sandbox import (
@@ -212,6 +212,8 @@ def solve(
             completion = provider.complete(
                 system=system, messages=_api_messages(transcript), tools=tools
             )
+        except ProviderAuthError:
+            raise  # every later call fails too: the run stops rather than record it
         except Exception as exc:  # provider errors are recorded, never swallowed
             transcript.append(
                 {"role": "error", "content": f"provider error: {type(exc).__name__}: {exc}"}
@@ -300,6 +302,8 @@ def _last_word(
         completion = provider.complete(
             system=system, messages=_api_messages(transcript), tools=[_finish_tool()]
         )
+    except ProviderAuthError:
+        raise
     except Exception as exc:  # provider errors are recorded, never swallowed
         transcript.append(
             {"role": "error", "content": f"provider error: {type(exc).__name__}: {exc}"}

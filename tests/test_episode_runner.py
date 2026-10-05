@@ -34,6 +34,7 @@ import yaml
 from conftest import GIT_STATUS_AT_IMPORT, FakeProvider, git_status_porcelain, gold_program
 
 from precondition_library import sandbox as sandbox_module
+from precondition_library.agents.react import solve
 from precondition_library.bench.ledger import Arm, EpisodeRecord, OccurrenceRole, read
 from precondition_library.bench.run import (
     _AccountingProvider,
@@ -52,13 +53,14 @@ from precondition_library.program import (
 )
 from precondition_library.provider import (
     Completion,
+    ProviderAuthError,
     ProviderError,
     ProviderTransportError,
     TokenUsage,
 )
 from precondition_library.runtime.probes import evaluate_preconditions
 from precondition_library.runtime.replay import replay
-from precondition_library.signatures import StateFingerprint
+from precondition_library.signatures import StateFingerprint, TaskSignature
 from precondition_library.similarity import SimilarityUsage
 from precondition_library.tasks.faults import build_sandbox
 from precondition_library.tasks.faults.diverged import SPEC as DIVERGED
@@ -1402,6 +1404,62 @@ def test_a_client_error_is_not_retried(tmp_path, monkeypatch) -> None:
     assert provider.calls == 1, "a 4xx must not be retried"
     assert record.outcome is EpisodeOutcome.FAIL
     assert record.llm_calls == 1, "the one attempt that was made is still a call"
+
+
+class _RefusedAfter:
+    """Serve `completions`, then refuse the account on every later call."""
+
+    def __init__(self, *completions: Completion) -> None:
+        self._inner = FakeProvider(*completions)
+        self._left = len(completions)
+        self.calls = 0
+
+    def complete(
+        self, *, system: str, messages: list[dict], tools: list[dict] | None = None
+    ) -> Completion:
+        self.calls += 1
+        if self._left == 0:
+            raise ProviderAuthError("DeepSeek request failed with HTTP 401", status_code=401)
+        self._left -= 1
+        return self._inner.complete(system=system, messages=messages, tools=tools)
+
+
+@pytest.mark.parametrize(
+    ("arm", "served"),
+    [pytest.param(Arm.REACT, 0, id="solve"), pytest.param(Arm.PRECONDITION, 3, id="compile")],
+)
+def test_a_refused_account_stops_the_run_rather_than_failing_the_episode(
+    tmp_path, arm, served
+) -> None:
+    """The tenth live run's revoked key became 28 failed rows and a summary. An auth
+    error is not the episode's failure, so it propagates and no record is returned."""
+    provider = _RefusedAfter(*_resolves_discard()[:served])
+    with pytest.raises(ProviderAuthError):
+        run_episode(
+            arm,
+            "diverged",
+            DISCARD_SEED,
+            1,
+            role=OccurrenceRole.VARIANT,
+            provider=provider,
+            library=Library(tmp_path / "lib", evaluate_preconditions=evaluate_preconditions),
+            model="fake",
+        )
+    assert provider.calls == served + 1, "the refused call is the last one made"
+
+
+def test_a_refused_account_at_the_last_word_stops_the_run() -> None:
+    box = build_sandbox(DISCARD_SEED, ["diverged"])
+    try:
+        signature = TaskSignature(
+            intent="sync", fingerprint=StateFingerprint.observe(box), target=str(box.work)
+        )
+        provider = _RefusedAfter(_resolves_discard()[0])
+        with pytest.raises(ProviderAuthError):
+            solve(signature, box, provider, max_tool_calls=1)
+        assert provider.calls == 2, "one tool turn, then the refused last word"
+    finally:
+        box.destroy()
 
 
 def test_retries_are_capped_and_a_persistent_5xx_fails_the_episode(tmp_path, monkeypatch) -> None:

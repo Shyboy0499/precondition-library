@@ -23,6 +23,7 @@ from precondition_library.provider import (
     Completion,
     DeepSeekProvider,
     Provider,
+    ProviderAuthError,
     ProviderError,
     ProviderTransportError,
     TokenUsage,
@@ -233,6 +234,23 @@ def test_non_2xx_raises_with_status_and_api_message() -> None:
     assert "429" in message
     assert "Rate limit exceeded" in message
     assert excinfo.value.status_code == 429, "the caller's retry policy needs the status"
+
+
+@pytest.mark.parametrize("status", [401, 402, 403])
+def test_a_refused_account_raises_the_auth_error(status: int) -> None:
+    """A revoked key, an empty balance or a forbidden model: every later call fails too."""
+    transport, _ = _capturing({"error": {"message": "Authentication Fails"}}, status=status)
+    with pytest.raises(ProviderAuthError) as excinfo:
+        _provider(transport).complete(system="s", messages=[])
+    assert excinfo.value.status_code == status
+
+
+@pytest.mark.parametrize("status", [400, 429, 500])
+def test_any_other_status_is_not_an_auth_error(status: int) -> None:
+    transport, _ = _capturing({"error": {"message": "no"}}, status=status)
+    with pytest.raises(ProviderError) as excinfo:
+        _provider(transport).complete(system="s", messages=[])
+    assert not isinstance(excinfo.value, ProviderAuthError)
 
 
 def test_non_2xx_without_json_still_reports_status() -> None:

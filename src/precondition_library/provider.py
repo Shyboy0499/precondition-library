@@ -146,6 +146,22 @@ class ProviderTransportError(ProviderError):
     """
 
 
+class ProviderAuthError(ProviderError):
+    """The endpoint refused the account: HTTP 401, 402 or 403.
+
+    A revoked or mistyped key (401), an account with no balance left (402, DeepSeek's
+    "insufficient balance"), or a key not allowed the model (403). Unlike any other
+    error, it says nothing about the episode that met it: every later call fails the
+    same way. Recorded as an episode `FAIL` like other provider errors, it made the tenth
+    live run's build write 28 failed rows and a summary in under a minute, a run that
+    looked measured and measured nothing. So it is never recorded: `solve`, its last
+    word and the compile step re-raise it, and the run stops with no summary.
+    """
+
+
+_AUTH_STATUSES = frozenset({401, 402, 403})
+
+
 class Provider(Protocol):
     """Minimal LLM boundary. Implementations must report real usage."""
 
@@ -220,7 +236,8 @@ class DeepSeekProvider:
                 f"DeepSeek request failed in transport: {type(exc).__name__}: {exc}"
             ) from exc
         if not response.is_success:
-            raise ProviderError(
+            error = ProviderAuthError if response.status_code in _AUTH_STATUSES else ProviderError
+            raise error(
                 f"DeepSeek request failed with HTTP {response.status_code}: "
                 f"{self._error_message(response)}",
                 status_code=response.status_code,
