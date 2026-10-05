@@ -35,7 +35,13 @@ from conftest import GIT_STATUS_AT_IMPORT, FakeProvider, git_status_porcelain, g
 
 from precondition_library import sandbox as sandbox_module
 from precondition_library.agents.react import solve
-from precondition_library.bench.ledger import Arm, EpisodeRecord, OccurrenceRole, read
+from precondition_library.bench.ledger import (
+    Arm,
+    EpisodeRecord,
+    OccurrenceRole,
+    read,
+    transcripts_path,
+)
 from precondition_library.bench.run import (
     _AccountingProvider,
     _program_id,
@@ -1886,6 +1892,32 @@ def test_a_repair_that_does_not_parse_either_names_both(tmp_path: Path) -> None:
     (row,) = read(out)
     assert not row.admitted and row.compile_attempts == 2
     assert "the repair did not parse either" in (row.compile_failure_reason or "")
+    (logged,) = [
+        json.loads(line) for line in transcripts_path(out).read_text(encoding="utf-8").splitlines()
+    ]
+    assert [entry["attempt"] for entry in logged["unparsed_compile_replies"]] == [1, 2]
+    assert all(
+        entry["reply"] == _MALFORMED_REPLY and "not a YAML mapping" in entry["reason"]
+        for entry in logged["unparsed_compile_replies"]
+    ), "each reply that was not a program is kept, so the failure can be diagnosed"
+
+
+def test_a_parsed_compile_logs_no_unparsed_reply(tmp_path: Path) -> None:
+    provider = FakeProvider(*_resolves_discard(), _completion(_reply_text(_discard_program())))
+    out = tmp_path / "ledger.jsonl"
+    run_benchmark(
+        arms=[Arm.PRECONDITION],
+        faults=["diverged"],
+        occurrences=1,
+        seeds=[DISCARD_SEED],
+        out=out,
+        model="fake",
+        provider=provider,
+    )
+    (logged,) = [
+        json.loads(line) for line in transcripts_path(out).read_text(encoding="utf-8").splitlines()
+    ]
+    assert "unparsed_compile_replies" not in logged
 
 
 def test_a_revision_that_is_refused_too_keeps_the_last_reason(tmp_path: Path) -> None:
