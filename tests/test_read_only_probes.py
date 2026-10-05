@@ -92,3 +92,12 @@ def test_the_compile_prompt_states_the_rule() -> None:
 
     assert "must only read" in SYSTEM_PROMPT
     assert "Fetching is the body's job" in SYSTEM_PROMPT
+
+
+def test_the_compile_prompt_says_how_to_check_absence() -> None:
+    """The eighth live run's `stash_entry_consumed` expected exit 1 and a pattern from
+    `git stash list`, which exits 0 and can only require presence."""
+    from precondition_library.agents.compile import SYSTEM_PROMPT
+
+    assert "can only require that something is present" in SYSTEM_PROMPT
+    assert "! git stash list | grep -q" in SYSTEM_PROMPT
