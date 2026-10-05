@@ -1,0 +1,73 @@
+id: branch_renamed-occ4-branch-renamed-retrack-upstream-renamed-branch
+intent: Retarget the current local branch to track upstream's new main-line branch
+  and merge upstream's commits into the local ones.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_branch_ref_present
+  description: the remote-tracking ref for upstream's new main line is already fetched
+    locally
+  probe: git rev-parse --verify --quiet refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: not_already_tracking_upstream_branch
+  description: the current branch does not already track upstream's new branch
+  probe: test "$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)"
+    != "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: head_is_a_branch
+  description: HEAD is on a local branch, not detached
+  probe: git symbolic-ref -q HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_not_on_upstream_branch
+  description: the local branch carries commits that upstream's new branch lacks
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_has_commits_local_lacks
+  description: upstream's new branch carries commits the local branch lacks, so a
+    merge integrates work
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: no uncommitted or untracked changes that a merge could clobber
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote} --prune
+  git branch --set-upstream-to={upstream_remote}/{upstream_branch}
+  git merge {upstream_remote}/{upstream_branch} --no-edit
+steps: null
+postconditions:
+- name: tracks_upstream_branch
+  description: the local branch's configured upstream is upstream's new branch
+  probe: git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}'
+  expect_exit: 0
+  expect_pattern: '{upstream_remote}/{upstream_branch}'
+- name: upstream_branch_merged
+  description: upstream's new branch is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_merge
+  description: the merge left no conflicts or uncommitted changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: Make this branch follow upstream's current main line again,
+    and catch it up. Track upstream's new branch and merge it into my own commits.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Make this branch follow upstream's current main line again, and catch
+    it up. Track upstream's new branch and merge it into my own commits./seed-1-branch_renamed-28393
+  fault: branch_renamed
+status: admitted

@@ -1,0 +1,113 @@
+id: dirty_tree-occ3-update-upstream-keep-wip-aside
+intent: Bring the current branch up to date with the upstream branch while keeping
+  uncommitted work in progress, saving each locally changed or untracked file that
+  the update would clobber beside upstream's version as <name>.local
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_present
+  description: the remote-tracking ref for the upstream branch already exists locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: work_in_progress_present
+  description: the working tree carries uncommitted changes (tracked modifications
+    or untracked files) that must survive the update
+  probe: test -n "$(git diff HEAD --name-only)$(git ls-files --others --exclude-standard)"
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_behind_upstream
+  description: the current branch is strictly behind the upstream branch
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_fast_forwardable
+  description: HEAD is an ancestor of the upstream branch, so the update is a plain
+    fast-forward
+  probe: git merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: work_in_progress_overlaps_upstream
+  description: at least one locally modified or untracked path also exists in the
+    upstream tree, which is the case this resolution sets aside as <name>.local
+  probe: test -n "$(comm -12 <(git ls-tree -r --name-only {upstream_remote}/{upstream_branch}
+    | sort) <(sort -u <(git ls-files --others --exclude-standard) <(git diff --name-only)
+    <(git diff --name-only --cached)))"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote} {upstream_branch}
+  upstream_ref={upstream_remote}/{upstream_branch}
+  tmp=$(mktemp -d)
+  trap 'rm -rf "$tmp"' EXIT
+
+  # Untracked paths that the upstream tree also provides: keep a copy beside
+  # upstream's version as <name>.local, then clear the path so the update lands.
+  git ls-tree -r --name-only "$upstream_ref" | sort > "$tmp/upstream_files"
+  git ls-files --others --exclude-standard | sort > "$tmp/untracked_files"
+  comm -12 "$tmp/upstream_files" "$tmp/untracked_files" > "$tmp/untracked_collisions"
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    cp -p -- "$f" "$f.local"
+    rm -f -- "$f"
+  done < "$tmp/untracked_collisions"
+
+  # Tracked files with local edits that the upstream commit also rewrites: same
+  # treatment, so uncommitted changes do not block the fast-forward.
+  git diff --name-only HEAD "$upstream_ref" | sort > "$tmp/upstream_changed"
+  : > "$tmp/local_changed"
+  git diff --name-only >> "$tmp/local_changed"
+  git diff --name-only --cached >> "$tmp/local_changed"
+  sort -u "$tmp/local_changed" -o "$tmp/local_changed"
+  comm -12 "$tmp/upstream_changed" "$tmp/local_changed" > "$tmp/tracked_collisions"
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    if [ -e "$f" ]; then
+      if git diff --quiet -- "$f"; then
+        git show ":$f" > "$f.local"
+      else
+        cp -p -- "$f" "$f.local"
+      fi
+    fi
+    if git cat-file -e "HEAD:$f" 2>/dev/null; then
+      git checkout HEAD -- "$f"
+    else
+      git rm --quiet --cached -- "$f" 2>/dev/null || true
+      rm -f -- "$f"
+    fi
+  done < "$tmp/tracked_collisions"
+
+  git merge --ff-only "$upstream_ref"
+steps: null
+postconditions:
+- name: branch_matches_upstream
+  description: HEAD is exactly the upstream branch's commit, so the update landed
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_path_shadows_the_update
+  description: no untracked file still occupies a path that the updated tree tracks
+  probe: '! comm -12 <(git ls-files --others --exclude-standard | sort) <(git ls-tree
+    -r --name-only HEAD | sort) | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: work_in_progress_kept
+  description: the user's changes are still available in the working tree, as modified
+    files or as <name>.local copies beside upstream's version
+  probe: test -n "$(git diff HEAD --name-only)$(git ls-files --others --exclude-standard)"
+  expect_exit: 0
+  expect_pattern: null
+variant: aside
+provenance:
+  compiled_from_task: Bring this branch up to date with upstream, but my work in progress
+    must survive. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Bring this branch up to date with upstream, but my work in progress
+    must survive. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update./seed-2-dirty_tree-12673
+  fault: dirty_tree
+status: admitted

@@ -1,0 +1,80 @@
+id: submodule_moved-occ1-submodule-remove-match-upstream
+intent: 'Make the checked-out branch consistent with upstream when upstream has removed
+  the nested submodule: fast-forward onto the upstream commit that drops the gitlink
+  and the .gitmodules entry, delete the leftover nested checkout on disk, and drop
+  the stale submodule section from the local config.'
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: upstream_ref_present
+  description: the upstream remote-tracking branch exists locally, so there is something
+    to fast-forward onto
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: head_is_ancestor_of_upstream
+  description: HEAD is an ancestor of upstream, so the branch can fast-forward (this
+    is the remove resolution, not a merge or a repin)
+  probe: git merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_gitlink_present
+  description: the submodule path is still recorded as a gitlink in the index
+  probe: git ls-files -s -- {submodule_path}
+  expect_exit: 0
+  expect_pattern: 160000.*{submodule_path}
+- name: gitmodules_declares_submodule
+  description: .gitmodules still declares a submodule entry for that path
+  probe: git config -f .gitmodules --get-regexp '^submodule\..*\.path$'
+  expect_exit: 0
+  expect_pattern: '{submodule_path}'
+- name: upstream_dropped_submodule
+  description: upstream's tree no longer contains the nested checkout
+  probe: '! git ls-tree {upstream_remote}/{upstream_branch} -- {submodule_path} |
+    grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+  git clean -ffd -- {submodule_path}
+  git config --remove-section submodule.{submodule_path} 2>/dev/null || true
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is exactly the upstream commit that dropped the nested library
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: gitlink_gone_from_index
+  description: the submodule path is no longer tracked as a gitlink
+  probe: '! git ls-files -s -- {submodule_path} | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: gitmodules_entry_gone
+  description: .gitmodules no longer declares the submodule path
+  probe: '! git config -f .gitmodules --get-regexp ''^submodule\..*\.path$'' | grep
+    -qF ''{submodule_path}'''
+  expect_exit: 0
+  expect_pattern: null
+- name: nested_checkout_gone
+  description: no leftover nested checkout files remain at the submodule path
+  probe: test -z "$(git status --porcelain --ignored -- {submodule_path})"
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_submodule_config_gone
+  description: the local config has no submodule section for the removed path
+  probe: '! git config --get-regexp ''^submodule\.'' | grep -qF ''{submodule_path}'''
+  expect_exit: 0
+  expect_pattern: null
+variant: remove
+provenance:
+  compiled_from_task: Get this repo's nested dependency consistent with upstream.
+    Remove the nested checkout, the way upstream did.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this repo's nested dependency consistent with upstream. Remove the
+    nested checkout, the way upstream did./seed-0-submodule_moved-28393
+  fault: submodule_moved
+status: admitted

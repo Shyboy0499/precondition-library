@@ -1,0 +1,77 @@
+id: dirty_tree-occ3-upstream-sync-wip-aside
+intent: bring the branch up to date with upstream while keeping uncommitted work in
+  progress, saved beside upstream's version as <name>.local
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_tracking_ref_exists
+  description: the upstream remote-tracking branch is present locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: work_in_progress_present
+  description: the working tree has modified or untracked files worth preserving
+  probe: git status --porcelain --untracked-files=all
+  expect_exit: 0
+  expect_pattern: \S
+- name: fast_forward_possible
+  description: HEAD is an ancestor of upstream, so the update is a fast-forward
+  probe: git merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ahead
+  description: upstream carries at least one commit the local branch does not have
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: '[1-9]'
+body: |
+  git fetch --quiet {upstream_remote}
+
+  # Keep every unsaved file beside upstream's version as <path>.local.
+  { git diff --name-only HEAD; git ls-files --others --exclude-standard; } \
+    | sort -u | while IFS= read -r f; do
+        if [ -f "$f" ]; then cp -p "$f" "$f.local"; fi
+      done
+
+  # The local content is safe in the .local copies, so drop the edits.
+  git reset --hard HEAD
+
+  # Remove untracked files that upstream's update would otherwise overwrite.
+  git diff --name-only HEAD {upstream_remote}/{upstream_branch} \
+    | while IFS= read -r f; do
+        if [ -f "$f" ] && ! git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
+          rm -f "$f"
+        fi
+      done
+
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: the branch is exactly at upstream's tip
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_tracked_modifications
+  description: no tracked file keeps local modifications
+  probe: git diff --quiet HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: wip_preserved_beside_upstream
+  description: the work in progress is kept in .local copies next to upstream's version
+  probe: test -n "$(git ls-files --others --exclude-standard | grep '\.local$')"
+  expect_exit: 0
+  expect_pattern: null
+variant: aside
+provenance:
+  compiled_from_task: Bring this branch up to date with upstream, but my work in progress
+    must survive. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Bring this branch up to date with upstream, but my work in progress
+    must survive. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update./seed-2-dirty_tree-28393
+  fault: dirty_tree
+status: admitted

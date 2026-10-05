@@ -1,0 +1,88 @@
+id: diverged-occ1-sync-fork-discard
+intent: Get the fork back in sync with upstream by making the checked-out branch match
+  the upstream branch exactly, discarding the local-only commits -- which is only
+  correct when those local commits carry no content the upstream branch lacks.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: clean_worktree
+  description: no staged, unstaged or untracked changes that the hard reset would
+    destroy or collide with
+  probe: git diff-index --quiet HEAD -- && test -z "$(git ls-files --others --exclude-standard)"
+  expect_exit: 0
+  expect_pattern: null
+- name: on_a_branch
+  description: HEAD points at a branch rather than a detached commit, so the reset
+    moves a branch
+  probe: git symbolic-ref -q HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_remote_exists
+  description: the upstream remote is configured so the body can fetch it
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_exists
+  description: the remote-tracking branch ref to reset to is known locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: has_local_only_commits
+  description: the branch is ahead of upstream, so discarding local commits actually
+    changes something
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: upstream_has_newer_commits
+  description: upstream has commits the branch lacks, so there is a newer state to
+    sync to
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: no_committed_conflict_markers
+  description: no tracked file already carries merge conflict markers, which would
+    make this a resolve-the-conflict task instead of a plain sync
+  probe: '! git grep -qI ''^<<<<<<< '''
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_carry_nothing_new
+  description: every file the local-only commits change already holds the upstream
+    content, so discarding those commits loses no work (a local-only edit that upstream
+    lacks, or an overlap with upstream's edit, means merge or rebase is the right
+    resolution, not discard)
+  probe: base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}); files=$(git
+    diff --name-only "$base" HEAD); test -z "$files" || git diff --quiet HEAD "{upstream_remote}/{upstream_branch}"
+    -- $files
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git reset --hard {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is exactly the upstream branch commit
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_local_only_commits
+  description: no commits remain that upstream does not have
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^0$
+- name: worktree_clean
+  description: the working tree is clean after the reset
+  probe: git diff-index --quiet HEAD -- && test -z "$(git ls-files --others --exclude-standard)"
+  expect_exit: 0
+  expect_pattern: null
+variant: discard
+provenance:
+  compiled_from_task: 'Get this fork back in sync with upstream without losing my
+    commits. My local commits can go: make my branch match upstream exactly.'
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: 'Get this fork back in sync with upstream without losing my commits.
+    My local commits can go: make my branch match upstream exactly./seed-1-diverged-28393'
+  fault: diverged
+status: admitted

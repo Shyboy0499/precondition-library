@@ -1,0 +1,2 @@
+{"episode_id": "Bring this branch up to date with upstream, but my work in progress must survive. Keep my unsaved file beside upstream's version, as `<name>.local`, and update./seed-2-dirty_tree-12673", "from": null, "program_id": "dirty_tree-occ3-update-upstream-keep-wip-aside", "to": "candidate"}
+{"episode_id": "dirty_tree/seed-2/occurrence-3", "from": "candidate", "program_id": "dirty_tree-occ3-update-upstream-keep-wip-aside", "to": "admitted"}

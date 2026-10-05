@@ -1,0 +1,72 @@
+id: dirty_tree-occ2-commit-dirty-then-rebase-upstream
+intent: commit the uncommitted work on the current branch first, then bring the branch
+  up to date with its upstream while keeping those changes
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_exists
+  description: the named upstream remote is configured and resolves to a URL
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: \S
+- name: on_a_local_branch
+  description: HEAD is a symbolic ref to a local branch, so committing and rebasing
+    apply
+  probe: git symbolic-ref --quiet HEAD
+  expect_exit: 0
+  expect_pattern: ^refs/heads/
+- name: upstream_tracking_ref_ahead
+  description: the already-fetched upstream-tracking ref exists and is strictly ahead
+    of HEAD
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: uncommitted_tracked_changes_exist
+  description: there are uncommitted modifications to tracked files that must be preserved
+  probe: git diff HEAD --name-only
+  expect_exit: 0
+  expect_pattern: \S
+- name: no_untracked_file_collides_with_upstream
+  description: no untracked local file is also present in upstream's tree, so the
+    local work can be committed in place; if one collides the work must be set aside
+    instead
+  probe: test -z "$(comm -12 <(git ls-files --others --exclude-standard | LC_ALL=C
+    sort) <(git ls-tree -r --name-only {upstream_remote}/{upstream_branch} | LC_ALL=C
+    sort))"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git add -A
+  git commit -m "chore: save local changes before syncing with upstream"
+  git rebase {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: worktree_clean
+  description: no tracked or untracked changes are left behind
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: the upstream branch is now an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_work_kept_on_top
+  description: the preserved local commit sits on top of upstream
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+variant: commit
+provenance:
+  compiled_from_task: My working tree has changes and the branch is behind upstream.
+    Fix that and keep my changes. Commit my uncommitted work first, then bring the
+    branch up to date.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: My working tree has changes and the branch is behind upstream. Fix that
+    and keep my changes. Commit my uncommitted work first, then bring the branch up
+    to date./seed-0-dirty_tree-28393
+  fault: dirty_tree
+status: admitted

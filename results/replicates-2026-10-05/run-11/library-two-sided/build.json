@@ -1,0 +1,120 @@
+{
+  "admission_gate": "two_sided",
+  "faults": [
+    "branch_renamed",
+    "dirty_tree",
+    "diverged",
+    "lockfile_conflict",
+    "submodule_moved"
+  ],
+  "episodes": {
+    "branch_renamed": [
+      {
+        "resolution": "rename",
+        "seeds": [
+          0,
+          4
+        ]
+      },
+      {
+        "resolution": "retrack",
+        "seeds": [
+          6,
+          10
+        ]
+      },
+      {
+        "resolution": "merge",
+        "seeds": [
+          1,
+          2
+        ]
+      }
+    ],
+    "dirty_tree": [
+      {
+        "resolution": "stash",
+        "seeds": [
+          5,
+          10
+        ]
+      },
+      {
+        "resolution": "commit",
+        "seeds": [
+          0,
+          1
+        ]
+      },
+      {
+        "resolution": "aside",
+        "seeds": [
+          2,
+          7
+        ]
+      }
+    ],
+    "diverged": [
+      {
+        "resolution": "discard",
+        "seeds": [
+          1,
+          3
+        ]
+      },
+      {
+        "resolution": "rebase",
+        "seeds": [
+          2,
+          5
+        ]
+      },
+      {
+        "resolution": "merge",
+        "seeds": [
+          0,
+          4
+        ]
+      }
+    ],
+    "lockfile_conflict": [
+      {
+        "resolution": "take_upstream",
+        "seeds": [
+          5,
+          6
+        ]
+      },
+      {
+        "resolution": "keep_local",
+        "seeds": [
+          2,
+          3
+        ]
+      }
+    ],
+    "submodule_moved": [
+      {
+        "resolution": "remove",
+        "seeds": [
+          0,
+          8
+        ]
+      },
+      {
+        "resolution": "init",
+        "seeds": [
+          4,
+          5
+        ]
+      },
+      {
+        "resolution": "repin",
+        "seeds": [
+          1,
+          2
+        ]
+      }
+    ]
+  }
+}

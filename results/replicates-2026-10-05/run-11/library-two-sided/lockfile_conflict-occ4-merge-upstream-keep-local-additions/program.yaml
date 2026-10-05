@@ -1,0 +1,159 @@
+id: lockfile_conflict-occ4-merge-upstream-keep-local-additions
+intent: Get the fork current with upstream by merging upstream into the current branch,
+  resolving the collided dependency file in favour of the local side so that local
+  removals stay removed, while adding the lines upstream inserted into it.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_present
+  description: the upstream remote-tracking branch exists in this clone
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: no uncommitted changes and no merge already in progress
+  probe: '[ -z "$(git status --porcelain)" ] && [ ! -e "$(git rev-parse --git-dir)/MERGE_HEAD"
+    ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_diverged_from_upstream
+  description: the current branch is both ahead of and behind upstream
+  probe: '[ "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt
+    0 ] && [ "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt
+    0 ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: overlapping_changes
+  description: local and upstream both changed at least one common file since their
+    merge base
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+    [ -n "$(comm -12 <(git diff --name-only "$base" HEAD | sort) <(git diff --name-only "$base" {upstream_remote}/{upstream_branch} | sort))" ]
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -eu
+  git merge -X ours --no-ff --no-commit {upstream_remote}/{upstream_branch} >/dev/null 2>&1 || true
+  if [ ! -f "$(git rev-parse --git-dir)/MERGE_HEAD" ]; then
+    echo "merge with {upstream_remote}/{upstream_branch} did not start" >&2
+    exit 1
+  fi
+  base=$(git merge-base HEAD MERGE_HEAD)
+  tmp=$(mktemp -d)
+  trap 'rm -rf "$tmp"' EXIT
+  git diff --name-only "$base" MERGE_HEAD | while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    [ -f "$f" ] || continue
+    git show "HEAD:$f" >/dev/null 2>&1 || continue
+    git show "MERGE_HEAD:$f" > "$tmp/theirs" 2>/dev/null || continue
+    git diff --no-color -U0 "$base" MERGE_HEAD -- "$f" | awk -v ours="$f" -v theirs="$tmp/theirs" '
+      BEGIN {
+        while ((getline l < ours) > 0) { no++; O[no] = l; seen[l] = 1 }
+        close(ours)
+        while ((getline l < theirs) > 0) { nt++; T[nt] = l }
+        close(theirs)
+        na = 0; inhunk = 0; m = 0; n = 0
+      }
+      function flush(   k) {
+        if (inhunk && n > m)
+          for (k = m + 1; k <= n; k++)
+            if (!(P[k] in seen)) { na++; AI[na] = nstart + k - 1; AT[na] = P[k] }
+      }
+      function anchor(ix,   j) {
+        for (j = ix + 1; j <= nt; j++) if (T[j] in seen) return T[j]
+        return ""
+      }
+      function emit(   i, k, t, ax) {
+        for (k = 1; k <= na; k++) {
+          ax = 0
+          t = anchor(AI[k])
+          if (t != "") for (i = 1; i <= no; i++) if (O[i] == t) { ax = i; break }
+          AN[k] = (ax > 0) ? ax : no + 1
+        }
+        for (i = 1; i <= no; i++) {
+          for (k = 1; k <= na; k++) if (AN[k] == i) print AT[k]
+          print O[i]
+        }
+        for (k = 1; k <= na; k++) if (AN[k] == no + 1) print AT[k]
+      }
+      /^diff --git/ { flush(); inhunk = 0; next }
+      /^@@ / {
+        flush()
+        inhunk = 1; m = 0; n = 0; delete P
+        s = $3; sub(/^\+/, "", s); split(s, parts, ","); nstart = parts[1] + 0
+        next
+      }
+      inhunk && /^---/ { next }
+      inhunk && /^\+\+\+/ { next }
+      inhunk && /^-/ { m++; next }
+      inhunk && /^\+/ { n++; P[n] = substr($0, 2); next }
+      END { flush(); emit() }
+    ' > "$tmp/merged"
+    if ! cmp -s "$tmp/merged" "$f"; then
+      cp "$tmp/merged" "$f"
+      git add -- "$f"
+    fi
+  done
+  git commit --no-edit
+steps: null
+postconditions:
+- name: upstream_merged
+  description: upstream's tip is an ancestor of HEAD, so the fork is current
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_commit_recorded
+  description: HEAD is a merge commit with a second parent
+  probe: git rev-parse --verify --quiet HEAD^2
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unresolved_paths
+  description: index and worktree hold no conflicts and no leftover changes
+  probe: '[ -z "$(git status --porcelain)" ] && [ -z "$(git diff --name-only --diff-filter=U)"
+    ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: local_side_lines_kept
+  description: every line of the local side version of the collided file survives
+    in the merge result
+  probe: |-
+    base=$(git merge-base HEAD^1 HEAD^2)
+    f=$(comm -12 <(git diff --name-only "$base" HEAD^1 | sort) <(git diff --name-only "$base" HEAD^2 | sort) | head -n 1)
+    [ -n "$f" ] || exit 1
+    [ -z "$(comm -23 <(git show "HEAD^1:$f" | sort -u) <(git show "HEAD:$f" | sort -u))" ]
+  expect_exit: 0
+  expect_pattern: null
+- name: local_removals_not_reintroduced
+  description: no line that the local side had removed from the collided file reappears
+    in the merge result
+  probe: |-
+    base=$(git merge-base HEAD^1 HEAD^2)
+    f=$(comm -12 <(git diff --name-only "$base" HEAD^1 | sort) <(git diff --name-only "$base" HEAD^2 | sort) | head -n 1)
+    [ -n "$f" ] || exit 1
+    [ -z "$(comm -23 <(git show "$base:$f" | sort -u) <(git show "HEAD^1:$f" | sort -u) | comm -12 - <(git show "HEAD:$f" | sort -u))" ]
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_additions_included
+  description: every line upstream inserted into the collided file is present in the
+    merge result
+  probe: |-
+    base=$(git merge-base HEAD^1 HEAD^2)
+    f=$(comm -12 <(git diff --name-only "$base" HEAD^1 | sort) <(git diff --name-only "$base" HEAD^2 | sort) | head -n 1)
+    [ -n "$f" ] || exit 1
+    missing=$(git diff --no-color -U0 "$base" HEAD^2 -- "$f" | awk '/^@@ /{m=0;n=0;next} /^---|^\+\+\+/{next} /^-/{m++;next} /^\+/{n++; if (n>m) print substr($0,2)}' | while IFS= read -r line; do git show "HEAD:$f" | grep -qxF -- "$line" || printf '%s\n' "$line"; done)
+    [ -z "$missing" ]
+  expect_exit: 0
+  expect_pattern: null
+variant: keep_local
+provenance:
+  compiled_from_task: Get my fork current with upstream; our dependency changes collided.
+    Keep my dependency file, with what I removed still removed, and add what upstream
+    added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get my fork current with upstream; our dependency changes collided.
+    Keep my dependency file, with what I removed still removed, and add what upstream
+    added./seed-3-lockfile_conflict-401
+  fault: lockfile_conflict
+status: candidate

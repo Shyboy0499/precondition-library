@@ -1,0 +1,165 @@
+id: lockfile_conflict-occ2-sync-lockfile-conflict-take-upstream
+intent: Resolve the conflicted sync with the upstream remote over the generated dependency
+  lockfile by starting from upstream's version of that file, re-adding the lines the
+  local branch added, and committing the merge.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_present
+  description: the upstream remote-tracking branch exists locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_diverged
+  description: the local branch and upstream have each moved ahead of their merge
+    base, so the sync has something to integrate on both sides
+  probe: |-
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0 &&
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: overlapping_lockfile_modified
+  description: the local branch and upstream both modified the same lockfile-style
+    path, the generated dependency file this project's sync conflict is about; a sync
+    that only touches other files is a plain merge, not this task
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+    comm -12 <(git diff --name-only "$base" HEAD | sort) <(git diff --name-only "$base" {upstream_remote}/{upstream_branch} | sort) | grep -qE '(^|/)[^/]*lock[^/]*$'
+  expect_exit: 0
+  expect_pattern: null
+- name: local_dropped_no_upstream_kept_lines
+  description: the local side has removed no lockfile line that upstream still carries,
+    so its edits are pure additions that can be re-applied on top of upstream's file;
+    had it dropped such a line, the local file would be the source of truth and the
+    sibling keep_local resolution would be the correct one, so this program must not
+    fire there
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+    uf={upstream_remote}/{upstream_branch}
+    for f in $(comm -12 <(git diff --name-only "$base" HEAD | sort) <(git diff --name-only "$base" "$uf" | sort) | grep -E '(^|/)[^/]*lock[^/]*$'); do
+      dropped=$(comm -23 <(comm -12 <(git show "$base:$f" | sort -u) <(git show "$uf:$f" | sort -u)) <(git show "HEAD:$f" | sort -u))
+      [ -n "$dropped" ] && exit 1
+    done
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_tree_or_merge_in_progress
+  description: the working tree is clean, or a merge already left unmerged paths behind
+  probe: '[ -f "$(git rev-parse --git-dir)/MERGE_HEAD" ] || [ -z "$(git status --porcelain)"
+    ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: conflicted_paths_have_all_stages
+  description: every unmerged path still carries base, ours and theirs stages
+  probe: |-
+    for f in $(git diff --name-only --diff-filter=U); do
+      git cat-file -e ":1:$f" &&
+      git cat-file -e ":2:$f" &&
+      git cat-file -e ":3:$f" || exit 1
+    done
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -u
+
+  git fetch {upstream_remote} {upstream_branch}
+
+  gitdir=$(git rev-parse --git-dir)
+  if [ ! -f "$gitdir/MERGE_HEAD" ]; then
+    git merge --no-edit {upstream_remote}/{upstream_branch} || true
+  fi
+
+  conflicted=$(git diff --name-only --diff-filter=U)
+  if [ -z "$conflicted" ]; then
+    echo "nothing conflicted to resolve"
+    exit 0
+  fi
+
+  tmpdir=$(mktemp -d)
+  for f in $conflicted; do
+    base=$(git rev-parse ":1:$f" 2>/dev/null || true)
+    ours=$(git rev-parse ":2:$f" 2>/dev/null || true)
+    theirs=$(git rev-parse ":3:$f" 2>/dev/null || true)
+    if [ -z "$base" ] || [ -z "$ours" ] || [ -z "$theirs" ]; then
+      echo "skipping $f: incomplete merge stages" >&2
+      continue
+    fi
+
+    # what the local side added, relative to the merge base
+    git diff --no-color -U1 "$base" "$ours" > "$tmpdir/local.diff"
+
+    # keep only true insertions (a '+' run not preceded by a '-' run, i.e. not a
+    # replacement) and remember the unchanged line they follow, as an anchor
+    awk '
+      {
+        if ($0 ~ /^\+/ && $0 !~ /^\+\+\+/) { n++; add[n] = substr($0, 2); next }
+        if (n > 0) {
+          if (kind == "ctx") { for (i = 1; i <= n; i++) print anchor "\t" add[i] }
+          else if (kind == "other" && nctx == 0) { for (i = 1; i <= n; i++) print "@@FILEHEAD@@" "\t" add[i] }
+          n = 0
+        }
+        if ($0 ~ /^-/ && $0 !~ /^---/) { kind = "del" }
+        else if ($0 ~ /^ /) { kind = "ctx"; nctx++; anchor = substr($0, 2) }
+        else { kind = "other" }
+      }
+      END {
+        if (n > 0 && kind == "ctx") { for (i = 1; i <= n; i++) print anchor "\t" add[i] }
+        else if (n > 0 && kind == "other" && nctx == 0) { for (i = 1; i <= n; i++) print "@@FILEHEAD@@" "\t" add[i] }
+      }
+    ' "$tmpdir/local.diff" > "$tmpdir/inserts"
+
+    # start from upstream, then put the local insertions back in place
+    git show "$theirs" > "$tmpdir/upstream"
+
+    awk -F'\t' '
+      NR == FNR { extra[$1] = extra[$1] $2 "\n"; next }
+      {
+        if (!started) {
+          started = 1
+          if ("@@FILEHEAD@@" in extra) { printf "%s", extra["@@FILEHEAD@@"]; delete extra["@@FILEHEAD@@"] }
+        }
+        print
+        if ($0 in extra) { printf "%s", extra[$0]; delete extra[$0] }
+      }
+    ' "$tmpdir/inserts" "$tmpdir/upstream" > "$tmpdir/resolved"
+
+    cat "$tmpdir/resolved" > "$f"
+    git add -- "$f"
+  done
+  rm -rf "$tmpdir"
+
+  git commit --no-edit
+steps: null
+postconditions:
+- name: no_unmerged_paths
+  description: the index has no unmerged entries left
+  probe: '[ -z "$(git diff --name-only --diff-filter=U)" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_merged_into_head
+  description: the upstream tip is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: no uncommitted changes remain
+  probe: '[ -z "$(git status --porcelain -uno)" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: no conflict markers remain in the working tree
+  probe: '! git grep -q -E ''^(<{7}|={7}|>{7})( |$)'' -- .'
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: The sync conflicts. Resolve it the way this project expects.
+    Start from upstream's dependency file and add back what I added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: The sync conflicts. Resolve it the way this project expects. Start from
+    upstream's dependency file and add back what I added./seed-6-lockfile_conflict-27781
+  fault: lockfile_conflict
+status: admitted

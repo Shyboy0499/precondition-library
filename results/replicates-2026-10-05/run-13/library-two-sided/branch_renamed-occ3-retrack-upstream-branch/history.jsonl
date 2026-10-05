@@ -1,0 +1,2 @@
+{"episode_id": "Make this branch follow upstream's current main line again, and catch it up. Keep my branch's name, point its tracking at upstream's new branch and catch up./seed-6-branch_renamed-28393", "from": null, "program_id": "branch_renamed-occ3-retrack-upstream-branch", "to": "candidate"}
+{"episode_id": "branch_renamed/seed-6/occurrence-3", "from": "candidate", "program_id": "branch_renamed-occ3-retrack-upstream-branch", "to": "admitted"}

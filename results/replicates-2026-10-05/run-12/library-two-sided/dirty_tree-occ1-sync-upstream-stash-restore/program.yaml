@@ -1,0 +1,76 @@
+id: dirty_tree-occ1-sync-upstream-stash-restore
+intent: fetch the latest from upstream, stash every uncommitted change, fast-forward
+  the current branch, then restore the stashed work
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: has_uncommitted_changes
+  description: the working tree holds tracked or untracked changes that must survive
+    the update
+  probe: test -n "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_remote_configured
+  description: the named upstream remote is configured in this repository
+  probe: git remote | grep -qx {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_present
+  description: a remote-tracking ref for the upstream branch has already been fetched
+  probe: git rev-parse --verify --quiet refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: local_behind_upstream
+  description: the local branch is strictly behind the upstream branch
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: fast_forward_possible
+  description: the local branch has no commits the upstream branch lacks, so the update
+    can fast-forward
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -eq 0
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_collision_with_upstream
+  description: no local untracked file is a path the incoming upstream commits add,
+    so a temporary stash is safe and untracked files do not need to be moved aside
+  probe: '! git ls-files --others --exclude-standard | grep -Fxq -f <(git diff --name-only
+    --diff-filter=A HEAD...{upstream_remote}/{upstream_branch})'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git stash push --include-untracked --message "wip: pre-update stash"
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+  git stash pop
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: the local branch tip is now the upstream tip
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: work_restored
+  description: the previously uncommitted changes are back in the working tree
+  probe: test -n "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: temporary_stash_consumed
+  description: the stash entry created for this update has been dropped
+  probe: '! git stash list | grep -q ''wip: pre-update stash'''
+  expect_exit: 0
+  expect_pattern: null
+variant: stash
+provenance:
+  compiled_from_task: Get the latest from upstream here, and keep every change I have
+    not saved yet. Stash my uncommitted work, update the branch, then put my work
+    back.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get the latest from upstream here, and keep every change I have not
+    saved yet. Stash my uncommitted work, update the branch, then put my work back./seed-5-dirty_tree-12673
+  fault: dirty_tree
+status: admitted

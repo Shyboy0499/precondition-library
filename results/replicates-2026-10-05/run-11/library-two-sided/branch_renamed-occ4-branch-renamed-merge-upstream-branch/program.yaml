@@ -1,0 +1,71 @@
+id: branch_renamed-occ4-branch-renamed-merge-upstream-branch
+intent: Track upstream's renamed branch and merge it into the local commits.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_configured
+  description: the named upstream remote exists and has a URL
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: head_is_attached
+  description: HEAD is on a local branch, so a branch can be retargeted and merged
+    into
+  probe: git symbolic-ref -q HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_branch_exists
+  description: upstream really publishes a branch named {upstream_branch}
+  probe: git ls-remote --exit-code --heads {upstream_remote} {upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: tracking_is_stale
+  description: the checked-out branch does not already track refs/heads/{upstream_branch}
+  probe: test "$(git config --get branch.$(git symbolic-ref --short HEAD).merge)"
+    != "refs/heads/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: no uncommitted changes that a merge would refuse to overwrite
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch --prune {upstream_remote}
+  git branch --set-upstream-to={upstream_remote}/{upstream_branch}
+  git merge --no-edit {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: tracks_new_upstream_branch
+  description: the checked-out branch now tracks refs/heads/{upstream_branch}
+  probe: test "$(git config --get branch.$(git symbolic-ref --short HEAD).merge)"
+    = "refs/heads/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tip_is_ancestor
+  description: upstream branch tip is reachable from HEAD, i.e. it was merged in
+  probe: git merge-base --is-ancestor refs/remotes/{upstream_remote}/{upstream_branch}
+    HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_completed
+  description: no merge is left half-finished
+  probe: test ! -e "$(git rev-parse --git-path MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_still_clean
+  description: the worktree has no conflicts or leftovers after the merge
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: Upstream changed something about its branches and my checkout
+    is lost. Sort it out. Track upstream's new branch and merge it into my own commits.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Upstream changed something about its branches and my checkout is lost.
+    Sort it out. Track upstream's new branch and merge it into my own commits./seed-2-branch_renamed-27781
+  fault: branch_renamed
+status: admitted

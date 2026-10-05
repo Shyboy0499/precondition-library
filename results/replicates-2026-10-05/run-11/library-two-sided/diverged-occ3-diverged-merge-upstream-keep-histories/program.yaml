@@ -1,0 +1,75 @@
+id: diverged-occ3-diverged-merge-upstream-keep-histories
+intent: bring a diverged local branch back into line with upstream by merging upstream
+  into it and keeping both histories
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: branch_diverged_from_upstream
+  description: the current branch has at least one commit upstream lacks and upstream
+    has at least one commit the branch lacks
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0 -a "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt
+    0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: nothing is staged, modified or untracked, so a merge can start
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: the repository is not already in the middle of a merge
+  probe: test ! -e "$(git rev-parse --git-dir)/MERGE_HEAD"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_default_branch_is_current_branch
+  description: the upstream remote's default branch is unset or is the branch we are
+    on, so this is not a renamed-branch checkout
+  probe: |-
+    rb=$(git symbolic-ref -q refs/remotes/{upstream_remote}/HEAD) || rb=
+    test -z "$rb" || test "$rb" = "refs/remotes/{upstream_remote}/$(git rev-parse --abbrev-ref HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_would_be_conflict_free
+  description: a dry-run merge of upstream into the current branch resolves without
+    any conflicted path
+  probe: |-
+    if git merge-tree -h 2>&1 | grep -q -- '--write-tree'; then
+      git merge-tree --write-tree HEAD {upstream_remote}/{upstream_branch} >/dev/null 2>&1
+    else
+      ! git merge-tree "$(git merge-base HEAD {upstream_remote}/{upstream_branch})" HEAD {upstream_remote}/{upstream_branch} 2>/dev/null | grep -q '^<<<<<<<'
+    fi
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git merge --no-ff --no-edit {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: upstream_is_ancestor
+  description: upstream's tip is reachable from HEAD, so its history was kept
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: head_is_a_merge_commit
+  description: HEAD has a second parent, i.e. it is a merge commit rather than a fast-forward
+    or reset
+  probe: git rev-parse --verify -q HEAD^2
+  expect_exit: 0
+  expect_pattern: ^[0-9a-f]{40}$
+- name: worktree_clean_after_merge
+  description: the merge left no conflicted or uncommitted paths behind
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: This branch and upstream have both changed. Bring it back into
+    line. Merge upstream into my branch and keep both histories.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: This branch and upstream have both changed. Bring it back into line.
+    Merge upstream into my branch and keep both histories./seed-0-diverged-27781
+  fault: diverged
+status: admitted

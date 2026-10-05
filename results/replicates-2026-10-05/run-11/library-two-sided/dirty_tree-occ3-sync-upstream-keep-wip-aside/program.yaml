@@ -1,0 +1,78 @@
+id: dirty_tree-occ3-sync-upstream-keep-wip-aside
+intent: 'Bring the current branch up to date with upstream by fast-forwarding, while
+  preserving local work in progress: any untracked file whose path upstream introduces
+  is kept beside upstream''s version as <name>.local.'
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_exists
+  description: the upstream remote-tracking branch exists locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: local_behind_upstream
+  description: HEAD is an ancestor of the upstream branch and strictly behind it,
+    so it can fast-forward
+  probe: git merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch} &&
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: untracked_path_collides_with_upstream
+  description: at least one untracked file sits at a path that upstream introduces
+  probe: test -n "$(comm -12 <(git ls-files --others --exclude-standard | LC_ALL=C
+    sort) <(git diff --name-only --diff-filter=A HEAD {upstream_remote}/{upstream_branch}
+    | LC_ALL=C sort))"
+  expect_exit: 0
+  expect_pattern: null
+- name: dirty_tracked_files_untouched_by_upstream
+  description: no locally modified tracked file is among the paths upstream changes,
+    so the fast-forward will not be blocked
+  probe: test -z "$(comm -12 <(git diff --name-only HEAD | LC_ALL=C sort) <(git diff
+    --name-only HEAD {upstream_remote}/{upstream_branch} | LC_ALL=C sort))"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+  comm -12 \
+    <(git ls-files --others --exclude-standard | LC_ALL=C sort) \
+    <(git diff --name-only --diff-filter=A HEAD {upstream_remote}/{upstream_branch} | LC_ALL=C sort) |
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    cp -p -- "$f" "$f.local"
+    rm -f -- "$f"
+  done
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: head_at_upstream
+  description: HEAD is now exactly the upstream tip
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: sidecar_preserved
+  description: the colliding unsaved work is kept as a .local sidecar beside a now-tracked
+    upstream file
+  probe: |-
+    found=0
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      if git ls-files --error-unmatch -- "${f%.local}" >/dev/null 2>&1; then
+        found=1
+      fi
+    done < <(git ls-files --others --exclude-standard | grep '\.local$' || true)
+    [ "$found" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+variant: aside
+provenance:
+  compiled_from_task: Bring this branch up to date with upstream, but my work in progress
+    must survive. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Bring this branch up to date with upstream, but my work in progress
+    must survive. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update./seed-2-dirty_tree-27781
+  fault: dirty_tree
+status: admitted
