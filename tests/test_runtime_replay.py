@@ -222,6 +222,16 @@ def test_git_revision_syntax_is_not_a_placeholder() -> None:
     assert placeholders(probe) == ["upstream_remote"]
 
 
+def test_git_peel_syntax_is_not_a_placeholder() -> None:
+    """The eighth live run's compiled `diverged` probe peeled a ref to its commit and was
+    refused as naming an unknown placeholder `commit`."""
+    probe = 'git rev-parse --verify --quiet "{upstream_remote}/{upstream_branch}^{commit}"'
+    assert substitute(probe, {"upstream_remote": "upstream", "upstream_branch": "main"}) == (
+        'git rev-parse --verify --quiet "upstream/main^{commit}"'
+    )
+    assert placeholders("git cat-file -t HEAD^{tree} && git rev-parse v1^{}") == []
+
+
 def test_substitute_raises_on_an_unknown_placeholder() -> None:
     """A name outside the vocabulary is a program defect and must not be silent."""
     with pytest.raises(KeyError):
