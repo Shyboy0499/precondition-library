@@ -1,0 +1,42 @@
+model: deepseek-flash
+compiled 17; admitted two-sided 13, positive-only 0
+library hash: b3612185dad48f7c412350d5503b144bd768994abca9f884956574f628b1652a
+
+build episodes:
+  branch_renamed seed 0: fallback, 10 tool calls, checker ok, admitted False -- negative side failed: preconditions accepted 1 of 2 same-intent states (branch_renamed seed 6 resolves to 'retrack', which accepts ['merge', 'retrack'], but the program implements 'rename'); firing where a sibling resolution is correct is the mismatch this gate exists to refuse; the revision did not parse: the reply was not a YAML mapping, so it is not a Program: mapping values are not allowed here in "<unicode string>", line 2, column 80: ... fter upstream renamed its branch: fetch and prune the upstream r ... ^
+  branch_renamed seed 4: fallback, 13 tool calls, checker not ok, admitted False -- positive side failed: unknown placeholder in the program ("no value bound for placeholder 'tracked_branch'; substituting an empty string would ask a different question")
+  branch_renamed seed 6: fallback, 15 tool calls, checker ok, admitted True
+  branch_renamed seed 1: fallback, 12 tool calls, checker ok, admitted True
+  dirty_tree seed 5: fallback, 6 tool calls, checker ok, admitted True
+  dirty_tree seed 0: fallback, 15 tool calls, checker ok, admitted True
+  dirty_tree seed 2: fallback, 19 tool calls, checker not ok, admitted True
+  diverged seed 1: fallback, 8 tool calls, checker ok, admitted True
+  diverged seed 2: fallback, 10 tool calls, checker ok, admitted False -- negative side failed: preconditions accepted 1 of 12 unrelated states (branch_renamed seed 1 resolves to 'merge'); a precondition set that accepts unrelated states is a defect
+  diverged seed 5: fallback, 8 tool calls, checker ok, admitted True
+  diverged seed 0: fallback, 10 tool calls, checker ok, admitted True
+  lockfile_conflict seed 5: fallback, 17 tool calls, checker ok, admitted True
+  lockfile_conflict seed 2: fallback, 18 tool calls, checker ok, admitted False -- negative side failed: preconditions accepted 1 of 12 unrelated states (diverged seed 0 resolves to 'merge'); a precondition set that accepts unrelated states is a defect. It also accepted 1 more state(s) it must refuse: preconditions accepted 1 of 2 same-intent states (lockfile_conflict seed 5 resolves to 'take_upstream', which accepts ['take_upstream'], but the program implements 'keep_local'); firing where a sibling resolution is correct is the mismatch this gate exists to refuse; the revision did not parse: the reply was not a YAML mapping, so it is not a Program: mapping values are not allowed here in "<unicode string>", line 2, column 3: id: merge-upstream-lockfile-keep-local ^
+  lockfile_conflict seed 3: fallback, 21 tool calls, checker ok, admitted True
+  submodule_moved seed 0: fallback, 23 tool calls, checker ok, admitted True
+  submodule_moved seed 4: fallback, 16 tool calls, checker ok, admitted True
+  submodule_moved seed 1: fallback, 11 tool calls, checker ok, admitted True
+
+2b threshold (tune seeds): 1.0
+claim 2: at matched dispatch coverage, executable-precondition dispatch mis-fires less often than text-similarity dispatch (at arm 3's coverage the soft vote's matched point is the hard rule itself (threshold >= 1.0), so it makes arm 3's decisions and cannot show that requiring every probe adds nothing; the registered claim keeps its wording)
+
+Primary metric, uninformed regime, 400 labelled pairs (spec §7 item 1, ADR-0008)
+  arm 3 (pre-registered coverage point): coverage 189/400, mismatch 0/189
+  arm 2 curve: 164 operating point(s), each with a 95% Wilson interval in figure1.csv
+  at matched coverage arm 2 (threshold 0.8404415545936161) has mismatch 169/187; coverage gap -0.005; mismatch difference (arm 2 - arm 3) +0.9037
+  power (item 3): with 187 and 189 fires, alpha 0.05 two-sided and power 0.8, the smallest detectable mismatch difference is 0.144 at a 50% base rate and 0.144 at the observed 0.449
+  baseline arm 2b (soft vote): curve, 2 operating point(s) -- context, not part of the claim
+  baseline arm 2c (intent key): point, 1 operating point(s) -- context, not part of the claim
+
+
+arm 2 baseline floor (spec §7 item 11): strict top-1 96/240: the 95% Wilson lower bound 0.340 exceeds chance 0.333, so arm 2 is a usable baseline
+
+episode stages skipped (--primary-only): no frozen benchmark
+
+artifacts:
+  rescored_from: results/replicates-2026-10-05/run-13
+  primary: primary
