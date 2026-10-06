@@ -1,0 +1,7 @@
+{
+  "scorer": "embedding",
+  "model_id": "sentence-transformers/all-MiniLM-L6-v2",
+  "revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+  "run": "results/replicates-2026-10-05/run-12",
+  "library_hash": "ad311de65eb51b120ea97aabb83fe22492c89812232e21bf2c5f1cde4dc8c8c1"
+}
