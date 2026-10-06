@@ -43,7 +43,7 @@ Stated first, because the prior art is real and the honest framing depends on it
 | That "the most similar case is not the most reusable" is a new insight | Smyth & Keane argued it in 1998, in a peer-reviewed journal, at length. |
 | That these token counts are a **cost** | They are tokens. Pricing input needs a rate table, and the provider's rates differ by peak and off-peak hours, so no currency figure is reported — input is metered as uncached, cache-read and cache-write so one can be computed once rates exist. |
 | That an episode-level comparison has been made | Only the pair-level primary metric has been measured ([Primary result](#primary-result)). The frozen benchmark, the admission factorial and the online arms have not been run at scale; the one smoke pass that ran them ([First demonstration](#first-demonstration)) demonstrates the mechanism and measures nothing. |
-| That precondition dispatch beats text similarity by a margin a stronger arm 2 would keep | Arm 2 here is lexical (ADR-0003) and clears its floor only modestly -- a 95% lower bound of 0.401 against chance 0.333. A better text scorer narrows the gap by an unknown amount; that is the measurement an embedding arm (#104) would make. |
+| That precondition dispatch beats text similarity by a margin a stronger arm 2 would keep | The shipped arm 2 is lexical (ADR-0003) and clears its floor only modestly -- a 95% lower bound of 0.401 against chance 0.333. The pinned embedding arm (#104) was measured on the same three libraries and did not narrow the gap (+0.77 to +0.90 against lexical +0.76 to +0.81), but it is no stronger on the floor (lower bounds 0.405 and 0.340), so it is a different text scorer, not a better one. Whether a scorer that clearly beats the lexical floor would keep the margin is still unmeasured. |
 
 Amortization is still what makes the project *useful* — it is an engineering
 assumption here, not a finding. It is reported as a cost model, never as a
@@ -325,12 +325,18 @@ resolutions, arm 2 swept to arm 3's coverage. Three whole-run replicates (spec �
 | arm 2 at matched coverage: mis-fires | 148/187 | 149/185 | 143/187 |
 | difference (arm 2 − arm 3) | +0.79 | **+0.81** | **+0.76** |
 | smallest detectable difference | 0.145 | 0.145 | 0.144 |
+| embedding arm 2 (#104): floor | not measurable | usable (112/240, 0.405) | usable, barely (96/240, 0.340) |
+| embedding arm 2 at matched coverage: mis-fires | 143/185 | 168/189 | 169/187 |
+| difference (embedding arm 2 − arm 3) | +0.77 | **+0.89** | **+0.90** |
 
 **What it shows.** Precondition dispatch never fired a program that the pair's state
 did not accept; text similarity, at the same coverage, did so on roughly four fires in
 five. The difference is about five times the smallest one the pair count can detect,
 and it holds in every replicate. Where arm 2's floor is usable -- replicates 2 and 3 --
-the claim may be worded as registered: a win over text similarity.
+the claim may be worded as registered: a win over text similarity. Swapping arm 2 for the
+pinned embedding scorer (#104) does not narrow the gap: it mis-fires on 77–90% of its
+fires at matched coverage, the gap widens in replicates 2 and 3 and narrows by 0.02 in
+replicate 1, and arm 3 is unchanged ([Embedding arm 2](results/replicates-2026-10-05/README.md#embedding-arm-2)).
 
 **What it does not show.**
 
@@ -338,8 +344,11 @@ the claim may be worded as registered: a win over text similarity.
   resolution, so arm 2 had nothing to choose between there and the floor could not be
   measured. It was also built on earlier code, before the fixes in #244 and #245;
   re-gated offline under the final admission, its figure is 0/187 against 141/186.
-- **Arm 2 is a weak baseline.** It is lexical, and its floor's lower bound sits only
-  0.07 above chance. The size of the gap is a statement about this arm 2.
+- **Arm 2 is a weak baseline, under both scorers.** The lexical arm's floor sits only
+  0.07 above chance, and the embedding arm is no stronger on it: one more correct top-1
+  in replicate 2, fifteen fewer in replicate 3, where its lower bound clears chance by
+  0.007. The size of the gap is a statement about these two text scorers, not about a
+  strong one.
 - **Nothing at episode level.** Mis-fires that end in a wrong repository, cost, the
   admission factorial and the online arms are separate stages, not run here.
 - **Arm 2b cannot separate the two.** At arm 3's coverage the soft vote's matched point

@@ -48,3 +48,40 @@ python -m precondition_library.bench.rescore --run results/replicates-2026-10-05
 
 The lexical rescore of `run-12` was checked against its own summary and matches it to the last
 digit: arm 2's threshold, 149/185 at matched coverage, the 111/240 floor.
+
+## Embedding arm 2
+
+Each run re-measured with arm 2 swapped for the pinned embedding scorer of #104
+(`sentence-transformers/all-MiniLM-L6-v2` at revision `1110a243fdf4706b3f48f1d95db1a4f5529b4d41`,
+recorded in each `rescore.json`), with no model call and no rebuild:
+
+```bash
+python -m precondition_library.bench.rescore --run results/replicates-2026-10-05/run-N \
+  --scorer embedding --out results/replicates-2026-10-05/run-N/rescore-embedding
+```
+
+Each `run-N/rescore-embedding/` holds that rescore's `summary.json`, `summary.txt`, `rescore.json`
+and `primary/` (Figure 1). The threshold is swept to arm 3's coverage exactly as for the lexical
+arm; it lands near 0.84 because the scorer maps cosine to `(cos + 1) / 2`, which puts every score in
+a narrow band above 0.5.
+
+| | run-11, lexical | run-11, embedding | run-12, lexical | run-12, embedding | run-13, lexical | run-13, embedding |
+| --- | --- | --- | --- | --- | --- | --- |
+| arm 2 floor: strict top-1 (Wilson lower bound vs 0.333) | not measurable | not measurable | 111/240 (0.401), usable | 112/240 (0.405), usable | 111/240 (0.401), usable | 96/240 (0.340), usable |
+| arm 3: coverage, mis-fires | 187/400, 0/187 | 187/400, 0/187 | 187/400, 0/187 | 187/400, 0/187 | 189/400, 0/189 | 189/400, 0/189 |
+| arm 2 at matched coverage: mis-fires | 148/187 | 143/185 | 149/185 | 168/189 | 143/187 | 169/187 |
+| difference (arm 2 − arm 3) | +0.791 | +0.773 | +0.805 | +0.889 | +0.765 | +0.904 |
+| smallest detectable difference (50% base rate) | 0.145 | 0.145 | 0.145 | 0.144 | 0.144 | 0.144 |
+| Claim 2 | registered wording kept | kept | kept | kept | kept | kept |
+
+Arm 3 is identical under both scorers, as it must be: it does not read the scorer.
+
+**What it shows.** The embedding arm 2 does not narrow the gap. At matched coverage it mis-fires
+on 77–90% of its fires against arm 3's 0%; the gap widened in replicates 2 and 3 (+0.08, +0.14) and
+narrowed by 0.02 in replicate 1, and in every replicate it stays five to six times the smallest
+detectable difference.
+
+**What it does not show.** That a *strong* text scorer would keep the gap. On the floor this
+embedding is no stronger than the lexical arm -- one more correct top-1 in replicate 2, fifteen
+fewer in replicate 3, where its lower bound clears chance by 0.007 -- so this measures a different
+text scorer, not a better one.
