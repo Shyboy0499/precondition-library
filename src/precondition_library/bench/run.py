@@ -75,6 +75,7 @@ from ..tasks.faults import FAULTS, build_sandbox
 from ..tasks.intent import IntentSpec, ResolutionVariant
 from ..tasks.invariants import recorded_state_intact
 from ..tasks.registry import EXCLUDED_FROM_BENCHMARK, ambiguous_intents
+from ..tasks.spec import FaultSpec
 from .gold import load_gold_programs
 from .ledger import (
     Arm,
@@ -486,30 +487,35 @@ def run_episode(
     # not run. Set from the declaration only once the call returns, so a row can never
     # claim a surface was applied when the fault's own clause failed first (issue #96).
     applied_surface: tuple[str, ...] | None = None
+
+    def invalid(exc: Exception) -> EpisodeRecord:
+        """The row for this episode if it cannot be graded, with what it has spent."""
+        return _invalid_record(
+            arm,
+            intent.name,
+            fault_type,
+            seed,
+            occurrence,
+            role,
+            model,
+            started,
+            str(exc),
+            accounting=accounting,
+            library_hash=library_hash,
+            library_program_ids=library_program_ids,
+            threshold=library.threshold,
+            soft_threshold=library.soft_threshold if arm is Arm.SOFT_VOTE else None,
+            rerank_k=_rerank_k(library),
+            change_surface=applied_surface,
+            replicate=replicate,
+        )
+
     try:
         try:
             box = build_sandbox(seed, [fault_type])
             state = StateFingerprint.observe(box)
         except Exception as exc:
-            return _invalid_record(
-                arm,
-                intent.name,
-                fault_type,
-                seed,
-                occurrence,
-                role,
-                model,
-                started,
-                str(exc),
-                accounting=accounting,
-                library_hash=library_hash,
-                library_program_ids=library_program_ids,
-                threshold=library.threshold,
-                soft_threshold=library.soft_threshold if arm is Arm.SOFT_VOTE else None,
-                rerank_k=_rerank_k(library),
-                change_surface=applied_surface,
-                replicate=replicate,
-            )
+            return invalid(exc)
 
         if request is None:
             request = fault.task_text(seed)
@@ -542,41 +548,10 @@ def run_episode(
             memory=memory,
         )
         embedding_after = _arm2_usage(library)
-        state_intact: bool | None = None
         try:
-            verdict = fault.check(box)
-            if verdict.ok:
-                # Reaching the expected state is not sufficient on its own: a
-                # resolution can reach it by discarding everything else, and then the
-                # arm would be scored as succeeding by destroying the repository
-                # rather than by repairing the fault (issue #9, item 3). Checked only
-                # when the fault's own clause passed, so a fault-level failure keeps
-                # its own reason rather than being reported as a ref violation.
-                intact = recorded_state_intact(box, surface=fault.change_surface)
-                applied_surface = fault.change_surface
-                state_intact = intact.ok
-                verdict = intact
-            ground_truth_ok = verdict.ok
+            ground_truth_ok, state_intact, applied_surface = _grade(fault, box)
         except Exception as exc:
-            return _invalid_record(
-                arm,
-                intent.name,
-                fault_type,
-                seed,
-                occurrence,
-                role,
-                model,
-                started,
-                str(exc),
-                accounting=accounting,
-                library_hash=library_hash,
-                library_program_ids=library_program_ids,
-                threshold=library.threshold,
-                soft_threshold=library.soft_threshold if arm is Arm.SOFT_VOTE else None,
-                rerank_k=_rerank_k(library),
-                change_surface=applied_surface,
-                replicate=replicate,
-            )
+            return invalid(exc)
 
         # Grading is done with this sandbox, so it is safe to release it now.
         # Admission (below) rebuilds sandboxes at deterministic paths, and one of
@@ -1318,6 +1293,24 @@ def _program_id(fault_type: str, occurrence: int, proposed: str) -> str:
     """
     slug = re.sub(r"[^a-z0-9]+", "-", proposed.lower()).strip("-") or "program"
     return f"{fault_type}-occ{occurrence}-{slug}"
+
+
+def _grade(fault: FaultSpec, box: Sandbox) -> tuple[bool, bool | None, tuple[str, ...] | None]:
+    """Ground truth for `box` after the arm: `(ground_truth_ok, recorded_state_intact,
+    the change surface applied)`. Raises when the checker cannot grade the state.
+
+    Reaching the expected state is not sufficient on its own: a resolution can reach it
+    by discarding everything else, and then the arm would be scored as succeeding by
+    destroying the repository rather than by repairing the fault (issue #9, item 3).
+    Checked only when the fault's own clause passed, so a fault-level failure keeps its
+    own reason rather than being reported as a ref violation -- and the surface is
+    reported as applied only once `recorded_state_intact` returns (issue #96).
+    """
+    verdict = fault.check(box)
+    if not verdict.ok:
+        return False, None, None
+    intact = recorded_state_intact(box, surface=fault.change_surface)
+    return intact.ok, intact.ok, fault.change_surface
 
 
 def _invalid_record(
