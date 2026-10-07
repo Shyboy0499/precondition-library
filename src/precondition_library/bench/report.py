@@ -1730,6 +1730,25 @@ def _summary(
     surfaces: list[FaultSurface],
     instances: list[AchievedInstance],
 ) -> str:
+    sections = [
+        _header_lines(rows, counts),
+        _surface_lines(surfaces),
+        _instance_lines(instances),
+        _ablation_lines(rows),
+        _cost_curve_lines(points),
+        _triple_lines(triples),
+        _pareto_lines(pareto),
+        _seam_lines(rows),
+        _prefix_lines(),
+        _equivalence_lines(triples),
+        _mismatch_lines(comparison),
+    ]
+    return "\n".join(line for section in sections for line in section)
+
+
+def _header_lines(rows: list[AblationRow], counts: dict[OccurrenceRole, int]) -> list[str]:
+    """The title, the warning that this is not the primary analysis, and the run's health:
+    invalid and spec-gaming rates and the occurrence roles."""
     invalid = _overall_invalid(rows)
     lines = [
         "Precondition-library ablation report",
@@ -1766,6 +1785,12 @@ def _summary(
             "resolutions that simply failed to repair the fault; `tasks/invariants.py` "
             "names which recorded ref was lost or rewritten (issue #9)."
         )
+    return lines
+
+
+def _surface_lines(surfaces: list[FaultSurface]) -> list[str]:
+    """Each fault's change surface as its rows applied it (#96)."""
+    lines: list[str] = []
     lines.append(
         "Change surface per fault (#96): the paths each fault's resolution was allowed to "
         "touch, as applied. Read from the ledger's `change_surface`, not from the fault "
@@ -1795,6 +1820,12 @@ def _summary(
         else:
             (only,) = fault_surface.surfaces
             lines.append(f"    {_format_surface(only.surface)} ({only.episodes} row(s))")
+    return lines
+
+
+def _instance_lines(instances: list[AchievedInstance]) -> list[str]:
+    """The independent instances each resolution's seeds built (ADR-0005 decision 8)."""
+    lines: list[str] = []
     lines.append(
         "Achieved instance count per resolution (ADR-0005 decision 8): the independent "
         "environments the run's seeds actually build, read from `instance_for_seed`. "
@@ -1808,6 +1839,12 @@ def _summary(
             f"  {achieved.fault_type}/{achieved.resolution}:"
             f" {achieved.instances} instance(s) over {achieved.seeds} seed(s)"
         )
+    return lines
+
+
+def _ablation_lines(rows: list[AblationRow]) -> list[str]:
+    """One line per ablation cell."""
+    lines: list[str] = []
     lines += ["", "Ablation table (one row per arm, fault, occurrence):"]
     if not rows:
         lines.append("  (the ledger is empty; no cell has a denominator to report)")
@@ -1822,6 +1859,12 @@ def _summary(
             f" {_format_mean(row.mean_llm_calls, 'llm_calls')}"
             f" {_format_mean(row.mean_wall_clock_s, 'wall_s')}"
         )
+    return lines
+
+
+def _cost_curve_lines(points: list[CostPoint]) -> list[str]:
+    """The secondary cost curve over replay occurrences, and its break-even in words."""
+    lines: list[str] = []
     lines += [
         "",
         "Cost curve (secondary; replay occurrences only -- the ones a library could "
@@ -1855,6 +1898,12 @@ def _summary(
         )
     for finding in findings:
         lines.append(f"  break-even: {finding.detail}")
+    return lines
+
+
+def _triple_lines(triples: list[ArmTriple]) -> list[str]:
+    """Each arm's pooled success and cost, and what the gold oracle floor means."""
+    lines: list[str] = []
     lines += [
         "",
         "Arm triples (secondary; pooled over every graded episode of the arm, failed ones "
@@ -1881,6 +1930,12 @@ def _summary(
             "could reach here and its cost bounds the cheapest an arm could be. It is an "
             "oracle, not a dispatcher, so it is absent from the matched-coverage comparison."
         )
+    return lines
+
+
+def _pareto_lines(pareto: ParetoFrontier) -> list[str]:
+    """Which arms are on the cost-success frontier and which are dominated."""
+    lines: list[str] = []
     lines.append(
         "Pareto over the arms (an arm is only dominated if it is no better on success "
         "and no cheaper on both costs):"
@@ -1898,6 +1953,12 @@ def _summary(
             "  unranked (no success to divide by, so not compared): "
             f"{', '.join(a.value for a in pareto.unranked)}"
         )
+    return lines
+
+
+def _seam_lines(rows: list[AblationRow]) -> list[str]:
+    """Arm 2's similarity-seam spend, kept apart from the LLM's tokens."""
+    lines: list[str] = []
     lines.append(
         "Similarity-seam currency (arm 2 only; never added to the LLM token counts, "
         "because one arm pays it and the others do not):"
@@ -1913,12 +1974,24 @@ def _summary(
             )
     if not any(row.mean_embedding_tokens.value for row in rows):
         lines.append("  0: the seam is lexical and spends nothing, so no arm pays a second bill")
+    return lines
+
+
+def _prefix_lines() -> list[str]:
+    """The prompt prefixes every arm sends."""
+    lines: list[str] = []
     lines.append(
         "Prompt prefixes the run sends (raw characters, shared by every arm -- the "
         "per-arm difference is transcript growth around the prefix, not the prefix):"
     )
     for prefix in prompt_prefix_lengths():
         lines.append(f"  {prefix.phase}: {prefix.chars:,} chars -- {prefix.source}")
+    return lines
+
+
+def _equivalence_lines(triples: list[ArmTriple]) -> list[str]:
+    """The pre-registered success-rate equivalence test between the dispatch arms."""
+    lines: list[str] = []
     lines.append(
         f"Success-rate equivalence (pre-registered TOST, margin +/-{EQUIVALENCE_MARGIN:.0%}, "
         f"alpha {TOST_ALPHA}; spec §7 item 10):"
@@ -1940,6 +2013,12 @@ def _summary(
                 f" p_lower={verdict.p_lower:.3f} p_upper={verdict.p_upper:.3f}"
             )
             lines.append(f"  {verdict.reason}")
+    return lines
+
+
+def _mismatch_lines(comparison: MismatchComparison) -> list[str]:
+    """The demo mismatch comparison at matched N, and where the figures are."""
+    lines: list[str] = []
     lines += [
         "",
         f"Mismatch comparison (arm 2 vs arm 3, matched N={comparison.matched_n}, "
@@ -1964,7 +2043,7 @@ def _summary(
         "carry the same numbers and are the deliverable.",
         "",
     ]
-    return "\n".join(lines)
+    return lines
 
 
 def write_report(ledger: Path, dest: Path) -> Path:
