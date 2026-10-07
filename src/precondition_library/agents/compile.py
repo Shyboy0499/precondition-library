@@ -32,6 +32,7 @@ would corrupt the ledger's denominator.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
@@ -546,47 +547,11 @@ def admit(
         )
 
     declared = _declared_variant_ids(name)
-    if declared is not None and program.variant not in declared:
-        return False, (
-            f"rejected before any sandbox: the intent for {name!r} is ambiguous and "
-            f"declares variant id(s) {sorted(declared)}, but the program declares "
-            f"{program.variant!r}; without a declared variant a wrong fire would be "
-            f"recorded as no fire at all"
-        )
-
-    # Skipped when the precondition list is empty: that case is already a recorded
-    # compile defect (`_EMPTY_PRECONDITIONS`) and is refused by the clean-sandbox
-    # class, which names the specific defect. Running this check there would only
-    # replace that reason with a less specific one, and it cannot admit anything:
-    # an empty list accepts every state including the clean sandbox.
-    unguarded = _unguarded_body_parameters(program) if program.preconditions else []
-    if unguarded:
-        named = ", ".join(f"{{{item}}}" for item in unguarded)
-        part = "steps use" if program.steps is not None else "body uses"
-        return False, (
-            f"rejected before any sandbox: the {part} {named}, which no "
-            f"precondition's probe references; a precondition is how a program "
-            f"declares what it needs, so a body parameter that no precondition names "
-            f"is a program that has not said what it requires -- the states it may "
-            f"fire in need not bind it"
-        )
-
-    for seed in seeds:
-        box = build_sandbox(seed, [name])
-        try:
-            result = replay(program, box)
-        except KeyError as exc:
-            # A placeholder outside the runtime's vocabulary is a compile defect,
-            # not a crash: report it as a rejection. A *declared* name this
-            # sandbox cannot bind no longer reaches here -- `replay` records it
-            # as an unbound-parameter result (issue #76) and the failure is
-            # reported by the `not result.ok` branch below.
-            return False, f"positive side failed: unknown placeholder in the program ({exc})"
-        finally:
-            box.destroy()
-        if not result.ok:
-            detail = result.reason or "the replay did not satisfy its contract"
-            return False, f"positive side failed on {name} seed {seed}: {detail}"
+    refusal = _refused_before_any_sandbox(program, name, declared) or _positive_refusal(
+        program, name, seeds
+    )
+    if refusal is not None:
+        return False, refusal
 
     if gate is AdmissionGate.POSITIVE_ONLY:
         return True, (
@@ -595,143 +560,31 @@ def admit(
             f"2x2's ungated arm, Claim 3)"
         )
 
-    accepted, error = _preconditions_accept(program, _CLEAN_SEED, [])
-    if error is not None:
-        return False, f"negative side failed: preconditions could not be evaluated ({error})"
-    if accepted:
-        _note(fired_on, (), _CLEAN_SEED)
-        return False, (
-            "negative side failed: preconditions accepted a clean sandbox (checked 1 "
-            "clean sandbox, built with no fault injected): nothing needs doing there, "
-            "so every program must refuse it"
-        )
+    refusal = _clean_refusal(program, fired_on)
+    if refusal is not None:
+        return False, refusal
 
-    unrelated = sorted(set(FAULTS) - {name})
-    if not unrelated:
-        raise ValueError(f"no unrelated faults exist to test {name!r} against")
-
-    # One (fault, seed, state) per distinct state each unrelated injector can
-    # select, in fault order then first-appearance seed order. Built from
-    # `variant_for_seed`, so the sandbox really is that state rather than an
-    # assumption about seed 0, and the verdict stays reproducible.
-    unrelated_states = [
-        (other, seed, FAULTS[other].variant_for_seed(seed))
-        for other in unrelated
-        for seed in _state_seeds(FAULTS[other])
-    ]
-    # Another fault's injector can produce a state this program's own intent labels --
-    # `lockfile_conflict`'s state was one, labelled `merge` by the sync intent, until
-    # #191 made that intent refuse a sync that would conflict. None does today; the
-    # class stays so a future overlap is judged correctly. Such an **overlap state**
-    # is not unrelated -- firing there is right when the program
-    # implements the label and wrong otherwise -- so it is judged as a same-intent
-    # state, by this intent's own decision rule (issue #158, ADR-0019). Only a state
-    # the intent leaves unlabelled is unrelated, where any fire is a defect.
     intent = _intent_for_fault(name)
+    unrelated = _unrelated_pass(program, name, intent, fired_on)
+    if unrelated.error is not None:
+        return False, _unevaluable(unrelated.error)
+    siblings = _sibling_pass(program, name, intent, declared, seeds, fired_on)
+    if siblings.error is not None:
+        return False, _unevaluable(siblings.error)
     # Every state the preconditions wrongly accept, not only the first: a revision is
     # shown all of them at once, which are still only states the program fired on
     # (ADR-0030). The verdict is the same refusal either way.
-    wrong: list[str] = []
-    overlap_fired: list[str] = []
-    for other, seed, state in unrelated_states:
-        accepted, error, label, acceptable = _preconditions_accept_labelled(
-            program, seed, [other], intent
-        )
-        if error is not None:
-            return False, f"negative side failed: preconditions could not be evaluated ({error})"
-        if not accepted:
-            continue
-        which = f"{other} seed {seed}"
-        if label is not None:
-            # Right when the program's resolution is one the state accepts (ADR-0023),
-            # not only when it is the label.
-            if program.variant is not None and accepts(label, acceptable, program.variant):
-                overlap_fired.append(f"{other}:{state}")
-                continue
-            _note(fired_on, (other,), seed)
-            wrong.append(
-                f"negative side failed: preconditions accepted an overlap state ({which}, "
-                f"which this intent's own rule labels {label!r} and accepts "
-                f"{list(acceptable) or [label]}, but the program implements "
-                f"{program.variant!r}); firing where another resolution is correct is the "
-                f"mismatch this gate exists to refuse"
-            )
-            continue
-        if state is not None:
-            which += f" resolves to {state!r}"
-        _note(fired_on, (other,), seed)
-        wrong.append(
-            f"negative side failed: preconditions accepted 1 of "
-            f"{len(unrelated_states)} unrelated states ({which}); a precondition "
-            f"set that accepts unrelated states is a defect"
-        )
-
-    siblings = _sibling_seeds(name, program.variant, declared)
-    # A sibling state is labelled with another resolution, but the checker may accept this
-    # program's resolution there too (ADR-0023: merge and rebase on any diverged state).
-    # Firing on such a state is right, and counts toward the breadth cap like any fire.
-    sibling_fired: list[str] = []
-    own_states = {FAULTS[name].variant_for_seed(seed) for seed in seeds}
-    for seed, variant in siblings:
-        accepted, error, label, acceptable = _preconditions_accept_labelled(
-            program, seed, [name], intent
-        )
-        if error is not None:
-            return False, f"negative side failed: preconditions could not be evaluated ({error})"
-        if not accepted:
-            continue
-        if program.variant is not None and accepts(label, acceptable, program.variant):
-            sibling_fired.append(f"{name}:{variant}")
-            continue
-        _note(fired_on, (name,), seed)
-        if variant in own_states:
-            # The program fired on the state it was compiled from, where its body passed:
-            # the preconditions are right to fire, and the declared variant is what is wrong
-            # (the fifth live run: an `aside` body labelled `stash`).
-            wrong.append(
-                f"negative side failed: preconditions accepted 1 of {len(siblings)} "
-                f"same-intent states ({name} seed {seed} resolves to {variant!r}, which accepts "
-                f"{list(acceptable) or [variant]}), and that is the state the program was "
-                f"compiled from: it declares variant {program.variant!r}, but the solution it "
-                f"was compiled from is a {variant!r} resolution there, so the declared variant, "
-                f"not the preconditions, is what is wrong"
-            )
-            continue
-        wrong.append(
-            f"negative side failed: preconditions accepted 1 of {len(siblings)} "
-            f"same-intent states ({name} seed {seed} resolves to {variant!r}, which accepts "
-            f"{list(acceptable) or [variant]}, but the program implements "
-            f"{program.variant!r}); firing where a sibling resolution is correct is the "
-            f"mismatch this gate exists to refuse"
-        )
+    wrong = unrelated.wrong + siblings.wrong
     if wrong:
         return False, _every_wrong_fire(wrong)
 
-    # Breadth cap (issue #10). The fraction of the sampled universe the
-    # preconditions fire on must not exceed BREADTH_CAP. Reaching here means the
-    # clean sandbox and every unlabelled unrelated state were rejected, and every
-    # overlap or sibling state it fired on accepts its resolution, so the universe
-    # states that fired are this fault's own non-sibling states -- its resolution,
-    # plus any injected state that is not a declared resolution -- and the overlap
-    # and sibling states it fired on correctly (`overlap_fired`, issue #158;
-    # `sibling_fired`, ADR-0023), which are added below. Evaluating
-    # only those is the cheap equivalent of `precondition_breadth`'s full sweep (which rebuilds the
-    # unrelated faults' sandboxes only to confirm the zero we already have); the
-    # two agree, pinned by test_breadth_cap. The denominator is the whole universe.
-    total = len(sampled_states())
-    sibling_seeds = {seed for seed, _ in siblings}
-    own_remaining = [seed for seed in _state_seeds(FAULTS[name]) if seed not in sibling_seeds]
-    fired_where: list[str] = []
-    for seed in own_remaining:
-        accepted, error = _preconditions_accept(program, seed, [name])
-        if error is not None:
-            return False, f"negative side failed: preconditions could not be evaluated ({error})"
-        if accepted:
-            fired_where.append(f"{name}:{FAULTS[name].variant_for_seed(seed)}")
+    fired_where, error = _own_fires(program, name, siblings.seeds)
+    if error is not None:
+        return False, _unevaluable(error)
     # Overlap and sibling states the program fired on correctly are fires on the universe
     # too (issue #158, ADR-0023).
-    fired_where.extend(overlap_fired)
-    fired_where.extend(sibling_fired)
+    fired_where += unrelated.fired_correctly + siblings.fired_correctly
+    total = len(sampled_states())
     fired = len(fired_where)
     if fired > BREADTH_CAP * total:
         return False, (
@@ -742,18 +595,253 @@ def admit(
         )
 
     overlap_note = (
-        f" (firing correctly on {len(overlap_fired)} overlap state(s) its intent labels "
-        f"{program.variant!r})"
-        if overlap_fired
+        f" (firing correctly on {len(unrelated.fired_correctly)} overlap state(s) its intent "
+        f"labels {program.variant!r})"
+        if unrelated.fired_correctly
         else ""
     )
     return True, (
         f"admitted: postconditions held on {len(seeds)} freshly faulted sandbox(es); "
-        f"preconditions rejected 1 clean sandbox, {len(unrelated_states)} unrelated "
-        f"state(s){overlap_note} and {len(siblings)} same-intent state(s), and fired on {fired} of "
-        f"{total} sampled states ({fired / total:.0%}), within the {BREADTH_CAP:.0%} "
-        f"breadth cap"
+        f"preconditions rejected 1 clean sandbox, {unrelated.checked} unrelated "
+        f"state(s){overlap_note} and {siblings.checked} same-intent state(s), and fired on "
+        f"{fired} of {total} sampled states ({fired / total:.0%}), within the "
+        f"{BREADTH_CAP:.0%} breadth cap"
     )
+
+
+def _unevaluable(error: str) -> str:
+    return f"negative side failed: preconditions could not be evaluated ({error})"
+
+
+def _refused_before_any_sandbox(
+    program: Program, name: str, declared: set[str] | None
+) -> str | None:
+    """Why `program` is refused on its text alone -- an undeclared variant, or a body
+    parameter no precondition names -- or `None`. See `admit`."""
+    if declared is not None and program.variant not in declared:
+        return (
+            f"rejected before any sandbox: the intent for {name!r} is ambiguous and "
+            f"declares variant id(s) {sorted(declared)}, but the program declares "
+            f"{program.variant!r}; without a declared variant a wrong fire would be "
+            f"recorded as no fire at all"
+        )
+    # Skipped when the precondition list is empty: that case is already a recorded
+    # compile defect (`_EMPTY_PRECONDITIONS`) and is refused by the clean-sandbox
+    # class, which names the specific defect. Running this check there would only
+    # replace that reason with a less specific one, and it cannot admit anything:
+    # an empty list accepts every state including the clean sandbox.
+    unguarded = _unguarded_body_parameters(program) if program.preconditions else []
+    if unguarded:
+        named = ", ".join(f"{{{item}}}" for item in unguarded)
+        part = "steps use" if program.steps is not None else "body uses"
+        return (
+            f"rejected before any sandbox: the {part} {named}, which no "
+            f"precondition's probe references; a precondition is how a program "
+            f"declares what it needs, so a body parameter that no precondition names "
+            f"is a program that has not said what it requires -- the states it may "
+            f"fire in need not bind it"
+        )
+    return None
+
+
+def _positive_refusal(program: Program, name: str, seeds: list[int]) -> str | None:
+    """Why `program` fails to fix `name` on a fresh sandbox at one of `seeds`, or `None`."""
+    for seed in seeds:
+        box = build_sandbox(seed, [name])
+        try:
+            result = replay(program, box)
+        except KeyError as exc:
+            # A placeholder outside the runtime's vocabulary is a compile defect,
+            # not a crash: report it as a rejection. A *declared* name this
+            # sandbox cannot bind no longer reaches here -- `replay` records it
+            # as an unbound-parameter result (issue #76) and the failure is
+            # reported by the `not result.ok` branch below.
+            return f"positive side failed: unknown placeholder in the program ({exc})"
+        finally:
+            box.destroy()
+        if not result.ok:
+            detail = result.reason or "the replay did not satisfy its contract"
+            return f"positive side failed on {name} seed {seed}: {detail}"
+    return None
+
+
+def _clean_refusal(
+    program: Program, fired_on: list[tuple[tuple[str, ...], int]] | None
+) -> str | None:
+    """Why `program`'s preconditions fail on the fault-free sandbox, or `None`."""
+    accepted, error = _preconditions_accept(program, _CLEAN_SEED, [])
+    if error is not None:
+        return _unevaluable(error)
+    if accepted:
+        _note(fired_on, (), _CLEAN_SEED)
+        return (
+            "negative side failed: preconditions accepted a clean sandbox (checked 1 "
+            "clean sandbox, built with no fault injected): nothing needs doing there, "
+            "so every program must refuse it"
+        )
+    return None
+
+
+@dataclass
+class _NegativePass:
+    """One class of negative states, as the preconditions met them."""
+
+    checked: int
+    """How many states the class holds, for the reason a refusal or admission gives."""
+    wrong: list[str] = field(default_factory=list)
+    """A refusal reason per state the program must not fire on and did."""
+    fired_correctly: list[str] = field(default_factory=list)
+    """`fault:state` for each state it fired on where its resolution is acceptable; these
+    count toward the breadth cap."""
+    seeds: set[int] = field(default_factory=set)
+    """The seeds the class covered on the program's own fault."""
+    error: str | None = None
+    """Why a precondition could not be evaluated; the class stops at the first."""
+
+
+def _unrelated_pass(
+    program: Program,
+    name: str,
+    intent: IntentSpec | None,
+    fired_on: list[tuple[tuple[str, ...], int]] | None,
+) -> _NegativePass:
+    """Class 2: every other fault, at one seed per distinct state it can inject.
+
+    Built from `variant_for_seed`, so the sandbox really is that state rather than an
+    assumption about seed 0, in fault order then first-appearance seed order.
+
+    Another fault's injector can produce a state this program's own intent labels --
+    `lockfile_conflict`'s state was one, labelled `merge` by the sync intent, until #191
+    made that intent refuse a sync that would conflict. None does today; the class stays
+    so a future overlap is judged correctly. Such an **overlap state** is not unrelated --
+    firing there is right when the program implements the label and wrong otherwise -- so
+    it is judged as a same-intent state, by this intent's own decision rule (issue #158,
+    ADR-0019). Only a state the intent leaves unlabelled is unrelated, where any fire is a
+    defect.
+    """
+    unrelated = sorted(set(FAULTS) - {name})
+    if not unrelated:
+        raise ValueError(f"no unrelated faults exist to test {name!r} against")
+    states = [
+        (other, seed, FAULTS[other].variant_for_seed(seed))
+        for other in unrelated
+        for seed in _state_seeds(FAULTS[other])
+    ]
+    result = _NegativePass(checked=len(states))
+    for other, seed, state in states:
+        accepted, error, label, acceptable = _preconditions_accept_labelled(
+            program, seed, [other], intent
+        )
+        if error is not None:
+            result.error = error
+            return result
+        if not accepted:
+            continue
+        which = f"{other} seed {seed}"
+        if label is not None:
+            # Right when the program's resolution is one the state accepts (ADR-0023),
+            # not only when it is the label.
+            if program.variant is not None and accepts(label, acceptable, program.variant):
+                result.fired_correctly.append(f"{other}:{state}")
+                continue
+            _note(fired_on, (other,), seed)
+            result.wrong.append(
+                f"negative side failed: preconditions accepted an overlap state ({which}, "
+                f"which this intent's own rule labels {label!r} and accepts "
+                f"{list(acceptable) or [label]}, but the program implements "
+                f"{program.variant!r}); firing where another resolution is correct is the "
+                f"mismatch this gate exists to refuse"
+            )
+            continue
+        if state is not None:
+            which += f" resolves to {state!r}"
+        _note(fired_on, (other,), seed)
+        result.wrong.append(
+            f"negative side failed: preconditions accepted 1 of "
+            f"{len(states)} unrelated states ({which}); a precondition "
+            f"set that accepts unrelated states is a defect"
+        )
+    return result
+
+
+def _sibling_pass(
+    program: Program,
+    name: str,
+    intent: IntentSpec | None,
+    declared: set[str] | None,
+    seeds: list[int],
+    fired_on: list[tuple[tuple[str, ...], int]] | None,
+) -> _NegativePass:
+    """Class 3: the program's own fault at every state labelled with another resolution.
+
+    A sibling state is labelled with another resolution, but the checker may accept this
+    program's resolution there too (ADR-0023: merge and rebase on any diverged state).
+    Firing on such a state is right, and counts toward the breadth cap like any fire.
+    """
+    siblings = _sibling_seeds(name, program.variant, declared)
+    result = _NegativePass(checked=len(siblings), seeds={seed for seed, _ in siblings})
+    own_states = {FAULTS[name].variant_for_seed(seed) for seed in seeds}
+    for seed, variant in siblings:
+        accepted, error, label, acceptable = _preconditions_accept_labelled(
+            program, seed, [name], intent
+        )
+        if error is not None:
+            result.error = error
+            return result
+        if not accepted:
+            continue
+        if program.variant is not None and accepts(label, acceptable, program.variant):
+            result.fired_correctly.append(f"{name}:{variant}")
+            continue
+        _note(fired_on, (name,), seed)
+        if variant in own_states:
+            # The program fired on the state it was compiled from, where its body passed:
+            # the preconditions are right to fire, and the declared variant is what is wrong
+            # (the fifth live run: an `aside` body labelled `stash`).
+            result.wrong.append(
+                f"negative side failed: preconditions accepted 1 of {len(siblings)} "
+                f"same-intent states ({name} seed {seed} resolves to {variant!r}, which accepts "
+                f"{list(acceptable) or [variant]}), and that is the state the program was "
+                f"compiled from: it declares variant {program.variant!r}, but the solution it "
+                f"was compiled from is a {variant!r} resolution there, so the declared variant, "
+                f"not the preconditions, is what is wrong"
+            )
+            continue
+        result.wrong.append(
+            f"negative side failed: preconditions accepted 1 of {len(siblings)} "
+            f"same-intent states ({name} seed {seed} resolves to {variant!r}, which accepts "
+            f"{list(acceptable) or [variant]}, but the program implements "
+            f"{program.variant!r}); firing where a sibling resolution is correct is the "
+            f"mismatch this gate exists to refuse"
+        )
+    return result
+
+
+def _own_fires(
+    program: Program, name: str, sibling_seeds: set[int]
+) -> tuple[list[str], str | None]:
+    """The breadth cap's own-fault fires (issue #10): `fault:state` for each of `name`'s
+    non-sibling states the preconditions accept, or the first evaluation error.
+
+    Reaching the cap means the clean sandbox and every unlabelled unrelated state were
+    rejected, and every overlap or sibling state the program fired on accepts its
+    resolution, so the universe states that fired are this fault's own non-sibling states
+    -- its resolution, plus any injected state that is not a declared resolution -- and
+    the overlap and sibling states it fired on correctly, which `admit` adds. Evaluating
+    only those is the cheap equivalent of `precondition_breadth`'s full sweep (which
+    rebuilds the unrelated faults' sandboxes only to confirm the zero already known); the
+    two agree, pinned by test_breadth_cap. The denominator is the whole universe.
+    """
+    fired: list[str] = []
+    for seed in _state_seeds(FAULTS[name]):
+        if seed in sibling_seeds:
+            continue
+        accepted, error = _preconditions_accept(program, seed, [name])
+        if error is not None:
+            return fired, error
+        if accepted:
+            fired.append(f"{name}:{FAULTS[name].variant_for_seed(seed)}")
+    return fired, None
 
 
 def _preconditions_accept(
