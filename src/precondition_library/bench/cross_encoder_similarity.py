@@ -8,7 +8,7 @@ reranker is trained for: given a query and a passage, how relevant is the passag
 2's question exactly -- given the request, how well does this program's text answer it -- so this
 module is the stronger text scorer the replicate README's caveat asked for.
 
-How it was chosen. Twelve pinned local models were screened on the floor itself (the informed
+How it was chosen. Thirteen pinned local models were screened on the floor itself (the informed
 regime's strict top-1 on the tune seeds, against replicates 2 and 3's frozen libraries; the
 table is in `results/replicates-2026-10-05/README.md`). Selecting on the tune seeds is what they
 are for (spec §7 item 5); the pair-level metric is measured on the disjoint pair seeds. This
