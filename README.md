@@ -299,9 +299,9 @@ places, both checked:
   fails when the declaration and the code disagree.
 - **What is outstanding.** The
   [issue tracker](https://github.com/Shyboy0499/precondition-library/issues). The
-  detail lives there, not here. The primary comparison's code is in place and #5
-  stays open until the pre-registered full-scale run exists (the one command is in
-  [Running it](#running-it)); #163 records the live runs so far. Using the library on
+  detail lives there, not here. The primary comparison is measured at the registered
+  pair-level scale and #5 is closed; the episode-level stages are what remains (the one
+  command is in [Running it](#running-it)); #163 records the live runs so far. Using the library on
   a repository of your own is #181 (dispatch, and replay on confirmation) and #188
   (learning a program there).
   Which faults are still excluded from dispatch measurement is declared in code, not

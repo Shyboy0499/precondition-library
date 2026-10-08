@@ -4,14 +4,67 @@ All notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
-Versions are **0.x** and the design is still moving. Nothing below claims a
-measured result; there are none yet. See
+Versions are **0.x** and the design is still moving. 0.1.0 is the first to carry a
+measured result, at pair level; everything before it is design and apparatus. See
 [`docs/decisions/`](docs/decisions/) for reversals and the reasoning behind them.
 
 ## Unreleased
 
+## 0.1.0 — 2026-10-08
+
+The first release with a measured result: the pair-level primary metric (ADR-0022) over
+three replicate builds, with every frozen library committed under
+[`results/replicates-2026-10-05/`](results/replicates-2026-10-05/) so each figure can be
+recomputed without a model key. At matched coverage, precondition dispatch mis-fired on 0
+of 563 fires against text-similarity dispatch's 76–81%, and 71–76% for the strongest
+local text scorer screened (README, [Primary result](README.md#primary-result)). Nothing at episode level is measured yet.
+
+Each section opens with a summary of the work after 2026-09-17, by area, with the issue or
+ADR that holds the detail; the entries after it were written as the earlier work landed
+and are kept as written.
+
 ### Added
 
+- **The primary measurement.** Mismatch against coverage over labelled dispatch pairs
+  (#5), built from a compiled library's own matchers on real sandboxes (#162, ADR-0022);
+  Figure 1 with its matched comparison and power; arm 2's pre-registered baseline floor
+  (#116, #184, ADR-0007); a mismatch is a fire outside the resolutions a state accepts
+  (#172, ADR-0023).
+- **One committed command for a live run** (`bench.live`, #163): build, frozen
+  benchmark, admission factorial and online arms; `--primary-only` measures Figure 1 for
+  the cost of the build; `--replicates` with an instance-clustered interval (#6, #185,
+  ADR-0012); `--resume` after an interruption during the build (#241).
+- **Re-measuring a finished run** with another arm 2 (`bench.rescore`): the shipped
+  lexical seam, the pinned embedding scorer (#104) and a pinned local reranker, chosen by
+  a thirteen-model screen on the floor (`results/replicates-2026-10-05/screen.py`).
+- **Baselines** (#7): a zero-token gold oracle floor, arm 2c intent-key dispatch, arm 2b
+  a soft vote over arm 3's probes with the Claim 2 restatement rule, arm 1b ReAct with a
+  memory of its own successes; arm 2's optional top-k rerank (ADR-0011).
+- **One frozen library** every arm dispatches against (#4, ADR-0009), and the dispatch ×
+  admission 2×2 from one compile gated twice (ADR-0010); every row records the program
+  ids the library held.
+- **Every fault measured.** `dirty_tree` (#189, ADR-0027), `branch_renamed` (#190,
+  ADR-0028) and `lockfile_conflict` (#191, ADR-0029) gained states, intents and checker
+  clauses, so `EXCLUDED_FROM_BENCHMARK` is empty; Tier 1 instance axes are drawn per seed
+  and independence is keyed on the instance (#86, ADR-0005).
+- **Use on your own repository**: an existing checkout as an environment (#181), a
+  dry-run on a copy then replay on confirmation, and learning a program there (#188,
+  ADR-0026); checkout-learned programs are kept out of measured runs.
+- **The agent**: a finish tool and a budget reminder (#171, ADR-0024), one last word when
+  the budget runs out (#179, ADR-0025), a confined file reader and writer (ADR-0031),
+  every solve's transcript kept beside its ledger row.
+- **The compile step**: one revision after a refusal, told why (ADR-0030); a refusal names
+  every state the program wrongly fired on; the admit set covers every resolution
+  (ADR-0032); admission builds every injected state.
+- **Containment** (#10): probes may not change the sandbox they observe, a timed-out
+  body's whole process group is killed, argv-template steps run without a shell, no
+  network where the host allows it, a measured precondition breadth cap, and an
+  adversarial injection suite over all of it.
+- **Accounting**: input tokens metered as uncached, cache-read and cache-write; sampling
+  temperature pinned at 0 and recorded per episode (#6); cumulative amortized cost with
+  the break-even; spec-gaming recorded as its own fact; each fault's change surface
+  declared and checked against the committed diff (#96).
+- A parallel test suite (`pytest-xdist`).
 - The ablation report (`bench/report.py`): `ablation_table` groups the ledger into
   one row per (arm, fault, occurrence) carrying episodes, success rate, mismatch
   rate, mean tokens, mean LLM calls and mean wall clock — every rate with its
@@ -186,6 +239,23 @@ measured result; there are none yet. See
 
 ### Fixed
 
+- **The provider**: an explicit timeout with counted retries (#157); a refused account
+  (401/402/403) stops the run instead of failing every episode (#240); an empty
+  completion is retried and what it cost is recorded (#246).
+- **The probe language**: git's `@{...}` and `^{type}` revision syntax, awk's braces and a
+  placeholder after a regex anchor are no longer misread as program placeholders (#244,
+  #245); a pattern binds its placeholders and reads POSIX classes.
+- **The compile reply**: its YAML is read as written or refused with the reason (#243);
+  a reply that does not parse gets the one retry as a repair, and is kept in the
+  transcript log (#242).
+- **The guard**: per-invocation git config overrides, git commands that run a command,
+  while-read variables, sed scripts, redirects inside `$( )` and assignments in case arms
+  are each judged correctly (#159, #180).
+- **The harness**: injected state, the pre-injection tip and every recorded value are held
+  outside the graded clone (#103, ADR-0021); git's hardening config is pinned so a
+  repository's hooks cannot run; Windows scratch variables and home path.
+- A Wilson interval always contains its point (#247); the discrimination probe measures
+  the text a dispatcher scores, not the rationales (#116).
 - The README said the skipped gold checkers in `tests/test_checkers_against_gold.py`
   wait on issue #4. Their own skip reason names issue #9, where the checker
   execution and its negative controls are tracked, so the reference is corrected.
@@ -275,17 +345,10 @@ measured result; there are none yet. See
   `lockfile_conflict`) are still one state each; that remainder is sampling and is
   labelled as such in `_state_seeds`' docstring rather than presented as coverage.
 
-### Not done in this change
+### Not done
 
-- `Library.match_semantic` and `Library.match_preconditions` are still stubs that
-  raise. They are the ablation's two arms, and the design requires them to differ
-  in exactly one function, decided in the next task; implementing them here would
-  have pre-empted that decision.
-- Three of the five faults — `dirty_tree`, `branch_renamed`, and
-  `lockfile_conflict` — still return a single fixed request sentence and
-  therefore still carry the original defect. They are deliberately unconverted,
-  must not be included in any dispatch measurement until they gain an
-  `IntentSpec`, and are tracked in issue #25.
+- The episode-level stages at the registered scale (`--episode-seeds 40 --replicates
+  3`): the frozen benchmark, the admission factorial and the online arms.
 
 ## 0.0.1 — 2026-09-13
 
