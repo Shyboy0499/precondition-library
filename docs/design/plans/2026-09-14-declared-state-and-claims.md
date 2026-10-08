@@ -34,7 +34,7 @@ So: the inventory is general and needs no maintenance beyond the moment of chang
 | `tests/test_declared_state.py` | **Create.** The `ast` collectors, the declared stub inventory, the declared skip inventory, and the claims table. One file: the declaration must sit next to the assertion that reads it, so it is visible in review and cheap to edit. |
 | `tests/test_checkers_against_gold.py` | **Modify.** Its skip reason still says "faults and gold solutions are stubs; implemented per plan, phase 1" — stale, and it must name the issue that will implement it, which Task 2 asserts for every skip. |
 | `CONTRIBUTING.md` | **Modify.** Rule: status lives in one place; other documents link rather than restate. States the limit of the mechanism. |
-| `docs/superpowers/specs/2026-09-13-precondition-library-design.md` | **Modify.** §10 gains the automation and its limit. |
+| `docs/design/specs/2026-09-13-precondition-library-design.md` | **Modify.** §10 gains the automation and its limit. |
 | `CHANGELOG.md` | **Modify.** One `Added` line. |
 
 ---
@@ -383,7 +383,7 @@ CLAIMS: list[Claim] = [
         ),
     ),
     Claim(
-        document="docs/superpowers/specs/2026-09-13-precondition-library-design.md",
+        document="docs/design/specs/2026-09-13-precondition-library-design.md",
         quote="but no checker has run against",
         holds=lambda: any(
             node_id.startswith("test_checkers_against_gold.py::") for node_id in skips()
@@ -432,7 +432,7 @@ Expected: FAIL only if a quote is not verbatim in its document. If every row pas
 Run:
 ```bash
 grep -c "No probe has ever been executed against a sandbox" bench/gold/README.md
-grep -c "but no checker has run against" docs/superpowers/specs/2026-09-13-precondition-library-design.md
+grep -c "but no checker has run against" docs/design/specs/2026-09-13-precondition-library-design.md
 grep -c "Nothing consumes this yet." src/precondition_library/runtime/guard.py
 grep -c "Faults that must never be measured" src/precondition_library/tasks/registry.py
 ```
@@ -456,7 +456,7 @@ git commit -m "test(docs): pin the status claims that reduce to a mechanical fac
 
 **Files:**
 - Modify: `CONTRIBUTING.md`
-- Modify: `docs/superpowers/specs/2026-09-13-precondition-library-design.md`
+- Modify: `docs/design/specs/2026-09-13-precondition-library-design.md`
 - Modify: `CHANGELOG.md`
 
 - [ ] **Step 1: Add the CONTRIBUTING rule**
@@ -527,7 +527,7 @@ Expected: format leaves files unchanged after the first run; ruff passes; mypy i
 - [ ] **Step 5: Commit and open the PR**
 
 ```bash
-git add CONTRIBUTING.md docs/superpowers/specs/2026-09-13-precondition-library-design.md CHANGELOG.md
+git add CONTRIBUTING.md docs/design/specs/2026-09-13-precondition-library-design.md CHANGELOG.md
 git commit -m "docs: state where status lives, and what the declaration cannot check"
 git push -u origin pr/NN-declared-state
 gh pr create --base main --title "test(docs): declare stubs and skips so status cannot drift silently" \

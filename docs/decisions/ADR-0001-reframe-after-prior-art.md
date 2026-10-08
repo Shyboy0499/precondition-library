@@ -3,7 +3,7 @@
 - **Status:** accepted
 - **Date:** 2026-09-13
 - **Supersedes:** the claims as originally stated in the design of record
-  (`docs/superpowers/specs/2026-09-13-precondition-library-design.md`)
+  (`docs/design/specs/2026-09-13-precondition-library-design.md`)
 - **Deciders:** project owner
 
 ## Context

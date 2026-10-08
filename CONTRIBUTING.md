@@ -100,7 +100,7 @@ document that records a decision **at a point in time** must not be rewritten.
   corrected when `library.py` was found to store candidates, and the correction is
   in the spec's revision history.
 - **Records of a time are not.** Merged changelog entries, ADRs, and the merged plan
-  documents under `docs/superpowers/plans/` describe a state as it was. A superseded
+  documents under `docs/design/plans/` describe a state as it was. A superseded
   record is narrowed by a *new* ADR or changelog entry, never edited. A changelog
   entry whose "Not done in this change" list has since been overtaken is
   deliberately left alone (#57).

@@ -15,7 +15,7 @@ from pathlib import Path
 
 SPEC = (
     Path(__file__).resolve().parents[1]
-    / "docs/superpowers/specs/2026-09-13-precondition-library-design.md"
+    / "docs/design/specs/2026-09-13-precondition-library-design.md"
 )
 ROW = re.compile(r"^\| (\d+) \| \d{4}-\d{2}-\d{2} \|")
 
