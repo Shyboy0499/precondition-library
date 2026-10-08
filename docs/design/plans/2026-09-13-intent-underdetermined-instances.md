@@ -55,7 +55,7 @@ Live git sandboxes and `inject()` (#4/#5) · the compile and admission pipeline 
 | `bench/gold/sync_fork_with_upstream.yaml` | **Create.** Three hand-written resolution programs. |
 | `bench/gold/restore_submodule_state.yaml` | **Create.** Three hand-written resolution programs. |
 | `tests/test_faults_deterministic.py` | **Modify.** Un-skip the parts that are pure functions now that they can really run. |
-| `docs/superpowers/specs/2026-09-13-precondition-library-design.md` | **Modify.** §3 (task family), §5 (artifact), §10 (testing) reflect variants and the control. |
+| `docs/design/specs/2026-09-13-precondition-library-design.md` | **Modify.** §3 (task family), §5 (artifact), §10 (testing) reflect variants and the control. |
 | `CHANGELOG.md` | **Modify.** Unreleased entry. |
 
 ---
@@ -2451,7 +2451,7 @@ Leaving a stale "not implemented yet" note in place after implementing it is the
 - [ ] **Step 5: Commit**
 
 ```bash
-git add bench/gold/sync_fork_with_upstream.yaml bench/gold/restore_submodule_state.yaml tests/test_gold_programs.py README.md bench/gold/README.md docs/superpowers/specs/2026-09-13-precondition-library-design.md
+git add bench/gold/sync_fork_with_upstream.yaml bench/gold/restore_submodule_state.yaml tests/test_gold_programs.py README.md bench/gold/README.md docs/design/specs/2026-09-13-precondition-library-design.md
 git commit -F - <<'MSG'
 test(bench): add hand-written gold resolutions for both ambiguous intents
 
@@ -2597,14 +2597,14 @@ git commit -m "test(tasks): un-skip task-text determinism and prove phrasings ar
 ### Task 12: Documentation and the full-suite check
 
 **Files:**
-- Modify: `docs/superpowers/specs/2026-09-13-precondition-library-design.md`
+- Modify: `docs/design/specs/2026-09-13-precondition-library-design.md`
 - Modify: `CHANGELOG.md`
 - Modify: `README.md` (boundary-condition paragraph, and a status-table row that said no number had been measured)
 - Modify: this plan (kept in step with what landed; see "Additions after this plan")
 
 - [ ] **Step 1: Update the spec's task-family section**
 
-In `docs/superpowers/specs/2026-09-13-precondition-library-design.md`, find the `### The five faults` table in §3 and add this section after the `lockfile_conflict` paragraph that follows it (before `### Out of scope for the family`):
+In `docs/design/specs/2026-09-13-precondition-library-design.md`, find the `### The five faults` table in §3 and add this section after the `lockfile_conflict` paragraph that follows it (before `### Out of scope for the family`):
 
 ```markdown
 ### Intents and resolutions (revised 2026-09-13)
@@ -2757,8 +2757,8 @@ Expected (measured on the branch before this commit): `50 files already formatte
 
 ```bash
 git add README.md CHANGELOG.md \
-  docs/superpowers/specs/2026-09-13-precondition-library-design.md \
-  docs/superpowers/plans/2026-09-13-intent-underdetermined-instances.md
+  docs/design/specs/2026-09-13-precondition-library-design.md \
+  docs/design/plans/2026-09-13-intent-underdetermined-instances.md
 git commit -m "docs: record intents, resolutions, and the measured boundary condition"
 git push -u origin pr/16-docs-and-changelog
 gh pr create --base main \

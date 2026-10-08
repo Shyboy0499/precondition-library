@@ -240,7 +240,7 @@ CLAIMS: list[Claim] = [
         ),
     ),
     Claim(
-        document="docs/superpowers/specs/2026-09-13-precondition-library-design.md",
+        document="docs/design/specs/2026-09-13-precondition-library-design.md",
         quote="but no checker has run against",
         holds=_gold_checkers_are_skipped,
         update="A checker has run. Correct the testing block in §10, which still says none has.",

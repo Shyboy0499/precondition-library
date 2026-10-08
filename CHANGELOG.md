@@ -299,7 +299,7 @@ artifact worth downloading and a released snapshot would mean something.
 ### Added
 
 - Design of record with a pre-registered analysis
-  (`docs/superpowers/specs/2026-09-13-precondition-library-design.md`).
+  (`docs/design/specs/2026-09-13-precondition-library-design.md`).
 - Repository skeleton: every stub names the invariant it must uphold and the plan
   phase that implements it; 30 tests skipped, each marked with its phase.
 - `tests/test_replay_isolated_from_provider.py` — a passing test that fails if

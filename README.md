@@ -490,7 +490,7 @@ success while doing nothing — and none of which the CI above could have caught
 ## Running it
 
 The invocation, the seed sets and the ledger format are fixed in the spec's
-[§7, "The seed plan and the run invocation"](docs/superpowers/specs/2026-09-13-precondition-library-design.md#the-seed-plan-and-the-run-invocation);
+[§7, "The seed plan and the run invocation"](docs/design/specs/2026-09-13-precondition-library-design.md#the-seed-plan-and-the-run-invocation);
 that section is the source, and this one does not repeat it. Two properties matter
 before anything runs:
 
