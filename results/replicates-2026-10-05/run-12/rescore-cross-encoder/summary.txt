@@ -1,0 +1,39 @@
+model: deepseek-flash
+compiled 14; admitted two-sided 14, positive-only 0
+library hash: ad311de65eb51b120ea97aabb83fe22492c89812232e21bf2c5f1cde4dc8c8c1
+
+build episodes:
+  branch_renamed seed 0: fallback, 13 tool calls, checker ok, admitted True
+  branch_renamed seed 6: fallback, 10 tool calls, checker ok, admitted True
+  branch_renamed seed 1: fallback, 17 tool calls, checker ok, admitted True
+  dirty_tree seed 5: fallback, 11 tool calls, checker ok, admitted True
+  dirty_tree seed 0: fallback, 10 tool calls, checker ok, admitted True
+  dirty_tree seed 2: fallback, 17 tool calls, checker ok, admitted True
+  diverged seed 1: fallback, 10 tool calls, checker ok, admitted True
+  diverged seed 2: fallback, 5 tool calls, checker ok, admitted True
+  diverged seed 0: fallback, 8 tool calls, checker ok, admitted True
+  lockfile_conflict seed 5: fallback, 22 tool calls, checker ok, admitted True
+  lockfile_conflict seed 2: fallback, 24 tool calls, checker ok, admitted True
+  submodule_moved seed 0: fallback, 20 tool calls, checker ok, admitted True
+  submodule_moved seed 4: fallback, 17 tool calls, checker ok, admitted True
+  submodule_moved seed 1: fallback, 20 tool calls, checker ok, admitted True
+
+2b threshold (tune seeds): 1.0
+claim 2: at matched dispatch coverage, executable-precondition dispatch mis-fires less often than text-similarity dispatch (at arm 3's coverage the soft vote's matched point is the hard rule itself (threshold >= 1.0), so it makes arm 3's decisions and cannot show that requiring every probe adds nothing; the registered claim keeps its wording)
+
+Primary metric, uninformed regime, 400 labelled pairs (spec §7 item 1, ADR-0008)
+  arm 3 (pre-registered coverage point): coverage 187/400, mismatch 0/187
+  arm 2 curve: 164 operating point(s), each with a 95% Wilson interval in figure1.csv
+  at matched coverage arm 2 (threshold 0.705275764825265) has mismatch 133/187; coverage gap +0.000; mismatch difference (arm 2 - arm 3) +0.7112
+  power (item 3): with 187 and 187 fires, alpha 0.05 two-sided and power 0.8, the smallest detectable mismatch difference is 0.145 at a 50% base rate and 0.139 at the observed 0.356
+  baseline arm 2b (soft vote): curve, 3 operating point(s) -- context, not part of the claim
+  baseline arm 2c (intent key): point, 1 operating point(s) -- context, not part of the claim
+
+
+arm 2 baseline floor (spec §7 item 11): strict top-1 152/240: the 95% Wilson lower bound 0.571 exceeds chance 0.333, so arm 2 is a usable baseline
+
+episode stages skipped (--primary-only): no frozen benchmark
+
+artifacts:
+  rescored_from: results/replicates-2026-10-05/run-12
+  primary: primary

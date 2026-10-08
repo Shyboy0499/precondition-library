@@ -1,0 +1,7 @@
+{
+  "scorer": "cross-encoder",
+  "model_id": "cross-encoder/ms-marco-MiniLM-L-12-v2",
+  "revision": "7b0235231ca2674cb8ca8f022859a6eba2b1c968",
+  "run": "results/replicates-2026-10-05/run-11",
+  "library_hash": "d8db771131354cf1b84e27bd19a0d83a126d1a712928737323e79cb11b26c572"
+}
