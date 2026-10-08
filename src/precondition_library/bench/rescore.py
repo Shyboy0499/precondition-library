@@ -21,6 +21,8 @@ Scorers:
 * `embedding` -- `bench.embedding_similarity.EmbeddingSimilarity`, the pinned local
   sentence-transformer. It needs the `embedding` extra and the pinned revision downloadable
   or cached; it spends no provider tokens.
+* `cross-encoder` -- `bench.cross_encoder_similarity.CrossEncoderSimilarity`, the pinned local
+  reranker that reads the request and the program text together. Same extra, same zero tokens.
 
 Usage: `python -m precondition_library.bench.rescore --run RUN_DIR --scorer embedding --out DIR`.
 """
@@ -38,7 +40,7 @@ from ..runtime.probes import evaluate_preconditions
 from ..similarity import Similarity, lexical_similarity
 from .live import LivePlan, LiveSummary, _build_episodes, _pair_level, _text
 
-SCORERS = ("lexical", "embedding")
+SCORERS = ("lexical", "embedding", "cross-encoder")
 
 
 def scorer(name: str) -> tuple[Similarity, dict[str, str]]:
@@ -53,6 +55,15 @@ def scorer(name: str) -> tuple[Similarity, dict[str, str]]:
             "scorer": "embedding",
             "model_id": embedding.model_id,
             "revision": embedding.revision,
+        }
+    if name == "cross-encoder":
+        from .cross_encoder_similarity import CrossEncoderSimilarity
+
+        reranker = CrossEncoderSimilarity()
+        return reranker, {
+            "scorer": "cross-encoder",
+            "model_id": reranker.model_id,
+            "revision": reranker.revision,
         }
     raise ValueError(f"unknown scorer {name!r}; choose one of {', '.join(SCORERS)}")
 
