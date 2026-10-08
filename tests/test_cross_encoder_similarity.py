@@ -39,7 +39,7 @@ class _Recording:
 
     def predict(self, pairs, *, batch_size, show_progress_bar, convert_to_numpy):
         self.batches.append(list(pairs))
-        assert batch_size == 1
+        assert batch_size == len(pairs)
         return [float(len(c) - len(q)) for q, c in pairs]
 
 
@@ -78,6 +78,52 @@ def test_the_query_and_the_candidate_are_not_swapped(recorded) -> None:
     scorer, model = recorded
     scorer("the request", "the program")
     assert model.batches == [[("the request", "the program")]]
+
+
+def test_score_many_is_one_model_call_per_request_and_memoised(recorded) -> None:
+    scorer, model = recorded
+    first = scorer.score_many("q", ["a", "bbb"])
+    assert first == [logistic(0.0), logistic(2.0)]
+    assert scorer.score_many("q", ["a", "bbb"]) == first
+    assert scorer.score_many("q", []) == []
+    assert model.batches == [[("q", "a"), ("q", "bbb")]]
+    assert scorer.usage().calls == 1
+
+
+def test_batched_and_pairwise_scores_are_cached_apart(recorded) -> None:
+    scorer, model = recorded
+    scorer.score_many("q", ["a"])
+    scorer("q", "a")
+    assert model.batches == [[("q", "a")], [("q", "a")]]
+
+
+def test_arm_2_scores_each_request_as_one_batch(tmp_path, recorded) -> None:
+    from precondition_library.library import Library
+    from precondition_library.program import ProgramStatus
+    from precondition_library.signatures import StateFingerprint, TaskSignature
+
+    state = StateFingerprint(
+        dirty_worktree=False,
+        branch="main",
+        upstream_ahead=1,
+        upstream_behind=0,
+        has_locked_branch=False,
+        has_submodule_reference=False,
+    )
+    scorer, model = recorded
+    library = Library(tmp_path / "lib", similarity=scorer, threshold=0.0)
+    for program in gold_programs()[:3]:
+        candidate = program.model_copy(update={"status": ProgramStatus.CANDIDATE})
+        library.add(candidate)
+        library.set_status(
+            candidate.id, ProgramStatus.ADMITTED, episode_id=candidate.provenance.episode_id
+        )
+    signature = TaskSignature(intent="sync my fork", fingerprint=state, target="")
+    matched = library.match_semantic(signature, limit=10)
+    assert len(model.batches) == 1 and len(model.batches[0]) == 3
+    assert [item.score for item in matched] == sorted(
+        (item.score for item in matched), reverse=True
+    )
 
 
 def _reranker_missing() -> str | None:

@@ -42,7 +42,7 @@ from .intent_key import agreeing
 from .program import GroundTruthResult, Program, ProgramStatus
 from .sandbox import Sandbox
 from .signatures import TaskSignature
-from .similarity import Similarity, lexical_similarity
+from .similarity import Similarity, lexical_similarity, score_all
 from .tasks.intent import IntentSpec
 from .tasks.registry import INTENTS
 
@@ -565,10 +565,11 @@ class Library:
         without adding state: arm 2 is exactly as blind as before (ADR-0011).
         """
         query = _query_text(signature)
+        admitted = [p for p in self.load_all() if p.status is ProgramStatus.ADMITTED]
+        scores = score_all(self.similarity, query, [_program_text(p) for p in admitted])
         scored = [
-            ScoredProgram(program=program, score=self.similarity(query, _program_text(program)))
-            for program in self.load_all()
-            if program.status is ProgramStatus.ADMITTED
+            ScoredProgram(program=program, score=score)
+            for program, score in zip(admitted, scores, strict=True)
         ]
         if self.reranker is not None:
             # Second stage (ADR-0011): the first stage only retrieves; the reranker's
