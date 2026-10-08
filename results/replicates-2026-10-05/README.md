@@ -130,6 +130,11 @@ python -m precondition_library.bench.rescore --run results/replicates-2026-10-05
 Each `run-N/rescore-cross-encoder/` holds that rescore's `summary.json`, `summary.txt`,
 `rescore.json` (model and revision) and `primary/` (Figure 1).
 
+These were scored pairwise, one model call per program. Arm 2 now scores a request against the
+whole library in one batch (`score_many`); re-measuring `run-12` that way reproduced every count,
+rate and Wilson interval here, and moved only the swept thresholds in `figure1.csv`, by under
+1e-6, because a padded batch reaches different kernels.
+
 | | run-11 | run-12 | run-13 |
 | --- | --- | --- | --- |
 | arm 2 floor: strict top-1 (Wilson lower bound vs 0.333) | not measurable | 152/240 (0.571), usable | 137/240 (0.508), usable |

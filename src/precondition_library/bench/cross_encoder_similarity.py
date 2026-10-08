@@ -28,7 +28,9 @@ The properties the seam needs, and how they are obtained here:
   depend on what was scored before (the batch-shape reason in `bench.embedding_similarity`):
   `__call__` scores exactly one pair, and `score_many` -- what arm 2's `match_semantic` uses --
   scores one request against the library's admitted programs, in the library's order, as one
-  batch. That batch is what makes a pair-level rescore minutes rather than hours. Each is
+  batch, so the model is called once per pair rather than once per program. Re-measuring
+  replicate 2 this way reproduced every count, rate and interval of the pairwise rescore
+  committed in `results/`; only the swept thresholds moved, by under 1e-6. Each is
   memoised on its own inputs; a memoised score is the same float the model gave, so the cache
   changes the cost and nothing else.
 * **Honest usage.** Local, so zero provider tokens; `calls` counts the model calls made, which
