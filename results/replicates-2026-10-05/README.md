@@ -116,5 +116,37 @@ Chance is 80/240. Rerankers, which read the request and the program text togethe
 bi-encoder, and bigger was not better. `ms-marco-MiniLM-L-12-v2` scored highest, with 95% lower
 bounds of 0.571 and 0.508 against chance 0.333 -- clearly above the floor where the embedding arm
 was at 0.405 and 0.340. It ships as `bench.cross_encoder_similarity.CrossEncoderSimilarity`, and
-`bench.rescore --scorer cross-encoder` re-measures a run with it. The rescores of the three runs
-with it are reported in a section to follow.
+`bench.rescore --scorer cross-encoder` re-measures a run with it.
+
+## Reranker arm 2
+
+Each run re-measured with arm 2 swapped for that reranker, with no model call and no rebuild:
+
+```bash
+python -m precondition_library.bench.rescore --run results/replicates-2026-10-05/run-N \
+  --scorer cross-encoder --out results/replicates-2026-10-05/run-N/rescore-cross-encoder
+```
+
+Each `run-N/rescore-cross-encoder/` holds that rescore's `summary.json`, `summary.txt`,
+`rescore.json` (model and revision) and `primary/` (Figure 1).
+
+| | run-11 | run-12 | run-13 |
+| --- | --- | --- | --- |
+| arm 2 floor: strict top-1 (Wilson lower bound vs 0.333) | not measurable | 152/240 (0.571), usable | 137/240 (0.508), usable |
+| arm 3: coverage, mis-fires | 187/400, 0/187 | 187/400, 0/187 | 189/400, 0/189 |
+| arm 2 at matched coverage: mis-fires | 142/186 | 133/187 | 134/189 |
+| difference (arm 2 − arm 3) | +0.763 | +0.711 | +0.709 |
+| the same, lexical arm 2 | +0.791 | +0.805 | +0.765 |
+| smallest detectable difference (50% base rate) | 0.145 | 0.145 | 0.144 |
+| Claim 2 | registered wording kept | kept | kept |
+
+**What it shows.** The strongest text scorer screened -- clearly above the floor where the lexical
+and embedding arms only just cleared it -- narrows the gap by 0.03 to 0.09 and no more. At matched
+coverage it still mis-fires on 71–76% of its fires against arm 3's 0%, and the difference stays
+about five times the smallest the pair count can detect, in every replicate. A better text scorer
+picks the right resolution more often when it must choose (the floor), but at arm 3's coverage it
+still fires on states whose preconditions do not hold, because the text cannot tell it they do not.
+
+**What it does not show.** That no text scorer could close the gap: thirteen local models are a
+screen, not a search, and a scorer reading the state through a model call (an LLM judge) was not
+tried. Replicate 1 still may not be worded as a win (its floor is not measurable).

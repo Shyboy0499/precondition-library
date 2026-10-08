@@ -14,7 +14,8 @@
 > At matched dispatch coverage, executable-precondition dispatch mis-fired on **0 of 563**
 > fires across the three libraries, against text-similarity dispatch's **76–81%**; arm 2
 > cleared its pre-registered baseline floor in the two replicates built on the final
-> code. The numbers, their provenance and their limits are in
+> code. The strongest text scorer screened, a local reranker, still mis-fires on
+> **71–76%**. The numbers, their provenance and their limits are in
 > [Primary result](#primary-result). What is **not** measured yet is everything at
 > episode level -- the frozen benchmark, the admission factorial and the online arms --
 > and an earlier smoke pass, [First demonstration](#first-demonstration), is kept as
@@ -43,7 +44,7 @@ Stated first, because the prior art is real and the honest framing depends on it
 | That "the most similar case is not the most reusable" is a new insight | Smyth & Keane argued it in 1998, in a peer-reviewed journal, at length. |
 | That these token counts are a **cost** | They are tokens. Pricing input needs a rate table, and the provider's rates differ by peak and off-peak hours, so no currency figure is reported — input is metered as uncached, cache-read and cache-write so one can be computed once rates exist. |
 | That an episode-level comparison has been made | Only the pair-level primary metric has been measured ([Primary result](#primary-result)). The frozen benchmark, the admission factorial and the online arms have not been run at scale; the one smoke pass that ran them ([First demonstration](#first-demonstration)) demonstrates the mechanism and measures nothing. |
-| That precondition dispatch beats text similarity by a margin a stronger arm 2 would keep | The shipped arm 2 is lexical (ADR-0003) and clears its floor only modestly -- a 95% lower bound of 0.401 against chance 0.333. The pinned embedding arm (#104) was measured on the same three libraries and did not narrow the gap (+0.77 to +0.90 against lexical +0.76 to +0.81), but it is no stronger on the floor (lower bounds 0.405 and 0.340), so it is a different text scorer, not a better one. Whether a scorer that clearly beats the lexical floor would keep the margin is still unmeasured. |
+| That no text scorer could close the gap | Three were measured on the same three libraries: the shipped lexical arm (ADR-0003), the pinned embedding arm (#104) and a pinned local reranker, the strongest of thirteen models screened on arm 2's floor (lower bounds 0.571 and 0.508 against chance 0.333, where the other two only just clear it). The reranker narrows the gap to +0.71 to +0.76, from lexical +0.76 to +0.81, and no further. That is a screen of local models, not a search; a scorer reading the state through an LLM call was not tried. |
 
 Amortization is still what makes the project *useful* — it is an engineering
 assumption here, not a finding. It is reported as a cost model, never as a
@@ -328,6 +329,9 @@ resolutions, arm 2 swept to arm 3's coverage. Three whole-run replicates (spec �
 | embedding arm 2 (#104): floor | not measurable | usable (112/240, 0.405) | usable, barely (96/240, 0.340) |
 | embedding arm 2 at matched coverage: mis-fires | 143/185 | 168/189 | 169/187 |
 | difference (embedding arm 2 − arm 3) | +0.77 | **+0.89** | **+0.90** |
+| reranker arm 2: floor | not measurable | **usable** (152/240, 0.571) | **usable** (137/240, 0.508) |
+| reranker arm 2 at matched coverage: mis-fires | 142/186 | 133/187 | 134/189 |
+| difference (reranker arm 2 − arm 3) | +0.76 | **+0.71** | **+0.71** |
 
 **What it shows.** Precondition dispatch never fired a program that the pair's state
 did not accept; text similarity, at the same coverage, did so on roughly four fires in
@@ -337,6 +341,9 @@ the claim may be worded as registered: a win over text similarity. Swapping arm 
 pinned embedding scorer (#104) does not narrow the gap: it mis-fires on 77–90% of its
 fires at matched coverage, the gap widens in replicates 2 and 3 and narrows by 0.02 in
 replicate 1, and arm 3 is unchanged ([Embedding arm 2](results/replicates-2026-10-05/README.md#embedding-arm-2)).
+A pinned local reranker, which clears the floor clearly where those two only just do,
+narrows it to +0.71 to +0.76 and no further: still about five times the smallest
+detectable difference.
 
 **What it does not show.**
 
@@ -344,11 +351,13 @@ replicate 1, and arm 3 is unchanged ([Embedding arm 2](results/replicates-2026-1
   resolution, so arm 2 had nothing to choose between there and the floor could not be
   measured. It was also built on earlier code, before the fixes in #244 and #245;
   re-gated offline under the final admission, its figure is 0/187 against 141/186.
-- **Arm 2 is a weak baseline, under both scorers.** The lexical arm's floor sits only
-  0.07 above chance, and the embedding arm is no stronger on it: one more correct top-1
-  in replicate 2, fifteen fewer in replicate 3, where its lower bound clears chance by
-  0.007. The size of the gap is a statement about these two text scorers, not about a
-  strong one.
+- **The gap is measured against local text scorers, not every text scorer.** The lexical
+  and embedding arms clear the floor only just (lower bounds 0.340 to 0.405 against
+  chance 0.333). The reranker -- the strongest of thirteen pinned local models screened on
+  the floor -- clears it clearly (0.571 and 0.508), and narrows the gap by 0.03 to 0.09
+  and no more: it still mis-fires on 71–76% of its fires
+  ([Reranker arm 2](results/replicates-2026-10-05/README.md#reranker-arm-2)). A scorer
+  reading the state through a model call (an LLM judge) was not tried.
 - **Nothing at episode level.** Mis-fires that end in a wrong repository, cost, the
   admission factorial and the online arms are separate stages, not run here.
 - **Arm 2b cannot separate the two.** At arm 3's coverage the soft vote's matched point
