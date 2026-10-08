@@ -297,3 +297,22 @@ def test_embedding_calls_is_what_the_seam_reports_not_what_it_was_asked(make_san
     assert reported.calls == 2, "the provider traffic is what the seam reports"
     assert reported.calls < 3, "three invocations but fewer provider calls is the whole point"
     assert reported.tokens == 10
+
+
+def test_score_all_batches_only_where_the_scorer_offers_it() -> None:
+    from precondition_library.similarity import lexical_similarity, score_all
+
+    texts = ["sync the fork", "rebase onto upstream"]
+    assert score_all(lexical_similarity, "sync my fork", texts) == [
+        lexical_similarity("sync my fork", text) for text in texts
+    ]
+
+    class Short:
+        def __call__(self, query: str, candidate: str) -> float:
+            return 0.0
+
+        def score_many(self, query: str, candidates: list[str]) -> list[float]:
+            return [0.0]
+
+    with pytest.raises(ValueError, match="1 scores for 2 texts"):
+        score_all(Short(), "q", texts)

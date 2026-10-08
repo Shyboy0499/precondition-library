@@ -23,6 +23,7 @@ parts of the experiment rather than a finding.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -111,3 +112,32 @@ def similarity_usage(similarity: Similarity) -> SimilarityUsage:
     """
     reporter = getattr(similarity, "usage", None)
     return SimilarityUsage() if reporter is None else reporter()
+
+
+class ScoresMany(Protocol):
+    """A `Similarity` that can score one query against many candidates in one go. **Optional.**
+
+    Arm 2 scores every admitted program against each request, so a model behind the seam is
+    asked for one query and a fixed list of candidates per pair. A batching implementation
+    answers that in one model call instead of one per program. It must return one score per
+    candidate, in order, on the same `[0, 1]` contract as `__call__`, and it must be
+    deterministic for a given `(query, candidates)`; whether a batched score equals the
+    pairwise one to the last bit is the implementation's to state.
+    """
+
+    def score_many(self, query: str, candidates: Sequence[str]) -> list[float]: ...
+
+
+def score_all(similarity: Similarity, query: str, candidates: Sequence[str]) -> list[float]:
+    """`similarity`'s score of `query` against each candidate, batched where it can be.
+
+    Pairwise through `__call__` unless the implementation offers `score_many`. A batch that
+    returns the wrong number of scores raises rather than being zipped short.
+    """
+    many = getattr(similarity, "score_many", None)
+    if many is None:
+        return [similarity(query, candidate) for candidate in candidates]
+    scores = list(many(query, candidates))
+    if len(scores) != len(candidates):
+        raise ValueError(f"score_many returned {len(scores)} scores for {len(candidates)} texts")
+    return scores

@@ -24,10 +24,13 @@ The properties the seam needs, and how they are obtained here:
   the model's config, so a revision that stored another default cannot change the scale. The
   score is **not symmetric**: the query is the request and the candidate is the program text,
   which is the order `Similarity` is called in and the order the reranker was trained on.
-* **Deterministic.** Every model call scores exactly one pair, so its tensor shape cannot depend
-  on what was scored before (the batch-shape reason in `bench.embedding_similarity`). Scores are
-  memoised per pair; a memoised score is the same float the model gave, so the cache changes the
-  cost and nothing else.
+* **Deterministic.** A model call's batch is fixed by its own inputs, so its tensor shape cannot
+  depend on what was scored before (the batch-shape reason in `bench.embedding_similarity`):
+  `__call__` scores exactly one pair, and `score_many` -- what arm 2's `match_semantic` uses --
+  scores one request against the library's admitted programs, in the library's order, as one
+  batch. That batch is what makes a pair-level rescore minutes rather than hours. Each is
+  memoised on its own inputs; a memoised score is the same float the model gave, so the cache
+  changes the cost and nothing else.
 * **Honest usage.** Local, so zero provider tokens; `calls` counts the model calls made, which
   the memo keeps below the number of scores asked for.
 * **Pinned and lazy.** `MODEL_ID` and `MODEL_REVISION` are passed to the loader, and
@@ -37,6 +40,7 @@ The properties the seam needs, and how they are obtained here:
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from typing import Any
 
 from ..similarity import SimilarityUsage
@@ -81,6 +85,7 @@ class CrossEncoderSimilarity:
         self._revision = revision
         self._model = _load_model(model_id, revision)
         self._scores: dict[tuple[str, str], float] = {}
+        self._batches: dict[tuple[str, tuple[str, ...]], list[float]] = {}
         self._calls = 0
 
     @property
@@ -103,6 +108,29 @@ class CrossEncoderSimilarity:
             )
             self._scores[key] = logistic(float(logit))
         return self._scores[key]
+
+    def score_many(self, query: str, candidates: Sequence[str]) -> list[float]:
+        """`query` against every candidate in **one** model call: arm 2's per-pair batch.
+
+        Deterministic for a given `(query, candidates)`, because the batch -- its members, their
+        order and so its padded shape -- is the same every time; memoised on exactly that. A
+        batched score is not bit-identical to the pairwise `__call__` (padding reaches other
+        kernels), so the two are cached apart and never mixed: which one a figure used depends
+        on the call site, never on what was scored before.
+        """
+        if not candidates:
+            return []
+        key = (query, tuple(candidates))
+        if key not in self._batches:
+            self._calls += 1
+            logits = self._model.predict(
+                [(query, candidate) for candidate in candidates],
+                batch_size=len(candidates),
+                show_progress_bar=False,
+                convert_to_numpy=True,
+            )
+            self._batches[key] = [logistic(float(logit)) for logit in logits]
+        return list(self._batches[key])
 
     def usage(self) -> SimilarityUsage:
         """`tokens=0` because the model is local; `calls` the model calls made so far."""
