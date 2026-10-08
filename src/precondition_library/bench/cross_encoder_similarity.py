@@ -10,8 +10,9 @@ module is the stronger text scorer the replicate README's caveat asked for.
 
 How it was chosen. Thirteen pinned local models were screened on the floor itself (the informed
 regime's strict top-1 on the tune seeds, against replicates 2 and 3's frozen libraries; the
-table is in `results/replicates-2026-10-05/README.md`). Selecting on the tune seeds is what they
-are for (spec §7 item 5); the pair-level metric is measured on the disjoint pair seeds. This
+table is in `results/replicates-2026-10-05/README.md`, "A stronger text scorer"). Selecting on
+the tune seeds is what they are for (spec §7 item 5); the pair-level metric is measured on the
+disjoint pair seeds. This
 model had the highest strict top-1 of any screened model, 289/480 against MiniLM's 208/480, and
 it is small enough to rescore a run in minutes on a CPU.
 

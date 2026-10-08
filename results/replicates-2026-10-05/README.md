@@ -85,3 +85,36 @@ detectable difference.
 embedding is no stronger than the lexical arm -- one more correct top-1 in replicate 2, fifteen
 fewer in replicate 3, where its lower bound clears chance by 0.007 -- so this measures a different
 text scorer, not a better one.
+
+## A stronger text scorer: the screen
+
+The embedding arm above clears the floor no better than the lexical one, so the gap it keeps
+says nothing about a *strong* text scorer. To find one, thirteen pinned local models were screened
+on the floor itself -- the informed regime's strict top-1 on the tune seeds against each frozen
+library (`bench.live.baseline_floor`), which is what the tune seeds are for (spec §7 item 5); the
+pair-level metric is measured on the disjoint pair seeds. Replicate 1 is not screened because its
+floor is not measurable. Reproduce any row with [`screen.py`](screen.py); the revision is the Hub
+commit each model was loaded at.
+
+| kind | model | revision | run-12 | run-13 | together |
+| --- | --- | --- | --- | --- | --- |
+| bi-encoder | `sentence-transformers/all-MiniLM-L6-v2` (the embedding arm) | `1110a243` | 112/240 | 96/240 | 208/480 |
+| bi-encoder | `sentence-transformers/all-mpnet-base-v2` | `e8c3b32e` | 120/240 | 112/240 | 232/480 |
+| bi-encoder | `BAAI/bge-base-en-v1.5` | `a5beb1e3` | 128/240 | 112/240 | 240/480 |
+| bi-encoder | `BAAI/bge-large-en-v1.5` | `d4aa6901` | 112/240 | 105/240 | 217/480 |
+| bi-encoder | `mixedbread-ai/mxbai-embed-large-v1` | `b33106f5` | 121/240 | 112/240 | 233/480 |
+| reranker | `cross-encoder/ms-marco-MiniLM-L-6-v2` | `233902d2` | 152/240 | 113/240 | 265/480 |
+| **reranker** | **`cross-encoder/ms-marco-MiniLM-L-12-v2`** | `7b023523` | **152/240** | **137/240** | **289/480** |
+| reranker | `BAAI/bge-reranker-base` | `2cfc18c9` | 128/240 | 135/240 | 263/480 |
+| reranker | `BAAI/bge-reranker-large` | `55611d7b` | 112/240 | 135/240 | 247/480 |
+| reranker | `BAAI/bge-reranker-v2-m3` | `953dc6f6` | 128/240 | 137/240 | 265/480 |
+| reranker | `mixedbread-ai/mxbai-rerank-base-v1` | `800f24c1` | 136/240 | 145/240 | 281/480 |
+| reranker | `mixedbread-ai/mxbai-rerank-large-v1` | `98f65584` | 120/240 | 136/240 | 256/480 |
+| NLI | `cross-encoder/nli-deberta-v3-base` | `6c749ce3` | 112/240 | 112/240 | 224/480 |
+
+Chance is 80/240. Rerankers, which read the request and the program text together, beat every
+bi-encoder, and bigger was not better. `ms-marco-MiniLM-L-12-v2` scored highest, with 95% lower
+bounds of 0.571 and 0.508 against chance 0.333 -- clearly above the floor where the embedding arm
+was at 0.405 and 0.340. It ships as `bench.cross_encoder_similarity.CrossEncoderSimilarity`, and
+`bench.rescore --scorer cross-encoder` re-measures a run with it. The rescores of the three runs
+with it are reported in a section to follow.
