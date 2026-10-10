@@ -16,6 +16,20 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+HELD_OUT_SEED_BASE = 3000
+"""The first seed that builds a **held-out** state (issue #263).
+
+Below it every seed builds a shipped state -- the ones admission, tuning and the
+evaluation draw from -- and an injector that declares a held-out axis must return its
+shipped value. At or above it the injector may draw the axis, so a state built from such
+a seed is one no admission has ever tested a program against.
+
+The constant lives here rather than in `bench.splits` because the *injectors* need it and
+`tasks` may not import `bench`; `bench.splits.HELD_OUT_SEEDS` is the plan block that uses
+it, and `bench.splits` asserts the two agree. It is fixed with the base tree in mind: the
+shipped blocks are 0-4, 1000-1015 and 2000-2039, and admission's seed search stops at 64
+(`agents.compile._SEED_SEARCH_LIMIT`), so no shipped state can land here by accident."""
+
 
 @dataclass(frozen=True)
 class GroundTruth:

@@ -33,6 +33,12 @@ request is one of its phrasings, none of which names a resolution, and
 `variant_for_seed` labels every seed with the resolution its state needs. Admission's
 unrelated-fault class therefore builds one dirty_tree state per resolution, as it does
 for `diverged` and `submodule_moved`.
+
+**The one axis a held-out seed varies is which paths the state writes** (issue #263, the
+section below the constants): the shipped triple at every seed a library was built or
+measured from, a pool value above `HELD_OUT_SEED_BASE`. Nothing else about a held-out
+state differs, which is what lets the frozen programs -- whose probes name no path -- be
+asked whether they still fire on it, and whether they are still right when they do.
 """
 
 from __future__ import annotations
@@ -43,7 +49,7 @@ from dataclasses import dataclass
 from ...sandbox import Sandbox, git_out, record_base, run_git, tip_contained
 from ...signatures import StateFingerprint
 from ..intent import IntentSpec, ResolutionVariant, draw_index, sample_index
-from ..spec import FaultSpec, GroundTruth
+from ..spec import HELD_OUT_SEED_BASE, FaultSpec, GroundTruth
 
 # The three live states a seed selects between, and the salt that chooses them.
 # Appending a state would change which state an existing seed injects, so add
@@ -60,6 +66,61 @@ ASIDE_SUFFIX = ".local"
 """Where a colliding untracked file may be kept: `<path>.local` (see `check`)."""
 
 
+# --- the held-out path axis (issue #263) -----------------------------------------
+#
+# File names and paths are Tier 2 (see the axes note below): the shipped programs bind
+# `upstream_remote` and `upstream_branch`, and no probe or body names a path, so a path
+# is not a Tier 1 axis. `paths_for_seed` therefore returns the shipped triple for every
+# seed below `HELD_OUT_SEED_BASE` -- which is every seed admission, tuning and the
+# evaluation use -- and a pool value only for a held-out seed. Adding to the pool below
+# moves no existing seed's state, so every committed figure stays recomputable.
+#
+# The held-out pool varies what a *path* can be while leaving the state's shape alone:
+# deeper directories, a path with a space, a non-ASCII name, a dotfile. That is the axis
+# worth measuring first, because the frozen programs' probes name no path and a
+# path-sensitive one would be a defect the shipped draw cannot expose -- it draws the
+# same three names at every seed.
+
+
+@dataclass(frozen=True)
+class _Paths:
+    """The three paths one state writes: upstream's commit, the tracked edit, the untracked file."""
+
+    upstream_file: str
+    tracked_file: str
+    untracked_path: str
+
+    @property
+    def aside_path(self) -> str:
+        """Where a colliding untracked file may be kept instead."""
+        return self.untracked_path + ASIDE_SUFFIX
+
+
+SHIPPED_PATHS = _Paths(_UPSTREAM_FILE, _TRACKED_FILE, _UNTRACKED_PATH)
+"""The shipped state's paths: what every seed below `HELD_OUT_SEED_BASE` draws."""
+
+HELD_OUT_PATHS: tuple[_Paths, ...] = (
+    _Paths("src/core/app.py", "docs/guides/readme.md", "notes/drafts/scratch.txt"),
+    _Paths("services/api/handlers.py", "README.md", "temp/notes.txt"),
+    _Paths("docs/release notes.md", "design/Übersicht.md", "scratch notes.md"),
+    _Paths(".env.example", ".gitattributes", ".cache/state"),
+)
+"""The path sets a held-out seed draws from (issue #263). None is the shipped triple."""
+
+
+def paths_for_seed(seed: int) -> _Paths:
+    """The path set this seed's state writes.
+
+    One definition shared by `inject`, `instance_for_seed` and the tests, as `draw_for_seed`
+    is for the Tier 1 axes. Deterministic in the seed, and **the shipped triple for every
+    seed below `HELD_OUT_SEED_BASE`** -- that half is what keeps the frozen libraries'
+    states reproducible.
+    """
+    if seed < HELD_OUT_SEED_BASE:
+        return SHIPPED_PATHS
+    return HELD_OUT_PATHS[(seed - HELD_OUT_SEED_BASE) % len(HELD_OUT_PATHS)]
+
+
 # --- Tier 1 instance axes (ADR-0005) ---------------------------------------------
 #
 #   content    the text each side writes: upstream's comment at the top of `app.py`,
@@ -73,7 +134,10 @@ ASIDE_SUFFIX = ".local"
 #              state always has one: it is what the state is.
 #
 # Not drawn: file names and paths (Tier 2: they need parameter binding), file counts
-# (Tier 3: a second edited file could move the same-file state's overlap), SHAs.
+# (Tier 3: a second edited file could move the same-file state's overlap), SHAs. Paths
+# are varied for held-out seeds only, and that axis is declared in the section above
+# rather than in `AXES`: it takes the shipped value at every seed a resolution label is
+# ever read from, so it is not an axis a resolution may vary along (ADR-0005 decision 2).
 
 
 @dataclass(frozen=True)
@@ -154,12 +218,20 @@ class Draw:
     resolution: str
     content: int
     untracked: bool
+    paths: str = ""
+    """The held-out path set's upstream file, or `""` for the shipped triple.
+
+    Carried in the identity because two states that differ only in their paths are two
+    environments (ADR-0005 decision 4): a set that called them one instance would count
+    the second as a replay of the first. Empty for a shipped seed, so the identities the
+    committed instance counts were taken over are unchanged."""
 
     @property
     def identity(self) -> str:
         """The stable instance identity: resolution plus every drawn axis value."""
         presence = "present" if self.untracked else "absent"
-        return f"dirty_tree/{self.resolution}/content={self.content}/untracked={presence}"
+        drawn = f"dirty_tree/{self.resolution}/content={self.content}/untracked={presence}"
+        return f"{drawn}/paths={self.paths}" if self.paths else drawn
 
     @property
     def axes(self) -> Mapping[str, str]:
@@ -177,14 +249,19 @@ def draw_for_seed(seed: int) -> Draw:
     One definition shared by `inject`, `instance_for_seed` and the tests. Each axis uses
     `draw_index` with its own salt, independent of the state selection, so which
     resolution a seed needs stays a function of the seed alone (ADR-0005).
+
+    The `paths` value is not a Tier 1 draw: it is the shipped triple at every seed below
+    `HELD_OUT_SEED_BASE` and a pool value above it, so it carries no drawn index.
     """
     state = state_for_seed(seed)
     untracked = state == "collision" or bool(draw_index(seed, "dirty_tree", "untracked", 2))
+    paths = paths_for_seed(seed)
     return Draw(
         state=state,
         resolution=STATE_VARIANT[state],
         content=draw_index(seed, "dirty_tree", "content", len(_FLAVOURS)),
         untracked=untracked,
+        paths="" if paths is SHIPPED_PATHS else paths.upstream_file,
     )
 
 
@@ -277,16 +354,58 @@ INTENT = IntentSpec(
 )
 
 
+_HELD_OUT_BASE = "# seeded for the held-out path axis (issue #263)\n"
+"""What a path the shipped base tree does not carry is created with.
+
+The fault is about which paths are dirty and which of them upstream touched, not about
+their contents, so the body only has to be something a commit can hold."""
+
+
+def _publish_paths(sandbox: Sandbox, paths: _Paths) -> None:
+    """Make the paths this state writes exist, on both sides, before the fault is injected.
+
+    The shipped triple is in the base tree already and this does nothing. A held-out set
+    is not, and an edit to a file that does not exist would be an *untracked* file
+    instead: a different state, with a different label. So the missing paths are
+    committed and pushed as one preparatory commit, **before** `record_base`, which makes
+    it part of the base both sides share rather than part of the fault.
+    """
+    work = sandbox.work
+    missing = [
+        relative
+        for relative in (paths.upstream_file, paths.tracked_file)
+        if not (work / relative).exists()
+    ]
+    if not missing:
+        return
+    for relative in missing:
+        target = work / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(_HELD_OUT_BASE, encoding="utf-8")
+    run_git(("add", "-A"), cwd=work)
+    run_git(("commit", "-q", "-m", "chore: seed the layout this state writes"), cwd=work)
+    run_git(("push", "-q", "upstream", "main"), cwd=work)
+
+
 class DirtyTreeFault(FaultSpec):
     name = "dirty_tree"
     description = "Uncommitted local changes present while upstream has new commits"
     # The upstream commit, the uncommitted tracked edit, the untracked file a
-    # `clean -fd` destroys, and where a colliding one may be moved aside.
-    change_surface = (
-        _UPSTREAM_FILE,
-        _TRACKED_FILE,
-        _UNTRACKED_PATH,
-        _UNTRACKED_PATH + ASIDE_SUFFIX,
+    # `clean -fd` destroys, and where a colliding one may be moved aside -- over every
+    # path set the injector may write, not only the shipped one, because the surface is
+    # a property of the fault (issue #263). A resolution of a held-out state touches the
+    # held-out paths, and a surface that named only the shipped triple would refuse it.
+    change_surface = tuple(
+        dict.fromkeys(
+            path
+            for paths in (SHIPPED_PATHS, *HELD_OUT_PATHS)
+            for path in (
+                paths.upstream_file,
+                paths.tracked_file,
+                paths.untracked_path,
+                paths.aside_path,
+            )
+        )
     )
 
     def inject(self, seed: int, sandbox: Sandbox) -> None:
@@ -299,19 +418,24 @@ class DirtyTreeFault(FaultSpec):
         modification the user could still lose.
 
         Deterministic in the seed: `draw_for_seed` selects the state and the drawn
-        axis values, and the pinned sandbox environment fixes the commit SHAs.
+        axis values, `paths_for_seed` the paths it writes, and the pinned sandbox
+        environment fixes the commit SHAs.
         """
         work = sandbox.work
         draw = draw_for_seed(seed)
         state, flavour = draw.state, _FLAVOURS[draw.content]
+        paths = paths_for_seed(seed)
+        _publish_paths(sandbox, paths)
         base = record_base(sandbox, fault="dirty_tree")
 
         # Upstream's unique commit, published to the bare repo. On a collision it
         # also starts tracking the path the local untracked file is about to occupy.
-        app = work / _UPSTREAM_FILE
-        app.write_text(flavour.upstream_comment + app.read_text(encoding="utf-8"), encoding="utf-8")
+        upstream_file = work / paths.upstream_file
+        upstream_file.write_text(
+            flavour.upstream_comment + upstream_file.read_text(encoding="utf-8"), encoding="utf-8"
+        )
         if state == "collision":
-            tracked_upstream = work / _UNTRACKED_PATH
+            tracked_upstream = work / paths.untracked_path
             tracked_upstream.parent.mkdir(parents=True, exist_ok=True)
             tracked_upstream.write_text(flavour.upstream_note, encoding="utf-8")
         run_git(("add", "-A"), cwd=work)
@@ -323,21 +447,23 @@ class DirtyTreeFault(FaultSpec):
 
         # The uncommitted work itself: a tracked modification -- in the file upstream
         # changed, on the same-file state -- plus an untracked file where the state
-        # has one.
+        # has one. The untracked path is recorded so `check` grades the same path the
+        # injection wrote, whichever path set this seed drew.
         if state == "same_file":
-            with (work / _UPSTREAM_FILE).open("a", encoding="utf-8") as handle:
+            with (work / paths.upstream_file).open("a", encoding="utf-8") as handle:
                 handle.write(flavour.same_file_work)
         else:
-            with (work / _TRACKED_FILE).open("a", encoding="utf-8") as handle:
+            with (work / paths.tracked_file).open("a", encoding="utf-8") as handle:
                 handle.write(flavour.local_work)
         sandbox.recorded["patch"] = run_git(("diff",), cwd=work).stdout
+        sandbox.recorded["untracked_path"] = paths.untracked_path
         if draw.untracked:
-            untracked = work / _UNTRACKED_PATH
+            untracked = work / paths.untracked_path
             untracked.parent.mkdir(parents=True, exist_ok=True)
             untracked.write_text(flavour.untracked_note, encoding="utf-8")
             sandbox.recorded["untracked"] = flavour.untracked_note
         if state == "collision":
-            sandbox.recorded["collision"] = _UNTRACKED_PATH
+            sandbox.recorded["collision"] = paths.untracked_path
 
         # Leave the remote-tracking ref current so observe() can read it without
         # fetching (observe must not mutate the environment).
@@ -411,11 +537,13 @@ class DirtyTreeFault(FaultSpec):
 
         has_untracked = "untracked" in sandbox.recorded
         if has_untracked:
-            # Not stripped: the checked file must match the stored bytes exactly.
+            # Not stripped: the checked file must match the stored bytes exactly. The path
+            # is the one the injection recorded, so a held-out state is graded on its own.
             expected = sandbox.recorded["untracked"]
-            places = [work / _UNTRACKED_PATH]
+            untracked_path = sandbox.recorded["untracked_path"]
+            places = [work / untracked_path]
             if "collision" in sandbox.recorded:
-                places.append(work / (_UNTRACKED_PATH + ASIDE_SUFFIX))
+                places.append(work / (untracked_path + ASIDE_SUFFIX))
             if not any(
                 place.is_file() and place.read_text(encoding="utf-8") == expected
                 for place in places
