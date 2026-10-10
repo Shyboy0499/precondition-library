@@ -168,7 +168,9 @@ def recorded_state_intact(sandbox: Sandbox, *, surface: Sequence[str] | None = N
             ),
         )
     changed = run_git(("diff", "--name-only", base, "HEAD"), cwd=sandbox.work, check=False)
-    outside = sorted(set(changed.stdout.split()) - set(surface))
+    # One path per line: a path may contain a space, and whitespace-splitting one makes the
+    # check refuse a committed change that *is* inside the declared surface (#263).
+    outside = sorted(set(changed.stdout.splitlines()) - set(surface))
     if outside:
         return GroundTruth(
             ok=False,

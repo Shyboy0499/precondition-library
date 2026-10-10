@@ -82,7 +82,7 @@ from collections.abc import Sequence
 from ..tasks.faults import FAULTS
 from .ledger import OccurrenceRole
 
-__all__ = ["EVAL_SEEDS", "SMOKE_SEEDS", "TUNE_SEEDS", "occurrence_roles"]
+__all__ = ["EVAL_SEEDS", "HELD_OUT_SEEDS", "SMOKE_SEEDS", "TUNE_SEEDS", "occurrence_roles"]
 
 SMOKE_SEEDS: tuple[int, ...] = (0, 1, 2, 4)
 """Pipeline shake-out. Until ADR-0032 it was also the build's admit set; the build now
@@ -179,6 +179,40 @@ rate is a rate over environments the injector can offer and any interval around 
 should be read with that in mind. The set is sized this large rather than larger
 because each eval seed is a real injected repository and every candidate program
 dispatched against it was compiled at LLM cost.
+"""
+
+
+HELD_OUT_SEEDS: tuple[int, ...] = tuple(range(3000, 3040))
+"""The held-out set: states no admission, tuning pass or measurement has ever built (#263).
+
+Arm 3's zero mis-fire rate was measured against states the fault injectors produced --
+the same injectors, and the same path names, that admission tested every compiled program
+against. That makes the figure an **in-distribution** one, and this block is the plan's
+answer to it: 40 seeds at or above `tasks.spec.HELD_OUT_SEED_BASE`, whose states draw a
+path set no shipped seed draws (`dirty_tree.paths_for_seed`), so no library has seen them.
+
+**Sized for what a run can pay for, and read at the instance.** Forty is the eval block's
+size, chosen against the measured cost of one held-out environment -- a real sandbox plus
+every admitted program's probes, about a minute on the host this was developed on. It is
+**not** forty independent observations: `FaultSpec.instance_for_seed` gives 31 distinct
+instances over these seeds, and that is the number an independence claim is read at
+(ADR-0005 decision 4). Arm 3 is request-blind, so the requests crossed with one
+environment are not extra observations either, and `bench.heldout` reports both counts
+(`distinct_instances`) rather than leaving a reader to infer them from the seed list.
+
+A larger block buys both -- every seed is a new draw -- and is a pre-registration revision
+rather than a config tweak, because the fire count is the metric's denominator.
+
+**Disjoint by construction, and asserted.** Every other block is below the base, and
+admission's own seed search stops at `agents.compile._SEED_SEARCH_LIMIT` (64), so no seed
+here can have been built while a library was compiled or measured.
+`tests/test_heldout_states.py` pins that, and pins that the base is above every planned
+block -- changing one of these values is a revision logged in the spec's revision history
+(CONTRIBUTING rule 8).
+
+**Not the same thing as a new fault family.** These seeds vary paths within the shipped
+state shapes; a sixth fault, or a Tier 2 axis in another fault, is a further source the
+issue names and this block does not cover.
 """
 
 

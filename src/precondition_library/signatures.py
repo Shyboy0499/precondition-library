@@ -242,8 +242,14 @@ class StateFingerprint(BaseModel):
         branch = out("rev-parse", "--abbrev-ref", "HEAD")
         upstream_ahead = int(out("rev-list", "--count", f"HEAD..{upstream}"))
         upstream_behind = int(out("rev-list", "--count", f"{upstream}..HEAD"))
-        local_touched = out("diff", "--name-only", f"{upstream}...HEAD").split()
-        upstream_touched = out("diff", "--name-only", f"HEAD...{upstream}").split()
+        # One path per line, never split on whitespace: a path may contain a space, and
+        # splitting one into two entries makes `dirty_files` and `upstream_touched_files`
+        # disagree about the same file -- the `same_file` state then reads as `disjoint`, and
+        # `build_sandbox` refuses the build as mislabelled. Found by the held-out path axis
+        # (#263), whose pool varies paths precisely so this cannot stay invisible; every
+        # shipped state's paths are space-free, so no shipped fingerprint moves.
+        local_touched = out("diff", "--name-only", f"{upstream}...HEAD").splitlines()
+        upstream_touched = out("diff", "--name-only", f"HEAD...{upstream}").splitlines()
 
         path = submodule_path(env)
         if path is None:

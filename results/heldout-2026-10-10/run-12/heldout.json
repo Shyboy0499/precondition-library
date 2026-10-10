@@ -1,0 +1,19 @@
+{
+  "scorer": "lexical",
+  "source": "results\\replicates-2026-10-05\\run-12",
+  "library_root": "results\\replicates-2026-10-05\\run-12\\library-two-sided",
+  "library_hash": "ad311de65eb51b120ea97aabb83fe22492c89812232e21bf2c5f1cde4dc8c8c1",
+  "faults": [
+    "dirty_tree"
+  ],
+  "seeds": {
+    "first": 3000,
+    "last": 3039,
+    "count": 40
+  },
+  "pairs": 80,
+  "arm3": {
+    "fires": 40,
+    "wrong": 0
+  }
+}

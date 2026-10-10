@@ -10,6 +10,28 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ## Unreleased
 
+### Added
+
+- **A held-out state source for the primary metric (#263, ADR-0033).** The claim's states came
+  from the same injectors admission tests every compiled program against, so `0 of 563` describes
+  this generator. `dirty_tree` now declares a **path axis** drawn only at or above
+  `tasks.spec.HELD_OUT_SEED_BASE`, the plan gains `bench.splits.HELD_OUT_SEEDS` (40 seeds,
+  3000-3039, disjoint from every other block and from admission's seed search), and
+  `bench.heldout` measures that block against a **committed** frozen library, read-only -- no
+  model call, no rebuild -- reporting Figure 1's metric apart from the eval pairs and the
+  block's **distinct instance** count, which is where an independence claim is read rather
+  than at the seed or pair count. The stage may not word a win (item 11's floor does not
+  transfer to states no library saw) and writes `wrong_fires.jsonl`, so a mis-fire is
+  readable without re-running it. No shipped seed's state moves: every seed below the base
+  still draws the shipped paths, so the three replicate figures stay recomputable from the
+  code that produced them.
+
+### Not done in this change
+
+- Held-out axes in the other four faults, the real-checkout source (#181) and a held-out floor.
+  Each is a further stage of #263, named in ADR-0033 rather than dropped; the other injectors and
+  the registry are unchanged, so those faults' states remain in-distribution.
+
 ## 0.1.0 — 2026-10-08
 
 The first release with a measured result: the pair-level primary metric (ADR-0022) over

@@ -130,6 +130,8 @@
 | 120 | 2026-10-05 | **A placeholder after a regex anchor is substituted.** #236 exempted every `^{name}` as git's peel syntax, so `expect_pattern: ^{upstream_branch}$` -- the commonest anchored pattern -- stayed literal and could never match. `runtime.probes` now leaves `^{name}` to git only for its peel types (`commit`, `tree`, `blob`, `tag`, `object`). The twelfth live run (replicate 2) refused a correct `rename` program for it on its first episode and was stopped; the eleventh (replicate 1) was built with the defect, as were the eighth onwards, so their admission counts are not comparable with later runs. |
 | 121 | 2026-10-05 | **A Wilson interval always contains its point, and a run interrupted in its pair-level stage resumes.** `bench.report.wilson_interval` bounds the interval by its point: at 0 and 1 floating point left a bound a rounding error on the wrong side (0/11's low above 0, 6/6's high below 1; 90 such (k, n) with n < 200). The eleventh live run's Figure 1 plot refused the negative error bar that made and crashed after its build, losing its summary; `primary._errors` also clamps at 0. `bench.live --resume` now accepts a run interrupted in the model-free pair-level stages and recomputes them whole from the finished library; an episode stage is still never resumed. Intervals move by at most a rounding error. |
 | 122 | 2026-10-05 | **A finished run's primary metric can be re-measured with another arm 2 scorer.** `bench.rescore --run DIR --scorer {lexical,embedding} --out DIR` opens the run's frozen two-sided library with the chosen scorer behind `Library(similarity=...)` and runs `bench.live`'s own pair-level stage -- 2b threshold, arm 2's floor, Figure 1, Claim 2 -- into a fresh directory, recording the scorer in `rescore.json`. No model call and no rebuild: arm 3 does not read the seam, so only arm 2's curve, floor and matched comparison move. It is how #104's embedding scorer is measured against the three replicate libraries; `lexical` reproduces a run's own figures. |
+| 123 | 2026-10-10 | **Pre-registration revision: the primary metric gets a held-out state source, and the stage that reads it may not word a win (issue #263, ADR-0033).** The claim's states came from the injectors admission also tested against, so `0 of 563` is an in-distribution figure. §7's pre-registered analysis gains item 13: a plan block `bench.splits.HELD_OUT_SEEDS` of **40 seeds at 3000-3039** -- the eval block's size, chosen against the measured cost of one held-out environment (a real sandbox plus every admitted program's probes) -- disjoint from the smoke, tune, eval and admit sets and from admission's own seed search; `dirty_tree`'s injector gains a **path axis** drawn only above `tasks.spec.HELD_OUT_SEED_BASE`, so no shipped seed's state moves and every committed figure stays recomputable; `bench.heldout` measures the block against a **committed** frozen library read-only (digest compared before and after, no model call, no rebuild) and reports Figure 1's metric with the power statement. **The reading is at the instance, not the seed or the pair:** the 40 seeds build 31 distinct instances (`FaultSpec.instance_for_seed`, reported as `distinct_instances`), and since arm 3 is request-blind the requests crossed with one environment are one decision rather than several observations (ADR-0005 decision 4). Because item 11's floor is measured on the tune seeds against the shipped states, it does not transfer, so the stage carries a `WORDING_LIMIT` field and no "beats text similarity" sentence may be read off it. Where arm 3 decides every held-out pair correctly the comparison is vacuous, which on **compiled** programs is a result rather than a tautology: the interval on its rate is what may be read, and the arm-2 contrast waits for a block on which arm 3 abstains somewhere. **Logged before the held-out block was measured, and the one thing measured before it is disclosed:** two seeds were built first to verify the stage runs end to end -- 4 pairs, arm 3 firing 2 with 0 wrong, comparison vacuous -- and **no analysis is read from them**: they are excluded from every figure, and the reading rule decision 5 states was written after that smoke showed a compiled arm 3 can be perfect on the block. The block's own seeds had not been built when this row was written. No metric definition, denominator or reported number in this document changes, and the three replicate figures stand as in-distribution. |
+| 124 | 2026-10-10 | **A git path list is read one path per line, because a path may contain a space (issue #263).** The held-out path axis failed on its first build: seed 3006 draws a `same_file` state whose upstream file is `docs/release notes.md`, and `StateFingerprint.observe` read `git diff --name-only` with `str.split()`, so one path became two entries -- `upstream_touched_files` held `['docs/release', 'notes.md']` while `dirty_files`, which already used `splitlines()`, held the path whole. The two lists then disagreed about the same file, the state read as `disjoint`, and `build_sandbox` refused the build as mislabelled (ADR-0005 decision 3) -- the invariant doing its job, on a defect in the fingerprint rather than in the injector. `local_touched_files`, `upstream_touched_files` and `tasks.invariants.recorded_state_intact`'s change-surface diff now use `splitlines()`, as the other field readers already did. **No shipped fingerprint moves:** every shipped path is space-free, so the two readings agree on every state the three replicate libraries were built and measured from, and no metric definition, denominator or reported number changes. The refused state is the regression test (`tests/test_heldout_states.py`). Not fixed, and not on this stage's path: `bench.instance_diversity._submodule_paths` reads a `.gitmodules` path with `split()[-1]`, so a submodule path containing a space would be truncated there; no injected submodule path has one. |
 
 ---
 
@@ -977,6 +979,32 @@ after seeing results.
    registered wording (`bench.soft_vote.claim2_verdict`). Registered before any eval
    data.
 
+13. **The primary metric is also measured on held-out states, in its own report.** The
+    states item 1's pairs are built from come from the same injectors admission tests
+    against, so the figure is an in-distribution one; `bench.heldout` measures a
+    **held-out block** -- `bench.splits.HELD_OUT_SEEDS`, 40 seeds at 3000-3039, where
+    `dirty_tree`'s injector draws a path set no shipped seed draws
+    (`tasks.spec.HELD_OUT_SEED_BASE`) -- against a **committed** frozen library, read-only
+    (its digest is compared before and after), with no model call and no rebuild. The
+    metric, the regime and the coverage point are item 1's; the report is written to a
+    fresh directory and is **never pooled with the eval pairs**, because the two answer
+    different questions. **The unit stays the environment** (item 2): the block builds 31
+    distinct instances across its 40 seeds, `bench.heldout` reports that count beside the
+    seed and pair counts, and a rate or interval is read at it rather than at the pair
+    count -- arm 3 is request-blind, so the requests crossed with one environment carry no
+    second observation. Two readings are registered with it. **No win wording:** item 11's
+    floor is measured on the tune seeds against the shipped states, so it does not transfer
+    to states no library saw, and the stage carries `bench.heldout.WORDING_LIMIT` for that
+    reason; below the smallest detectable difference item 3 computes for the achieved fire
+    counts, nothing may be read. **A vacuous comparison is an outcome, not a failure:**
+    where arm 3 decides every held-out pair correctly, `bench.primary` prints
+    `vacuous_reason` and no comparison; on hand-written gold that is a tautology, but on
+    **compiled** programs it means arm 3 neither mis-fired nor abstained, so the interval on
+    its held-out rate is the readable statement and the arm-2 contrast waits for a block on
+    which arm 3 abstains somewhere. Registered before any held-out state was built
+    (issue #263, ADR-0033); the paths, the pool, the block and the wording limit are
+    pre-registration values, so changing one is a revision logged here first.
+
 #### The seed plan and the run invocation
 
 The split is fixed in `bench/splits.py` before any data exists, because a split
@@ -987,6 +1015,8 @@ row, so a reader must be able to tell which set an episode came from.
 smoke  0,1,2,4     4 seeds   shake out the pipeline; admit the programs (the admit set)
 tune   1000-1015   16 seeds  calibrate arm 2's similarity threshold (item 5)
 eval   2000-2039   40 seeds  the reported numbers
+held-out 3000-3039 40 seeds  states no library saw; measured apart from the eval pairs
+                             (item 13, issue #263)
 ```
 
 **The admit set builds one frozen library** (issue #4, ADR-0009). `bench.build_library`
