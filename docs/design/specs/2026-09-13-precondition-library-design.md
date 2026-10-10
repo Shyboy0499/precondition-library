@@ -130,6 +130,7 @@
 | 120 | 2026-10-05 | **A placeholder after a regex anchor is substituted.** #236 exempted every `^{name}` as git's peel syntax, so `expect_pattern: ^{upstream_branch}$` -- the commonest anchored pattern -- stayed literal and could never match. `runtime.probes` now leaves `^{name}` to git only for its peel types (`commit`, `tree`, `blob`, `tag`, `object`). The twelfth live run (replicate 2) refused a correct `rename` program for it on its first episode and was stopped; the eleventh (replicate 1) was built with the defect, as were the eighth onwards, so their admission counts are not comparable with later runs. |
 | 121 | 2026-10-05 | **A Wilson interval always contains its point, and a run interrupted in its pair-level stage resumes.** `bench.report.wilson_interval` bounds the interval by its point: at 0 and 1 floating point left a bound a rounding error on the wrong side (0/11's low above 0, 6/6's high below 1; 90 such (k, n) with n < 200). The eleventh live run's Figure 1 plot refused the negative error bar that made and crashed after its build, losing its summary; `primary._errors` also clamps at 0. `bench.live --resume` now accepts a run interrupted in the model-free pair-level stages and recomputes them whole from the finished library; an episode stage is still never resumed. Intervals move by at most a rounding error. |
 | 122 | 2026-10-05 | **A finished run's primary metric can be re-measured with another arm 2 scorer.** `bench.rescore --run DIR --scorer {lexical,embedding} --out DIR` opens the run's frozen two-sided library with the chosen scorer behind `Library(similarity=...)` and runs `bench.live`'s own pair-level stage -- 2b threshold, arm 2's floor, Figure 1, Claim 2 -- into a fresh directory, recording the scorer in `rescore.json`. No model call and no rebuild: arm 3 does not read the seam, so only arm 2's curve, floor and matched comparison move. It is how #104's embedding scorer is measured against the three replicate libraries; `lexical` reproduces a run's own figures. |
+| 123 | 2026-10-10 | **Pre-registration revision: arm 2 gains a judge that reads the state, and its first run is gated on its own floor (issue #264, ADR-0034).** §7's pre-registered analysis gains item 14. The judge is `bench.judge_similarity.JudgeSimilarity` behind the `Similarity` / `ScoresMany` / `ReportsUsage` seam, so nothing downstream of the seam learns what it is and **arm 3 is unchanged by construction**. It sees exactly what arm 2 sees -- the request, `StateFingerprint.as_text()`, and each candidate's `_program_text` -- and **not** the probe strings, because a judge that reads the probes is reasoning about the predicates arm 3 executes (a separate experiment, in ADR-0034's rejected table). It makes **one provider call per pair** (`score_many`) returning one score per candidate, so item 1's sweep still applies rather than degenerating into a step; model, temperature and prompt are pinned in code and their hash travels with every artifact; its per-pair scores are **committed as a JSONL cache**, so a figure can be recomputed with **no key and no tokens**, and a cache whose prompt hash, model or per-record candidate count disagrees is refused rather than reused. Failed replies -- empty completion, transport error, unparseable, wrong length, out of range -- become an **abstain** (`0.0` for every candidate) and stay in item 1's denominator, counted separately; `ProviderAuthError` is re-raised and stops the run (issue #157's precedent) and there are no silent retries. **The floor comes first:** the judge's informed-regime strict top-1 on the tune seeds against each frozen library is judged by item 11, and below it no "beats text similarity" sentence may be written. **Repeatability is registered, not assumed:** a pre-registered subsample is asked `k >= 2` times and the agreement is reported beside the judge's row, with the statement that the three text scorers carry no such component -- a judge is an LLM, and the primary metric moved to pair level precisely because sampling variance made the episode-level comparison unreadable (revision 41 records that temperature 0 is not determinism on a hosted model). Its spend is metered in `SimilarityUsage`'s own currency and recorded in the rescore's record, never folded into the LLM's `tokens_in`/`tokens_out` nor into an episode's `embedding_*`. **Registered before the first judge call:** no judge has been called, the floor and the three rescores need a provider key the caller supplies, and this revision reports no number. No existing metric definition, denominator or committed figure changes. |
 
 ---
 
@@ -976,6 +977,39 @@ after seeing results.
    makes its decisions exactly, so that tie is reported as **collapsed** and keeps the
    registered wording (`bench.soft_vote.claim2_verdict`). Registered before any eval
    data.
+14. **Arm 2's fourth scorer is a judge that reads the state, and it is gated like any
+    other baseline** (issue #264, ADR-0034). `bench.judge_similarity.JudgeSimilarity`
+    sits behind the `Similarity` / `ScoresMany` / `ReportsUsage` seam, so nothing
+    downstream of the seam learns what it is and **arm 3 is unchanged by construction**
+    (it does not read the seam). Four things are registered with it. *What it sees:*
+    exactly what arm 2 sees -- the request, `StateFingerprint.as_text()`, each
+    candidate's `_program_text` -- and **not** the probe strings, because a judge that
+    reads the probes reasons about the predicates arm 3 executes, which is a different
+    mechanism and a separate experiment. *How it is called:* one provider call per
+    `(request, state)` pair through `score_many`, returning one score per candidate, so
+    item 1's sweep still applies; `__call__` stays available and memoised for the
+    probe's pairwise loop. *What makes it reproducible:* its per-pair scores are
+    committed as a JSONL cache under `results/`, `bench.rescore --judge-cache` recomputes
+    a figure from that file with **no key and no tokens**, and a cache whose prompt hash,
+    model or per-record candidate count disagrees with the running configuration is
+    **refused** rather than reused. *What stays in the denominator:* an empty completion,
+    a transport error, an unparseable reply, a wrong length and an out-of-range score all
+    become an **abstain** (`0.0` for every candidate) and are counted separately;
+    `ProviderAuthError` is re-raised and stops the run (issue #157) and there are no
+    silent retries. **The floor comes first** (item 11): the judge's informed-regime
+    strict top-1 on the tune seeds against each frozen library decides whether it is a
+    usable baseline, and below it no "beats text similarity" sentence may be written.
+    **Repeatability is registered, not assumed:** a pre-registered subsample is asked
+    `k >= 2` times and the agreement is reported beside the judge's row, with the
+    statement that the three text scorers carry no such component -- a judge is an LLM,
+    and the primary metric moved to pair level precisely because sampling variance made
+    the episode-level comparison unreadable (revision 41 records that temperature 0 is
+    not determinism on a hosted model). Its spend is `SimilarityUsage`'s own currency,
+    recorded in the rescore's record beside the scorer's identity, never folded into the
+    LLM's `tokens_in`/`tokens_out` nor into an episode's `embedding_*`; the budget is
+    declared here before the run and an exceeded budget stops it. **Registered before the
+    first judge call:** no judge has been called, the floor and the three rescores need a
+    provider key the caller supplies, and nothing here reports a number.
 
 #### The seed plan and the run invocation
 
