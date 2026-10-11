@@ -130,6 +130,7 @@
 | 120 | 2026-10-05 | **A placeholder after a regex anchor is substituted.** #236 exempted every `^{name}` as git's peel syntax, so `expect_pattern: ^{upstream_branch}$` -- the commonest anchored pattern -- stayed literal and could never match. `runtime.probes` now leaves `^{name}` to git only for its peel types (`commit`, `tree`, `blob`, `tag`, `object`). The twelfth live run (replicate 2) refused a correct `rename` program for it on its first episode and was stopped; the eleventh (replicate 1) was built with the defect, as were the eighth onwards, so their admission counts are not comparable with later runs. |
 | 121 | 2026-10-05 | **A Wilson interval always contains its point, and a run interrupted in its pair-level stage resumes.** `bench.report.wilson_interval` bounds the interval by its point: at 0 and 1 floating point left a bound a rounding error on the wrong side (0/11's low above 0, 6/6's high below 1; 90 such (k, n) with n < 200). The eleventh live run's Figure 1 plot refused the negative error bar that made and crashed after its build, losing its summary; `primary._errors` also clamps at 0. `bench.live --resume` now accepts a run interrupted in the model-free pair-level stages and recomputes them whole from the finished library; an episode stage is still never resumed. Intervals move by at most a rounding error. |
 | 122 | 2026-10-05 | **A finished run's primary metric can be re-measured with another arm 2 scorer.** `bench.rescore --run DIR --scorer {lexical,embedding} --out DIR` opens the run's frozen two-sided library with the chosen scorer behind `Library(similarity=...)` and runs `bench.live`'s own pair-level stage -- 2b threshold, arm 2's floor, Figure 1, Claim 2 -- into a fresh directory, recording the scorer in `rescore.json`. No model call and no rebuild: arm 3 does not read the seam, so only arm 2's curve, floor and matched comparison move. It is how #104's embedding scorer is measured against the three replicate libraries; `lexical` reproduces a run's own figures. |
+| 123 | 2026-10-10 | **Pre-registration revision: a hybrid dispatcher is measured as a family, and read at arm 3's coverage (issue #265, ADR-0035).** §7's pre-registered analysis gains item 15. The hybrid is four steps -- rank the admitted programs by the text scorer unthresholded, keep those at or above a retrieval floor within the top `k`, fire the best-ranked one whose preconditions all hold, else fire nothing -- and it is **derived from the pair pass's record**: `bench.library_pairs` now records each environment's accepted program ids and each request's complete text ranking, both of which it was already computing and discarding, so the whole grid is arithmetic over one pass rather than a sandbox per point. The registered grid is `k` in `(1, 2, 3, 5, 10, None)` crossed with every distinct retrieval score plus no floor (item 1's rule). **The claimable comparison is the point nearest arm 3's coverage**, a tie to the lower coverage, with its Wilson interval, the coverage gap and the smallest detectable difference at its fire counts; every other point is the family. **Selection is registered as this issue's trap:** with two knobs over a few hundred points on 400 pairs the best cell is a maximum, so the widest zero-mismatch point per `k` is reported as a description of these pairs, bounded by the 95% Wilson upper limit of the mis-fires it did not have, and never as an unbiased estimate of the rate at a floor chosen because it looked good. **What would falsify it:** at arm 3's coverage the hybrid mis-fires more than arm 3, or no point above arm 3's coverage is reachable without a rise distinguishable at the registered difference. A named operating point's `k` and floor come from the tune seeds, and the stage reads a committed frozen library read-only (digest compared before and after) with no model call and no key. No existing metric definition, denominator or committed figure changes. |
 
 ---
 
@@ -976,6 +977,30 @@ after seeing results.
    makes its decisions exactly, so that tie is reported as **collapsed** and keeps the
    registered wording (`bench.soft_vote.claim2_verdict`). Registered before any eval
    data.
+
+15. **A hybrid dispatcher is measured as a family, and read at arm 3's coverage** (issue
+    #265, ADR-0035; registered as item 15 because items 13 and 14 are the held-out stage and the
+    judge, whose changes are open PRs this branch predates). `bench.hybrid` builds the family from
+    the pair pass's own record -- each environment's accepted program ids and each request's
+    complete text ranking, which `bench.library_pairs` now keeps instead of discarding -- so no
+    sandbox and no model call is added. Its definition is fixed: rank the admitted programs by the
+    text scorer, unthresholded; keep those at or above a retrieval floor and within the top `k`;
+    fire the **best-ranked one whose preconditions all hold**; otherwise fire nothing. The grid is
+    registered as `k` in `(1, 2, 3, 5, 10, None)` (`None` = the whole ranking) crossed with every
+    distinct retrieval score plus no floor, and changing either is a revision logged here first.
+    **The claimable comparison is the point nearest arm 3's coverage** (a tie to the lower
+    coverage, item 1's rule), reported with its Wilson interval, the coverage gap and the smallest
+    detectable difference at those fire counts; every other point is the family, not the hybrid's
+    number. **Two readings are registered with it.** *Selection is the trap:* two knobs over a few
+    hundred points on 400 pairs makes the best cell a maximum over many draws, so the widest
+    zero-mismatch point per `k` is a **description of these pairs**, bounded by the 95% Wilson upper
+    limit of the mis-fires it did not have, and never an unbiased estimate of the rate at a floor
+    chosen because it looked good. *The gate's refusals are a property, not a finding:* the hybrid
+    cannot fire on a negative pair because the gate is applied per candidate and a fault-free
+    sandbox accepts nothing, so that is its definition rather than a result. A named operating
+    point's `k` and floor are chosen on the tune seeds and the record says where; a sweep is not
+    tuning and needs none. The stage reads a committed frozen library read-only, with no model call
+    and no key.
 
 #### The seed plan and the run invocation
 

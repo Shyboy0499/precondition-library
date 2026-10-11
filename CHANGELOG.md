@@ -10,6 +10,28 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ## Unreleased
 
+### Added
+
+- **The hybrid arm: retrieve by text, gate by preconditions (#265, ADR-0035).** `bench.hybrid`
+  measures the cascade a practitioner deploys -- rank the admitted programs by the text scorer,
+  keep those at or above a retrieval floor within the top `k`, fire the best-ranked one whose
+  preconditions all hold, else fall back -- as a **family** over the registered `k` x floor grid.
+  It builds the family from the pair pass's own record, so `bench.library_pairs` now keeps each
+  environment's **accepted program ids** and each request's **complete text ranking**, both of which
+  it was already computing and discarding; the grid is arithmetic over one pass rather than a
+  sandbox per point, and no model call or key is needed. The claimable comparison is the point
+  nearest arm 3's coverage, with its Wilson interval and the detectable difference; the widest
+  zero-mismatch point per `k` is reported as a description of these pairs within its own Wilson
+  upper limit.
+
+### Not done in this change
+
+- **The other two frozen libraries and the reranker.** The first run names the library and the
+  scorer it used; the pinned reranker of #256 needs the `embedding` extra and is a flag away, and
+  each further library is the same command.
+- **Episode-level anything.** This is a dispatch-level measurement on labelled pairs, like the rest
+  of Figure 1.
+
 ## 0.1.0 — 2026-10-08
 
 The first release with a measured result: the pair-level primary metric (ADR-0022) over
