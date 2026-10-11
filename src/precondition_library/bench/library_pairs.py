@@ -64,12 +64,38 @@ SOFT_VOTE = "arm 2b (soft vote)"
 INTENT_KEY = "arm 2c (intent key)"
 
 
+class RankedProgram(BaseModel):
+    """One program in a request's text ranking, with what a later reader needs to re-decide.
+
+    Recorded per pair so the hybrid arm (#265) can be derived from this pass instead of rebuilding
+    every environment: the hybrid's decision at any `(k, threshold)` is a walk down this list, and
+    the walk needs each program's id, score and declared resolution -- nothing else.
+    """
+
+    id: str
+    variant: str | None
+    score: float
+
+
 class LibraryPair(BaseModel):
-    """One labelled pair, with the environment it was built in."""
+    """One labelled pair, with the environment it was built in and what the arms saw there."""
 
     pair: LabelledPair
     environment: str
     """`FAULT_FREE`, or the name of the fault whose state the sandbox holds."""
+    accepted: tuple[str, ...] = ()
+    """Program ids whose preconditions hold in this environment, in arm 3's firing order.
+
+    Empty on a negative pair, which is the gate's whole point. Recorded because arm 3's decision is
+    computed here anyway -- `match_preconditions` evaluates every admitted program -- and a hybrid
+    needs the *accepted set*, not only the winner that set produced (issue #265).
+    """
+    ranked: tuple[RankedProgram, ...] = ()
+    """This request's text ranking of the admitted programs, best first and unthresholded.
+
+    Complete rather than top-1: `score_all` scores every admitted program either way, so a wider
+    limit re-trims a list that was already computed. The hybrid sweeps `k` over it and applies a
+    retrieval floor of its own to the scores."""
 
 
 class LibraryPairOutcomes(BaseModel):
@@ -96,6 +122,8 @@ class _EnvironmentDecisions:
     arm3: str | None
     soft_variant: str | None
     soft_score: float | None
+    accepted: tuple[str, ...] = ()
+    """The ids whose preconditions hold here, in `match_preconditions`' order (issue #265)."""
 
 
 def _measured_intents(faults: Sequence[str]) -> list[IntentSpec]:
@@ -133,6 +161,7 @@ def _decide(library: Library, box: Sandbox) -> _EnvironmentDecisions:
         arm3=accepted[0].variant if accepted else None,
         soft_variant=ranked[0].program.variant if ranked else None,
         soft_score=ranked[0].score if ranked else None,
+        accepted=tuple(program.id for program in accepted),
     )
 
 
@@ -185,6 +214,9 @@ def library_pair_outcomes(
         soft_vote=[],
         intent_key=[],
     )
+    # A limit wide enough to return every admitted program: `score_all` scores them all anyway,
+    # so this trims nothing off the cost and leaves the complete ranking for the hybrid (#265).
+    every_program = len(library.load_all())
     for seed in seeds:
         for environment, injected in [(FAULT_FREE, []), *((f, [f]) for f in faults)]:
             box = build_sandbox(seed, injected)
@@ -199,13 +231,27 @@ def library_pair_outcomes(
                 signature = TaskSignature(
                     intent=pair.task_text, fingerprint=decided.state, target=decided.target
                 )
-                top = semantic.match_semantic(signature, limit=1)
+                ranked = semantic.match_semantic(signature, limit=every_program)
                 keyed = library.match_intent_key(signature)
 
-                result.pairs.append(LibraryPair(pair=pair, environment=environment))
+                result.pairs.append(
+                    LibraryPair(
+                        pair=pair,
+                        environment=environment,
+                        accepted=decided.accepted,
+                        ranked=tuple(
+                            RankedProgram(
+                                id=item.program.id,
+                                variant=item.program.variant,
+                                score=item.score,
+                            )
+                            for item in ranked
+                        ),
+                    )
+                )
                 result.arm2.append(
-                    _outcome(pair, top[0].program.variant, top[0].score)
-                    if top
+                    _outcome(pair, ranked[0].program.variant, ranked[0].score)
+                    if ranked
                     else _outcome(pair, None, None)
                 )
                 result.arm3.append(_outcome(pair, decided.arm3, None))

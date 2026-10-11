@@ -57,7 +57,7 @@ figure bounds it at 2.0%.
 3006: `StateFingerprint.observe` read `git diff --name-only` with `str.split()`, so
 `docs/release notes.md` became two entries, the `same_file` state read as `disjoint`, and
 `build_sandbox` refused the build as mislabelled (ADR-0005 decision 3). Fixed in the same change
-(spec revision 124), with that state as the regression test. Nothing in the shipped draw could
+(spec revision 126), with that state as the regression test. Nothing in the shipped draw could
 have exposed it: every shipped path is space-free.
 
 ## What it does not show

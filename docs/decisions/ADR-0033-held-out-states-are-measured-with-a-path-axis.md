@@ -119,7 +119,7 @@ vacuous, with a message that describes hand-written gold rather than a compiled 
 - **The axis has already paid for itself, and the defect it found is fixed here.** Its first
   build was refused: `StateFingerprint.observe` read `git diff --name-only` with `str.split()`,
   so a path containing a space became two entries and the `same_file` state read as `disjoint`
-  (spec revision 124). `local_touched_files`, `upstream_touched_files` and the change-surface
+  (spec revision 126). `local_touched_files`, `upstream_touched_files` and the change-surface
   check in `tasks.invariants` now read one path per line. No shipped fingerprint moves -- every
   shipped path is space-free -- and the refused state is the regression test.
 

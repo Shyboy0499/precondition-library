@@ -19,6 +19,7 @@ mechanical fact about this repository are pinned here.
 from __future__ import annotations
 
 import ast
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -229,6 +230,19 @@ def _gold_checkers_are_skipped() -> bool:
     return any(node_id.startswith("test_checkers_against_gold.py::") for node_id in skips())
 
 
+def _no_judge_result_is_committed() -> bool:
+    """No committed rescore names the judge scorer, so no judge figure exists yet (ADR-0034).
+
+    The sentence this pins says the state-reading scorer *has not been run*. It stops being true the
+    moment a run's `rescore.json` names the judge, and the failure is what tells whoever commits
+    that run to correct the prose in the same change.
+    """
+    committed = (ROOT / "results").rglob("rescore.json")
+    return all(
+        json.loads(path.read_text(encoding="utf-8")).get("scorer") != "judge" for path in committed
+    )
+
+
 CLAIMS: list[Claim] = [
     Claim(
         document="bench/gold/README.md",
@@ -262,6 +276,16 @@ CLAIMS: list[Claim] = [
             "The excluded set changed size. Check every document that says no fault "
             "is excluded -- the spec's open risk 6 and the testing block in §10 -- and "
             "correct the count."
+        ),
+    ),
+    Claim(
+        document="README.md",
+        quote="has not been run",
+        holds=_no_judge_result_is_committed,
+        update=(
+            "A judge result is committed. Rewrite the two sentences in README.md that say the "
+            "state-reading scorer has not been run, and the matching lines in ADR-0034's "
+            "consequences and spec §7 item 14: the run is what those sentences were waiting for."
         ),
     ),
 ]

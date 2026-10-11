@@ -25,12 +25,42 @@ measured result, at pair level; everything before it is design and apparatus. Se
   readable without re-running it. No shipped seed's state moves: every seed below the base
   still draws the shipped paths, so the three replicate figures stay recomputable from the
   code that produced them.
+- **Arm 2 gets a judge that reads the state (#264, ADR-0034).**
+  `bench.judge_similarity.JudgeSimilarity` fills the same `Similarity` / `ScoresMany` /
+  `ReportsUsage` seam as the lexical, embedding and reranker scorers, so nothing downstream of the
+  seam learns what it is and arm 3 is untouched by construction. It sees the request, the
+  fingerprint text and each candidate's program text -- never the probe strings -- makes **one
+  provider call per pair** returning one score per candidate so the coverage sweep survives, pins
+  the model, temperature and prompt in code, commits its per-pair scores as a JSONL cache, and
+  meters its spend as `SimilarityUsage`. `bench.rescore --scorer judge --judge-cache FILE`
+  recomputes a figure from that cache with no key and no tokens; the seam's usage and the scorer's
+  prompt hash are recorded in `rescore.json`.
+- **The hybrid arm: retrieve by text, gate by preconditions (#265, ADR-0035).** `bench.hybrid`
+  measures the cascade a practitioner deploys -- rank the admitted programs by the text scorer,
+  keep those at or above a retrieval floor within the top `k`, fire the best-ranked one whose
+  preconditions all hold, else fall back -- as a **family** over the registered `k` x floor grid.
+  It builds the family from the pair pass's own record, so `bench.library_pairs` now keeps each
+  environment's **accepted program ids** and each request's **complete text ranking**, both of which
+  it was already computing and discarding; the grid is arithmetic over one pass rather than a
+  sandbox per point, and no model call or key is needed. The claimable comparison is the point
+  nearest arm 3's coverage, with its Wilson interval and the detectable difference; the widest
+  zero-mismatch point per `k` is reported as a description of these pairs within its own Wilson
+  upper limit.
 
 ### Not done in this change
 
 - Held-out axes in the other four faults, the real-checkout source (#181) and a held-out floor.
   Each is a further stage of #263, named in ADR-0033 rather than dropped; the other injectors and
   the registry are unchanged, so those faults' states remain in-distribution.
+- **The judge has not been called.** Its floor (spec §7 item 11) and the three rescores need a
+  provider key the caller supplies, and neither has been run, so there is no judge number and no
+  sentence may claim the judge lost or won. The commands are in ADR-0034 and spec item 14; the
+  repeatability figure that a judge makes necessary is registered there too, not measured.
+- **The other two frozen libraries and the reranker.** The first run names the library and the
+  scorer it used; the pinned reranker of #256 needs the `embedding` extra and is a flag away, and
+  each further library is the same command.
+- **Episode-level anything.** This is a dispatch-level measurement on labelled pairs, like the rest
+  of Figure 1.
 
 ## 0.1.0 — 2026-10-08
 
