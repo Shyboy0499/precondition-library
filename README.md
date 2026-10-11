@@ -44,7 +44,7 @@ Stated first, because the prior art is real and the honest framing depends on it
 | That "the most similar case is not the most reusable" is a new insight | Smyth & Keane argued it in 1998, in a peer-reviewed journal, at length. |
 | That these token counts are a **cost** | They are tokens. Pricing input needs a rate table, and the provider's rates differ by peak and off-peak hours, so no currency figure is reported — input is metered as uncached, cache-read and cache-write so one can be computed once rates exist. |
 | That an episode-level comparison has been made | Only the pair-level primary metric has been measured ([Primary result](#primary-result)). The frozen benchmark, the admission factorial and the online arms have not been run at scale; the one smoke pass that ran them ([First demonstration](#first-demonstration)) demonstrates the mechanism and measures nothing. |
-| That no text scorer could close the gap | Three were measured on the same three libraries: the shipped lexical arm (ADR-0003), the pinned embedding arm (#104) and a pinned local reranker, the strongest of thirteen models screened on arm 2's floor (lower bounds 0.571 and 0.508 against chance 0.333, where the other two only just clear it). The reranker narrows the gap to +0.71 to +0.76, from lexical +0.76 to +0.81, and no further. That is a screen of local models, not a search; a scorer reading the state through an LLM call was not tried. |
+| That no text scorer could close the gap | Three were measured on the same three libraries: the shipped lexical arm (ADR-0003), the pinned embedding arm (#104) and a pinned local reranker, the strongest of thirteen models screened on arm 2's floor (lower bounds 0.571 and 0.508 against chance 0.333, where the other two only just clear it). The reranker narrows the gap to +0.71 to +0.76, from lexical +0.76 to +0.81, and no further. That is a screen of local models, not a search; a scorer reading the state through an LLM call is implemented and registered (ADR-0034) and has not been run, so it closes no gap here. |
 
 Amortization is still what makes the project *useful* — it is an engineering
 assumption here, not a finding. It is reported as a cost model, never as a
@@ -357,7 +357,9 @@ detectable difference.
   the floor -- clears it clearly (0.571 and 0.508), and narrows the gap by 0.03 to 0.09
   and no more: it still mis-fires on 71–76% of its fires
   ([Reranker arm 2](results/replicates-2026-10-05/README.md#reranker-arm-2)). A scorer
-  reading the state through a model call (an LLM judge) was not tried.
+  reading the state through a model call (an LLM judge) is implemented and registered
+  (ADR-0034, spec §7 item 14) and **has not been run**: it needs a provider key, and until
+  it runs, no sentence may say it won or lost.
 - **Nothing at episode level.** Mis-fires that end in a wrong repository, cost, the
   admission factorial and the online arms are separate stages, not run here.
 - **Arm 2b cannot separate the two.** At arm 3's coverage the soft vote's matched point

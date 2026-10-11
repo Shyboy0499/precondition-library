@@ -12,6 +12,16 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **Arm 2 gets a judge that reads the state (#264, ADR-0034).**
+  `bench.judge_similarity.JudgeSimilarity` fills the same `Similarity` / `ScoresMany` /
+  `ReportsUsage` seam as the lexical, embedding and reranker scorers, so nothing downstream of the
+  seam learns what it is and arm 3 is untouched by construction. It sees the request, the
+  fingerprint text and each candidate's program text -- never the probe strings -- makes **one
+  provider call per pair** returning one score per candidate so the coverage sweep survives, pins
+  the model, temperature and prompt in code, commits its per-pair scores as a JSONL cache, and
+  meters its spend as `SimilarityUsage`. `bench.rescore --scorer judge --judge-cache FILE`
+  recomputes a figure from that cache with no key and no tokens; the seam's usage and the scorer's
+  prompt hash are recorded in `rescore.json`.
 - **The hybrid arm: retrieve by text, gate by preconditions (#265, ADR-0035).** `bench.hybrid`
   measures the cascade a practitioner deploys -- rank the admitted programs by the text scorer,
   keep those at or above a retrieval floor within the top `k`, fire the best-ranked one whose
@@ -26,6 +36,10 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Not done in this change
 
+- **The judge has not been called.** Its floor (spec §7 item 11) and the three rescores need a
+  provider key the caller supplies, and neither has been run, so there is no judge number and no
+  sentence may claim the judge lost or won. The commands are in ADR-0034 and spec item 14; the
+  repeatability figure that a judge makes necessary is registered there too, not measured.
 - **The other two frozen libraries and the reranker.** The first run names the library and the
   scorer it used; the pinned reranker of #256 needs the `embedding` extra and is a flag away, and
   each further library is the same command.
