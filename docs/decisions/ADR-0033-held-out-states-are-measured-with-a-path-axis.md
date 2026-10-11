@@ -100,6 +100,14 @@ vacuous, with a message that describes hand-written gold rather than a compiled 
   same way on both sides), but a held-out **resolution** on that path would be refused by
   `tasks.invariants.recorded_state_intact`, which compares the committed diff against
   `change_surface`'s raw names. Nothing in this stage runs a resolution.
+- **The change surface is per seed.** A resolution of a held-out state commits held-out
+  paths, so grading it against the shipped surface would refuse a correct fix. Widening
+  `change_surface` to the union over the pool was the first version, and it was wrong: the
+  grader reads that surface on **every** episode, so a shipped `dirty_tree` episode could
+  then rewrite `README.md`, `.gitattributes` or `.env.example` and still be graded intact.
+  `FaultSpec.change_surface_for_seed` returns the surface of the paths that seed writes --
+  `change_surface` itself for every shipped seed and every other fault -- and
+  `bench.run._grade` applies it.
 - **Cost.** A held-out environment is a real sandbox plus every admitted program's probes;
   on Windows that is about a minute per seed, which is why the block is 40 seeds and not
   larger. The block is a pilot: the smallest detectable difference for its fire count is

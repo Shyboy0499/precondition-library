@@ -549,7 +549,7 @@ def run_episode(
         )
         embedding_after = _arm2_usage(library)
         try:
-            ground_truth_ok, state_intact, applied_surface = _grade(fault, box)
+            ground_truth_ok, state_intact, applied_surface = _grade(fault, box, seed)
         except Exception as exc:
             return invalid(exc)
 
@@ -1295,7 +1295,9 @@ def _program_id(fault_type: str, occurrence: int, proposed: str) -> str:
     return f"{fault_type}-occ{occurrence}-{slug}"
 
 
-def _grade(fault: FaultSpec, box: Sandbox) -> tuple[bool, bool | None, tuple[str, ...] | None]:
+def _grade(
+    fault: FaultSpec, box: Sandbox, seed: int
+) -> tuple[bool, bool | None, tuple[str, ...] | None]:
     """Ground truth for `box` after the arm: `(ground_truth_ok, recorded_state_intact,
     the change surface applied)`. Raises when the checker cannot grade the state.
 
@@ -1309,8 +1311,9 @@ def _grade(fault: FaultSpec, box: Sandbox) -> tuple[bool, bool | None, tuple[str
     verdict = fault.check(box)
     if not verdict.ok:
         return False, None, None
-    intact = recorded_state_intact(box, surface=fault.change_surface)
-    return intact.ok, intact.ok, fault.change_surface
+    surface = fault.change_surface_for_seed(seed)
+    intact = recorded_state_intact(box, surface=surface)
+    return intact.ok, intact.ok, surface
 
 
 def _invalid_record(

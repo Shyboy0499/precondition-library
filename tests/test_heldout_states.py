@@ -327,3 +327,32 @@ def test_a_clean_held_out_block_leaves_the_wrong_fire_file_empty(tmp_path) -> No
     lines = (out / "wrong_fires.jsonl").read_text(encoding="utf-8").splitlines()
     assert len(lines) == summary.arm3_wrong
     assert summary.arm3_wrong == 0
+
+
+def test_the_change_surface_is_the_seeds_own_paths() -> None:
+    """A shipped seed may commit only the shipped paths; a held-out seed only its own.
+
+    The grader reads this surface on every episode, so a union over the held-out pool would let
+    a shipped `dirty_tree` episode rewrite `README.md` or `.gitattributes` and still be graded
+    intact. Every other fault's surface does not depend on the seed.
+    """
+    from precondition_library.tasks.faults import FAULTS
+
+    shipped = DIRTY_TREE.change_surface_for_seed(0)
+    assert shipped == DIRTY_TREE.change_surface
+    assert SHIPPED_PATHS.upstream_file in shipped
+    for held_out in HELD_OUT_PATHS:
+        for path in (held_out.upstream_file, held_out.tracked_file, held_out.untracked_path):
+            if path not in (
+                SHIPPED_PATHS.upstream_file,
+                SHIPPED_PATHS.tracked_file,
+                SHIPPED_PATHS.untracked_path,
+            ):
+                assert path not in shipped
+    for seed in HELD_OUT_SEEDS[: len(HELD_OUT_PATHS)]:
+        paths = paths_for_seed(seed)
+        surface = DIRTY_TREE.change_surface_for_seed(seed)
+        assert {paths.upstream_file, paths.tracked_file, paths.untracked_path} <= set(surface)
+    for name, fault in FAULTS.items():
+        if name != "dirty_tree":
+            assert fault.change_surface_for_seed(HELD_OUT_SEEDS[0]) == fault.change_surface

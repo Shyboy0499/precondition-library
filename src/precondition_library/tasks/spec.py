@@ -63,6 +63,16 @@ class FaultSpec:
     recorded base, so it shares the one fact that already covers the recorded refs.
     """
 
+    def change_surface_for_seed(self, seed: int) -> tuple[str, ...]:
+        """The surface a resolution of the state injected at `seed` may commit.
+
+        `change_surface` for every fault whose injector writes the same paths at every seed,
+        which is all of them but `dirty_tree`: its held-out seeds write other paths (issue
+        #263), and grading one against the shipped surface would refuse a correct fix, while
+        grading every seed against the union would admit a wrong one.
+        """
+        return self.change_surface
+
     def inject(self, seed: int, sandbox) -> None:
         """Mutate `sandbox` into the faulty state. Same seed, same state.
 

@@ -387,26 +387,28 @@ def _publish_paths(sandbox: Sandbox, paths: _Paths) -> None:
     run_git(("push", "-q", "upstream", "main"), cwd=work)
 
 
+def _surface(paths: _Paths) -> tuple[str, ...]:
+    """What a resolution of a state that writes `paths` may commit, in a fixed order."""
+    return (paths.upstream_file, paths.tracked_file, paths.untracked_path, paths.aside_path)
+
+
 class DirtyTreeFault(FaultSpec):
     name = "dirty_tree"
     description = "Uncommitted local changes present while upstream has new commits"
     # The upstream commit, the uncommitted tracked edit, the untracked file a
-    # `clean -fd` destroys, and where a colliding one may be moved aside -- over every
-    # path set the injector may write, not only the shipped one, because the surface is
-    # a property of the fault (issue #263). A resolution of a held-out state touches the
-    # held-out paths, and a surface that named only the shipped triple would refuse it.
-    change_surface = tuple(
-        dict.fromkeys(
-            path
-            for paths in (SHIPPED_PATHS, *HELD_OUT_PATHS)
-            for path in (
-                paths.upstream_file,
-                paths.tracked_file,
-                paths.untracked_path,
-                paths.aside_path,
-            )
-        )
-    )
+    # `clean -fd` destroys, and where a colliding one may be moved aside: the shipped
+    # triple's, which is every seed a library is built, tuned or measured from.
+    change_surface = _surface(SHIPPED_PATHS)
+
+    def change_surface_for_seed(self, seed: int) -> tuple[str, ...]:
+        """The surface of the paths *this seed's* state writes (issue #263).
+
+        Per seed rather than the union over the held-out pool, because the surface is what
+        the grader lets a resolution commit: a union would let every shipped episode
+        rewrite `README.md`, `.gitattributes` or `.env.example` and still be graded intact.
+        A shipped seed gets exactly `change_surface`; a held-out seed gets its own set.
+        """
+        return _surface(paths_for_seed(seed))
 
     def inject(self, seed: int, sandbox: Sandbox) -> None:
         """Publish one upstream commit, rewind local to base, then dirty the tree.
