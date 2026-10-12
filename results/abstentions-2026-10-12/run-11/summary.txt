@@ -1,0 +1,18 @@
+Arm 3's abstentions on results/replicates-2026-10-05/run-11 (library d8db77113135)
+  pairs: 200 positive, 200 negative
+  arm 3 fires: 187 (0 on negatives)
+  positives arm 3 sat out: 13
+    no program: 13
+  - seed 2000, lockfile_conflict state, intent sync_through_a_conflicting_lockfile: needs keep_local (accepts keep_local) -- no program
+  - seed 2004, lockfile_conflict state, intent sync_through_a_conflicting_lockfile: needs keep_local (accepts keep_local) -- no program
+  - seed 2006, lockfile_conflict state, intent sync_through_a_conflicting_lockfile: needs keep_local (accepts keep_local) -- no program
+  - seed 2007, lockfile_conflict state, intent sync_through_a_conflicting_lockfile: needs keep_local (accepts keep_local) -- no program
+  - seed 2014, lockfile_conflict state, intent sync_through_a_conflicting_lockfile: needs keep_local (accepts keep_local) -- no program
+  - seed 2016, lockfile_conflict state, intent sync_through_a_conflicting_lockfile: needs keep_local (accepts keep_local) -- no program
+  - seed 2017, lockfile_conflict state, intent sync_through_a_conflicting_lockfile: needs keep_local (accepts keep_local) -- no program
+  - seed 2022, lockfile_conflict state, intent sync_through_a_conflicting_lockfile: needs keep_local (accepts keep_local) -- no program
+  - seed 2025, lockfile_conflict state, intent sync_through_a_conflicting_lockfile: needs keep_local (accepts keep_local) -- no program
+  - seed 2026, lockfile_conflict state, intent sync_through_a_conflicting_lockfile: needs keep_local (accepts keep_local) -- no program
+  - seed 2030, lockfile_conflict state, intent sync_through_a_conflicting_lockfile: needs keep_local (accepts keep_local) -- no program
+  - seed 2031, lockfile_conflict state, intent sync_through_a_conflicting_lockfile: needs keep_local (accepts keep_local) -- no program
+  - seed 2032, lockfile_conflict state, intent sync_through_a_conflicting_lockfile: needs keep_local (accepts keep_local) -- no program

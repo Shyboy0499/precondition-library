@@ -1,0 +1,38 @@
+Arm 3's abstentions on results/replicates-2026-10-05/run-13 (library b3612185dad4)
+  pairs: 200 positive, 200 negative
+  arm 3 fires: 189 (0 on negatives)
+  positives arm 3 sat out: 11
+    checks refused: 11
+  - seed 2009, lockfile_conflict state, intent sync_through_a_conflicting_lockfile: needs take_upstream (accepts keep_local, take_upstream) -- checks refused
+      lockfile_conflict-occ1-lockfile-conflict-merge-take-upstream (take_upstream): upstream_dropped_lines_local_still_has did not hold; observed: exit=1 (expected 0); stdout='' stderr=''
+      lockfile_conflict-occ3-merge-upstream-keep-local-depfile (keep_local): local_side_drops_lines_in_shared_file did not hold; observed: exit=1 (expected 0); stdout='' stderr=''
+  - seed 2010, lockfile_conflict state, intent sync_through_a_conflicting_lockfile: needs take_upstream (accepts keep_local, take_upstream) -- checks refused
+      lockfile_conflict-occ1-lockfile-conflict-merge-take-upstream (take_upstream): upstream_dropped_lines_local_still_has did not hold; observed: exit=1 (expected 0); stdout='' stderr=''
+      lockfile_conflict-occ3-merge-upstream-keep-local-depfile (keep_local): local_side_drops_lines_in_shared_file did not hold; observed: exit=1 (expected 0); stdout='' stderr=''
+  - seed 2011, lockfile_conflict state, intent sync_through_a_conflicting_lockfile: needs take_upstream (accepts keep_local, take_upstream) -- checks refused
+      lockfile_conflict-occ1-lockfile-conflict-merge-take-upstream (take_upstream): upstream_dropped_lines_local_still_has did not hold; observed: exit=1 (expected 0); stdout='' stderr=''
+      lockfile_conflict-occ3-merge-upstream-keep-local-depfile (keep_local): local_side_drops_lines_in_shared_file did not hold; observed: exit=1 (expected 0); stdout='' stderr=''
+  - seed 2013, lockfile_conflict state, intent sync_through_a_conflicting_lockfile: needs take_upstream (accepts keep_local, take_upstream) -- checks refused
+      lockfile_conflict-occ1-lockfile-conflict-merge-take-upstream (take_upstream): upstream_dropped_lines_local_still_has did not hold; observed: exit=1 (expected 0); stdout='' stderr=''
+      lockfile_conflict-occ3-merge-upstream-keep-local-depfile (keep_local): local_side_drops_lines_in_shared_file did not hold; observed: exit=1 (expected 0); stdout='' stderr=''
+  - seed 2020, lockfile_conflict state, intent sync_through_a_conflicting_lockfile: needs take_upstream (accepts keep_local, take_upstream) -- checks refused
+      lockfile_conflict-occ1-lockfile-conflict-merge-take-upstream (take_upstream): upstream_dropped_lines_local_still_has did not hold; observed: exit=1 (expected 0); stdout='' stderr=''
+      lockfile_conflict-occ3-merge-upstream-keep-local-depfile (keep_local): local_side_drops_lines_in_shared_file did not hold; observed: exit=1 (expected 0); stdout='' stderr=''
+  - seed 2021, lockfile_conflict state, intent sync_through_a_conflicting_lockfile: needs take_upstream (accepts keep_local, take_upstream) -- checks refused
+      lockfile_conflict-occ1-lockfile-conflict-merge-take-upstream (take_upstream): upstream_dropped_lines_local_still_has did not hold; observed: exit=1 (expected 0); stdout='' stderr=''
+      lockfile_conflict-occ3-merge-upstream-keep-local-depfile (keep_local): local_side_drops_lines_in_shared_file did not hold; observed: exit=1 (expected 0); stdout='' stderr=''
+  - seed 2027, lockfile_conflict state, intent sync_through_a_conflicting_lockfile: needs take_upstream (accepts keep_local, take_upstream) -- checks refused
+      lockfile_conflict-occ1-lockfile-conflict-merge-take-upstream (take_upstream): upstream_dropped_lines_local_still_has did not hold; observed: exit=1 (expected 0); stdout='' stderr=''
+      lockfile_conflict-occ3-merge-upstream-keep-local-depfile (keep_local): local_side_drops_lines_in_shared_file did not hold; observed: exit=1 (expected 0); stdout='' stderr=''
+  - seed 2035, lockfile_conflict state, intent sync_through_a_conflicting_lockfile: needs take_upstream (accepts keep_local, take_upstream) -- checks refused
+      lockfile_conflict-occ1-lockfile-conflict-merge-take-upstream (take_upstream): upstream_dropped_lines_local_still_has did not hold; observed: exit=1 (expected 0); stdout='' stderr=''
+      lockfile_conflict-occ3-merge-upstream-keep-local-depfile (keep_local): local_side_drops_lines_in_shared_file did not hold; observed: exit=1 (expected 0); stdout='' stderr=''
+  - seed 2036, lockfile_conflict state, intent sync_through_a_conflicting_lockfile: needs take_upstream (accepts keep_local, take_upstream) -- checks refused
+      lockfile_conflict-occ1-lockfile-conflict-merge-take-upstream (take_upstream): upstream_dropped_lines_local_still_has did not hold; observed: exit=1 (expected 0); stdout='' stderr=''
+      lockfile_conflict-occ3-merge-upstream-keep-local-depfile (keep_local): local_side_drops_lines_in_shared_file did not hold; observed: exit=1 (expected 0); stdout='' stderr=''
+  - seed 2037, lockfile_conflict state, intent sync_through_a_conflicting_lockfile: needs take_upstream (accepts keep_local, take_upstream) -- checks refused
+      lockfile_conflict-occ1-lockfile-conflict-merge-take-upstream (take_upstream): upstream_dropped_lines_local_still_has did not hold; observed: exit=1 (expected 0); stdout='' stderr=''
+      lockfile_conflict-occ3-merge-upstream-keep-local-depfile (keep_local): local_side_drops_lines_in_shared_file did not hold; observed: exit=1 (expected 0); stdout='' stderr=''
+  - seed 2038, lockfile_conflict state, intent sync_through_a_conflicting_lockfile: needs take_upstream (accepts keep_local, take_upstream) -- checks refused
+      lockfile_conflict-occ1-lockfile-conflict-merge-take-upstream (take_upstream): upstream_dropped_lines_local_still_has did not hold; observed: exit=1 (expected 0); stdout='' stderr=''
+      lockfile_conflict-occ3-merge-upstream-keep-local-depfile (keep_local): local_side_drops_lines_in_shared_file did not hold; observed: exit=1 (expected 0); stdout='' stderr=''

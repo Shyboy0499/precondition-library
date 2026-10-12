@@ -1,0 +1,12 @@
+{
+  "library_hash": "ad311de65eb51b120ea97aabb83fe22492c89812232e21bf2c5f1cde4dc8c8c1",
+  "source": "results/replicates-2026-10-05/run-12",
+  "positives": 200,
+  "negatives": 200,
+  "arm3_fires": 187,
+  "arm3_fires_on_negatives": 0,
+  "abstained": 13,
+  "by_cause": {
+    "checks refused": 13
+  }
+}
