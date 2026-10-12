@@ -486,9 +486,10 @@ def admit(
     It exists for the 2x2 factorial's ungated arm (spec §3, Claim 3), never as a
     shortcut, and its reason says the negative side was not checked.
 
-    Positive side: the program must fix the fault on fresh sandboxes. Each seed
-    in `seeds` builds a sandbox injected with `fault`, the body is replayed, and
-    the program's own postconditions must hold. Failure means not admitted.
+    Positive side: the program must fire on, and fix, the fault on fresh sandboxes.
+    Each seed in `seeds` builds a sandbox injected with `fault`; the program's
+    preconditions must hold there (ADR-0036), then the body is replayed and the
+    program's own postconditions must hold. Failure means not admitted.
 
     A program is also rejected before any sandbox runs when its body uses a
     parameter that no precondition names. A precondition is not only how a
@@ -645,10 +646,32 @@ def _refused_before_any_sandbox(
 
 
 def _positive_refusal(program: Program, name: str, seeds: list[int]) -> str | None:
-    """Why `program` fails to fix `name` on a fresh sandbox at one of `seeds`, or `None`."""
+    """Why `program` fails to fix `name` on a fresh sandbox at one of `seeds`, or `None`.
+
+    Its preconditions must hold there first (ADR-0036). A program whose preconditions refuse
+    its own positive state can never fire, and without this it passes every other side: its
+    replay works, and it refuses every negative because it refuses everything. The probes only
+    read, so they run on the same fresh sandbox the replay then uses.
+    """
     for seed in seeds:
         box = build_sandbox(seed, [name])
         try:
+            held = evaluate_preconditions(program, box)
+            refused = [predicate for predicate in held.predicates if predicate.refused]
+            if refused:
+                # A probe the guard refused, or one that changed the sandbox, is not an
+                # ordinary "does not hold": name it as the refusal it is (issue #10).
+                first = refused[0]
+                return (
+                    f"positive side failed on {name} seed {seed}: precondition "
+                    f"{first.name!r} was refused: {first.observed}"
+                )
+            if not held.ok:
+                return (
+                    f"positive side failed on {name} seed {seed}: the preconditions do not hold "
+                    f"on the state the program is meant to fix, so it could never fire there "
+                    f"({held.detail})"
+                )
             result = replay(program, box)
         except KeyError as exc:
             # A placeholder outside the runtime's vocabulary is a compile defect,

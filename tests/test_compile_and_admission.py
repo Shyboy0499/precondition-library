@@ -25,6 +25,7 @@ from pydantic import BaseModel
 from precondition_library.agents.compile import (
     UNTRUSTED_CLOSE,
     UNTRUSTED_OPEN,
+    AdmissionGate,
     _state_seeds,
     admit,
     compile_program,
@@ -340,6 +341,32 @@ def test_body_that_does_not_work_is_rejected() -> None:
     assert not admitted
     assert "positive side" in reason, reason
     assert "matches_upstream" in reason, reason
+
+
+@pytest.mark.parametrize("gate", list(AdmissionGate))
+def test_a_program_whose_preconditions_refuse_its_own_state_is_rejected(gate) -> None:
+    """A program that could never fire is refused on the positive side, under either gate.
+
+    Before ADR-0036 this one was admitted: the body still fixes the state and the
+    postconditions hold, and a precondition that never holds refuses every negative too.
+    Replicate 2's library admitted exactly such a program (results/abstentions-2026-10-12/).
+    """
+    program = gold_program("discard")
+    program = program.model_copy(
+        update={
+            "preconditions": [
+                *program.preconditions,
+                Predicate(name="never_holds", description="never holds", probe="false"),
+            ]
+        }
+    )
+
+    admitted, reason = admit(program, FAULTS["diverged"], seeds=[DISCARD_SEED], gate=gate)
+
+    assert not admitted
+    assert "positive side failed" in reason, reason
+    assert "preconditions do not hold" in reason, reason
+    assert "never_holds" in reason, reason
 
 
 def test_admission_is_deterministic() -> None:

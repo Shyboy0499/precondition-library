@@ -12,6 +12,10 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **Why arm 3 sits out (`bench.abstentions`).** Every positive pair arm 3 does not fire on, named
+  with its cause: no admitted program for an acceptable resolution, or one whose preconditions
+  failed, with each failing probe and what it observed. On the three committed libraries all 37
+  misses are `lockfile_conflict` states (`results/abstentions-2026-10-12/`).
 - **A held-out state source for the primary metric (#263, ADR-0033).** The claim's states came
   from the same injectors admission tests every compiled program against, so `0 of 563` describes
   this generator. `dirty_tree` now declares a **path axis** drawn only at or above
@@ -46,6 +50,13 @@ measured result, at pair level; everything before it is design and apparatus. Se
   nearest arm 3's coverage, with its Wilson interval and the detectable difference; the widest
   zero-mismatch point per `k` is reported as a description of these pairs within its own Wilson
   upper limit.
+
+### Fixed
+
+- **Admission refuses a program whose preconditions refuse its own state (ADR-0036).** The positive
+  side replayed a program without evaluating its preconditions, so one that could never fire passed
+  every side; replicate 2's library admitted one. The preconditions must now hold on each positive
+  seed's sandbox before the replay, under both gates.
 
 ### Not done in this change
 
