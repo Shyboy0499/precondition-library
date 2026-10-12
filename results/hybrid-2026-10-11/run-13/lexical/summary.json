@@ -1,0 +1,103 @@
+{
+  "source": "results/replicates-2026-10-05/run-13",
+  "library_root": "results/replicates-2026-10-05/run-13/library-two-sided",
+  "library_hash_before": "b3612185dad48f7c412350d5503b144bd768994abca9f884956574f628b1652a",
+  "library_hash_after": "b3612185dad48f7c412350d5503b144bd768994abca9f884956574f628b1652a",
+  "scorer": {
+    "scorer": "lexical"
+  },
+  "pairs": 400,
+  "positives": 200,
+  "grid_points": 2898,
+  "fired_points": 2892,
+  "thresholds": 483,
+  "ks": [
+    1,
+    2,
+    3,
+    5,
+    10,
+    null
+  ],
+  "programs": 17,
+  "admitted": 13,
+  "arm3_fires": 189,
+  "arm3_mismatch": "0/189",
+  "matched": {
+    "hybrid": {
+      "coverage": 0.4725,
+      "fires": 189,
+      "mismatch": 0.0,
+      "wrong": 0,
+      "pairs": 400,
+      "k": null,
+      "retrieval_floor": 0.047058823529411764,
+      "mismatch_interval": {
+        "low": 0.0,
+        "high": 0.019921012893483563
+      }
+    },
+    "arm3": {
+      "coverage": 0.4725,
+      "fires": 189,
+      "mismatch": 0.0,
+      "wrong": 0,
+      "pairs": null,
+      "k": null,
+      "retrieval_floor": null,
+      "mismatch_interval": null
+    },
+    "coverage_gap": 0.0,
+    "mismatch_difference": 0.0
+  },
+  "smallest_detectable_difference": 0.14409799478636962,
+  "widest_zero_mismatch": [
+    {
+      "k": 1,
+      "threshold": 0.12727272727272726,
+      "fires": 65,
+      "coverage": 0.1625,
+      "mismatch_upper": 0.055803467670710726
+    },
+    {
+      "k": 2,
+      "threshold": 0.11818181818181818,
+      "fires": 76,
+      "coverage": 0.19,
+      "mismatch_upper": 0.04811526823109757
+    },
+    {
+      "k": 3,
+      "threshold": 0.10606060606060606,
+      "fires": 87,
+      "coverage": 0.2175,
+      "mismatch_upper": 0.04228899535014795
+    },
+    {
+      "k": 5,
+      "threshold": 0.08928571428571429,
+      "fires": 113,
+      "coverage": 0.2825,
+      "mismatch_upper": 0.03287870073672391
+    },
+    {
+      "k": 10,
+      "threshold": 0.08256880733944955,
+      "fires": 172,
+      "coverage": 0.43,
+      "mismatch_upper": 0.021846934968744597
+    },
+    {
+      "k": null,
+      "threshold": 0.047058823529411764,
+      "fires": 189,
+      "coverage": 0.4725,
+      "mismatch_upper": 0.019921012893483563
+    }
+  ],
+  "wording": "the family is a maximum over a grid of (k, retrieval floor) points on one set of pairs, so a single best point is optimistically biased; the claimable comparison is the point nearest arm 3's coverage, and the widest zero-mismatch points describe these pairs within their own Wilson upper limits",
+  "artifacts": {
+    "hybrid.csv": "hybrid.csv",
+    "hybrid.png": "hybrid.png"
+  }
+}

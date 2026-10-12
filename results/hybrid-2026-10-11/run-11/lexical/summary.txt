@@ -1,0 +1,14 @@
+Hybrid arm (issue #265): 400 labelled pairs, 200 of them positive, 2862 of 2892 grid point(s) firing, over 482 retrieval floor(s)
+  library results/replicates-2026-10-05/run-11/library-two-sided (13 admitted of 16 programs), hash d8db771131354cf1b84e27bd19a0d83a126d1a712928737323e79cb11b26c572
+  text scorer: lexical
+  arm 3 alone: coverage 187 of 400, mismatch 0 of 187
+  hybrid at arm 3's coverage: k=None, floor 0.0625, fires 187 (coverage 0.4675), mismatch 0 of 187 = 0.0000, coverage gap +0.000, mismatch difference (hybrid - arm 3) +0.0000
+  smallest detectable mismatch difference at a 50% base rate with these fire counts: 0.145
+  wording: the family is a maximum over a grid of (k, retrieval floor) points on one set of pairs, so a single best point is optimistically biased; the claimable comparison is the point nearest arm 3's coverage, and the widest zero-mismatch points describe these pairs within their own Wilson upper limits
+  widest zero-mismatch point per k (a description of these pairs):
+    k=1: 56 fire(s), coverage 0.140, mismatches 0 (95% Wilson upper 0.0642)
+    k=2: 85 fire(s), coverage 0.212, mismatches 0 (95% Wilson upper 0.0432)
+    k=3: 91 fire(s), coverage 0.228, mismatches 0 (95% Wilson upper 0.0405)
+    k=5: 122 fire(s), coverage 0.305, mismatches 0 (95% Wilson upper 0.0305)
+    k=10: 172 fire(s), coverage 0.430, mismatches 0 (95% Wilson upper 0.0218)
+    k=all: 187 fire(s), coverage 0.468, mismatches 0 (95% Wilson upper 0.0201)
