@@ -49,9 +49,9 @@ never add one. At `k = all` with no binding floor it makes exactly arm 3's 187â€
 
 **So the text stage costs coverage and buys nothing here.** Under both scorers' orderings, every
 accepting program the walk reached was an acceptable resolution of its state, so the order text put
-them in never turned a fire wrong. A tighter `k` or floor only drops correct fires. The reranker drops fewer than lexical at
-every `k` (for example 75 against 56 at `k = 1` on run-12), because it ranks the accepted program
-higher more often. Neither ever beats `k = all`.
+them in never turned a fire wrong. A tighter `k` or floor only drops correct fires. The reranker
+drops fewer than lexical at every `k` below `all` (for example 75 against 56 fires at `k = 1` on
+run-12), because it ranks an accepting program higher more often. Neither ever beats `k = all`.
 
 **This corrects a premise of issue #265.** The issue described arm 3's 187/400 as giving up coverage.
 But 200 of the 400 pairs are fault-free negatives, where the correct action is not to fire. On the 200
