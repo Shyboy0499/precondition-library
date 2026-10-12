@@ -14,6 +14,14 @@ semantic recall first, then an executability gate that prunes. A hybrid is what 
 actually deploy, and whether it keeps arm 3's mis-fire rate at higher coverage is a different and
 more useful comparison than either arm alone.
 
+> **Correction, 2026-10-12.** The premise above overstates what arm 3 gives up. Of the 400 pairs,
+> 200 are fault-free negatives (one per seed and intent), where the correct decision is not to fire,
+> so a dispatcher that never mis-fires covers at most 0.5. On the 200 positives arm 3 fires on 187-189,
+> 93.5-94.5%. And the hybrid defined here fires only a program whose preconditions hold, so its fires
+> are a subset of arm 3's: it cannot recover the 11-13 positives arm 3 misses. The measurement
+> (`results/hybrid-2026-10-11/`) confirms both: 0 mis-fires at every grid point, and never more
+> fires than arm 3. The decisions below are unchanged; only the motivation is corrected.
+
 **Nothing new is needed to compute it.** `bench.library_pairs` already builds each pair's environment
 and each request's text ranking, and `Library.match_preconditions` already evaluates every admitted
 program in that environment. A hybrid decision is a walk down those two lists. What was missing is

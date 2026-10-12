@@ -333,6 +333,11 @@ resolutions, arm 2 swept to arm 3's coverage. Three whole-run replicates (spec �
 | reranker arm 2 at matched coverage: mis-fires | 142/186 | 133/187 | 134/189 |
 | difference (reranker arm 2 − arm 3) | +0.76 | **+0.71** | **+0.71** |
 
+**How to read coverage.** Half of each run's 400 pairs are fault-free negatives, where the
+correct decision is not to fire, so a dispatcher that never mis-fires covers at most 0.5;
+anything above that is fires on negatives. Arm 3's 187–189 fires are 93.5–94.5% of the 200
+positives, not a dispatcher that sits out half the time.
+
 **What it shows.** Precondition dispatch never fired a program that the pair's state
 did not accept; text similarity, at the same coverage, did so on roughly four fires in
 five. The difference is about five times the smallest one the pair count can detect,

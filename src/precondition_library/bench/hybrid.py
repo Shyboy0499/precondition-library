@@ -1,8 +1,9 @@
 """The hybrid arm: retrieve by text, gate by preconditions (issue #265).
 
-Arm 3 fires on about 47% of pairs (187/400) and falls back on the rest -- that is the price of its
-zero mis-fires. The production gate in the prior work runs the other way round: semantic recall
-first, then an executability gate that prunes. This module measures that cascade:
+Arm 3 fires on 187 of 400 pairs, but half of the 400 are fault-free negatives, where not firing is
+correct: on the 200 positives it fires on 187-189 (93.5-94.5%). The production gate in the prior
+work runs the other way round: semantic recall first, then an executability gate that prunes. This
+module measures that cascade:
 
 1. rank the library's admitted programs by the seam's text scorer, **unthresholded**;
 2. keep those with score at or above a retrieval floor and within the top `k`;
