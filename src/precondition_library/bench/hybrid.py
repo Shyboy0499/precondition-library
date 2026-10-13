@@ -385,6 +385,11 @@ def run_hybrid(
     )
     if plot:
         _plot(report, out / "hybrid.png")
+    # The record every hybrid decision is derived from -- each pair's accepted set and complete
+    # text ranking -- kept so a later reading (`bench.probe_cost`) needs no sandbox rebuilt.
+    with (out / "pairs.jsonl").open("w", encoding="utf-8") as handle:
+        for pair in outcomes.pairs:
+            handle.write(pair.model_dump_json() + "\n")
     with (out / "hybrid.csv").open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
         writer.writerow(_CSV_HEADER)
@@ -410,7 +415,7 @@ def run_hybrid(
         smallest_detectable_difference=difference,
         widest_zero_mismatch=widest_zero_mismatch(points),
         wording=WORDING_LIMIT,
-        artifacts={"hybrid.csv": "hybrid.csv"},
+        artifacts={"hybrid.csv": "hybrid.csv", "pairs.jsonl": "pairs.jsonl"},
     )
     if plot:
         summary.artifacts["hybrid.png"] = "hybrid.png"

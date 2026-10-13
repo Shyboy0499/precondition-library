@@ -248,6 +248,11 @@ def test_the_hybrid_stage_writes_its_artifacts_and_refuses_a_used_directory(
     assert record["library_hash"] == summary.library_hash_before
     assert record["matched"]["arm3"]["fires"] == summary.arm3_fires
     assert "hybrid at arm 3's coverage" in text(summary)
+    saved = [
+        LibraryPair.model_validate_json(line)
+        for line in (out / "pairs.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert len(saved) == summary.pairs, "one saved record per pair, so a reading needs no rebuild"
 
     with pytest.raises(ValueError, match="fresh directory"):
         run_hybrid(
