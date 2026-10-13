@@ -156,3 +156,39 @@ def test_an_overlap_state_is_a_pair_and_an_unlabelled_foreign_one_is_not() -> No
     assert not is_pair("submodule_moved", SYNC_INTENT, benign), "an unlabelled foreign state"
     assert is_pair("diverged", SYNC_INTENT, benign), "the intent's own fault, labelled or not"
     assert is_pair(FAULT_FREE, SYNC_INTENT, benign)
+
+
+def test_shared_verdicts_give_both_arms_the_same_decisions(tmp_path) -> None:
+    """Passing one evaluation to both matchers changes nothing either arm decides (#268)."""
+    from precondition_library.tasks.faults import build_sandbox
+
+    library = _gold_library(tmp_path / "gold")
+    box = build_sandbox(SEEDS[0], ["diverged"])
+    try:
+        verdicts = library.precondition_verdicts(box)
+        assert library.match_preconditions(box, verdicts) == library.match_preconditions(box)
+        shared = [(item.program.id, item.score) for item in library.rank_soft(box, verdicts)]
+        alone = [(item.program.id, item.score) for item in library.rank_soft(box)]
+        assert shared == alone
+    finally:
+        box.destroy()
+
+
+def test_the_pair_pass_evaluates_each_program_once_per_sandbox(tmp_path) -> None:
+    """Arms 3 and 2b share one evaluation per (program, sandbox), not one each (#268)."""
+    calls: list[tuple[str, str]] = []
+
+    def counting(program, env):
+        calls.append((program.id, str(env.work)))
+        return evaluate_preconditions(program, env)
+
+    library = _gold_library(tmp_path / "gold")
+    counted = Library(library.root, evaluate_preconditions=counting)
+    admitted = [p for p in counted.load_all() if p.status is ProgramStatus.ADMITTED]
+    faults = ["diverged"]
+    library_pair_outcomes(counted, faults, SEEDS[:1])
+
+    sandboxes = {work for _, work in calls}
+    assert len(sandboxes) == 1 + len(faults), "one fault-free and one per fault"
+    assert len(calls) == len(admitted) * len(sandboxes)
+    assert len(set(calls)) == len(calls), "no program is evaluated twice on one sandbox"

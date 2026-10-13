@@ -152,9 +152,14 @@ def _unthresholded(library: Library) -> Library:
 
 
 def _decide(library: Library, box: Sandbox) -> _EnvironmentDecisions:
-    """Run the state-reading arms once per sandbox: they never read the request."""
-    accepted: list[Program] = library.match_preconditions(box)
-    ranked = library.rank_soft(box)
+    """Run the state-reading arms once per sandbox: they never read the request.
+
+    Arms 3 and 2b read the same per-program verdicts, so the probes run once and both arms
+    are derived from them (issue #268).
+    """
+    verdicts = library.precondition_verdicts(box)
+    accepted: list[Program] = library.match_preconditions(box, verdicts)
+    ranked = library.rank_soft(box, verdicts)
     return _EnvironmentDecisions(
         state=StateFingerprint.observe(box),
         target=str(box.work),

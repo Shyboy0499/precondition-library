@@ -587,7 +587,34 @@ class Library:
         above.sort(key=lambda item: (-item.score, item.program.id))
         return above[:limit]
 
-    def match_preconditions(self, env: Sandbox) -> list[Program]:
+    def precondition_verdicts(self, env: Sandbox) -> dict[str, GroundTruthResult]:
+        """Every admitted program's precondition verdict on `env`, keyed by program id.
+
+        Arms 3 and 2b read the same verdicts: arm 3 the conjunction, 2b the fraction that
+        held. A caller that needs both on one sandbox evaluates once here and passes the
+        result to `match_preconditions` and `rank_soft` (issue #268), so each probe runs
+        once per sandbox instead of once per arm. Probes only read (issue #10), so the
+        verdicts are the same whichever arm asks first.
+        """
+        return self._verdicts(env, "arms 3 and 2b's matchers")
+
+    def _verdicts(self, env: Sandbox, who: str) -> dict[str, GroundTruthResult]:
+        if self.evaluate_preconditions is None:
+            raise ValueError(
+                f"{who} needs a predicate evaluator; construct the library as "
+                "Library(root, evaluate_preconditions=...) -- importing one here would "
+                "put the probe runtime back into the storage layer and re-hide the seam"
+            )
+        evaluate = self.evaluate_preconditions
+        return {
+            program.id: evaluate(program, env)
+            for program in self.load_all()
+            if program.status is ProgramStatus.ADMITTED
+        }
+
+    def match_preconditions(
+        self, env: Sandbox, verdicts: dict[str, GroundTruthResult] | None = None
+    ) -> list[Program]:
         """Arm 3. Programs whose executable preconditions all accept `env`.
 
         The predicate evaluator is `self.evaluate_preconditions`, injected at
@@ -615,22 +642,19 @@ class Library:
         general program cannot shadow a targeted one; ordering by the library's
         directory order would let it.
         """
-        if self.evaluate_preconditions is None:
-            raise ValueError(
-                "arm 3's matcher needs a predicate evaluator; construct the library as "
-                "Library(root, evaluate_preconditions=...) -- importing one here would "
-                "put the probe runtime back into the storage layer and re-hide the seam"
-            )
+        if verdicts is None:
+            verdicts = self._verdicts(env, "arm 3's matcher")
         accepted = [
             program
             for program in self.load_all()
-            if program.status is ProgramStatus.ADMITTED
-            and self.evaluate_preconditions(program, env).ok
+            if program.status is ProgramStatus.ADMITTED and verdicts[program.id].ok
         ]
         accepted.sort(key=lambda program: (-len(program.preconditions), program.id))
         return accepted
 
-    def rank_soft(self, env: Sandbox) -> list[ScoredProgram]:
+    def rank_soft(
+        self, env: Sandbox, verdicts: dict[str, GroundTruthResult] | None = None
+    ) -> list[ScoredProgram]:
         """Arm 2b's scores, before its threshold: every admitted program, best first.
 
         The soft vote (issue #7, ADR-0016) reads exactly what arm 3 reads -- the
@@ -645,13 +669,10 @@ class Library:
         score, then by precondition count (more specific first, arm 3's tie-break),
         then by id, so equal scores come back in a stable order.
         """
-        if self.evaluate_preconditions is None:
-            raise ValueError(
-                "arm 2b's matcher needs a predicate evaluator; construct the library as "
-                "Library(root, evaluate_preconditions=...)"
-            )
+        if verdicts is None:
+            verdicts = self._verdicts(env, "arm 2b's matcher")
         scored = [
-            ScoredProgram(program, soft_vote_score(self.evaluate_preconditions(program, env)))
+            ScoredProgram(program, soft_vote_score(verdicts[program.id]))
             for program in self.load_all()
             if program.status is ProgramStatus.ADMITTED
         ]
