@@ -64,6 +64,51 @@ cannot recover them by construction.
 - **That a hybrid never helps.** On these libraries the accepting programs never disagree. A library
   where two accepting programs resolve a state differently is where text order would matter. These
   libraries do not contain such a case, and this measurement cannot say how often one would arise.
-- **A cost saving.** A hybrid that probes only the top `k` programs would run fewer checks. This
-  stage derives every point from one full pass, so it measures decisions, not probe cost.
+- **A cost saving, on its own.** This stage derives every point from one full pass, so it measures
+  decisions. The probe bill is priced separately below.
 - **Anything at episode level, or on held-out states** (#263).
+
+## What it costs in checks
+
+Once no model is called, a dispatcher's remaining cost is the preconditions it evaluates. Arm 3 as
+shipped evaluates every admitted program's on every request. It need not. Evaluated
+most-specific-first and stopped at the first program that holds, it makes the same decision. The
+hybrid can stop the same way in text order. `bench.probe_cost` prices all three from each run's saved
+record (`pairs.jsonl`: every pair's accepted set and full text ranking), with no sandbox rebuilt:
+
+```bash
+python -m precondition_library.bench.probe_cost --hybrid results/hybrid-2026-10-11/run-N/SCORER \
+  --library results/replicates-2026-10-05/run-N/library-two-sided \
+  --out results/hybrid-2026-10-11/run-N/SCORER/probe_cost.csv
+```
+
+`pairs.jsonl` was regenerated with the stage at main `be72257`. The `hybrid.csv` it produced is
+byte-identical to the committed one in all six runs, so the record is the one these figures were
+drawn from.
+
+Checks evaluated per request, all 400 pairs (`probe_cost.csv` has every `k`):
+
+| | run-11 | run-12 | run-13 |
+| --- | --- | --- | --- |
+| arm 3, every program (fires, mis-fires) | 74.0 (187, 0) | 81.0 (187, 0) | 77.0 (189, 0) |
+| arm 3, lazy, most specific first | 59.5, **20%** fewer | 64.6, **20%** | 61.5, **20%** |
+| lazy hybrid, lexical order, no cap | 52.5, **29%** | 57.5, **29%** | 54.5, **29%** |
+| lazy hybrid, reranker order, no cap | 48.6, **34%** | 50.8, **37%** | 50.2, **35%** |
+| lazy hybrid, reranker order, `k = 3` (fires) | 17.0, 77% (136) | 15.5, 81% (145) | 15.6, 80% (137) |
+
+**What it shows.** **Without a cap, the lazy hybrid makes exactly arm 3's decisions** (the same
+187–189 fires, 0 wrong), and it reaches them with 29–37% fewer checks than arm 3 evaluates today. Lazy
+arm 3 saves 20%. So text order is worth something after all: not as a filter, which only removes
+correct fires (above), but as the **order to try programs in**, because it puts the program that will
+hold earlier than specificity does. The reranker's order saves the most. Capping `k` saves far more
+checks, but only by dropping correct fires.
+
+Each lazy walk's decision is checked against the dispatcher it stands for: lazy arm 3 against arm 3's
+pick, and the lazy hybrid against `hybrid_decision`. A cheaper walk that decided differently would
+be refused rather than priced. Arm 3's every-program total is each library's precondition count,
+recounted from the program files: 74, 81 and 77.
+
+**What it does not show.** Wall-clock time. A check is one subprocess, but checks differ in cost,
+so fewer checks is a proxy for time, not a measure of it. (In the profile behind #268, evaluating
+preconditions was about 62% of a rescore's time, which is why the count is worth having.) Nor does
+it count the reranker's own cost, one model call per request.

@@ -1,0 +1,9 @@
+dispatcher,k,pairs,fires,wrong,programs_per_pair,predicates_per_pair,saved_vs_every_program
+"arm 3, every program",all,400,189,0,13.0,77.0,0.0
+"arm 3, lazy (specificity order)",all,400,189,0,10.0,61.46,0.20181818181818179
+lazy hybrid (text order),1,400,65,0,1.0,6.2525,0.9187987012987013
+lazy hybrid (text order),2,400,76,0,1.8375,11.4025,0.8519155844155843
+lazy hybrid (text order),3,400,87,0,2.6475,16.12,0.7906493506493506
+lazy hybrid (text order),5,400,113,0,4.1675,25.965,0.6627922077922078
+lazy hybrid (text order),10,400,172,0,7.455,45.0875,0.414448051948052
+lazy hybrid (text order),all,400,189,0,9.1525,54.51,0.29207792207792216
