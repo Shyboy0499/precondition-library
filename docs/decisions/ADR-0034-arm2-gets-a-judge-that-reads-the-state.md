@@ -12,7 +12,7 @@
 **The question.** At matched coverage, does executable-precondition dispatch (arm 3) mis-fire less
 often than a model that is shown the request **and the repository state** and asked how well each
 compiled program fits it? The issue is that question, and the README's own
-[What this is not](../README.md) table already answers it in the negative: every arm 2 measured so
+[What this is not](../../README.md#what-this-is-not) table already answers it in the negative: every arm 2 measured so
 far -- the shipped lexical overlap, #104's embedding, #256's pinned reranker -- compares text with
 text. None of them can *verify* state, so "running checks beats reading text" is close to built
 into the comparison. A model that reads the state as text is the strongest reasonable alternative,
