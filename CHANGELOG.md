@@ -12,6 +12,12 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **Held-out states, part 2 (#263, ADR-0037).** `diverged` gains a held-out shape axis: 2-3
+  upstream commits, an upstream-only file and 4-5 local commits, with every label kept. The held-out
+  stage now covers `dirty_tree` and `diverged` on all three committed libraries
+  (`results/heldout-2026-10-16/`). Arm 3 fired on every held-out positive. It made its first
+  mis-fire, 1 of 240 fires: a learned probe compared quoted and unquoted git path lists, and broke
+  on a path with a space. `WrongFire` now records the seed it fired on.
 - **Why arm 3 sits out (`bench.abstentions`).** Every positive pair arm 3 does not fire on, named
   with its cause: no admitted program for an acceptable resolution, or one whose preconditions
   failed, with each failing probe and what it observed. On the three committed libraries all 37

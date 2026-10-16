@@ -54,7 +54,7 @@ from .primary import (
 from .rescore import scorer
 from .splits import HELD_OUT_SEEDS
 
-HELD_OUT_FAULTS: tuple[str, ...] = ("dirty_tree",)
+HELD_OUT_FAULTS: tuple[str, ...] = ("dirty_tree", "diverged")
 """The faults this stage measures: the ones whose injector declares a held-out axis.
 
 `tests/test_heldout_states.py` pins each name here against a declared axis, so a fault added
@@ -70,6 +70,9 @@ class WrongFire(BaseModel):
     """One fire the pair did not accept -- the evidence a mis-fire claim rests on."""
 
     environment: str
+    seed: int | None = None
+    """The seed whose state it fired on, so the state can be rebuilt and read without a search.
+    `None` only in records written before the seed was kept."""
     correct_variant: str | None
     acceptable_variants: tuple[str, ...]
     fired_variant: str
@@ -128,6 +131,7 @@ def _wrong_fires(outcomes: LibraryPairOutcomes, arm3: Sequence[PairOutcome]) -> 
         found.append(
             WrongFire(
                 environment=pair.environment,
+                seed=pair.pair.seed,
                 correct_variant=outcome.correct_variant,
                 acceptable_variants=outcome.acceptable_variants,
                 fired_variant=outcome.fired_variant,

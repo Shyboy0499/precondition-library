@@ -25,7 +25,7 @@ from pathlib import Path
 from ...sandbox import Sandbox, git_out, record_base, run_git, tip_contained
 from ...signatures import StateFingerprint
 from ..intent import IntentSpec, ResolutionVariant, draw_index, sample_index
-from ..spec import FaultSpec, GroundTruth
+from ..spec import HELD_OUT_SEED_BASE, FaultSpec, GroundTruth
 
 # The three live states, and the resolution each is the real-world equivalent of.
 # The order is part of the seed-to-state mapping, so appending to it would change
@@ -71,6 +71,60 @@ _ANCHORS = ("top", "after_greet", "bottom")
 
 _LOCAL_COMMIT_RANGE = (1, 3)
 """The local-only commit count is drawn from 1..3 inclusive."""
+
+
+# --- the held-out shape axis (issue #263, part 2) -----------------------------------
+#
+# Every shipped state has the same *shape*: upstream is exactly one commit ahead and touches one
+# file (`app.py`), and the local side has one to three commits. A held-out seed changes that
+# shape -- more upstream commits, an upstream-only file beside `app.py`, and more local commits
+# than any shipped seed draws -- while keeping every label: the rule reads which files each side
+# touched and whether they overlap, and an upstream-only file overlaps nothing. What it does
+# change is exactly what a probe reading `rev-list --count` or `diff --name-only` sees, which is
+# the question a held-out *shape* asks that a held-out *path* (`dirty_tree`'s axis) cannot.
+
+
+@dataclass(frozen=True)
+class _Shape:
+    """How many commits each side carries, and the upstream-only file, if any."""
+
+    upstream_commits: int
+    upstream_only_file: str | None
+    local_commits: int | None
+    """`None` is the shipped draw (1..3); a held-out shape fixes a count above it."""
+
+
+SHIPPED_SHAPE = _Shape(upstream_commits=1, upstream_only_file=None, local_commits=None)
+"""What every seed below `HELD_OUT_SEED_BASE` builds."""
+
+HELD_OUT_SHAPES: tuple[_Shape, ...] = (
+    _Shape(upstream_commits=2, upstream_only_file="config/settings.toml", local_commits=4),
+    _Shape(upstream_commits=3, upstream_only_file="CHANGELOG.md", local_commits=5),
+    _Shape(upstream_commits=2, upstream_only_file="notes/upstream.md", local_commits=5),
+    _Shape(upstream_commits=3, upstream_only_file="config/settings.toml", local_commits=4),
+)
+"""The shapes a held-out seed draws from (issue #263). None is the shipped shape."""
+
+
+def shape_for_seed(seed: int) -> _Shape:
+    """The shape this seed builds: shipped below `HELD_OUT_SEED_BASE`, a pool value above it."""
+    if seed < HELD_OUT_SEED_BASE:
+        return SHIPPED_SHAPE
+    return HELD_OUT_SHAPES[(seed - HELD_OUT_SEED_BASE) % len(HELD_OUT_SHAPES)]
+
+
+def _note(flavour: _Flavour, index: int) -> str:
+    """The local note for commit `index`: the flavour's own for the first three."""
+    if index < len(flavour.local_notes):
+        return flavour.local_notes[index]
+    return f"\nLocal note {index + 1}.\n"
+
+
+def _subject(flavour: _Flavour, index: int) -> str:
+    """The subject for local commit `index`: the flavour's own for the first three."""
+    if index < len(flavour.subjects):
+        return flavour.subjects[index]
+    return f"docs: local note {index + 1}"
 
 
 @dataclass(frozen=True)
@@ -150,16 +204,20 @@ class Draw:
     content: int
     local_commits: int
     hunk: str
+    shape: str = ""
+    """The held-out shape, or `""` for the shipped one -- carried in the identity only when
+    held out, so every identity the committed instance counts were taken over is unchanged."""
 
     @property
     def identity(self) -> str:
         """The stable instance identity: resolution plus every drawn axis value."""
-        return (
+        drawn = (
             f"diverged/{self.resolution}"
             f"/content={self.content}"
             f"/commits={self.local_commits}"
             f"/hunk={self.hunk}"
         )
+        return f"{drawn}/shape={self.shape}" if self.shape else drawn
 
     @property
     def axes(self) -> Mapping[str, str]:
@@ -186,12 +244,17 @@ def draw_for_seed(seed: int) -> Draw:
     """
     state = state_for_seed(seed)
     low, high = _LOCAL_COMMIT_RANGE
+    shape = shape_for_seed(seed)
+    drawn_commits = low + draw_index(seed, "diverged", "local_commit_count", high - low + 1)
     return Draw(
         state=state,
         resolution=STATE_VARIANT[state],
         content=draw_index(seed, "diverged", "content", len(_FLAVOURS)),
-        local_commits=low + draw_index(seed, "diverged", "local_commit_count", high - low + 1),
+        local_commits=shape.local_commits if shape.local_commits is not None else drawn_commits,
         hunk=_ANCHORS[draw_index(seed, "diverged", "hunk", len(_ANCHORS))],
+        shape=""
+        if shape is SHIPPED_SHAPE
+        else f"up{shape.upstream_commits}+{shape.upstream_only_file}",
     )
 
 
@@ -338,6 +401,16 @@ class DivergedFault(FaultSpec):
     # resolves the fault entirely inside them.
     change_surface = ("app.py", "docs/readme.md")
 
+    def change_surface_for_seed(self, seed: int) -> tuple[str, ...]:
+        """The shipped surface, plus a held-out shape's upstream-only file (issue #263).
+
+        A merge or rebase carries upstream's commits into the committed diff from the base, so
+        the file only upstream touched is inside what a correct resolution commits; per seed,
+        not the union, so a shipped episode's surface is unchanged.
+        """
+        extra = shape_for_seed(seed).upstream_only_file
+        return self.change_surface if extra is None else (*self.change_surface, extra)
+
     def inject(self, seed: int, sandbox: Sandbox) -> None:
         """Publish the upstream commits, then replay the local-only commits on top.
 
@@ -363,6 +436,16 @@ class DivergedFault(FaultSpec):
         _insert(app, flavour.upstream, draw.hunk)
         run_git(("add", "-A"), cwd=work)
         _commit(work, "feat: upstream stamps the entry point")
+        # A held-out shape adds upstream commits to a file only upstream touches, so the
+        # overlap the rule reads is unchanged (issue #263); the shipped shape adds none.
+        shape = shape_for_seed(seed)
+        for index in range(1, shape.upstream_commits):
+            assert shape.upstream_only_file is not None
+            extra = work / shape.upstream_only_file
+            extra.parent.mkdir(parents=True, exist_ok=True)
+            _append(extra, f"upstream change {index}\n")
+            run_git(("add", "-A"), cwd=work)
+            _commit(work, f"chore: upstream updates {shape.upstream_only_file} ({index})")
         run_git(("push", "-q", "upstream", "main"), cwd=work)
 
         # Local-only commits, replayed from the base so the two sides diverge.
@@ -370,19 +453,19 @@ class DivergedFault(FaultSpec):
         local_anchor = _ANCHORS[(_ANCHORS.index(draw.hunk) + 1) % len(_ANCHORS)]
         if draw.state == "empty_local_commits":
             for index in range(draw.local_commits):
-                _commit(work, flavour.subjects[index], allow_empty=True)
+                _commit(work, _subject(flavour, index), allow_empty=True)
         elif draw.state == "disjoint_files":
             for index in range(draw.local_commits):
-                _append(work / "docs/readme.md", flavour.local_notes[index])
+                _append(work / "docs/readme.md", _note(flavour, index))
                 run_git(("add", "-A"), cwd=work)
-                _commit(work, flavour.subjects[index])
+                _commit(work, _subject(flavour, index))
         else:
             for index in range(draw.local_commits):
                 if index == 0:
                     _insert(app, flavour.local_app, local_anchor)
-                _append(work / "docs/readme.md", flavour.local_notes[index])
+                _append(work / "docs/readme.md", _note(flavour, index))
                 run_git(("add", "-A"), cwd=work)
-                _commit(work, flavour.subjects[index])
+                _commit(work, _subject(flavour, index))
 
         local_tip = git_out("rev-parse", "HEAD", cwd=work)
         sandbox.recorded["local-tip"] = local_tip

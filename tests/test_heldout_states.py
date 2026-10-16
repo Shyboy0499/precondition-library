@@ -47,6 +47,21 @@ from precondition_library.tasks.faults.dirty_tree import (
 from precondition_library.tasks.faults.dirty_tree import (
     SPEC as DIRTY_TREE,
 )
+from precondition_library.tasks.faults.diverged import (
+    HELD_OUT_SHAPES as DIVERGED_HELD_OUT_SHAPES,
+)
+from precondition_library.tasks.faults.diverged import (
+    INTENT as DIVERGED_INTENT,
+)
+from precondition_library.tasks.faults.diverged import (
+    SHIPPED_SHAPE as DIVERGED_SHIPPED_SHAPE,
+)
+from precondition_library.tasks.faults.diverged import (
+    SPEC as DIVERGED,
+)
+from precondition_library.tasks.faults.diverged import (
+    shape_for_seed as diverged_shape_for_seed,
+)
 from precondition_library.tasks.registry import ambiguous_intents
 from precondition_library.tasks.spec import HELD_OUT_SEED_BASE
 
@@ -54,6 +69,7 @@ PLANNED_SEEDS = [*SMOKE_SEEDS, *TUNE_SEEDS, *EVAL_SEEDS]
 
 HELD_OUT_AXES = {
     "dirty_tree": lambda seed: paths_for_seed(seed).upstream_file,
+    "diverged": lambda seed: diverged_shape_for_seed(seed),
 }
 """Per fault, the held-out axis it declares, as a function of a seed.
 
@@ -174,7 +190,8 @@ def test_the_stage_measures_the_held_out_block_and_not_the_plan(held_out_run) ->
     _, summary = held_out_run
     assert summary.seeds == list(HELD_OUT_SEEDS[:2])
     assert summary.faults == list(HELD_OUT_FAULTS)
-    assert summary.pairs == 2 * len(HELD_OUT_SEEDS[:2])
+    # Per seed and fault: the fault-free negative and the fault's own state.
+    assert summary.pairs == 2 * len(HELD_OUT_FAULTS) * len(HELD_OUT_SEEDS[:2])
     assert not set(summary.seeds) & set(EVAL_SEEDS)
 
 
@@ -274,6 +291,7 @@ def test_a_wrong_fire_is_reported_with_the_pair_it_happened_on(tmp_path) -> None
     ]
     assert len(lines) == summary.arm3_wrong
     assert all(fire.fired_variant == "stash" for fire in lines)
+    assert all(fire.seed in HELD_OUT_SEEDS for fire in lines), "a record names its seed"
     assert all(fire.correct_variant != "stash" for fire in lines)
     assert all(fire.task_text for fire in lines), "a record must name the request it answered"
     assert "wrong" in (out / "summary.txt").read_text(encoding="utf-8")
@@ -354,5 +372,39 @@ def test_the_change_surface_is_the_seeds_own_paths() -> None:
         surface = DIRTY_TREE.change_surface_for_seed(seed)
         assert {paths.upstream_file, paths.tracked_file, paths.untracked_path} <= set(surface)
     for name, fault in FAULTS.items():
-        if name != "dirty_tree":
+        if name not in HELD_OUT_FAULTS:
             assert fault.change_surface_for_seed(HELD_OUT_SEEDS[0]) == fault.change_surface
+
+
+def test_every_shipped_diverged_seed_keeps_the_shipped_shape() -> None:
+    """Below the base, the shape is the shipped one and the identity carries no shape (#263)."""
+    for seed in [*range(HELD_OUT_SEED_BASE), *PLANNED_SEEDS]:
+        assert diverged_shape_for_seed(seed) is DIVERGED_SHIPPED_SHAPE, seed
+        assert "/shape=" not in DIVERGED.instance_for_seed(seed), seed
+    for seed in HELD_OUT_SEEDS:
+        assert diverged_shape_for_seed(seed) in DIVERGED_HELD_OUT_SHAPES, seed
+        assert "/shape=" in DIVERGED.instance_for_seed(seed), seed
+
+
+def test_a_held_out_diverged_state_changes_shape_and_keeps_its_label() -> None:
+    """More upstream commits, an upstream-only file, more local commits; the same resolution."""
+    seed = HELD_OUT_SEEDS[0]
+    shape = diverged_shape_for_seed(seed)
+    box = build_sandbox(seed, ["diverged"])
+    try:
+        observed = StateFingerprint.observe(box)
+    finally:
+        box.destroy()
+    assert observed.upstream_ahead == shape.upstream_commits > 1
+    assert shape.upstream_only_file in observed.upstream_touched_files
+    assert len(observed.upstream_touched_files) == 2
+    assert not observed.sync_would_conflict
+    label = DIVERGED_INTENT.correct_variant(observed)
+    assert label is not None and label.id == DIVERGED.variant_for_seed(seed)
+
+
+def test_a_held_out_diverged_seed_widens_the_surface_by_its_own_file_only() -> None:
+    assert DIVERGED.change_surface_for_seed(0) == DIVERGED.change_surface
+    for seed in HELD_OUT_SEEDS[: len(DIVERGED_HELD_OUT_SHAPES)]:
+        extra = diverged_shape_for_seed(seed).upstream_only_file
+        assert DIVERGED.change_surface_for_seed(seed) == (*DIVERGED.change_surface, extra)
