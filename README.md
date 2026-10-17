@@ -15,7 +15,10 @@
 > fires across the three libraries, against text-similarity dispatch's **76–81%**; arm 2
 > cleared its pre-registered baseline floor in the two replicates built on the final
 > code. The strongest text scorer screened, a local reranker, still mis-fires on
-> **71–76%**. The numbers, their provenance and their limits are in
+> **71–76%**. Those states come from the same generators admission tests against. On
+> **held-out** states no build ever drew, precondition dispatch fired on all 240 positives
+> and mis-fired **once**: a learned check broke on a file name with a space
+> ([Held-out states](#held-out-states)). The numbers, their provenance and their limits are in
 > [Primary result](#primary-result). What is **not** measured yet is everything at
 > episode level -- the frozen benchmark, the admission factorial and the online arms --
 > and an earlier smoke pass, [First demonstration](#first-demonstration), is kept as
@@ -365,6 +368,9 @@ detectable difference.
   reading the state through a model call (an LLM judge) is implemented and registered
   (ADR-0034, spec §7 item 14) and **has not been run**: it needs a provider key, and until
   it runs, no sentence may say it won or lost.
+- **States outside the generators, except in part.** Every pair here comes from the
+  injectors admission tests each program against. Two held-out sources are measured below,
+  and arm 3 mis-fired once on them. Real repositories are not measured.
 - **Nothing at episode level.** Mis-fires that end in a wrong repository, cost, the
   admission factorial and the online arms are separate stages, not run here.
 - **Arm 2b cannot separate the two.** At arm 3's coverage the soft vote's matched point
@@ -376,6 +382,70 @@ input, 280k–372k cached input and 402k–539k output tokens each. Code: run 11
 `a6ff042`, run 12 on `d524978`, run 13 on `44a1ffc`. The per-run table, the re-gate and
 the defects found on the way are in
 [#214](https://github.com/Shyboy0499/precondition-library/issues/214#issuecomment-5999250801).
+
+### Held-out states
+
+The 0 of 563 describes this generator: admission tests every program on states built by the
+same injectors as the evaluation pairs (#263). The held-out stage (ADR-0033, ADR-0037) reads
+each committed library again, read-only, on 40 seeds no build ever drew (3000–3039). It uses two
+sources, each reported on its own:
+
+- **`dirty_tree` with held-out paths.** States write paths no shipped seed uses: deeper
+  directories, a space, a non-ASCII name, a dotfile.
+- **`diverged` with a held-out shape.** Upstream is 2–3 commits ahead across two files, and
+  there are 4–5 local commits.
+
+Each block is 40 positives and 40 fault-free negatives.
+
+| | replicate 1 (run 11) | replicate 2 (run 12) | replicate 3 (run 13) |
+| --- | --- | --- | --- |
+| `dirty_tree`, held-out paths: arm 3 fires, mis-fires | 40, 0 | 40, 0 | 40, **1** |
+| `diverged`, held-out shape: arm 3 fires, mis-fires | 40, 0 | 40, 0 | 40, 0 |
+| fires on the fault-free negatives (each block) | 0 | 0 | 0 |
+
+**What it shows.** Arm 3 fired on every held-out positive and mis-fired once in 240 fires
+(0.4%, 95% Wilson upper bound 2.3%). The mis-fire is the generalisation failure #263 asked
+about.
+
+- **What broke.** Replicate 3's `stash` program compares two git path lists, and git quotes a
+  name with a space in one and not the other. On `scratch notes.md` the check saw no collision,
+  and the program fired where `aside` was needed.
+- **Why admission passed it.** The check is right on every shipped state, because no shipped path
+  needs quoting.
+- **How common the defect is.** An audit found 15 probes in 9 of the 40 admitted programs that a
+  space or a non-ASCII name could break. Three were confirmed by running them, and 12 were found by
+  reading (ADR-0038).
+- **What changed.** The compile prompt now tells the model to read path lists with `-z`. Whether
+  that removes the defect is for the next live build.
+
+**What it does not show.**
+
+- **A comparison with arm 2.** No held-out floor is measured, so no sentence may say arm 3 beats
+  text similarity on these states (ADR-0033).
+- **States of a different kind.** Both sources keep the fault's kind of state, with new names and
+  counts. Real checkouts and the other three faults' axes are not measured.
+
+The details are in [`results/heldout-2026-10-16/`](results/heldout-2026-10-16/README.md), and
+part 1 is in [`results/heldout-2026-10-10/`](results/heldout-2026-10-10/README.md).
+
+### Measured since
+
+Both of these re-read the committed libraries, with no model call:
+
+- **Retrieve by text, then gate by checks** (ADR-0035,
+  [`results/hybrid-2026-10-11/`](results/hybrid-2026-10-11/README.md)).
+  - **As a filter, it costs coverage.** The hybrid never mis-fired and never fired more often than
+    arm 3, because its fires are a subset of arm 3's by construction. So as a filter, text only
+    removes correct fires.
+  - **As an order, it saves checks.** Used as the order to try programs in, stopping at the first
+    whose checks hold, it makes arm 3's exact decisions with 29–37% fewer checks evaluated. Arm 3
+    tried most-specific-first saves 20%.
+- **Why arm 3 sits out**
+  ([`results/abstentions-2026-10-12/`](results/abstentions-2026-10-12/README.md)).
+  - **Where the misses are.** All 37 positives arm 3 did not fire on are `lockfile_conflict`
+    states.
+  - **The dead program.** Replicate 2's 13 misses came from one program admitted unable to fire on
+    its own state. Admission now refuses such a program (ADR-0036).
 
 ## First demonstration
 
