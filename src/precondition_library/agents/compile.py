@@ -136,6 +136,20 @@ Rules:
   leave expect_pattern unset. Many git
   commands exit 0 whether or not they print anything (`git stash list`,
   `git status --porcelain`), so their exit code alone says nothing.
+- Git does not print paths one way. `git status --porcelain` wraps a path with a
+  space in double quotes, even with `core.quotePath=false`; `git diff
+  --name-only`, `git ls-files` and `git ls-tree` print it bare; and by default
+  all of them print a non-ASCII name as a quoted octal escape. A probe that
+  compares two path lists, or tests a printed path as a file (`[ -e "$p" ]`), is
+  then wrong on exactly the paths a test repository lacks. Read every path list
+  with `-z` and turn the NULs into newlines, and list untracked files with
+  `git ls-files --others --exclude-standard -z`, not by parsing `git status`:
+
+      probe: |-
+        ! comm -12 \\
+          <(git ls-files --others --exclude-standard -z | tr '\\0' '\\n' | sort) \\
+          <(git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} \\
+            | tr '\\0' '\\n' | sort) | grep -q .
 - Shell is not YAML-safe. A probe that starts with `!`, `[`, `{`, `"`, `'`, `*`,
   `&`, `%`, `@`, `|`, `>` or a backtick, or that contains `: ` or ` #`, means
   something else to YAML: a leading `!` is a tag and is silently DROPPED, which

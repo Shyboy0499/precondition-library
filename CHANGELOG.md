@@ -12,6 +12,12 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **The compile prompt says how git quotes paths (ADR-0038).** `git status --porcelain` quotes a
+  path with a space, while `git diff --name-only`, `git ls-files` and `git ls-tree` print it bare, and
+  all of them escape a non-ASCII name. The prompt now tells the model to read path lists with `-z`.
+  Its example probe is tested on real repositories and held-out states. An audit of the committed
+  libraries names 15 probes in 9 of 40 programs that such a path could break. The libraries are not
+  rebuilt.
 - **Held-out states, part 2 (#263, ADR-0037).** `diverged` gains a held-out shape axis: 2-3
   upstream commits, an upstream-only file and 4-5 local commits, with every label kept. The held-out
   stage now covers `dirty_tree` and `diverged` on all three committed libraries
