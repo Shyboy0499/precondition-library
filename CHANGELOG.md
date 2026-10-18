@@ -70,6 +70,11 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Fixed
 
+- **Security: a repository-derived value can no longer run as shell (ADR-0040).** On a checkout,
+  the upstream's default branch and the `.gitmodules` path were pasted into probes and bodies run
+  under `bash -c`. A remote whose default branch is `x;>PWNED` made a probe create `PWNED` in the
+  user's checkout. Such a value is now left unbound, so a program that needs it is not applicable.
+  `.gitmodules` is read with `-z`, so a submodule at `my lib` no longer binds as `lib`.
 - **The fingerprint reads git paths with `-z` (ADR-0039).** `StateFingerprint.observe` printed a
   non-ASCII path escaped and missed a conflict in it. No shipped fingerprint moves; the held-out
   `dirty_tree` results were regenerated, with their quoted figures unchanged.
