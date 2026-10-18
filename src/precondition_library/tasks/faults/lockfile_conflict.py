@@ -44,6 +44,15 @@ resolutions are right in different states, by this checker:
 The fault is measured (ADR-0029): `INTENT` is registered in `tasks.registry`, so the
 request is one of its phrasings and `variant_for_seed` labels every seed with the
 resolution its state needs.
+
+## A held-out path axis (issue #263, ADR-0039)
+
+Every shipped seed writes the file at `deps.lock`, in the repository root. A held-out seed
+-- one at or above `HELD_OUT_SEED_BASE` -- writes it somewhere no shipped seed does: a nested
+directory, a directory with a space, a non-ASCII name, a dotfile (`lock_path_for_seed`).
+Nothing else about the state changes, and every name keeps `lock` in it, so a program that
+recognises the file by its name is not refused by the axis, only one that reads paths in a
+way such names break.
 """
 
 from __future__ import annotations
@@ -53,11 +62,20 @@ from collections.abc import Mapping
 from ...sandbox import Sandbox, git_out, record_base, run_git, tip_contained
 from ...signatures import StateFingerprint
 from ..intent import IntentSpec, ResolutionVariant, sample_index
-from ..spec import FaultSpec, GroundTruth
+from ..spec import HELD_OUT_SEED_BASE, FaultSpec, GroundTruth
 
 # The generated file the sandbox itself creates. Lock-shaped: a version field
 # and a package list, not the format of any real package manager.
 LOCK_PATH = "deps.lock"
+"""Where every shipped seed writes the file: each seed below `HELD_OUT_SEED_BASE`."""
+
+HELD_OUT_LOCK_PATHS = (
+    "services/api/deps.lock",
+    "web app/deps.lock",
+    "vendor/abhängigkeiten.lock",
+    "config/.deps.lock",
+)
+"""The paths a held-out seed writes the file at (issue #263). None is `LOCK_PATH`."""
 _HEADER = "# lock-shaped dependency file (generated; not a real ecosystem lockfile)\n"
 _BASE_PACKAGE = "corelib"
 
@@ -96,6 +114,17 @@ _REMOVABLE_PACKAGE = "zlib"
 # A conflict marker starts a line: `<<<<<<<`, `=======` (separator), `>>>>>>>`
 # (end) or `|||||||` (diff3 base).
 _MARKER_PATTERN = r"^(<{7}|={7}|>{7}|\|{7})"
+
+
+def lock_path_for_seed(seed: int) -> str:
+    """Where this seed's state keeps the file.
+
+    `LOCK_PATH` for every seed below `HELD_OUT_SEED_BASE` -- every seed a library is built,
+    tuned or measured from -- and a held-out pool value above it, so no shipped state moves.
+    """
+    if seed < HELD_OUT_SEED_BASE:
+        return LOCK_PATH
+    return HELD_OUT_LOCK_PATHS[(seed - HELD_OUT_SEED_BASE) % len(HELD_OUT_LOCK_PATHS)]
 
 
 def state_for_seed(seed: int) -> str:
@@ -324,16 +353,19 @@ class LockfileConflictFault(FaultSpec):
         """
         work = sandbox.work
         record_base(sandbox, fault="lockfile_conflict")
+        lock = work / lock_path_for_seed(seed)
+        lock.parent.mkdir(parents=True, exist_ok=True)
+        sandbox.recorded["lock-path"] = lock_path_for_seed(seed)
 
         # The shared ancestor: both sides edit this version of the file.
-        (work / LOCK_PATH).write_text(_base_lock_text(seed), encoding="utf-8")
+        lock.write_text(_base_lock_text(seed), encoding="utf-8")
         run_git(("add", "-A"), cwd=work)
         run_git(("commit", "-q", "-m", "chore: add generated dependency lock"), cwd=work)
         common = git_out("rev-parse", "HEAD", cwd=work)
         run_git(("push", "-q", "upstream", "main"), cwd=work)
 
         # The local-only edit.
-        (work / LOCK_PATH).write_text(_edited_lock_text(seed, "local"), encoding="utf-8")
+        lock.write_text(_edited_lock_text(seed, "local"), encoding="utf-8")
         run_git(("add", "-A"), cwd=work)
         run_git(("commit", "-q", "-m", "feat: add local dependency"), cwd=work)
         local_tip = git_out("rev-parse", "HEAD", cwd=work)
@@ -341,7 +373,7 @@ class LockfileConflictFault(FaultSpec):
 
         # Upstream's edit, built from the same ancestor and published.
         run_git(("reset", "--hard", common), cwd=work)
-        (work / LOCK_PATH).write_text(_edited_lock_text(seed, "upstream"), encoding="utf-8")
+        lock.write_text(_edited_lock_text(seed, "upstream"), encoding="utf-8")
         run_git(("add", "-A"), cwd=work)
         run_git(("commit", "-q", "-m", "feat: upstream adds a dependency"), cwd=work)
         run_git(("push", "-q", "upstream", "main"), cwd=work)
@@ -357,6 +389,10 @@ class LockfileConflictFault(FaultSpec):
         # fetching (observe must not mutate the environment).
         run_git(("fetch", "-q", "upstream"), cwd=work)
 
+    def change_surface_for_seed(self, seed: int) -> tuple[str, ...]:
+        """The file where *this seed's* state keeps it (issue #263): `LOCK_PATH` when shipped."""
+        return (lock_path_for_seed(seed),)
+
     def task_text(self, seed: int) -> str:
         return INTENT.task_text(seed)
 
@@ -368,12 +404,18 @@ class LockfileConflictFault(FaultSpec):
         return STATE_VARIANT[state_for_seed(seed)]
 
     def instance_for_seed(self, seed: int) -> str:
-        """The instance identity: resolution plus every drawn axis value, in axis order."""
+        """The instance identity: resolution plus every drawn axis value, in axis order.
+
+        A held-out seed's path is appended; a shipped seed's identity carries none, so the
+        instance counts the committed figures were taken over do not move.
+        """
         resolution = self.variant_for_seed(seed)
         drawn = self.drawn_axes_for_seed(seed)
-        return "/".join(
+        identity = "/".join(
             ["lockfile_conflict", resolution, *(f"{axis}={value}" for axis, value in drawn.items())]
         )
+        path = lock_path_for_seed(seed)
+        return identity if path == LOCK_PATH else f"{identity}/path={path}"
 
     def axes_for_resolution(self, resolution: str) -> Mapping[str, tuple[str, ...]]:
         """The axes `resolution` may vary along, with their value pools (ADR-0005)."""
@@ -421,9 +463,10 @@ class LockfileConflictFault(FaultSpec):
                 detail=f"conflict markers remain in the working tree: {first}",
             )
 
-        lock = work / LOCK_PATH
+        lock_path = sandbox.recorded["lock-path"]
+        lock = work / lock_path
         if not lock.exists():
-            return GroundTruth(ok=False, detail=f"{LOCK_PATH} is missing after the sync")
+            return GroundTruth(ok=False, detail=f"{lock_path} is missing after the sync")
         text = lock.read_text(encoding="utf-8")
 
         local_entry = sandbox.recorded["local-dependency"]
@@ -431,25 +474,25 @@ class LockfileConflictFault(FaultSpec):
         if local_entry not in text:
             return GroundTruth(
                 ok=False,
-                detail=f"the locally-added dependency is missing from {LOCK_PATH}",
+                detail=f"the locally-added dependency is missing from {lock_path}",
             )
         if upstream_entry not in text:
             return GroundTruth(
                 ok=False,
-                detail=f"the upstream-added dependency is missing from {LOCK_PATH}",
+                detail=f"the upstream-added dependency is missing from {lock_path}",
             )
 
         removed = sandbox.recorded.get("removed-dependency")
         if removed is not None and removed in text:
             return GroundTruth(
                 ok=False,
-                detail=f"a dependency one side removed is back in {LOCK_PATH}: {removed}",
+                detail=f"a dependency one side removed is back in {lock_path}: {removed}",
             )
         versions = [line for line in text.splitlines() if line.startswith("version = ")]
         if len(versions) != 1:
             return GroundTruth(
                 ok=False,
-                detail=f"{LOCK_PATH} has {len(versions)} version lines, not one",
+                detail=f"{lock_path} has {len(versions)} version lines, not one",
             )
 
         return GroundTruth(

@@ -238,18 +238,25 @@ class StateFingerprint(BaseModel):
         def out(*args: str) -> str:
             return run_git(args, cwd=work).stdout.strip()
 
+        def paths(*args: str) -> list[str]:
+            # NUL-separated, so each path is git's raw name. Without `-z` git escapes a
+            # non-ASCII name as a quoted octal string, which then names no file: the
+            # three-way read below shows nothing for it, and a conflict there goes unseen
+            # (ADR-0039). Every shipped path is plain ASCII, so no shipped fingerprint moves.
+            return [path for path in run_git((*args, "-z"), cwd=work).stdout.split("\0") if path]
+
         upstream = upstream_ref(env)
         branch = out("rev-parse", "--abbrev-ref", "HEAD")
         upstream_ahead = int(out("rev-list", "--count", f"HEAD..{upstream}"))
         upstream_behind = int(out("rev-list", "--count", f"{upstream}..HEAD"))
-        # One path per line, never split on whitespace: a path may contain a space, and
+        # One entry per path, never split on whitespace: a path may contain a space, and
         # splitting one into two entries makes `dirty_files` and `upstream_touched_files`
         # disagree about the same file -- the `same_file` state then reads as `disjoint`, and
         # `build_sandbox` refuses the build as mislabelled. Found by the held-out path axis
         # (#263), whose pool varies paths precisely so this cannot stay invisible; every
         # shipped state's paths are space-free, so no shipped fingerprint moves.
-        local_touched = out("diff", "--name-only", f"{upstream}...HEAD").splitlines()
-        upstream_touched = out("diff", "--name-only", f"HEAD...{upstream}").splitlines()
+        local_touched = paths("diff", "--name-only", f"{upstream}...HEAD")
+        upstream_touched = paths("diff", "--name-only", f"HEAD...{upstream}")
 
         path = submodule_path(env)
         if path is None:
@@ -275,8 +282,8 @@ class StateFingerprint(BaseModel):
         ).stdout.strip()
         merge_ref = git_config(work, f"branch.{branch}.merge") or ""
 
-        untracked = out("ls-files", "--others", "--exclude-standard").splitlines()
-        upstream_paths = set(out("ls-tree", "-r", "--name-only", upstream).splitlines())
+        untracked = paths("ls-files", "--others", "--exclude-standard")
+        upstream_paths = set(paths("ls-tree", "-r", "--name-only", upstream))
 
         conflicted: list[_ThreeWay] = []
         conflicted_names: list[str] = []
@@ -304,7 +311,7 @@ class StateFingerprint(BaseModel):
             submodule_initialised=submodule_initialised,
             submodule_pin_matches_upstream=pin_matches,
             upstream_still_references_submodule=upstream_references,
-            dirty_files=sorted(out("diff", "--name-only", "HEAD").splitlines()),
+            dirty_files=sorted(paths("diff", "--name-only", "HEAD")),
             untracked_upstream_collisions=sorted(p for p in untracked if p in upstream_paths),
             tracked_branch=merge_ref.removeprefix("refs/heads/"),
             upstream_default_branch=default_ref.removeprefix(f"{remote}/"),

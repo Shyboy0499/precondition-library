@@ -16,12 +16,20 @@
 #
 # Descriptions state the applicability condition in the vocabulary a request would
 # use, without naming a resolution label.
+#
+# The bodies rebuild `deps.lock` by name, so each program first requires that file on
+# both sides. Without that check, a state that keeps the file elsewhere made every
+# `git show <rev>:deps.lock` read nothing, the removal checks held vacuously, and the
+# take_upstream program fired on every held-out keep_local state (ADR-0039).
 programs:
   - id: rebuild-the-lock-from-upstreams
     intent: sync_through_a_conflicting_lockfile
     variant: take_upstream
     parameters: [upstream_remote, upstream_branch]
     preconditions:
+      - name: the_dependency_file_is_deps_lock
+        description: Both sides keep the dependency file at deps.lock, the file this body rebuilds.
+        probe: 'git cat-file -e HEAD:deps.lock && git cat-file -e {upstream_remote}/{upstream_branch}:deps.lock'
       - name: both_sides_have_commits
         description: Upstream and the local branch each have commits the other lacks.
         probe: 'test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0 && test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0'
@@ -61,6 +69,9 @@ programs:
     variant: keep_local
     parameters: [upstream_remote, upstream_branch]
     preconditions:
+      - name: the_dependency_file_is_deps_lock
+        description: Both sides keep the dependency file at deps.lock, the file this body rebuilds.
+        probe: 'git cat-file -e HEAD:deps.lock && git cat-file -e {upstream_remote}/{upstream_branch}:deps.lock'
       - name: both_sides_have_commits
         description: Upstream and the local branch each have commits the other lacks.
         probe: 'test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0 && test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0'

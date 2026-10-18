@@ -13,10 +13,12 @@ path set no shipped seed draws. These tests pin the two halves that make it mean
 
 from __future__ import annotations
 
+import os
+import subprocess
 from pathlib import Path
 
 import pytest
-from conftest import gold_programs
+from conftest import gold_program, gold_programs
 
 from precondition_library.bench.heldout import (
     HELD_OUT_FAULTS,
@@ -32,7 +34,7 @@ from precondition_library.bench.splits import (
 )
 from precondition_library.library import Library
 from precondition_library.program import Predicate, Program, ProgramStatus, Provenance
-from precondition_library.runtime.probes import evaluate_preconditions
+from precondition_library.runtime.probes import bindings, evaluate_preconditions, substitute
 from precondition_library.signatures import StateFingerprint
 from precondition_library.similarity import lexical_similarity
 from precondition_library.tasks.faults import build_sandbox
@@ -62,6 +64,17 @@ from precondition_library.tasks.faults.diverged import (
 from precondition_library.tasks.faults.diverged import (
     shape_for_seed as diverged_shape_for_seed,
 )
+from precondition_library.tasks.faults.lockfile_conflict import (
+    HELD_OUT_LOCK_PATHS,
+    LOCK_PATH,
+    lock_path_for_seed,
+)
+from precondition_library.tasks.faults.lockfile_conflict import (
+    INTENT as LOCKFILE_INTENT,
+)
+from precondition_library.tasks.faults.lockfile_conflict import (
+    SPEC as LOCKFILE,
+)
 from precondition_library.tasks.registry import ambiguous_intents
 from precondition_library.tasks.spec import HELD_OUT_SEED_BASE
 
@@ -70,6 +83,7 @@ PLANNED_SEEDS = [*SMOKE_SEEDS, *TUNE_SEEDS, *EVAL_SEEDS]
 HELD_OUT_AXES = {
     "dirty_tree": lambda seed: paths_for_seed(seed).upstream_file,
     "diverged": lambda seed: diverged_shape_for_seed(seed),
+    "lockfile_conflict": lambda seed: lock_path_for_seed(seed),
 }
 """Per fault, the held-out axis it declares, as a function of a seed.
 
@@ -408,3 +422,79 @@ def test_a_held_out_diverged_seed_widens_the_surface_by_its_own_file_only() -> N
     for seed in HELD_OUT_SEEDS[: len(DIVERGED_HELD_OUT_SHAPES)]:
         extra = diverged_shape_for_seed(seed).upstream_only_file
         assert DIVERGED.change_surface_for_seed(seed) == (*DIVERGED.change_surface, extra)
+
+
+def test_every_shipped_lockfile_seed_keeps_the_shipped_path() -> None:
+    """Below the base the file is `deps.lock` and the identity carries no path (#263)."""
+    for seed in [*range(HELD_OUT_SEED_BASE), *PLANNED_SEEDS]:
+        assert lock_path_for_seed(seed) == LOCK_PATH, seed
+        assert "/path=" not in LOCKFILE.instance_for_seed(seed), seed
+        assert LOCKFILE.change_surface_for_seed(seed) == LOCKFILE.change_surface, seed
+    for seed in HELD_OUT_SEEDS:
+        assert lock_path_for_seed(seed) in HELD_OUT_LOCK_PATHS, seed
+        assert LOCKFILE.instance_for_seed(seed).endswith(f"/path={lock_path_for_seed(seed)}")
+        assert LOCKFILE.change_surface_for_seed(seed) == (lock_path_for_seed(seed),)
+
+
+def test_the_held_out_block_meets_every_lockfile_path_in_every_resolution() -> None:
+    """Each path is drawn under both labels, so no path is read on one resolution only."""
+    pairs = {(lock_path_for_seed(s), LOCKFILE.variant_for_seed(s)) for s in HELD_OUT_SEEDS}
+    assert pairs == {
+        (path, variant)
+        for path in HELD_OUT_LOCK_PATHS
+        for variant in ("take_upstream", "keep_local")
+    }
+
+
+@pytest.mark.parametrize("seed", HELD_OUT_SEEDS[: len(HELD_OUT_LOCK_PATHS)])
+def test_a_held_out_lockfile_state_keeps_its_label_and_resolves_at_its_path(seed: int) -> None:
+    """Each held-out path, built for real: the conflict is seen there, and its fix passes there.
+
+    The non-ASCII path is the regression test for the fingerprint: `git diff --name-only`
+    without `-z` printed it as an escaped string, the three-way read found no such file, and the
+    conflict went unseen, so `build_sandbox` refused the state as mislabelled (ADR-0039). The
+    gold body, with `deps.lock` replaced by the seed's path, then shows the checker grades the
+    file where the state put it.
+    """
+    path = lock_path_for_seed(seed)
+    variant = LOCKFILE.variant_for_seed(seed)
+    box = build_sandbox(seed, ["lockfile_conflict"])
+    try:
+        observed = StateFingerprint.observe(box)
+        assert observed.merge_conflicted_files == [path]
+        assert observed.sync_would_conflict
+        label = LOCKFILE_INTENT.correct_variant(observed)
+        assert label is not None and label.id == variant
+        assert not LOCKFILE.check(box).ok, "the injected state is not already resolved"
+        body = gold_program(variant, "sync_through_a_conflicting_lockfile").body
+        command = substitute(body.replace("deps.lock", '"$LOCK"'), bindings(box))
+        done = subprocess.run(
+            ["bash", "-c", command],
+            cwd=box.work,
+            env={**os.environ, "LOCK": path},
+            capture_output=True,
+            text=True,
+        )
+        assert done.returncode == 0, done.stderr
+        verdict = LOCKFILE.check(box)
+        assert verdict.ok, verdict.detail
+    finally:
+        box.destroy()
+
+
+def test_the_gold_lockfile_programs_refuse_a_file_they_do_not_rebuild() -> None:
+    """The gold bodies rebuild `deps.lock` by name, so on a held-out path they must not fire.
+
+    Before they required the file, every `git show <rev>:deps.lock` read nothing on such a
+    state, the removal checks held vacuously, and `take_upstream` fired on every held-out
+    `keep_local` state -- 15 wrong fires of 40 over the held-out block (ADR-0039).
+    """
+    seeds = [s for s in HELD_OUT_SEEDS if LOCKFILE.variant_for_seed(s) == "keep_local"][:2]
+    for seed in seeds:
+        box = build_sandbox(seed, ["lockfile_conflict"])
+        try:
+            for program in gold_programs("sync_through_a_conflicting_lockfile"):
+                verdict = evaluate_preconditions(program, box)
+                assert not verdict.ok, f"{program.variant} fired at {lock_path_for_seed(seed)}"
+        finally:
+            box.destroy()
