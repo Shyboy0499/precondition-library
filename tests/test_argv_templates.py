@@ -14,12 +14,14 @@ property is about what a real `git` does with a real repository.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from precondition_library.program import Predicate, Program, Provenance, Step
 from precondition_library.runtime.probes import bindings
 from precondition_library.runtime.templates import TEMPLATES, render, run_steps
-from precondition_library.sandbox import create
+from precondition_library.sandbox import CheckoutContext, Sandbox, create
 
 _PROV = Provenance(
     compiled_from_task="argv-template test",
@@ -83,16 +85,39 @@ def test_an_unknown_template_is_refused_before_anything_runs() -> None:
         box.destroy()
 
 
+def _bound_directly(box: Sandbox, submodule_path: str) -> Sandbox:
+    """`box` with `submodule_path` bound as given, past the binding layer's own screening.
+
+    Since ADR-0040 `bindings` leaves an unsafe `.gitmodules` path unbound, so it never reaches
+    a template. The templates still validate what they are handed; this hands them the value
+    directly, through the one route `bindings` passes on unchanged, to pin that second layer.
+    """
+    parameters = {**bindings(box), "submodule_path": submodule_path}
+    return replace(
+        box, checkout=CheckoutContext(parameters=parameters, identity=None, redirects=())
+    )
+
+
 def test_a_gitmodules_path_that_escapes_the_tree_is_refused(make_sandbox) -> None:
-    """`.gitmodules` is attacker-controlled, so an escaping path must not reach git."""
+    """`.gitmodules` is attacker-controlled, so an escaping path must not reach git.
+
+    Two layers refuse it: the binding layer leaves it unbound (ADR-0040), and a template
+    handed it anyway refuses it by containment.
+    """
     box = create(5, [])
     (box.work / ".gitmodules").write_text(
         '[submodule "evil"]\n\tpath = ../../escape\n\turl = ./x\n', encoding="utf-8"
     )
     try:
-        assert bindings(box)["submodule_path"] == "../../escape"
+        assert "submodule_path" not in bindings(box)
         ok, exit_code, _out, _err, _to, _unbound, reason, post = run_steps(
             _steps_program(Step(template="rm_cached_path")), box
+        )
+        assert not ok and exit_code == -1 and post is None
+        assert "cannot bind" in reason
+
+        ok, exit_code, _out, _err, _to, _unbound, reason, post = run_steps(
+            _steps_program(Step(template="rm_cached_path")), _bound_directly(box, "../../escape")
         )
         assert not ok and exit_code == -1 and post is None
         assert "escapes the working tree" in reason
@@ -112,11 +137,13 @@ def test_shell_metacharacters_in_a_path_are_inert() -> None:
         f'[submodule "x"]\n\tpath = {hostile}\n\turl = ./x\n', encoding="utf-8"
     )
     try:
-        argv = render(_steps_program(Step(template="rm_cached_path")), box)[0]
+        assert "submodule_path" not in bindings(box), "the binding layer refuses it first"
+        handed = _bound_directly(box, hostile)
+        argv = render(_steps_program(Step(template="rm_cached_path")), handed)[0]
         assert argv[-1] == hostile, "the metacharacter string must be one argv element"
         # Running it: git rm fails on the nonexistent pathspec, but no shell parses
         # the `>`, so the redirect never happens.
-        run_steps(_steps_program(Step(template="rm_cached_path")), box)
+        run_steps(_steps_program(Step(template="rm_cached_path")), handed)
         assert not (box.work / "pwned").exists(), "a shell parsed the path; argv was not inert"
     finally:
         box.destroy()

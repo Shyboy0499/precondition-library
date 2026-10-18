@@ -47,7 +47,14 @@ import string
 from pathlib import Path
 
 from ..program import GroundTruthResult, Predicate, PredicateResult, Program
-from ..sandbox import Sandbox, harness_upstream_branch, run_env, run_git, submodule_path
+from ..sandbox import (
+    Sandbox,
+    gitmodules_path,
+    harness_upstream_branch,
+    run_env,
+    run_git,
+    submodule_path,
+)
 from .confine import run_confined
 from .guard import Verdict, screen
 
@@ -94,6 +101,42 @@ pattern could never match: the twelfth live run's first episode refused a correc
 _VOCABULARY_WORDS: frozenset[str] = frozenset(
     word for name in VOCABULARY for word in name.split("_")
 )
+
+
+_SHELL_SAFE = re.compile(r"\A[A-Za-z0-9._+][A-Za-z0-9._/+-]*\Z")
+"""What a repository-derived value may contain to be bound at all.
+
+`substitute` pastes a value into shell text as written, and a probe or body is run with
+`bash -c`. The values `bindings` and `repository_bindings` read from a repository are not
+the program's: an upstream's default branch is whatever its owner names it, and git allows
+`;`, `$`, `(`, `|`, `&`, `>` and quotes in a branch name; a `.gitmodules` path is whatever
+the file says. A remote whose default branch is `x;>PWNED` made a probe naming
+`{upstream_branch}` create `PWNED` in the user's checkout before the snapshot refused it
+(ADR-0040). So only letters, digits and `._/+-` are bound, never a leading `/` or `-`
+(an absolute path, an option), never a `..` component. Anything else -- a space, a
+non-ASCII name, a metacharacter -- leaves the name unbound, and a program that needs it is
+not applicable here: it refuses rather than running with a value nobody vetted. Quoting the
+value instead would change what every existing program's text means, since many already wrap
+a placeholder in quotes.
+"""
+
+_REPOSITORY_DERIVED = ("upstream_remote", "upstream_branch", "submodule_path")
+"""The bound names whose values come from the repository. `work_dir` is the sandbox's or
+the user's own directory, chosen by whoever runs the tool, so it is not screened."""
+
+
+def shell_safe(value: str) -> bool:
+    """Whether `value` may be pasted into a probe or a body unquoted (`_SHELL_SAFE`)."""
+    return bool(_SHELL_SAFE.match(value)) and ".." not in value.split("/")
+
+
+def _screened(values: dict[str, str]) -> dict[str, str]:
+    """`values` without any repository-derived value that is not `shell_safe`."""
+    return {
+        name: value
+        for name, value in values.items()
+        if name not in _REPOSITORY_DERIVED or shell_safe(value)
+    }
 
 
 def _names_a_parameter(text: str, match: re.Match[str]) -> bool:
@@ -431,7 +474,7 @@ def bindings(env: Sandbox) -> dict[str, str]:
     path = submodule_path(env)
     if path is not None:
         values["submodule_path"] = path
-    return values
+    return _screened(values)
 
 
 UPSTREAM_REMOTE_PREFERENCE = "upstream"
@@ -477,14 +520,6 @@ def _default_branch(work: Path, remote: str) -> str | None:
     return None
 
 
-def _gitmodules_path(work: Path) -> str | None:
-    """The first submodule path `.gitmodules` declares, as `submodule_path` reads it."""
-    out = _git_out(
-        work, "config", "--file", ".gitmodules", "--get-regexp", r"^submodule\..*\.path$"
-    )
-    return out.split()[-1] if out is not None else None
-
-
 def repository_bindings(work: Path) -> dict[str, str]:
     """The declared parameter names' values, **derived** from an existing checkout (#181).
 
@@ -515,10 +550,10 @@ def repository_bindings(work: Path) -> dict[str, str]:
         branch = _default_branch(work, remote)
         if branch is not None:
             values["upstream_branch"] = branch
-    path = _gitmodules_path(work)
+    path = gitmodules_path(work)
     if path is not None:
         values["submodule_path"] = path
-    return values
+    return _screened(values)
 
 
 def evaluate_predicates(

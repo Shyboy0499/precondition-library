@@ -640,14 +640,29 @@ def submodule_path(sandbox: Sandbox) -> str | None:
     recorded = sandbox.recorded.get(RECORDED_SUBMODULE_PATH)
     if recorded:
         return recorded
+    return gitmodules_path(sandbox.work)
+
+
+def gitmodules_path(work: Path) -> str | None:
+    """The first submodule path `work`'s `.gitmodules` declares, exactly as written.
+
+    Read with `-z`, which prints each entry as its key, a newline and its value, so a
+    path with a space is returned whole. Splitting the plain output on whitespace
+    returned a path's last word instead -- `lib` for `my lib`, a valid-looking path that
+    is not the submodule (ADR-0040).
+    """
     result = run_git(
-        ("config", "--file", ".gitmodules", "--get-regexp", r"^submodule\..*\.path$"),
-        cwd=sandbox.work,
+        ("config", "-z", "--file", ".gitmodules", "--get-regexp", r"^submodule\..*\.path$"),
+        cwd=work,
         check=False,
     )
-    if result.returncode != 0 or not result.stdout.strip():
+    if result.returncode != 0:
         return None
-    return result.stdout.split()[-1]
+    for entry in result.stdout.split("\0"):
+        _, separator, value = entry.partition("\n")
+        if separator and value:
+            return value
+    return None
 
 
 def create_submodule_origin(root: Path, name: str) -> Path:
