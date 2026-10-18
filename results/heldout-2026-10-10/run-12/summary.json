@@ -1,6 +1,6 @@
 {
-  "source": "results\\replicates-2026-10-05\\run-12",
-  "library_root": "results\\replicates-2026-10-05\\run-12\\library-two-sided",
+  "source": "results/replicates-2026-10-05/run-12",
+  "library_root": "results/replicates-2026-10-05/run-12/library-two-sided",
   "library_hash_before": "ad311de65eb51b120ea97aabb83fe22492c89812232e21bf2c5f1cde4dc8c8c1",
   "library_hash_after": "ad311de65eb51b120ea97aabb83fe22492c89812232e21bf2c5f1cde4dc8c8c1",
   "scorer": {

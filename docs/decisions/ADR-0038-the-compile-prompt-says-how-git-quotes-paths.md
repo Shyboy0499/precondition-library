@@ -3,6 +3,8 @@
 - **Status:** accepted
 - **Date:** 2026-10-17
 - **Supersedes:** nothing. It adds one rule to the compile prompt.
+- **Corrected by:** ADR-0039. Running the probes on held-out `lockfile_conflict` paths found a
+  fourth failing one this audit missed, so its count is at least 16 probes in 10 programs.
 - **Deciders:** repository owner, issue #263 part 2.
 
 ## Context

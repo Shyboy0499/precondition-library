@@ -101,3 +101,15 @@ this was measured on -- one held-out environment is a real sandbox plus every ad
 probes, about 2.5 minutes per seed on Windows, which is why the block is 40 seeds and not the
 family's ~150 fires. A larger block, and the other four faults' axes, is a pre-registration
 revision (ADR-0033), not a flag.
+
+## Regenerated on 2026-10-18 (ADR-0039)
+
+`StateFingerprint.observe` now reads git path lists with `-z`. Before, a non-ASCII name such as
+`design/Übersicht.md` was printed as an escaped string in the fingerprint arm 2 reads. The held-out
+`dirty_tree` directories here were regenerated with the fixed fingerprint:
+
+- arm 3's fires and mis-fires are unchanged;
+- arm 2 at the matched point is unchanged;
+- arm 2's curve moved at a few other thresholds.
+
+Every figure quoted in this README stands.

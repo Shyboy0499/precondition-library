@@ -12,12 +12,17 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **Held-out states, part 3 (#263, ADR-0039).** `lockfile_conflict` gains held-out paths for its
+  file: nested, a space, a non-ASCII name, a dotfile. On the three committed libraries arm 3
+  mis-fired on 41 of 101 held-out lock-file fires (`results/heldout-2026-10-18/`). Every one was
+  on the spaced or non-ASCII path, from four probes that read git paths without `-z`.
+
 - **The compile prompt says how git quotes paths (ADR-0038).** `git status --porcelain` quotes a
   path with a space, while `git diff --name-only`, `git ls-files` and `git ls-tree` print it bare, and
   all of them escape a non-ASCII name. The prompt now tells the model to read path lists with `-z`.
   Its example probe is tested on real repositories and held-out states. An audit of the committed
-  libraries names 15 probes in 9 of 40 programs that such a path could break. The libraries are not
-  rebuilt.
+  libraries names 15 probes in 9 of 40 programs that such a path could break (at least 16 in 10,
+  after ADR-0039). The libraries are not rebuilt.
 - **Held-out states, part 2 (#263, ADR-0037).** `diverged` gains a held-out shape axis: 2-3
   upstream commits, an upstream-only file and 4-5 local commits, with every label kept. The held-out
   stage now covers `dirty_tree` and `diverged` on all three committed libraries
@@ -65,6 +70,12 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Fixed
 
+- **The fingerprint reads git paths with `-z` (ADR-0039).** `StateFingerprint.observe` printed a
+  non-ASCII path escaped and missed a conflict in it. No shipped fingerprint moves; the held-out
+  `dirty_tree` results were regenerated, with their quoted figures unchanged.
+- **The gold `lockfile_conflict` programs require `deps.lock`.** Their removal checks held
+  vacuously when the file lived elsewhere, so `take_upstream` fired on held-out `keep_local`
+  states.
 - **Admission refuses a program whose preconditions refuse its own state (ADR-0036).** The positive
   side replayed a program without evaluating its preconditions, so one that could never fire passed
   every side; replicate 2's library admitted one. The preconditions must now hold on each positive

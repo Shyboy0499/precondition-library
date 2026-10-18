@@ -1,6 +1,6 @@
 Held-out stage (issue #263): 80 labelled pairs, faults dirty_tree, seeds 3000-3039 (40)
   distinct instances built: dirty_tree 31 -- the number an independence claim is read at, not the seed count
-  library results\replicates-2026-10-05\run-12\library-two-sided (14 admitted of 14 programs), hash ad311de65eb51b120ea97aabb83fe22492c89812232e21bf2c5f1cde4dc8c8c1
+  library results/replicates-2026-10-05/run-12/library-two-sided (14 admitted of 14 programs), hash ad311de65eb51b120ea97aabb83fe22492c89812232e21bf2c5f1cde4dc8c8c1
   arm 2 scorer: lexical
   arm 3: fires 40, wrong 0
   no comparison: arm 3 decides all 80 pairs correctly, so it is the labelling rule rather than a dispatcher: the comparison needs fallible (compiled) programs

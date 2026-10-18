@@ -46,6 +46,7 @@ commit message is not a record.
 | [ADR-0036](ADR-0036-a-program-must-fire-on-its-own-state.md) | accepted | A program's **preconditions must hold on its own positive states**: admission's positive side evaluates them on each fresh positive sandbox before the replay, under both gates, so a program that could never fire is refused (one was admitted in replicate 2's library). |
 | [ADR-0037](ADR-0037-diverged-has-a-held-out-shape.md) | accepted | `diverged` gets a **held-out shape axis** above `HELD_OUT_SEED_BASE`: 2-3 upstream commits, an upstream-only file and 4-5 local commits, every label kept, so the held-out stage tests states built differently and not only renamed. |
 | [ADR-0038](ADR-0038-the-compile-prompt-says-how-git-quotes-paths.md) | accepted | The compile prompt says **git quotes paths inconsistently** and to read every path list with `-z`, after arm 3's first held-out mis-fire; its example probe is run on spaced and non-ASCII collisions, and an audit names 15 path-fragile probes in the committed libraries. |
+| [ADR-0039](ADR-0039-lockfile-conflict-has-held-out-paths.md) | accepted | `lockfile_conflict` gets **held-out paths** (nested, space, non-ASCII, dotfile), and the fingerprint reads git paths with `-z`; arm 3 mis-fired on 41 of 101 held-out lock-file fires, every one on a spaced or non-ASCII path, from four path-reading probes. |
 
 ## When to write one
 

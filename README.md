@@ -16,8 +16,9 @@
 > cleared its pre-registered baseline floor in the two replicates built on the final
 > code. The strongest text scorer screened, a local reranker, still mis-fires on
 > **71–76%**. Those states come from the same generators admission tests against. On
-> **held-out** states no build ever drew, precondition dispatch fired on all 240 positives
-> and mis-fired **once**: a learned check broke on a file name with a space
+> **held-out** states no build ever drew, it mis-fired once in 240 fires on new paths and a new
+> shape, but on **41 of 101** when the lock file moved to new paths. All 42 of those mis-fires
+> were on a file name with a space or a non-ASCII character
 > ([Held-out states](#held-out-states)). The numbers, their provenance and their limits are in
 > [Primary result](#primary-result). What is **not** measured yet is everything at
 > episode level -- the frozen benchmark, the admission factorial and the online arms --
@@ -369,8 +370,9 @@ detectable difference.
   (ADR-0034, spec §7 item 14) and **has not been run**: it needs a provider key, and until
   it runs, no sentence may say it won or lost.
 - **States outside the generators, except in part.** Every pair here comes from the
-  injectors admission tests each program against. Two held-out sources are measured below,
-  and arm 3 mis-fired once on them. Real repositories are not measured.
+  injectors admission tests each program against. Three held-out sources are measured below.
+  On one of them, file names with a space or a non-ASCII character, arm 3 mis-fired often.
+  Real repositories are not measured.
 - **Nothing at episode level.** Mis-fires that end in a wrong repository, cost, the
   admission factorial and the online arms are separate stages, not run here.
 - **Arm 2b cannot separate the two.** At arm 3's coverage the soft vote's matched point
@@ -386,14 +388,16 @@ the defects found on the way are in
 ### Held-out states
 
 The 0 of 563 describes this generator: admission tests every program on states built by the
-same injectors as the evaluation pairs (#263). The held-out stage (ADR-0033, ADR-0037) reads
-each committed library again, read-only, on 40 seeds no build ever drew (3000–3039). It uses two
-sources, each reported on its own:
+same injectors as the evaluation pairs (#263). The held-out stage (ADR-0033, ADR-0037, ADR-0039)
+reads each committed library again, read-only, on 40 seeds no build ever drew (3000–3039). It
+uses three sources, each reported on its own:
 
 - **`dirty_tree` with held-out paths.** States write paths no shipped seed uses: deeper
   directories, a space, a non-ASCII name, a dotfile.
 - **`diverged` with a held-out shape.** Upstream is 2–3 commits ahead across two files, and
   there are 4–5 local commits.
+- **`lockfile_conflict` with held-out paths.** The conflicting file is moved from `deps.lock` to
+  a nested path, a path with a space, a non-ASCII name or a dotfile.
 
 Each block is 40 positives and 40 fault-free negatives.
 
@@ -401,32 +405,41 @@ Each block is 40 positives and 40 fault-free negatives.
 | --- | --- | --- | --- |
 | `dirty_tree`, held-out paths: arm 3 fires, mis-fires | 40, 0 | 40, 0 | 40, **1** |
 | `diverged`, held-out shape: arm 3 fires, mis-fires | 40, 0 | 40, 0 | 40, 0 |
+| `lockfile_conflict`, held-out paths: arm 3 fires, mis-fires | 33, **13** | 33, **8** | 35, **20** |
 | fires on the fault-free negatives (each block) | 0 | 0 | 0 |
 
-**What it shows.** Arm 3 fired on every held-out positive and mis-fired once in 240 fires
-(0.4%, 95% Wilson upper bound 2.3%). The mis-fire is the generalisation failure #263 asked
-about.
+**What it shows.** The first two sources carried: one mis-fire in 240 fires (0.4%, 95% Wilson
+upper bound 2.3%). The third did not: 41 of 101 fires were wrong. **Every one of those 42
+mis-fires is on a path with a space or a non-ASCII name.** On the lock file's spaced and
+non-ASCII paths, 41 of 60 fires were wrong. On its nested and dotfile paths, none of 41 was.
 
-- **What broke.** Replicate 3's `stash` program compares two git path lists, and git quotes a
-  name with a space in one and not the other. On `scratch notes.md` the check saw no collision,
-  and the program fired where `aside` was needed.
-- **Why admission passed it.** The check is right on every shipped state, because no shipped path
-  needs quoting.
-- **How common the defect is.** An audit found 15 probes in 9 of the 40 admitted programs that a
-  space or a non-ASCII name could break. Three were confirmed by running them, and 12 were found by
-  reading (ADR-0038).
-- **What changed.** The compile prompt now tells the model to read path lists with `-z`. Whether
-  that removes the defect is for the next live build.
+- **What broke.** Five learned checks read a git path list without `-z`. Then they compared it
+  with another list, used it as a file name or pathspec, or split it on spaces. On a name git
+  quotes or escapes, each finds nothing. Each is an absence check, so finding nothing means it
+  holds, and the program fires. Two of them are `diverged` `discard` programs firing on a
+  lock-file conflict, which throws the local dependency changes away.
+- **Why admission passed them.** Each check is right on every shipped state, because no shipped
+  path needs quoting.
+- **How common the defect is.** Reading the libraries found at least 16 probes in 10 of the 40
+  admitted programs that such a path could break (ADR-0038, corrected by ADR-0039). The lock-file
+  block ran them: four of its probes cause all 41 of its mis-fires.
+- **What changed.**
+  - The compile prompt now tells the model to read path lists with `-z`. Whether that removes the
+    defect is for the next live build.
+  - The harness's own fingerprint had the same bug, and is fixed.
+  - The hand-written reference programs had a hard-coded file name, and now refuse rather than
+    mis-fire.
 
 **What it does not show.**
 
 - **A comparison with arm 2.** No held-out floor is measured, so no sentence may say arm 3 beats
   text similarity on these states (ADR-0033).
-- **States of a different kind.** Both sources keep the fault's kind of state, with new names and
-  counts. Real checkouts and the other three faults' axes are not measured.
+- **States of a different kind.** All three sources keep the fault's kind of state, with new
+  names, paths and counts. Real checkouts and the other two faults' axes are not measured.
 
-The details are in [`results/heldout-2026-10-16/`](results/heldout-2026-10-16/README.md), and
-part 1 is in [`results/heldout-2026-10-10/`](results/heldout-2026-10-10/README.md).
+The details are in [`results/heldout-2026-10-18/`](results/heldout-2026-10-18/README.md) (the
+lock-file block), [`results/heldout-2026-10-16/`](results/heldout-2026-10-16/README.md) and
+[`results/heldout-2026-10-10/`](results/heldout-2026-10-10/README.md).
 
 ### Measured since
 

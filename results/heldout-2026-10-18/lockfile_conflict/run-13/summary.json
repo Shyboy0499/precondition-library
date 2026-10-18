@@ -1,0 +1,275 @@
+{
+  "source": "results/replicates-2026-10-05/run-13",
+  "library_root": "results/replicates-2026-10-05/run-13/library-two-sided",
+  "library_hash_before": "b3612185dad48f7c412350d5503b144bd768994abca9f884956574f628b1652a",
+  "library_hash_after": "b3612185dad48f7c412350d5503b144bd768994abca9f884956574f628b1652a",
+  "scorer": {
+    "scorer": "lexical"
+  },
+  "faults": [
+    "lockfile_conflict"
+  ],
+  "seeds": [
+    3000,
+    3001,
+    3002,
+    3003,
+    3004,
+    3005,
+    3006,
+    3007,
+    3008,
+    3009,
+    3010,
+    3011,
+    3012,
+    3013,
+    3014,
+    3015,
+    3016,
+    3017,
+    3018,
+    3019,
+    3020,
+    3021,
+    3022,
+    3023,
+    3024,
+    3025,
+    3026,
+    3027,
+    3028,
+    3029,
+    3030,
+    3031,
+    3032,
+    3033,
+    3034,
+    3035,
+    3036,
+    3037,
+    3038,
+    3039
+  ],
+  "distinct_instances": {
+    "lockfile_conflict": 37
+  },
+  "pairs": 80,
+  "programs": 17,
+  "admitted": 13,
+  "arm3_fires": 35,
+  "arm3_wrong": 20,
+  "arm2_at_matched": "arm 2 (threshold 0.1388888888888889) mismatches 25/32 at arm 3's coverage, coverage gap -0.037, mismatch difference (arm 2 - arm 3) +0.2098",
+  "smallest_detectable_difference": 0.3426117330135153,
+  "wording": "no held-out floor is measured, so this stage may not say precondition dispatch beats text similarity; it reports the held-out coverage, the mis-fire counts and the comparison",
+  "figure": "Primary metric, uninformed regime, 80 labelled pairs (spec §7 item 1, ADR-0008)\n  arm 3 (pre-registered coverage point): coverage 35/80, mismatch 20/35\n  arm 2 curve: 32 operating point(s), each with a 95% Wilson interval in figure1.csv\n  at matched coverage arm 2 (threshold 0.1388888888888889) has mismatch 25/32; coverage gap -0.037; mismatch difference (arm 2 - arm 3) +0.2098\n  power (item 3): with 32 and 35 fires, alpha 0.05 two-sided and power 0.8, the smallest detectable mismatch difference is 0.343 at a 50% base rate and 0.322 at the observed 0.672\n  baseline arm 2b (soft vote): curve, 2 operating point(s) -- context, not part of the claim\n  baseline arm 2c (intent key): point, 1 operating point(s) -- context, not part of the claim\n",
+  "wrong_fires": [
+    {
+      "environment": "lockfile_conflict",
+      "seed": 3001,
+      "correct_variant": "keep_local",
+      "acceptable_variants": [
+        "keep_local"
+      ],
+      "fired_variant": "discard",
+      "task_text": "The sync conflicts. Resolve it the way this project expects."
+    },
+    {
+      "environment": "lockfile_conflict",
+      "seed": 3002,
+      "correct_variant": "keep_local",
+      "acceptable_variants": [
+        "keep_local"
+      ],
+      "fired_variant": "discard",
+      "task_text": "Bring this branch up to date with upstream. Both of us changed our dependencies."
+    },
+    {
+      "environment": "lockfile_conflict",
+      "seed": 3005,
+      "correct_variant": "take_upstream",
+      "acceptable_variants": [
+        "keep_local",
+        "take_upstream"
+      ],
+      "fired_variant": "discard",
+      "task_text": "Upstream and I both moved our dependencies on. Catch my branch up properly."
+    },
+    {
+      "environment": "lockfile_conflict",
+      "seed": 3006,
+      "correct_variant": "keep_local",
+      "acceptable_variants": [
+        "keep_local"
+      ],
+      "fired_variant": "discard",
+      "task_text": "Update this branch from upstream and make sure the dependency list still makes sense."
+    },
+    {
+      "environment": "lockfile_conflict",
+      "seed": 3009,
+      "correct_variant": "take_upstream",
+      "acceptable_variants": [
+        "take_upstream"
+      ],
+      "fired_variant": "discard",
+      "task_text": "Catch up with upstream without losing what either side added, or reviving what either side removed."
+    },
+    {
+      "environment": "lockfile_conflict",
+      "seed": 3010,
+      "correct_variant": "keep_local",
+      "acceptable_variants": [
+        "keep_local"
+      ],
+      "fired_variant": "discard",
+      "task_text": "Bring this branch up to date with upstream. Both of us changed our dependencies."
+    },
+    {
+      "environment": "lockfile_conflict",
+      "seed": 3013,
+      "correct_variant": "keep_local",
+      "acceptable_variants": [
+        "keep_local"
+      ],
+      "fired_variant": "discard",
+      "task_text": "Syncing with upstream stopped on a conflict. Get it through without losing any dependency either side meant to have."
+    },
+    {
+      "environment": "lockfile_conflict",
+      "seed": 3014,
+      "correct_variant": "take_upstream",
+      "acceptable_variants": [
+        "take_upstream"
+      ],
+      "fired_variant": "discard",
+      "task_text": "Upstream and I both moved our dependencies on. Catch my branch up properly."
+    },
+    {
+      "environment": "lockfile_conflict",
+      "seed": 3017,
+      "correct_variant": "take_upstream",
+      "acceptable_variants": [
+        "keep_local",
+        "take_upstream"
+      ],
+      "fired_variant": "discard",
+      "task_text": "Get my fork current with upstream; our dependency changes collided."
+    },
+    {
+      "environment": "lockfile_conflict",
+      "seed": 3018,
+      "correct_variant": "take_upstream",
+      "acceptable_variants": [
+        "take_upstream"
+      ],
+      "fired_variant": "discard",
+      "task_text": "Bring this branch up to date with upstream. Both of us changed our dependencies."
+    },
+    {
+      "environment": "lockfile_conflict",
+      "seed": 3021,
+      "correct_variant": "keep_local",
+      "acceptable_variants": [
+        "keep_local"
+      ],
+      "fired_variant": "discard",
+      "task_text": "Get my fork current with upstream; our dependency changes collided."
+    },
+    {
+      "environment": "lockfile_conflict",
+      "seed": 3022,
+      "correct_variant": "take_upstream",
+      "acceptable_variants": [
+        "take_upstream"
+      ],
+      "fired_variant": "discard",
+      "task_text": "Catch up with upstream without losing what either side added, or reviving what either side removed."
+    },
+    {
+      "environment": "lockfile_conflict",
+      "seed": 3025,
+      "correct_variant": "take_upstream",
+      "acceptable_variants": [
+        "take_upstream"
+      ],
+      "fired_variant": "discard",
+      "task_text": "Bring this branch up to date with upstream. Both of us changed our dependencies."
+    },
+    {
+      "environment": "lockfile_conflict",
+      "seed": 3026,
+      "correct_variant": "keep_local",
+      "acceptable_variants": [
+        "keep_local"
+      ],
+      "fired_variant": "discard",
+      "task_text": "Update this branch from upstream and make sure the dependency list still makes sense."
+    },
+    {
+      "environment": "lockfile_conflict",
+      "seed": 3029,
+      "correct_variant": "take_upstream",
+      "acceptable_variants": [
+        "take_upstream"
+      ],
+      "fired_variant": "discard",
+      "task_text": "Syncing with upstream stopped on a conflict. Get it through without losing any dependency either side meant to have."
+    },
+    {
+      "environment": "lockfile_conflict",
+      "seed": 3030,
+      "correct_variant": "take_upstream",
+      "acceptable_variants": [
+        "keep_local",
+        "take_upstream"
+      ],
+      "fired_variant": "discard",
+      "task_text": "Bring this branch up to date with upstream. Both of us changed our dependencies."
+    },
+    {
+      "environment": "lockfile_conflict",
+      "seed": 3033,
+      "correct_variant": "take_upstream",
+      "acceptable_variants": [
+        "take_upstream"
+      ],
+      "fired_variant": "discard",
+      "task_text": "Syncing with upstream stopped on a conflict. Get it through without losing any dependency either side meant to have."
+    },
+    {
+      "environment": "lockfile_conflict",
+      "seed": 3034,
+      "correct_variant": "keep_local",
+      "acceptable_variants": [
+        "keep_local"
+      ],
+      "fired_variant": "discard",
+      "task_text": "The sync conflicts. Resolve it the way this project expects."
+    },
+    {
+      "environment": "lockfile_conflict",
+      "seed": 3037,
+      "correct_variant": "take_upstream",
+      "acceptable_variants": [
+        "take_upstream"
+      ],
+      "fired_variant": "discard",
+      "task_text": "Upstream and I both moved our dependencies on. Catch my branch up properly."
+    },
+    {
+      "environment": "lockfile_conflict",
+      "seed": 3038,
+      "correct_variant": "take_upstream",
+      "acceptable_variants": [
+        "keep_local",
+        "take_upstream"
+      ],
+      "fired_variant": "discard",
+      "task_text": "Update this branch from upstream and make sure the dependency list still makes sense."
+    }
+  ],
+  "artifacts": {
+    "primary": "primary"
+  }
+}

@@ -80,3 +80,15 @@ metric could never see it. On held-out paths it mis-fires once in 40.
   counts. Real checkouts (#181) and other faults' axes remain.
 - **How often a space-in-path probe defect would bite in practice.** That depends on the
   repositories, not on this block.
+
+## Regenerated on 2026-10-18 (ADR-0039)
+
+`StateFingerprint.observe` now reads git path lists with `-z`. Before, a non-ASCII name such as
+`design/Übersicht.md` was printed as an escaped string in the fingerprint arm 2 reads. The held-out
+`dirty_tree` directories here were regenerated with the fixed fingerprint:
+
+- arm 3's fires and mis-fires are unchanged;
+- arm 2 at the matched point is unchanged;
+- arm 2's curve moved at a few other thresholds.
+
+Every figure quoted in this README stands.

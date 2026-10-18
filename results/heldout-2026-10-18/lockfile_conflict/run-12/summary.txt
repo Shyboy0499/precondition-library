@@ -1,0 +1,25 @@
+Held-out stage (issue #263): 80 labelled pairs, faults lockfile_conflict, seeds 3000-3039 (40)
+  distinct instances built: lockfile_conflict 37 -- the number an independence claim is read at, not the seed count
+  library results/replicates-2026-10-05/run-12/library-two-sided (14 admitted of 14 programs), hash ad311de65eb51b120ea97aabb83fe22492c89812232e21bf2c5f1cde4dc8c8c1
+  arm 2 scorer: lexical
+  arm 3: fires 33, wrong 8
+  arm 2 (threshold 0.12962962962962962) mismatches 32/32 at arm 3's coverage, coverage gap -0.012, mismatch difference (arm 2 - arm 3) +0.7576
+  smallest detectable mismatch difference at a 50% base rate with these fire counts: 0.348
+  wording: no held-out floor is measured, so this stage may not say precondition dispatch beats text similarity; it reports the held-out coverage, the mis-fire counts and the comparison
+  wrong fires (8), each naming its pair:
+    lockfile_conflict: fired take_upstream, pair accepts ('keep_local',) -- 'The sync conflicts. Resolve it the way this project expects.'
+    lockfile_conflict: fired take_upstream, pair accepts ('keep_local',) -- 'Bring this branch up to date with upstream. Both of us changed our dependencies.'
+    lockfile_conflict: fired take_upstream, pair accepts ('keep_local',) -- 'Update this branch from upstream and make sure the dependency list still makes sense.'
+    lockfile_conflict: fired take_upstream, pair accepts ('keep_local',) -- 'Bring this branch up to date with upstream. Both of us changed our dependencies.'
+    lockfile_conflict: fired take_upstream, pair accepts ('keep_local',) -- 'Syncing with upstream stopped on a conflict. Get it through without losing any dependency either side meant to have.'
+    lockfile_conflict: fired take_upstream, pair accepts ('keep_local',) -- 'Get my fork current with upstream; our dependency changes collided.'
+    lockfile_conflict: fired take_upstream, pair accepts ('keep_local',) -- 'Update this branch from upstream and make sure the dependency list still makes sense.'
+    lockfile_conflict: fired take_upstream, pair accepts ('keep_local',) -- 'The sync conflicts. Resolve it the way this project expects.'
+
+Primary metric, uninformed regime, 80 labelled pairs (spec §7 item 1, ADR-0008)
+  arm 3 (pre-registered coverage point): coverage 33/80, mismatch 8/33
+  arm 2 curve: 34 operating point(s), each with a 95% Wilson interval in figure1.csv
+  at matched coverage arm 2 (threshold 0.12962962962962962) has mismatch 32/32; coverage gap -0.012; mismatch difference (arm 2 - arm 3) +0.7576
+  power (item 3): with 32 and 33 fires, alpha 0.05 two-sided and power 0.8, the smallest detectable mismatch difference is 0.348 at a 50% base rate and 0.338 at the observed 0.615
+  baseline arm 2b (soft vote): curve, 3 operating point(s) -- context, not part of the claim
+  baseline arm 2c (intent key): point, 1 operating point(s) -- context, not part of the claim
