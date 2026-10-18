@@ -337,6 +337,11 @@ resolutions, arm 2 swept to arm 3's coverage. Three whole-run replicates (spec �
 | reranker arm 2 at matched coverage: mis-fires | 142/186 | 133/187 | 134/189 |
 | difference (reranker arm 2 − arm 3) | +0.76 | **+0.71** | **+0.71** |
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/figures/primary-dark.svg">
+  <img src="docs/figures/primary-light.svg" alt="Mis-fire rate at matched coverage, one dot per replicate with its 95% Wilson interval. Precondition checks: 0 of 563 fires wrong. Text similarity: lexical 76–81%, embedding 77–90%, reranker 71–76%.">
+</picture>
+
 **How to read coverage.** Half of each run's 400 pairs are fault-free negatives, where the
 correct decision is not to fire, so a dispatcher that never mis-fires covers at most 0.5;
 anything above that is fires on negatives. Arm 3's 187–189 fires are 93.5–94.5% of the 200
@@ -407,6 +412,15 @@ Each block is 40 positives and 40 fault-free negatives.
 | `diverged`, held-out shape: arm 3 fires, mis-fires | 40, 0 | 40, 0 | 40, 0 |
 | `lockfile_conflict`, held-out paths: arm 3 fires, mis-fires | 33, **13** | 33, **8** | 35, **20** |
 | fires on the fault-free negatives (each block) | 0 | 0 | 0 |
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/figures/heldout-dark.svg">
+  <img src="docs/figures/heldout-light.svg" alt="Arm 3's mis-fire rate summed over the three libraries. In distribution 0 of 563. Held out: dirty_tree at new paths 1 of 120; diverged in a new shape 0 of 120; lockfile_conflict at new paths 41 of 101, all 41 on a path with a space or a non-ASCII name.">
+</picture>
+
+Both figures are drawn from the committed result files by
+[`docs/figures/make_readme_figures.py`](docs/figures/make_readme_figures.py); nothing in them is
+typed in.
 
 **What it shows.** The first two sources carried: one mis-fire in 240 fires (0.4%, 95% Wilson
 upper bound 2.3%). The third did not: 41 of 101 fires were wrong. **Every one of those 42

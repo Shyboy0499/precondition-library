@@ -12,6 +12,10 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **Two README figures.** The primary comparison (mis-fire rate at matched coverage, per
+  replicate, with Wilson intervals) and the held-out picture, each in light and dark.
+  `docs/figures/make_readme_figures.py` draws them from the committed result files, and a rerun
+  is byte-identical.
 - **Held-out states, part 3 (#263, ADR-0039).** `lockfile_conflict` gains held-out paths for its
   file: nested, a space, a non-ASCII name, a dotfile. On the three committed libraries arm 3
   mis-fired on 41 of 101 held-out lock-file fires (`results/heldout-2026-10-18/`). Every one was
