@@ -139,6 +139,7 @@
 | 129 | 2026-10-17 | **The compile prompt says how git quotes paths (ADR-0038).** Arm 3's first held-out mis-fire came from a probe that compared `git status --porcelain`, which quotes a path with a space, with `git diff --name-only`, which does not. Both escape a non-ASCII name, and `core.quotePath=false` does not stop `status` quoting a space. The prompt now names which commands quote what, says to read every path list with `-z`, and to list untracked files with `git ls-files --others --exclude-standard -z`. `tests/test_path_quoting.py` runs the prompt's own example on spaced and non-ASCII collisions and on held-out states 3038 and 3010. An audit of the committed libraries found 15 probes in 9 of 40 admitted programs that a space or a non-ASCII name could break; 3 were confirmed by running, 12 found by reading. **This changes the compile prompt only**, by 865 characters, identically across arms; admission is unchanged and no committed figure moves. |
 | 130 | 2026-10-18 | **`lockfile_conflict` has held-out paths, and the fingerprint reads git paths with `-z` (issue #263, ADR-0039).** Above `HELD_OUT_SEED_BASE` the lock-shaped file moves from `deps.lock` to a nested path, a path with a space, a non-ASCII name or a dotfile; below it every seed keeps `deps.lock` and its identity, the checker grades the recorded path, and `bench.heldout.HELD_OUT_FAULTS` gains the fault. Building the non-ASCII state showed `StateFingerprint.observe` missing the conflict, because `git diff --name-only` escaped the name; every path list is now read NUL-separated. Of 410 shipped fingerprints compared none moved, and six held-out `dirty_tree` ones changed only in how a non-ASCII name prints; those committed held-out results were regenerated with arm 3's counts and arm 2's matched point unchanged. The gold `lockfile_conflict` programs now require `deps.lock` on both sides, which they rebuild by name. On the three committed libraries arm 3 mis-fired on 41 of 101 held-out lock-file fires, all on the spaced or non-ASCII path, from four probes; ADR-0038's audit missed one of them, so its count becomes at least 16 probes in 10 programs (`results/heldout-2026-10-18/`). |
 | 131 | 2026-10-18 | **A repository-derived value is bound only if a shell cannot read it as code (ADR-0040).** `substitute` pastes a bound value into probe and body text as written, and both run under `bash -c`. On a checkout (#181) `upstream_branch` is the remote's recorded default branch and `submodule_path` the first `.gitmodules` path, both written by someone other than the user. Measured before the fix: a remote whose default branch is `x;>PWNED` made a probe naming `{upstream_branch}` create `PWNED` in the checkout, and the snapshot refused the probe only after it had run. `bindings` and `repository_bindings` now leave unbound any repository-derived value that is not `shell_safe` (letters, digits, `._/+-`, no leading `/` or `-`, no `..` component), so a program needing it is not applicable; `upstream_ref` then raises `NoUpstreamError` as for any checkout with no derivable upstream. `.gitmodules` is read with `-z` by one function, `sandbox.gitmodules_path`: both readers split the plain output on whitespace, so a submodule at `my lib` bound as `lib`. §9's threat table gains the row. Every harness binding is unchanged, so no committed figure moves. |
+| 132 | 2026-10-19 | **A sixth family, `config_renamed`, whose state is config files rather than git history (issue #266 step 1, ADR-0041).** A synthetic app keeps a key-rename table and its settings under `config/`; a seed builds `stale_key` (rename it), `both_keys` (delete the dead old line) or `local_override` (rename it in the git-ignored override, which must stay untracked). The fingerprint gains `config_stale_keys`, `config_keys_set_twice` and `config_ignored_files`, read from files and **rendered only when set**, so every earlier state's text is unchanged: 610 fingerprints compared before and after, none moved. `update_renamed_config_keys` is registered with gold programs that read the rename table; replay pins each state to exactly its own resolution. The guard now recognises a quoted assignment before `read` (`IFS=' =' read -r k v`), which it refused as an environment read. Future plans measure six families (480 pairs; the eval set's 146 environments); committed runs are unaffected, since rescoring reads each run's `plan.json`. Steps 2 and 3 of #266 (a build of the family, and one with a second model) need a provider key. |
 
 ---
 
@@ -280,7 +281,7 @@ not preferences:
    obvious "agent does devops" tasks and is the reason the family below is
    narrow.
 
-### The five faults
+### The faults
 
 | fault | why it recurs | why it is branchy |
 | --- | --- | --- |
@@ -289,6 +290,7 @@ not preferences:
 | `branch_renamed` | upstream renames a default branch once, then forks stay broken | requires detecting the disappearance of a remote-tracking branch and re-pointing the local one |
 | `submodule_moved` | submodule pins drift constantly in fork-heavy repos | recovery differs by whether the submodule is initialised, dirty, or absent |
 | `lockfile_conflict` | dependency bumps conflict in generated files | the right fix is regeneration, not marker-editing — and marker-editing *appears* to succeed |
+| `config_renamed` | apps rename config keys, and old names linger in shared and private config files | whether the old name stands alone, beside its new name, or only in a git-ignored override decides rename vs delete vs migrate-in-place; its state is the files, not git history (ADR-0041) |
 
 `lockfile_conflict` is included as much for the **negative sandboxes** it
 supplies as for its positive ones: it is the fault most likely to produce a
@@ -309,6 +311,7 @@ described by **intents**, each carrying a paraphrase distribution and one or mor
 | `keep_uncommitted_work_and_sync` | stash / commit / aside | whether an untracked file sits where upstream now tracks one, and whether the uncommitted edits touch a file upstream changed (ADR-0027) |
 | `follow_renamed_upstream_branch` | rename / retrack / merge | whether the branch follows a name upstream no longer uses, whether local commits exist, and whether a local branch already has the new name (ADR-0028) |
 | `sync_through_a_conflicting_lockfile` | take_upstream / keep_local | whether a sync would conflict in a file both sides changed, and which side dropped lines the other kept (ADR-0029) |
+| `update_renamed_config_keys` | rename / drop_old / migrate_local | whether a config file still sets a renamed key, whether it sets the new name too, and whether the file is git-ignored (ADR-0041) |
 
 Only intents with two or more resolutions have an experimental surface, and
 `tasks/registry.py` is the single place that distinction lives, so an
@@ -1136,10 +1139,14 @@ breakdown the report carries (`bench.report.achieved_instances`) is:
 | `branch_renamed` | `retrack` | 9 |
 | `lockfile_conflict` | `keep_local` | 11 |
 | `lockfile_conflict` | `take_upstream` | 17 |
+| `config_renamed` | `drop_old` | 9 |
+| `config_renamed` | `migrate_local` | 11 |
+| `config_renamed` | `rename` | 7 |
 
-The 40-seed eval set therefore builds **119 independent environments** -- 47 on the
+The 40-seed eval set therefore builds **146 independent environments** -- 47 on the
 first two faults, up from 6, 14 on `dirty_tree` since ADR-0027, 30 on `branch_renamed`
-since ADR-0028 and 28 on `lockfile_conflict` since ADR-0029 -- and every resolution
+since ADR-0028, 28 on `lockfile_conflict` since ADR-0029 and 27 on `config_renamed`
+since ADR-0041 -- and every resolution
 reaches the owner's target of 4. `lockfile_conflict`'s versions follow from its drawn
 package pair rather than being drawn on their own: drawn independently, no seed set
 ever repeated an instance, and the cost curve is read from repeats. `dirty_tree/aside` sits exactly on it:
@@ -1155,14 +1162,15 @@ measurement, including that distinct identities are distinct environments, with
 reason.** No interval could be attached at 6 environments. One arm's success
 rate now carries a real interval: its 95% Wilson half-width near 0.5 is about
 **±18.6pp** at the owner's target of 24, **±13.7pp** at the 47 the first two faults
-build, **±12.2pp** at the 61 three build, **±10.1pp** at the 91 four build and **±8.8pp**
-at the 119 all five build. But the
+build, **±12.2pp** at the 61 three build, **±10.1pp** at the 91 four build, **±8.8pp**
+at the 119 the five git faults build and **±8.0pp** at the 146 all six build. But the
 ±10pp margin (item 10) is applied to the **difference** between two arms' rates, by
 a TOST at a 90% interval, and that interval is wider. With `tost_equivalence` and
 both arms at the same observed 50% rate — the most favourable case — the difference's
 half-width is about **±22.5pp** at 24 per arm, **±16.5pp** at 47, **±14.6pp** at 61,
-**±12.0pp** at 91 and **±10.5pp** at 119, and ±10pp first
-becomes passable at **133 per arm** (87 at an 80% rate, 53 at 90%; any observed
+**±12.0pp** at 91, **±10.5pp** at 119 and **±9.5pp** at 146, and ±10pp first
+becomes passable at **133 per arm** (so the six families' 146 clear it, in that most
+favourable case only) (87 at an 80% rate, 53 at 90%; any observed
 difference needs more). ADR-0006 keeps the margin at ±10pp, so at the achieved N the
 expected verdict is "comparable", which the report already produces for an
 underpowered run. The pre-registered primary

@@ -12,6 +12,11 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **A sixth family outside git history (#266, ADR-0041).** `config_renamed`: an app's config
+  still sets a renamed key, alone, beside its new name, or only in a git-ignored override, and
+  each needs a different fix. Registered with its intent, gold programs, state grid and
+  admit-set episodes. Its fingerprint fields render only when set, so no earlier state's
+  arm-2 text changes. The guard now reads `IFS=' =' read -r k v` as assigning `k` and `v`.
 - **Two README figures.** The primary comparison (mis-fire rate at matched coverage, per
   replicate, with Wilson intervals) and the held-out picture, each in light and dark.
   `docs/figures/make_readme_figures.py` draws them from the committed result files, and a rerun

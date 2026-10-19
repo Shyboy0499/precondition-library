@@ -406,6 +406,33 @@ def test_same_declared_phrasings_imply_same_text_for_every_seed(make_state) -> N
                 remotes=["origin"],
             ),
         ),
+        # Both `drop_old`: some key set under both names. Everything else varies.
+        "update_renamed_config_keys": (
+            make_state(
+                dirty_worktree=True,
+                branch="feature",
+                upstream_ahead=7,
+                upstream_behind=3,
+                has_locked_branch=True,
+                config_stale_keys=["config/settings.conf: retries -> max_retries"],
+                config_keys_set_twice=["config/settings.conf: retries -> max_retries"],
+                remotes=["origin", "upstream", "fork"],
+            ),
+            make_state(
+                dirty_worktree=False,
+                branch="main",
+                upstream_ahead=0,
+                upstream_behind=0,
+                has_locked_branch=False,
+                config_stale_keys=[
+                    "config/app.conf: log -> log_level",
+                    "config/app.conf: timeout_s -> request_timeout_s",
+                ],
+                config_keys_set_twice=["config/app.conf: log -> log_level"],
+                config_ignored_files=["config/local.conf"],
+                remotes=["origin"],
+            ),
+        ),
     }
     for intent in ambiguous_intents():
         left, right = pairs[intent.name]

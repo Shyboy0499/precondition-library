@@ -115,6 +115,21 @@ ADMIT_SET: dict[str, tuple[AdmitEpisode, ...]] = {
             "upstream added.",
         ),
     ),
+    "config_renamed": (
+        AdmitEpisode(
+            (0, 7), "rename", "Rename the old key in the project's settings and keep its value."
+        ),
+        AdmitEpisode(
+            (23, 35),
+            "drop_old",
+            "The new name is already set too, so delete the old key's line and keep the new one.",
+        ),
+        AdmitEpisode(
+            (14, 18),
+            "migrate_local",
+            "Rename the old key in my own override file, and keep that file out of git.",
+        ),
+    ),
 }
 """Each measured fault's build episodes, one per declared resolution (ADR-0032)."""
 

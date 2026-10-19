@@ -30,9 +30,9 @@ from precondition_library.tasks.faults import FAULTS
 def test_the_universe_is_clean_plus_every_faults_distinct_states() -> None:
     universe = sampled_states()
     assert universe[0] == ("", 0), "the clean sandbox is first"
-    assert len(universe) == 16, (
-        "clean + 3 each for diverged, submodule, dirty_tree, branch_renamed and "
-        "lockfile_conflict: every injected state, not one per label"
+    assert len(universe) == 19, (
+        "clean + 3 each for diverged, submodule, dirty_tree, branch_renamed, "
+        "lockfile_conflict and config_renamed: every injected state, not one per label"
     )
     # No duplicate (fault, seed) entries -- each sampled state is distinct.
     assert len(set(universe)) == len(universe)
@@ -63,7 +63,7 @@ def test_a_gold_program_fires_on_exactly_its_own_state(intent: str) -> None:
             and FAULTS[fault].variant_for_seed(seed) == program.variant
         )
         fired, total, where = precondition_breadth(program)
-        assert total == 16
+        assert total == 19
         assert fired == own, f"{program.id} fired on {where}, expected only its own states"
         assert fired <= BREADTH_CAP * total
 
@@ -82,7 +82,7 @@ def test_an_over_broad_precondition_is_measured_over_cap_and_refused() -> None:
         }
     )
     fired, total, _where = precondition_breadth(program)
-    assert fired == total == 16
+    assert fired == total == 19
     assert fired > BREADTH_CAP * total
 
     admitted, reason = admit(program, "diverged", seeds=[1])

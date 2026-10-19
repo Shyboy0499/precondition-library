@@ -165,6 +165,7 @@ def test_registry_exposes_only_intents_with_a_surface() -> None:
         "restore_submodule_state",
         "sync_fork_with_upstream",
         "sync_through_a_conflicting_lockfile",
+        "update_renamed_config_keys",
     ]  # sorted
 
 

@@ -44,6 +44,53 @@ def _render(value: object) -> str:
     return str(value)
 
 
+CONFIG_DIR = "config"
+RENAMES_FILE = "config/renames.conf"
+"""The app's key-rename table (ADR-0041): one `old = new` per line."""
+
+_CONFIG_FIELDS = frozenset({"config_stale_keys", "config_keys_set_twice", "config_ignored_files"})
+"""Fields `as_text` renders only when set. Every state before ADR-0041 has none of them, so
+leaving them out when empty keeps each such state's text, and every arm-2 figure taken from it,
+byte for byte what it was."""
+
+
+def config_assignments(text: str) -> list[tuple[str, str]]:
+    """The `key = value` lines of a config file, in order; comments and blank lines skipped."""
+    pairs = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, _, value = stripped.partition("=")
+        pairs.append((key.strip(), value.strip()))
+    return pairs
+
+
+def _config_tree(work: Path) -> tuple[list[str], list[str], list[str]]:
+    """Stale keys, keys set under both names, and ignored config files, as the fields hold them."""
+    renames_path = work / RENAMES_FILE
+    if not renames_path.is_file():
+        return [], [], []
+    renames = dict(config_assignments(renames_path.read_text(encoding="utf-8")))
+    stale: list[str] = []
+    twice: list[str] = []
+    for path in sorted((work / CONFIG_DIR).glob("*.conf")):
+        relative = f"{CONFIG_DIR}/{path.name}"
+        if relative == RENAMES_FILE or not path.is_file():
+            continue
+        keys = {key for key, _ in config_assignments(path.read_text(encoding="utf-8"))}
+        for old, new in sorted(renames.items()):
+            if old in keys:
+                stale.append(f"{relative}: {old} -> {new}")
+                if new in keys:
+                    twice.append(f"{relative}: {old} -> {new}")
+    ignored = run_git(
+        ("ls-files", "--others", "--ignored", "--exclude-standard", "-z", "--", CONFIG_DIR),
+        cwd=work,
+    ).stdout
+    return stale, twice, sorted(name for name in ignored.split("\0") if name)
+
+
 class _ThreeWay:
     """One file's three versions -- merge base, local, upstream -- read without writing.
 
@@ -163,6 +210,18 @@ class StateFingerprint(BaseModel):
     """In those files, lines of the merge base upstream removed and the local side kept."""
     local_dropped_lines: list[str] = []
     """In those files, lines of the merge base the local side removed and upstream kept."""
+
+    # Discriminators for the renamed-config-key intent (#266, ADR-0041). Read from files, not
+    # from git history: the app keeps its key renames in `config/renames.conf`, one `old = new`
+    # per line, and its settings in the other `config/*.conf` files, one `key = value` per line.
+    config_stale_keys: list[str] = []
+    """Each renamed key a config file still sets, as `<path>: <old> -> <new>`, over every
+    `config/*.conf` but the renames table, tracked or not."""
+    config_keys_set_twice: list[str] = []
+    """Of those, each whose file sets the new name too, in the same form."""
+    config_ignored_files: list[str] = []
+    """Config files git ignores:
+    `git ls-files --others --ignored --exclude-standard -z -- config`."""
 
     @property
     def conflicting_files(self) -> set[str]:
@@ -296,6 +355,8 @@ class StateFingerprint(BaseModel):
                     conflicted.append(three)
                     conflicted_names.append(path)
 
+        config_stale, config_twice, config_ignored = _config_tree(work)
+
         return cls(
             dirty_worktree=bool(out("status", "--porcelain")),
             branch=branch,
@@ -325,6 +386,9 @@ class StateFingerprint(BaseModel):
             local_dropped_lines=sorted(
                 {line for three in conflicted for line in three.dropped_by("local")}
             ),
+            config_stale_keys=config_stale,
+            config_keys_set_twice=config_twice,
+            config_ignored_files=config_ignored,
         )
 
     def as_text(self) -> str:
@@ -342,9 +406,14 @@ class StateFingerprint(BaseModel):
         blindness is that it cannot *evaluate* this text, so handing it a probe's
         verdict would give it arm 3's mechanism and reduce the ablation to one
         signal compared with itself.
+
+        The config fields (`_CONFIG_FIELDS`) are rendered only when set, so a state with no
+        config tree reads exactly as it did before they existed (ADR-0041).
         """
         return "\n".join(
-            f"{name}: {_render(getattr(self, name))}" for name in type(self).model_fields
+            f"{name}: {_render(getattr(self, name))}"
+            for name in type(self).model_fields
+            if name not in _CONFIG_FIELDS or getattr(self, name)
         )
 
 

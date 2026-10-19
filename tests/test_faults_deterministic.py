@@ -57,6 +57,7 @@ DISTINGUISHING_SEEDS: dict[str, tuple[int, int]] = {
     "branch_renamed": (0, 3),  # trunk vs develop
     "submodule_moved": (0, 4),  # remove vs init
     "lockfile_conflict": (0, 3),  # birch/elder vs dogwood/hazel
+    "config_renamed": (0, 23),  # stale_key vs both_keys
 }
 
 
@@ -137,6 +138,9 @@ def _seed_signal(fault_type: str, box: Sandbox) -> object:
     if fault_type == "lockfile_conflict":
         # The seed picks package names and versions, so the file bytes differ.
         return (box.work / lockfile_conflict.LOCK_PATH).read_text(encoding="utf-8")
+    if fault_type == "config_renamed":
+        # The seed picks the state, the stale key and the values, all in the settings' bytes.
+        return (box.work / "config/settings.conf").read_text(encoding="utf-8")
     raise KeyError(f"no distinguishing signal defined for fault {fault_type!r}")
 
 
@@ -236,6 +240,8 @@ def test_injected_states_are_distinguishable(fault_type: str, make_sandbox) -> N
                         fingerprint's submodule discriminators carry.
       lockfile_conflict the seed picks the package names and versions, so the
                         lock-shaped file's bytes differ.
+      config_renamed    the seed picks stale_key or both_keys, so the settings
+                        file's bytes differ.
 
     Each pair was chosen to select different states for its fault; no pair that
     injects one state is asserted to differ. The digest comparison is kept

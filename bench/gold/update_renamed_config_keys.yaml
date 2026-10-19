@@ -1,0 +1,137 @@
+# Hand-written resolutions for the `update_renamed_config_keys` intent (#266).
+#
+# The intent is defined in tasks/faults/config_renamed.py and registered (ADR-0041). The
+# acceptable sets it declares are pinned against the fault's own checker by replay
+# (tests/test_config_renamed_intent.py), the way ADR-0023 pins the other intents'.
+#
+# Every program reads the app's own rename table, `config/renames.conf` (`old = new` per
+# line), rather than naming the key it was written against: which key is stale is a
+# Tier 1 axis of the family, so a program that hard-codes one is right on a quarter of it.
+#
+# Preconditions are probes, so they must agree with the intent's decision rules
+# (decided_by in tasks/faults/config_renamed.py). They are written independently --
+# agreeing by construction would defeat the point of having a check. Every probe and body
+# is a YAML block scalar, so no shell character is read as YAML.
+programs:
+  - id: rename-the-stale-setting
+    intent: update_renamed_config_keys
+    variant: rename
+    parameters: []
+    preconditions:
+      - name: the_app_lists_its_renames
+        description: The app ships a table of the setting names it has renamed.
+        probe: |-
+          test -f config/renames.conf
+      - name: the_settings_use_an_old_name
+        description: The project's settings still set a key under a name the app has renamed.
+        probe: |-
+          grep -v '^#' config/renames.conf | while IFS=' =' read -r old new; do
+            [ -n "$old" ] && grep -q "^[[:space:]]*$old[[:space:]]*=" config/settings.conf && echo "$old"
+          done | grep -q .
+      - name: no_setting_is_there_under_both_names
+        description: The settings never set the same key under its old and its new name.
+        probe: |-
+          ! grep -v '^#' config/renames.conf | while IFS=' =' read -r old new; do
+            [ -n "$old" ] && grep -q "^[[:space:]]*$old[[:space:]]*=" config/settings.conf && grep -q "^[[:space:]]*$new[[:space:]]*=" config/settings.conf && echo "$old"
+          done | grep -q .
+    body: |
+      grep -v '^#' config/renames.conf | while IFS=' =' read -r old new; do
+        [ -n "$old" ] || continue
+        sed -i "s/^\([[:space:]]*\)$old\([[:space:]]*=\)/\1$new\2/" config/settings.conf
+      done
+    postconditions:
+      - name: no_old_name_is_left
+        description: The settings no longer set any renamed key under its old name.
+        probe: |-
+          ! grep -v '^#' config/renames.conf | while IFS=' =' read -r old new; do
+            [ -n "$old" ] && grep -q "^[[:space:]]*$old[[:space:]]*=" config/settings.conf && echo "$old"
+          done | grep -q .
+    provenance:
+      compiled_from_task: hand-written gold resolution for benchmarking
+      model: human
+      compiler_version: human
+      episode_id: gold/update_renamed_config_keys/rename
+      fault: config_renamed
+    status: candidate
+
+  - id: drop-the-dead-old-setting
+    intent: update_renamed_config_keys
+    variant: drop_old
+    parameters: []
+    preconditions:
+      - name: the_app_lists_its_renames
+        description: The app ships a table of the setting names it has renamed.
+        probe: |-
+          test -f config/renames.conf
+      - name: a_setting_is_there_under_both_names
+        description: The settings set some key under both its old name and its new one.
+        probe: |-
+          grep -v '^#' config/renames.conf | while IFS=' =' read -r old new; do
+            [ -n "$old" ] && grep -q "^[[:space:]]*$old[[:space:]]*=" config/settings.conf && grep -q "^[[:space:]]*$new[[:space:]]*=" config/settings.conf && echo "$old"
+          done | grep -q .
+    body: |
+      grep -v '^#' config/renames.conf | while IFS=' =' read -r old new; do
+        [ -n "$old" ] || continue
+        if grep -q "^[[:space:]]*$new[[:space:]]*=" config/settings.conf; then
+          sed -i "/^[[:space:]]*$old[[:space:]]*=/d" config/settings.conf
+        fi
+      done
+    postconditions:
+      - name: no_old_name_is_left
+        description: The settings no longer set any renamed key under its old name.
+        probe: |-
+          ! grep -v '^#' config/renames.conf | while IFS=' =' read -r old new; do
+            [ -n "$old" ] && grep -q "^[[:space:]]*$old[[:space:]]*=" config/settings.conf && echo "$old"
+          done | grep -q .
+    provenance:
+      compiled_from_task: hand-written gold resolution for benchmarking
+      model: human
+      compiler_version: human
+      episode_id: gold/update_renamed_config_keys/drop_old
+      fault: config_renamed
+    status: candidate
+
+  - id: migrate-the-local-override
+    intent: update_renamed_config_keys
+    variant: migrate_local
+    parameters: []
+    preconditions:
+      - name: the_app_lists_its_renames
+        description: The app ships a table of the setting names it has renamed.
+        probe: |-
+          test -f config/renames.conf
+      - name: the_override_is_private
+        description: This machine has its own settings override, which git ignores.
+        probe: |-
+          test -f config/local.conf && git check-ignore -q config/local.conf
+      - name: only_the_override_uses_an_old_name
+        description: The override sets a renamed key under its old name, and the shared settings do not.
+        probe: |-
+          grep -v '^#' config/renames.conf | while IFS=' =' read -r old new; do
+            [ -n "$old" ] && grep -q "^[[:space:]]*$old[[:space:]]*=" config/local.conf && echo "$old"
+          done | grep -q . && ! grep -v '^#' config/renames.conf | while IFS=' =' read -r old new; do
+            [ -n "$old" ] && grep -q "^[[:space:]]*$old[[:space:]]*=" config/settings.conf && echo "$old"
+          done | grep -q .
+    body: |
+      grep -v '^#' config/renames.conf | while IFS=' =' read -r old new; do
+        [ -n "$old" ] || continue
+        sed -i "s/^\([[:space:]]*\)$old\([[:space:]]*=\)/\1$new\2/" config/local.conf
+      done
+    postconditions:
+      - name: the_override_uses_no_old_name
+        description: The override no longer sets any renamed key under its old name.
+        probe: |-
+          ! grep -v '^#' config/renames.conf | while IFS=' =' read -r old new; do
+            [ -n "$old" ] && grep -q "^[[:space:]]*$old[[:space:]]*=" config/local.conf && echo "$old"
+          done | grep -q .
+      - name: the_override_is_still_private
+        description: The override is still not tracked.
+        probe: |-
+          ! git ls-files --error-unmatch -- config/local.conf
+    provenance:
+      compiled_from_task: hand-written gold resolution for benchmarking
+      model: human
+      compiler_version: human
+      episode_id: gold/update_renamed_config_keys/migrate_local
+      fault: config_renamed
+    status: candidate

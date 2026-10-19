@@ -169,10 +169,32 @@ LOCKFILE_STATES = {
     ),
 }
 
+_CONFIG = {"upstream_ahead": 0, "upstream_behind": 0}
+"""Every config state is committed and pushed: nothing to sync, which is no git family's state."""
+
+CONFIG_RENAMED_STATES = {
+    "benign_current": declared_state(**_CONFIG),
+    "stale_key": declared_state(
+        **_CONFIG,
+        config_stale_keys=["config/settings.conf: timeout_s -> request_timeout_s"],
+    ),
+    "both_keys": declared_state(
+        **_CONFIG,
+        config_stale_keys=["config/settings.conf: timeout_s -> request_timeout_s"],
+        config_keys_set_twice=["config/settings.conf: timeout_s -> request_timeout_s"],
+    ),
+    "local_override": declared_state(
+        **_CONFIG,
+        config_stale_keys=["config/local.conf: timeout_s -> request_timeout_s"],
+        config_ignored_files=["config/local.conf"],
+    ),
+}
+
 STATE_GRID: dict[str, dict[str, StateFingerprint]] = {
     "sync_fork_with_upstream": DIVERGED_STATES,
     "restore_submodule_state": SUBMODULE_STATES,
     "keep_uncommitted_work_and_sync": DIRTY_TREE_STATES,
     "follow_renamed_upstream_branch": BRANCH_RENAMED_STATES,
     "sync_through_a_conflicting_lockfile": LOCKFILE_STATES,
+    "update_renamed_config_keys": CONFIG_RENAMED_STATES,
 }

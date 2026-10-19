@@ -128,8 +128,10 @@ _ASSIGNED_NAME = re.compile(
     re.MULTILINE,
 )
 # A `read` may also follow its own environment assignments (`IFS= read -r x`) and still
-# assign its names (#214).
-_READ_PREFIX = r"(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*"
+# assign its names (#214). A quoted value may hold spaces (`IFS=' =' read -r k v`, how a
+# `key = value` file is split); before #266 the quote's space ended the prefix, and the
+# names read were then refused as environment reads.
+_READ_PREFIX = r"(?:[A-Za-z_][A-Za-z0-9_]*=(?:'[^'\n]*'|\"[^\"\n]*\"|\S*)\s+)*"
 _READ_NAMES = re.compile(
     _STATEMENT_START + _READ_PREFIX + r"read\b(?:\s+-\w+)*((?:\s+[A-Za-z_][A-Za-z0-9_]*)+)",
     re.MULTILINE,

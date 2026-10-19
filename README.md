@@ -188,8 +188,9 @@ have to handle that.
 
 ## The task family
 
-Branchy git maintenance work, on disposable sandboxes. A fault is admitted only
-if it **recurs**, is **checkable by git alone** (so scoring costs no tokens), and
+Branchy maintenance work, on disposable sandboxes: five git faults, and one config
+fault whose state is files rather than history (ADR-0041). A fault is admitted only
+if it **recurs**, is **checkable without a model** (so scoring costs no tokens), and
 is **branchy** — a fault solvable by one aliased command has a baseline cost of
 zero, so nothing can be saved on it.
 
@@ -200,6 +201,7 @@ zero, so nothing can be saved on it.
 | `submodule_moved` | recovery differs by whether the submodule is initialised, dirty, or absent |
 | `branch_renamed` | requires noticing a remote-tracking branch disappeared and re-pointing the local one |
 | `lockfile_conflict` | the right fix is regeneration, not marker-editing — and marker-editing *looks* like success |
+| `config_renamed` | an old config key alone, beside its new name, or only in a git-ignored override each needs a different fix |
 
 `lockfile_conflict` is included as much for the negative sandboxes it supplies as
 for its positive ones: it is the fault most likely to produce a program that
@@ -532,8 +534,8 @@ before anything runs:
   ledger row; `bench/report.py` computes the cost curve over the replays and the
   mismatch comparison over the variants, says so in each figure, and carries the
   achieved instance count per resolution. The arithmetic for the eval set is in
-  the spec's §7: 32, 15, 14, 30 and 28 variant occurrences (119 distinct
-  environments across the five faults), not forty seeds.
+  the spec's §7: 32, 15, 14, 30, 28 and 27 variant occurrences (146 distinct
+  environments across the six families), not forty seeds.
 - **The API key is the caller's.** `provider.py` reads no environment variables
   and no files; `DeepSeekProvider` takes the key at construction, and the spec's §7
   example is what passes `DEEPSEEK_API_KEY` into it. That is a deliberate boundary,

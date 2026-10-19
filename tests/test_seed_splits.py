@@ -60,6 +60,9 @@ DECLARED_ROLE_COUNTS = {
     ("smoke", "lockfile_conflict"): (3, 1),
     ("tune", "lockfile_conflict"): (14, 2),
     ("eval", "lockfile_conflict"): (28, 12),
+    ("smoke", "config_renamed"): (4, 0),
+    ("tune", "config_renamed"): (13, 3),
+    ("eval", "config_renamed"): (27, 13),
 }
 
 
