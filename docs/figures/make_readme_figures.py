@@ -120,6 +120,10 @@ def heldout_rows() -> list[tuple[str, Rate, str]]:
     ]
     diverged = [results / f"heldout-2026-10-16/diverged/{run}/summary.json" for run in RUNS]
     lock = [results / f"heldout-2026-10-18/lockfile_conflict/{run}/summary.json" for run in RUNS]
+    names = [results / f"heldout-2026-10-19/branch_renamed/{run}/summary.json" for run in RUNS]
+    submodules = [
+        results / f"heldout-2026-10-19/submodule_moved/{run}/summary.json" for run in RUNS
+    ]
     arm3 = primary_rows()[0][1]
     in_distribution = Rate(sum(rate.k for rate in arm3), sum(rate.n for rate in arm3))
 
@@ -128,9 +132,11 @@ def heldout_rows() -> list[tuple[str, Rate, str]]:
         return [paths.upstream_file, paths.tracked_file, paths.untracked_path]
 
     return [
-        ("in distribution (all five faults)", in_distribution, ""),
+        ("in distribution (the five git faults)", in_distribution, ""),
         ("held out: dirty_tree, new paths", _summed(dirty), _awkward_share(dirty, dirty_paths)),
         ("held out: diverged, new shape", _summed(diverged), ""),
+        ("held out: branch_renamed, new names", _summed(names), ""),
+        ("held out: submodule_moved, new paths", _summed(submodules), ""),
         (
             "held out: lockfile_conflict, new paths",
             _summed(lock),
@@ -239,7 +245,7 @@ def draw_primary(mode: str) -> None:
 def draw_heldout(mode: str) -> None:
     theme = THEMES[mode]
     rows = heldout_rows()
-    fig, ax = plt.subplots(figsize=(7.2, 3.0), dpi=100)
+    fig, ax = plt.subplots(figsize=(7.2, 3.9), dpi=100)
     fig.patch.set_facecolor(theme["surface"])
     _style(ax, theme)
     for i, (name, rate, note) in enumerate(rows):

@@ -49,6 +49,7 @@ commit message is not a record.
 | [ADR-0039](ADR-0039-lockfile-conflict-has-held-out-paths.md) | accepted | `lockfile_conflict` gets **held-out paths** (nested, space, non-ASCII, dotfile), and the fingerprint reads git paths with `-z`; arm 3 mis-fired on 41 of 101 held-out lock-file fires, every one on a spaced or non-ASCII path, from four path-reading probes. |
 | [ADR-0040](ADR-0040-repository-derived-bindings-must-be-shell-safe.md) | accepted | A **repository-derived binding** (`upstream_remote`, `upstream_branch`, `submodule_path`) is bound only when it is **shell-safe**; anything else is left unbound, after a remote's branch name `x;>PWNED` was shown running in a probe on a checkout. |
 | [ADR-0041](ADR-0041-a-config-family-outside-git-history.md) | accepted | A sixth family, **`config_renamed`**, whose state is config files rather than git history (#266 step 1); its fingerprint fields render only when set, so no earlier state's arm-2 text moves. |
+| [ADR-0042](ADR-0042-branch-names-and-submodule-paths-are-held-out.md) | accepted | **Held-out branch names and submodule paths**, so every git fault has a held-out axis; arm 3 fired on all 240 held-out positives with none wrong, because every program binds the name or path as a parameter. |
 
 ## When to write one
 

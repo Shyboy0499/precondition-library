@@ -16,9 +16,10 @@
 > cleared its pre-registered baseline floor in the two replicates built on the final
 > code. The strongest text scorer screened, a local reranker, still mis-fires on
 > **71–76%**. Those states come from the same generators admission tests against. On
-> **held-out** states no build ever drew, it mis-fired once in 240 fires on new paths and a new
-> shape, but on **41 of 101** when the lock file moved to new paths. All 42 of those mis-fires
-> were on a file name with a space or a non-ASCII character
+> **held-out** states no build ever drew, it mis-fired once in 480 fires on new paths, a new
+> shape, new branch names and new submodule paths, but on **41 of 101** when the lock file moved
+> to new paths. All 42 of those mis-fires were on a file name with a space or a non-ASCII
+> character
 > ([Held-out states](#held-out-states)). The numbers, their provenance and their limits are in
 > [Primary result](#primary-result). What is **not** measured yet is everything at
 > episode level -- the frozen benchmark, the admission factorial and the online arms --
@@ -377,8 +378,9 @@ detectable difference.
   (ADR-0034, spec §7 item 14) and **has not been run**: it needs a provider key, and until
   it runs, no sentence may say it won or lost.
 - **States outside the generators, except in part.** Every pair here comes from the
-  injectors admission tests each program against. Three held-out sources are measured below.
-  On one of them, file names with a space or a non-ASCII character, arm 3 mis-fired often.
+  injectors admission tests each program against. Five held-out sources are measured below,
+  one per git fault. On one of them, file names with a space or a non-ASCII character, arm 3
+  mis-fired often.
   Real repositories are not measured.
 - **Nothing at episode level.** Mis-fires that end in a wrong repository, cost, the
   admission factorial and the online arms are separate stages, not run here.
@@ -395,9 +397,9 @@ the defects found on the way are in
 ### Held-out states
 
 The 0 of 563 describes this generator: admission tests every program on states built by the
-same injectors as the evaluation pairs (#263). The held-out stage (ADR-0033, ADR-0037, ADR-0039)
-reads each committed library again, read-only, on 40 seeds no build ever drew (3000–3039). It
-uses three sources, each reported on its own:
+same injectors as the evaluation pairs (#263). The held-out stage (ADR-0033, ADR-0037, ADR-0039,
+ADR-0042) reads each committed library again, read-only, on 40 seeds no build ever drew
+(3000–3039). It uses five sources, one per git fault, each reported on its own:
 
 - **`dirty_tree` with held-out paths.** States write paths no shipped seed uses: deeper
   directories, a space, a non-ASCII name, a dotfile.
@@ -405,6 +407,10 @@ uses three sources, each reported on its own:
   there are 4–5 local commits.
 - **`lockfile_conflict` with held-out paths.** The conflicting file is moved from `deps.lock` to
   a nested path, a path with a space, a non-ASCII name or a dotfile.
+- **`branch_renamed` with held-out names.** Upstream renames its branch to names no shipped seed
+  uses, two of them with a `/` (`release/2026`, `team/integration`).
+- **`submodule_moved` with held-out paths.** The submodule lives somewhere other than
+  `vendor/libcore`: deeper, in a dot directory, or under another name.
 
 Each block is 40 positives and 40 fault-free negatives.
 
@@ -413,19 +419,21 @@ Each block is 40 positives and 40 fault-free negatives.
 | `dirty_tree`, held-out paths: arm 3 fires, mis-fires | 40, 0 | 40, 0 | 40, **1** |
 | `diverged`, held-out shape: arm 3 fires, mis-fires | 40, 0 | 40, 0 | 40, 0 |
 | `lockfile_conflict`, held-out paths: arm 3 fires, mis-fires | 33, **13** | 33, **8** | 35, **20** |
+| `branch_renamed`, held-out names: arm 3 fires, mis-fires | 40, 0 | 40, 0 | 40, 0 |
+| `submodule_moved`, held-out paths: arm 3 fires, mis-fires | 40, 0 | 40, 0 | 40, 0 |
 | fires on the fault-free negatives (each block) | 0 | 0 | 0 |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/figures/heldout-dark.svg">
-  <img src="docs/figures/heldout-light.svg" alt="Arm 3's mis-fire rate summed over the three libraries. In distribution 0 of 563. Held out: dirty_tree at new paths 1 of 120; diverged in a new shape 0 of 120; lockfile_conflict at new paths 41 of 101, all 41 on a path with a space or a non-ASCII name.">
+  <img src="docs/figures/heldout-light.svg" alt="Arm 3's mis-fire rate summed over the three libraries. In distribution 0 of 563. Held out: dirty_tree at new paths 1 of 120; diverged in a new shape 0 of 120; branch_renamed with new names 0 of 120; submodule_moved at new paths 0 of 120; lockfile_conflict at new paths 41 of 101, all 41 on a path with a space or a non-ASCII name.">
 </picture>
 
 Both figures are drawn from the committed result files by
 [`docs/figures/make_readme_figures.py`](docs/figures/make_readme_figures.py); nothing in them is
 typed in.
 
-**What it shows.** The first two sources carried: one mis-fire in 240 fires (0.4%, 95% Wilson
-upper bound 2.3%). The third did not: 41 of 101 fires were wrong. **Every one of those 42
+**What it shows.** Four sources carried: one mis-fire in 480 fires (0.2%, 95% Wilson upper
+bound 1.2%). The lock-file source did not: 41 of 101 fires were wrong. **Every one of those 42
 mis-fires is on a path with a space or a non-ASCII name.** On the lock file's spaced and
 non-ASCII paths, 41 of 60 fires were wrong. On its nested and dotfile paths, none of 41 was.
 
@@ -436,6 +444,10 @@ non-ASCII paths, 41 of 60 fires were wrong. On its nested and dotfile paths, non
   lock-file conflict, which throws the local dependency changes away.
 - **Why admission passed them.** Each check is right on every shipped state, because no shipped
   path needs quoting.
+- **Why the names and submodule paths carried.** No compiled program for those faults names a
+  branch or a submodule path: each binds `{upstream_branch}` or `{submodule_path}`, so a new
+  value reaches it as the parameter it already reads. The lock file's path is not a parameter;
+  a program has to find it in git's output, and that reading is what broke (ADR-0042).
 - **How common the defect is.** Reading the libraries found at least 16 probes in 10 of the 40
   admitted programs that such a path could break (ADR-0038, corrected by ADR-0039). The lock-file
   block ran them: four of its probes cause all 41 of its mis-fires.
@@ -450,10 +462,11 @@ non-ASCII paths, 41 of 60 fires were wrong. On its nested and dotfile paths, non
 
 - **A comparison with arm 2.** No held-out floor is measured, so no sentence may say arm 3 beats
   text similarity on these states (ADR-0033).
-- **States of a different kind.** All three sources keep the fault's kind of state, with new
-  names, paths and counts. Real checkouts and the other two faults' axes are not measured.
+- **States of a different kind.** All five sources keep the fault's kind of state, with new
+  names, paths and counts. Real checkouts are not measured.
 
-The details are in [`results/heldout-2026-10-18/`](results/heldout-2026-10-18/README.md) (the
+The details are in [`results/heldout-2026-10-19/`](results/heldout-2026-10-19/README.md) (branch
+names and submodule paths), [`results/heldout-2026-10-18/`](results/heldout-2026-10-18/README.md) (the
 lock-file block), [`results/heldout-2026-10-16/`](results/heldout-2026-10-16/README.md) and
 [`results/heldout-2026-10-10/`](results/heldout-2026-10-10/README.md).
 

@@ -12,6 +12,11 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **Held-out states, part 4 (#263, ADR-0042).** `branch_renamed` gains held-out branch names
+  (two with a `/`) and `submodule_moved` held-out submodule paths, so every git fault has a
+  held-out axis. Arm 3 fired on all 240 held-out positives, none wrong
+  (`results/heldout-2026-10-19/`): every program binds the name or path as a parameter. The
+  README's held-out figure gains both rows.
 - **A sixth family outside git history (#266, ADR-0041).** `config_renamed`: an app's config
   still sets a renamed key, alone, beside its new name, or only in a git-ignored override, and
   each needs a different fix. Registered with its intent, gold programs, state grid and
