@@ -35,9 +35,21 @@ from precondition_library.bench.splits import (
 from precondition_library.library import Library
 from precondition_library.program import Predicate, Program, ProgramStatus, Provenance
 from precondition_library.runtime.probes import bindings, evaluate_preconditions, substitute
+from precondition_library.runtime.replay import replay
 from precondition_library.signatures import StateFingerprint
 from precondition_library.similarity import lexical_similarity
 from precondition_library.tasks.faults import build_sandbox
+from precondition_library.tasks.faults.branch_renamed import (
+    HELD_OUT_BRANCH_NAMES,
+    NEW_BRANCH_NAMES,
+    renamed_branch_for_seed,
+)
+from precondition_library.tasks.faults.branch_renamed import (
+    INTENT as BRANCH_RENAMED_INTENT,
+)
+from precondition_library.tasks.faults.branch_renamed import (
+    SPEC as BRANCH_RENAMED,
+)
 from precondition_library.tasks.faults.dirty_tree import (
     HELD_OUT_PATHS,
     SHIPPED_PATHS,
@@ -75,6 +87,17 @@ from precondition_library.tasks.faults.lockfile_conflict import (
 from precondition_library.tasks.faults.lockfile_conflict import (
     SPEC as LOCKFILE,
 )
+from precondition_library.tasks.faults.submodule_moved import (
+    HELD_OUT_SUBMODULE_PATHS,
+    SUBMODULE_PATH,
+    submodule_path_for_seed,
+)
+from precondition_library.tasks.faults.submodule_moved import (
+    INTENT as SUBMODULE_INTENT,
+)
+from precondition_library.tasks.faults.submodule_moved import (
+    SPEC as SUBMODULE_MOVED,
+)
 from precondition_library.tasks.registry import ambiguous_intents
 from precondition_library.tasks.spec import HELD_OUT_SEED_BASE
 
@@ -84,6 +107,10 @@ HELD_OUT_AXES = {
     "dirty_tree": lambda seed: paths_for_seed(seed).upstream_file,
     "diverged": lambda seed: diverged_shape_for_seed(seed),
     "lockfile_conflict": lambda seed: lock_path_for_seed(seed),
+    "branch_renamed": lambda seed: (
+        renamed_branch_for_seed(seed) if seed >= HELD_OUT_SEED_BASE else "shipped"
+    ),
+    "submodule_moved": lambda seed: submodule_path_for_seed(seed),
 }
 """Per fault, the held-out axis it declares, as a function of a seed.
 
@@ -498,3 +525,64 @@ def test_the_gold_lockfile_programs_refuse_a_file_they_do_not_rebuild() -> None:
                 assert not verdict.ok, f"{program.variant} fired at {lock_path_for_seed(seed)}"
         finally:
             box.destroy()
+
+
+def test_every_shipped_seed_keeps_its_branch_name_and_submodule_path() -> None:
+    """Below the base both draws are the shipped ones, and identities carry no held-out value."""
+    for seed in [*range(HELD_OUT_SEED_BASE), *PLANNED_SEEDS]:
+        assert renamed_branch_for_seed(seed) in NEW_BRANCH_NAMES, seed
+        assert submodule_path_for_seed(seed) == SUBMODULE_PATH, seed
+        assert "/path=" not in SUBMODULE_MOVED.instance_for_seed(seed), seed
+        assert SUBMODULE_MOVED.change_surface_for_seed(seed) == SUBMODULE_MOVED.change_surface
+    for seed in HELD_OUT_SEEDS:
+        assert renamed_branch_for_seed(seed) in HELD_OUT_BRANCH_NAMES, seed
+        assert submodule_path_for_seed(seed) in HELD_OUT_SUBMODULE_PATHS, seed
+        assert SUBMODULE_MOVED.instance_for_seed(seed).endswith(
+            f"/path={submodule_path_for_seed(seed)}"
+        )
+
+
+@pytest.mark.parametrize(
+    ("fault", "axis", "pool"),
+    [
+        (BRANCH_RENAMED, renamed_branch_for_seed, HELD_OUT_BRANCH_NAMES),
+        (SUBMODULE_MOVED, submodule_path_for_seed, HELD_OUT_SUBMODULE_PATHS),
+    ],
+    ids=["branch_renamed", "submodule_moved"],
+)
+def test_the_held_out_block_meets_every_value_under_every_resolution(fault, axis, pool) -> None:
+    resolutions = {fault.variant_for_seed(seed) for seed in range(64)}
+    met = {(axis(seed), fault.variant_for_seed(seed)) for seed in HELD_OUT_SEEDS}
+    assert met == {(value, resolution) for value in pool for resolution in resolutions}
+
+
+_HELD_OUT_GOLD = [
+    (fault, intent, seed)
+    for fault, intent in (
+        (BRANCH_RENAMED, BRANCH_RENAMED_INTENT),
+        (SUBMODULE_MOVED, SUBMODULE_INTENT),
+    )
+    for seed in HELD_OUT_SEEDS[:4]
+]
+
+
+@pytest.mark.parametrize(
+    ("fault", "intent", "seed"),
+    _HELD_OUT_GOLD,
+    ids=[f"{fault.name}-{seed}" for fault, _, seed in _HELD_OUT_GOLD],
+)
+def test_gold_resolves_a_held_out_state_at_its_own_name_or_path(fault, intent, seed) -> None:
+    """The gold programs bind the name and path they are given, so the checker grades the
+    held-out value the state uses, and the label the fault declares is the one replay needs."""
+    box = build_sandbox(seed, [fault.name])
+    try:
+        observed = StateFingerprint.observe(box)
+        label = intent.correct_variant(observed)
+        assert label is not None and label.id == fault.variant_for_seed(seed)
+        assert not fault.check(box).ok, "the injected state is not already resolved"
+        result = replay(gold_program(label.id, intent.name), box)
+        verdict = fault.check(box)
+    finally:
+        box.destroy()
+    assert result.ok, result.reason
+    assert verdict.ok, verdict.detail

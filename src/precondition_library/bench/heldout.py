@@ -54,7 +54,13 @@ from .primary import (
 from .rescore import scorer
 from .splits import HELD_OUT_SEEDS
 
-HELD_OUT_FAULTS: tuple[str, ...] = ("dirty_tree", "diverged", "lockfile_conflict")
+HELD_OUT_FAULTS: tuple[str, ...] = (
+    "dirty_tree",
+    "diverged",
+    "lockfile_conflict",
+    "branch_renamed",
+    "submodule_moved",
+)
 """The faults this stage measures: the ones whose injector declares a held-out axis.
 
 `tests/test_heldout_states.py` pins each name here against a declared axis, so a fault added

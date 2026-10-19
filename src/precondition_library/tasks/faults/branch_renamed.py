@@ -36,7 +36,7 @@ from dataclasses import dataclass
 from ...sandbox import Sandbox, git_config, git_out, record_base, run_git, tip_contained
 from ...signatures import StateFingerprint
 from ..intent import IntentSpec, ResolutionVariant, draw_index, sample_index
-from ..spec import FaultSpec, GroundTruth
+from ..spec import HELD_OUT_SEED_BASE, FaultSpec, GroundTruth
 
 # The three live states a seed selects between, and the salt that chooses them.
 # Appending a state would change which state an existing seed injects, so add
@@ -58,6 +58,11 @@ _TAKEN_FILE = "notes/side.md"
 # add names deliberately.
 NEW_BRANCH_NAMES = ("trunk", "develop", "default", "primary")
 _NAME_SALT = "branch_renamed:name"
+
+HELD_OUT_BRANCH_NAMES = ("release/2026", "main-v2", "stable.next", "team/integration")
+"""The names a held-out seed renames upstream's branch to (issue #263, ADR-0042). Two hold a
+`/`, so a probe that takes the name as the part of `upstream/<name>` after the first `/` keeps
+working, and one that takes the last part breaks. Every name is shell-safe (ADR-0040)."""
 
 
 # --- Tier 1 instance axes (ADR-0005) ---------------------------------------------
@@ -126,6 +131,8 @@ def renamed_branch_for_seed(seed: int) -> str:
     One definition shared by `inject` and the tests, so a test cannot disagree
     with the injected environment.
     """
+    if seed >= HELD_OUT_SEED_BASE:
+        return HELD_OUT_BRANCH_NAMES[(seed - HELD_OUT_SEED_BASE) % len(HELD_OUT_BRANCH_NAMES)]
     return NEW_BRANCH_NAMES[sample_index(seed, _NAME_SALT, len(NEW_BRANCH_NAMES))]
 
 

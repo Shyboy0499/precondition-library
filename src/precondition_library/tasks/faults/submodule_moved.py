@@ -40,12 +40,32 @@ from ...sandbox import (
 )
 from ...signatures import StateFingerprint
 from ..intent import IntentSpec, ResolutionVariant, draw_index, sample_index
-from ..spec import FaultSpec, GroundTruth
+from ..spec import HELD_OUT_SEED_BASE, FaultSpec, GroundTruth
 
 # The path the submodule lives at, and the directory inside the sandbox root that
 # plays its origin. Both are fixed, so the same seed rebuilds the same URLs and
 # SHAs; the origin directory is inside `root`, so `Sandbox.destroy` removes it.
 SUBMODULE_PATH = "vendor/libcore"
+"""Where every shipped seed puts the submodule: each seed below `HELD_OUT_SEED_BASE`."""
+
+HELD_OUT_SUBMODULE_PATHS = (
+    "third_party/libs/core",
+    ".deps/libcore",
+    "lib/core-v2",
+    "ext/libcore",
+)
+"""Where a held-out seed puts it (issue #263, ADR-0042): deeper, a dot directory, another
+name, another parent. Every path is shell-safe (ADR-0040), so `{submodule_path}` binds and the
+axis asks whether a program reads the path it is given rather than the one it learned on."""
+
+
+def submodule_path_for_seed(seed: int) -> str:
+    """The submodule's path at `seed`: `SUBMODULE_PATH` below the base, a pool value above."""
+    if seed < HELD_OUT_SEED_BASE:
+        return SUBMODULE_PATH
+    return HELD_OUT_SUBMODULE_PATHS[(seed - HELD_OUT_SEED_BASE) % len(HELD_OUT_SUBMODULE_PATHS)]
+
+
 ORIGIN_DIRNAME = "submodule-origin"
 
 # The three live states, chosen by seed. The order is part of the seed-to-state
@@ -302,6 +322,7 @@ class SubmoduleMovedFault(FaultSpec):
         draw = draw_for_seed(seed)
         state = draw.state
         content = _LIBRARY_CONTENTS[draw.content]
+        path = submodule_path_for_seed(seed)
 
         # The third repository: the submodule's origin. Its first commit is what
         # both sides start pinned to.
@@ -321,7 +342,7 @@ class SubmoduleMovedFault(FaultSpec):
         # `<root>/submodule-origin` these two repositories already stand in, and
         # keeps the committed content independent of where the sandbox was built.
         run_git(
-            (*_FILE_PROTOCOL, "submodule", "add", "-q", f"../{ORIGIN_DIRNAME}", SUBMODULE_PATH),
+            (*_FILE_PROTOCOL, "submodule", "add", "-q", f"../{ORIGIN_DIRNAME}", path),
             cwd=work,
         )
         run_git(("commit", "-q", "-m", "chore: add nested library"), cwd=work)
@@ -335,49 +356,46 @@ class SubmoduleMovedFault(FaultSpec):
         grown = git_out("rev-parse", "HEAD", cwd=origin)
 
         if state == "init":
-            run_git(("submodule", "deinit", "-f", "--", SUBMODULE_PATH), cwd=work)
+            run_git(("submodule", "deinit", "-f", "--", path), cwd=work)
         elif state == "repin":
-            self._advance_upstream_pin(work, grown)
+            self._advance_upstream_pin(work, grown, path)
             run_git(("reset", "--hard", pinned), cwd=work)
-            self._sync_checkout(work)
+            self._sync_checkout(work, path)
         else:
-            self._drop_upstream_reference(work)
+            self._drop_upstream_reference(work, path)
             run_git(("reset", "--hard", pinned), cwd=work)
-            self._sync_checkout(work)
+            self._sync_checkout(work, path)
 
         # The path is recorded because the *probes* bind `{submodule_path}` from it, and
         # a correct removal deletes the `.gitmodules` entry that would otherwise carry it.
         # It is recorded on the sandbox object, never in the clone: a ref there was
         # readable by the agent and could anchor a precondition (issues #103, #161).
-        sandbox.recorded[RECORDED_SUBMODULE_PATH] = SUBMODULE_PATH
+        sandbox.recorded[RECORDED_SUBMODULE_PATH] = path
 
         # Leave the remote-tracking ref current so observe() can read it without
         # fetching (observe must not mutate the environment).
         run_git(("fetch", "-q", "upstream"), cwd=work)
 
     @staticmethod
-    def _sync_checkout(work: Path) -> None:
+    def _sync_checkout(work: Path, path: str) -> None:
         """Check the submodule out at whatever commit the clone records."""
-        run_git(
-            (*_FILE_PROTOCOL, "submodule", "update", "--init", "--", SUBMODULE_PATH),
-            cwd=work,
-        )
+        run_git((*_FILE_PROTOCOL, "submodule", "update", "--init", "--", path), cwd=work)
 
     @staticmethod
-    def _advance_upstream_pin(work: Path, commit: str) -> None:
+    def _advance_upstream_pin(work: Path, commit: str, path: str) -> None:
         """Move the submodule to `commit` and publish a clone commit pinning it."""
-        run_git(("fetch", "-q", "origin"), cwd=work / SUBMODULE_PATH)
-        run_git(("checkout", "-q", commit), cwd=work / SUBMODULE_PATH)
-        run_git(("add", SUBMODULE_PATH), cwd=work)
+        run_git(("fetch", "-q", "origin"), cwd=work / path)
+        run_git(("checkout", "-q", commit), cwd=work / path)
+        run_git(("add", path), cwd=work)
         run_git(("commit", "-q", "-m", "chore: bump nested library"), cwd=work)
         run_git(("push", "-q", "upstream", "main"), cwd=work)
 
     @staticmethod
-    def _drop_upstream_reference(work: Path) -> None:
+    def _drop_upstream_reference(work: Path, path: str) -> None:
         """Remove the submodule on upstream and publish that removal."""
         # `git rm` drops the gitlink, the working tree and the `.gitmodules`
         # entry; on a single-submodule repo it leaves an empty `.gitmodules`.
-        run_git(("rm", "-q", "--", SUBMODULE_PATH), cwd=work)
+        run_git(("rm", "-q", "--", path), cwd=work)
         run_git(("commit", "-q", "-m", "chore: drop nested library"), cwd=work)
         run_git(("push", "-q", "upstream", "main"), cwd=work)
 
@@ -407,7 +425,13 @@ class SubmoduleMovedFault(FaultSpec):
         `bench.splits` keys independence on the environment rather than on the
         resolution and only a genuine repeat of one instance is a replay.
         """
-        return draw_for_seed(seed).identity
+        identity = draw_for_seed(seed).identity
+        path = submodule_path_for_seed(seed)
+        return identity if path == SUBMODULE_PATH else f"{identity}/path={path}"
+
+    def change_surface_for_seed(self, seed: int) -> tuple[str, ...]:
+        """`.gitmodules` and the gitlink at *this seed's* path (issue #263)."""
+        return (".gitmodules", submodule_path_for_seed(seed))
 
     def axes_for_resolution(self, resolution: str) -> Mapping[str, tuple[str, ...]]:
         """The axes `resolution` may vary along, with their value pools.
@@ -459,7 +483,7 @@ class SubmoduleMovedFault(FaultSpec):
                 "submodule_moved.check needs the injected state; build the sandbox through "
                 "tasks.faults.build_sandbox, which records it on the sandbox"
             )
-        path = SUBMODULE_PATH
+        path = sandbox.recorded[RECORDED_SUBMODULE_PATH]
 
         if state == "init":
             if not _is_initialised(work, path):
