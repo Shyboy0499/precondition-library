@@ -651,7 +651,7 @@ def fetch_real_host(host: RealHost) -> Path:
     if cache.is_dir():
         return cache
     _REAL_HOSTS.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(dir=_REAL_HOSTS) as scratch:
+    with tempfile.TemporaryDirectory(dir=_REAL_HOSTS, ignore_cleanup_errors=True) as scratch:
         staged = Path(scratch) / "cache.git"
 
         def git(*args: str) -> None:

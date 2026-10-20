@@ -53,7 +53,7 @@ def _git(cwd: Path, *args: str) -> str:
         "GIT_AUTHOR_DATE": "2025-06-01T00:00:00+00:00",
         "GIT_COMMITTER_DATE": "2025-06-01T00:00:00+00:00",
         "GIT_CONFIG_NOSYSTEM": "1",
-        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GIT_CONFIG_GLOBAL": "/dev/null",
     }
     return subprocess.run(
         ["git", "-c", "user.name=host", "-c", "user.email=host@example.invalid", *args],
