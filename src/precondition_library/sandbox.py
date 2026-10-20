@@ -42,8 +42,11 @@ import shlex
 import shutil
 import stat
 import subprocess
+import tempfile
 import warnings
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -597,6 +600,94 @@ _BASE_FILES = {
 }
 
 
+@dataclass(frozen=True)
+class RealHost:
+    """A public repository, pinned at one commit, that a sandbox's history can start from.
+
+    The real-host stage (ADR-0043) builds the same fault states on top of a real project's
+    files and last `depth` commits instead of the two-file synthetic base. Only the URL and
+    the commit are recorded in this repository; the content is fetched once into a local
+    cache (`fetch_real_host`) and never committed here.
+    """
+
+    name: str
+    url: str
+    commit: str
+    depth: int = 50
+
+
+_REAL_HOSTS = _SANDBOX_DIR / "real-hosts"
+
+_REAL_HOST_FOR_SEED: ContextVar[Callable[[int], RealHost | None] | None] = ContextVar(
+    "real_host_for_seed", default=None
+)
+
+
+@contextmanager
+def real_host_bases(host_for_seed: Callable[[int], RealHost | None]) -> Iterator[None]:
+    """Within the block, `create(seed, ...)` starts from `host_for_seed(seed)`'s history.
+
+    A seed it maps to None keeps the synthetic base. Scoped rather than threaded through
+    every caller, so the held-out stage, the pair builder and the injectors run unchanged:
+    the base is the one thing this stage varies.
+    """
+    token = _REAL_HOST_FOR_SEED.set(host_for_seed)
+    try:
+        yield
+    finally:
+        _REAL_HOST_FOR_SEED.reset(token)
+
+
+def fetch_real_host(host: RealHost) -> Path:
+    """The local bare cache of `host`'s pinned commit and its last `depth` commits.
+
+    The fetch is the harness's own step, the only one that reaches the network, so it runs
+    under the operator's environment (its proxy and CA settings), never the scrubbed one
+    model-authored code gets. It is made in a temporary directory and renamed into place, so
+    two processes fetching at once cannot leave a half-written cache, and the pinned commit
+    is verified before the cache is used.
+    """
+    cache = _REAL_HOSTS / f"{host.commit}-{host.depth}.git"
+    if cache.is_dir():
+        return cache
+    _REAL_HOSTS.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=_REAL_HOSTS) as scratch:
+        staged = Path(scratch) / "cache.git"
+
+        def git(*args: str) -> None:
+            subprocess.run(
+                ["git", "-c", "core.hooksPath=/dev/null", *args],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+        git("init", "-q", "--bare", str(staged))
+        git("-C", str(staged), "fetch", "-q", "--depth", str(host.depth), host.url, host.commit)
+        git("-C", str(staged), "rev-parse", "--verify", "-q", f"{host.commit}^{{commit}}")
+        (staged / "FETCH_HEAD").unlink(missing_ok=True)
+        try:
+            staged.rename(cache)
+        except OSError:
+            if not cache.is_dir():
+                raise
+    return cache
+
+
+def _start_upstream(upstream: Path, root: Path, host: RealHost | None) -> None:
+    """Create upstream's bare repository: empty, or holding `host`'s pinned history.
+
+    A shallow history cannot be pushed into an empty repository, so the cache is copied in
+    and `main` is pointed at the pinned commit; the clone then starts from it.
+    """
+    if host is None:
+        run_git(("-c", "init.defaultBranch=main", "init", "--bare", str(upstream)), cwd=root)
+        return
+    shutil.copytree(fetch_real_host(host), upstream)
+    run_git(("update-ref", "refs/heads/main", host.commit), cwd=upstream)
+    run_git(("symbolic-ref", "HEAD", "refs/heads/main"), cwd=upstream)
+
+
 def _seed_base(work: Path) -> None:
     """Write the base tree, commit it, and publish it as upstream's `main`."""
     for relative, content in _BASE_FILES.items():
@@ -737,10 +828,16 @@ def create(seed: int, faults: list[str]) -> Sandbox:
 
     upstream = root / "upstream.git"
     work = root / "work"
-    run_git(("-c", "init.defaultBranch=main", "init", "--bare", str(upstream)), cwd=root)
+    resolver = _REAL_HOST_FOR_SEED.get()
+    host = resolver(seed) if resolver is not None else None
+    _start_upstream(upstream, root, host)
     run_git(("clone", "-o", "upstream", str(upstream), str(work)), cwd=root)
     # Identity is per-repo, never global.
     run_git(("config", "user.name", _GIT_NAME), cwd=work)
     run_git(("config", "user.email", _GIT_EMAIL), cwd=work)
     _seed_base(work)
-    return Sandbox(root=root, work=work, upstream=upstream)
+    sandbox = Sandbox(root=root, work=work, upstream=upstream)
+    if host is not None:
+        # The harness's record of which real history this is; nothing is written in the clone.
+        sandbox.recorded["real-host"] = f"{host.name}@{host.commit}"
+    return sandbox

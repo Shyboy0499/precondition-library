@@ -341,8 +341,13 @@ class SubmoduleMovedFault(FaultSpec):
         # a different HEAD -- measured in #72. A relative URL resolves to the same
         # `<root>/submodule-origin` these two repositories already stand in, and
         # keeps the committed content independent of where the sandbox was built.
+        #
+        # `--force` because a real project's `.gitignore` may match the path (fzf ignores
+        # `vendor`), and git refuses an ignored path without it. A repository can hold a
+        # submodule there; the synthetic base has no `.gitignore`, so nothing it builds
+        # changes (ADR-0043).
         run_git(
-            (*_FILE_PROTOCOL, "submodule", "add", "-q", f"../{ORIGIN_DIRNAME}", path),
+            (*_FILE_PROTOCOL, "submodule", "add", "-q", "--force", f"../{ORIGIN_DIRNAME}", path),
             cwd=work,
         )
         run_git(("commit", "-q", "-m", "chore: add nested library"), cwd=work)
@@ -386,7 +391,7 @@ class SubmoduleMovedFault(FaultSpec):
         """Move the submodule to `commit` and publish a clone commit pinning it."""
         run_git(("fetch", "-q", "origin"), cwd=work / path)
         run_git(("checkout", "-q", commit), cwd=work / path)
-        run_git(("add", path), cwd=work)
+        run_git(("add", "--force", path), cwd=work)
         run_git(("commit", "-q", "-m", "chore: bump nested library"), cwd=work)
         run_git(("push", "-q", "upstream", "main"), cwd=work)
 
