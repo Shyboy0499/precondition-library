@@ -84,6 +84,18 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Fixed
 
+- **Security: quoted text no longer counts as assigning a variable.** The guard's scan for a
+  body's own variables read inside quotes and comments, so `echo 'x; read HOME'; echo $HOME`
+  passed as reading the body's own `HOME`. It now blanks quoted text and comments first. An
+  `IFS=$' \t' read` is recognised. No committed or gold body changes verdict.
+- **The `config_renamed` checker grades a deleted or unreadable file as a failed fix.** Deleting
+  `config/renames.conf` silences the app's warning, and the checker raised on it, so the episode
+  was dropped as invalid rather than scored wrong. Observing a config file that is not UTF-8 no
+  longer raises either; observe runs for every intent.
+- **The `update_renamed_config_keys` rules hold only where one resolution fixes every stale
+  key (ADR-0041, amended).** One key set twice anywhere labelled the whole tree `drop_old`.
+- **The `config_renamed` admit seeds draw six instances**; the `drop_old` fallback drew its first
+  seed's instance.
 - **Security: a repository-derived value can no longer run as shell (ADR-0040).** On a checkout,
   the upstream's default branch and the `.gitmodules` path were pasted into probes and bodies run
   under `bash -c`. A remote whose default branch is `x;>PWNED` made a probe create `PWNED` in the

@@ -115,17 +115,19 @@ ADMIT_SET: dict[str, tuple[AdmitEpisode, ...]] = {
             "upstream added.",
         ),
     ),
+    # Six seeds, six instances: each first seed has its own stale key, and each fallback
+    # draws a key its first seed does not, so a retry is never the same environment again.
     "config_renamed": (
         AdmitEpisode(
-            (0, 7), "rename", "Rename the old key in the project's settings and keep its value."
+            (0, 8), "rename", "Rename the old key in the project's settings and keep its value."
         ),
         AdmitEpisode(
-            (23, 35),
+            (31, 23),
             "drop_old",
             "The new name is already set too, so delete the old key's line and keep the new one.",
         ),
         AdmitEpisode(
-            (14, 18),
+            (12, 2),
             "migrate_local",
             "Rename the old key in my own override file, and keep that file out of git.",
         ),

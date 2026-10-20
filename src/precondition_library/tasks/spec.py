@@ -171,6 +171,8 @@ class FaultSpec:
         The read side of the declaration `axes_for_resolution` states: a test can
         check that every declared axis really varies over the seeds that select a
         resolution, and that the draw moves no axis the resolution did not declare.
-        A fault with no drawn axes returns an empty mapping.
+        A fault with no drawn axes returns an empty mapping. At or above
+        `HELD_OUT_SEED_BASE` a value may lie outside the declared pool: a held-out axis
+        draws values no plan seed meets (ADR-0033), and the pool stays the shipped one.
         """
         return {}

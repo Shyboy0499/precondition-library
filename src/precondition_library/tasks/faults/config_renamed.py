@@ -37,14 +37,15 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 
 from ...sandbox import Sandbox, record_base, run_git
-from ...signatures import RENAMES_FILE, StateFingerprint, config_assignments
+from ...signatures import CONFIG_DIR, RENAMES_FILE, StateFingerprint, config_assignments
 from ..intent import IntentSpec, ResolutionVariant, draw_index, sample_index
 from ..spec import FaultSpec, GroundTruth
 
-SETTINGS_FILE = "config/settings.conf"
-LOCAL_FILE = "config/local.conf"
+SETTINGS_FILE = f"{CONFIG_DIR}/settings.conf"
+LOCAL_FILE = f"{CONFIG_DIR}/local.conf"
 _GITIGNORE = ".gitignore"
 
 RENAMES: tuple[tuple[str, str], ...] = (
@@ -245,27 +246,51 @@ def has_stale_config(state: StateFingerprint) -> bool:
     return bool(state.config_stale_keys)
 
 
-def _stale_files(state: StateFingerprint) -> set[str]:
-    return {entry.split(": ", 1)[0] for entry in state.config_stale_keys}
+def _in_an_ignored_file(state: StateFingerprint, entry: str) -> bool:
+    """Whether a `config_stale_keys` entry (`<file>: <old> -> <new>`) is in an ignored file.
+
+    Matched by prefix rather than split on `: `, so a file name holding `: ` is not misread.
+    """
+    return any(entry.startswith(f"{name}: ") for name in state.config_ignored_files)
 
 
-def _set_twice(state: StateFingerprint) -> bool:
-    return bool(state.config_keys_set_twice)
+# Each rule holds only when one resolution fixes *every* stale entry: a checkout that mixes
+# them -- one file renamed, another setting both names -- has no fixed resolution, and is
+# left unlabelled rather than given one that fixes part of it.
 
 
-def _only_in_ignored_files(state: StateFingerprint) -> bool:
-    return _stale_files(state) <= set(state.config_ignored_files)
+def _needs_rename(s: StateFingerprint) -> bool:
+    """Every stale key is in a tracked file, set under its old name only."""
+    return (
+        has_stale_config(s)
+        and not s.config_keys_set_twice
+        and not any(_in_an_ignored_file(s, entry) for entry in s.config_stale_keys)
+    )
 
 
-def _in_a_tracked_file(state: StateFingerprint) -> bool:
-    return bool(_stale_files(state) - set(state.config_ignored_files))
+def _needs_drop_old(s: StateFingerprint) -> bool:
+    """Every stale key is in a tracked file, set under both names."""
+    return (
+        has_stale_config(s)
+        and set(s.config_stale_keys) == set(s.config_keys_set_twice)
+        and not any(_in_an_ignored_file(s, entry) for entry in s.config_stale_keys)
+    )
+
+
+def _needs_migrate_local(s: StateFingerprint) -> bool:
+    """Every stale key is in an ignored file, set under its old name only."""
+    return (
+        has_stale_config(s)
+        and not s.config_keys_set_twice
+        and all(_in_an_ignored_file(s, entry) for entry in s.config_stale_keys)
+    )
 
 
 VARIANTS = [
     ResolutionVariant(
         id="rename",
-        decided_by=lambda s: has_stale_config(s) and _in_a_tracked_file(s) and not _set_twice(s),
-        accepted_by=lambda s: has_stale_config(s) and _in_a_tracked_file(s) and not _set_twice(s),
+        decided_by=_needs_rename,
+        accepted_by=_needs_rename,
         rationale=(
             "The project's settings set an old key name and not the new one, so the key is "
             "renamed where it stands and keeps its value."
@@ -273,8 +298,8 @@ VARIANTS = [
     ),
     ResolutionVariant(
         id="drop_old",
-        decided_by=lambda s: has_stale_config(s) and _set_twice(s),
-        accepted_by=lambda s: has_stale_config(s) and _set_twice(s),
+        decided_by=_needs_drop_old,
+        accepted_by=_needs_drop_old,
         rationale=(
             "The settings set both names and the app reads the new one, so the old line is "
             "dead: it is deleted and the new value stays."
@@ -282,12 +307,8 @@ VARIANTS = [
     ),
     ResolutionVariant(
         id="migrate_local",
-        decided_by=lambda s: (
-            has_stale_config(s) and _only_in_ignored_files(s) and not _set_twice(s)
-        ),
-        accepted_by=lambda s: (
-            has_stale_config(s) and _only_in_ignored_files(s) and not _set_twice(s)
-        ),
+        decided_by=_needs_migrate_local,
+        accepted_by=_needs_migrate_local,
         rationale=(
             "The project's settings are already current; the old name is in this machine's "
             "ignored override, so it is renamed there and the file stays private."
@@ -319,6 +340,18 @@ INTENT = IntentSpec(
 )
 
 
+def _read(path: Path) -> str | None:
+    """A config file's text, or None where a fix left no readable file there.
+
+    A deleted, replaced-by-a-directory or undecodable file is a failed fix, so the checker
+    grades it rather than raising, which would drop the episode as invalid.
+    """
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
 class ConfigRenamedFault(FaultSpec):
     name = "config_renamed"
     description = "The app renamed config keys and a config file still sets an old name"
@@ -337,7 +370,7 @@ class ConfigRenamedFault(FaultSpec):
         work = sandbox.work
         record_base(sandbox, fault="config_renamed")
         layout = layout_for_seed(seed)
-        (work / "config").mkdir(exist_ok=True)
+        (work / CONFIG_DIR).mkdir(exist_ok=True)
         (work / RENAMES_FILE).write_text(_renames_text(), encoding="utf-8")
         (work / SETTINGS_FILE).write_text(layout.settings, encoding="utf-8")
         (work / _GITIGNORE).write_text(f"{LOCAL_FILE}\n", encoding="utf-8")
@@ -390,17 +423,20 @@ class ConfigRenamedFault(FaultSpec):
         tracked, and `settings.conf` is untouched.
         """
         work = sandbox.work
-        if (work / RENAMES_FILE).read_text(encoding="utf-8") != _renames_text():
+        if _read(work / RENAMES_FILE) != _renames_text():
             return GroundTruth(ok=False, detail=f"{RENAMES_FILE} was changed")
-        if (work / _GITIGNORE).read_text(encoding="utf-8") != f"{LOCAL_FILE}\n":
+        if _read(work / _GITIGNORE) != f"{LOCAL_FILE}\n":
             return GroundTruth(ok=False, detail=f"{_GITIGNORE} was changed")
 
         olds = {old for old, _ in RENAMES}
-        for path in sorted((work / "config").glob("*.conf")):
-            relative = f"config/{path.name}"
+        for path in sorted((work / CONFIG_DIR).glob("*.conf")):
+            relative = f"{CONFIG_DIR}/{path.name}"
             if relative == RENAMES_FILE:
                 continue
-            stale = olds & {key for key, _ in config_assignments(path.read_text(encoding="utf-8"))}
+            text = _read(path)
+            if text is None:
+                return GroundTruth(ok=False, detail=f"{relative} is not a readable config file")
+            stale = olds & {key for key, _ in config_assignments(text)}
             if stale:
                 return GroundTruth(
                     ok=False, detail=f"{relative} still sets {', '.join(sorted(stale))}"
@@ -408,9 +444,10 @@ class ConfigRenamedFault(FaultSpec):
 
         target = sandbox.recorded["config-target"]
         new = sandbox.recorded["config-new"]
-        if not (work / target).is_file():
+        target_text = _read(work / target)
+        if target_text is None:
             return GroundTruth(ok=False, detail=f"{target} is gone")
-        pairs = config_assignments((work / target).read_text(encoding="utf-8"))
+        pairs = config_assignments(target_text)
         values = [value for key, value in pairs if key == new]
         if len(values) != 1:
             return GroundTruth(
@@ -433,9 +470,7 @@ class ConfigRenamedFault(FaultSpec):
                 return GroundTruth(
                     ok=False, detail=f"{LOCAL_FILE} is tracked: a machine's override was committed"
                 )
-            if (work / SETTINGS_FILE).read_text(encoding="utf-8") != sandbox.recorded[
-                "config-settings"
-            ]:
+            if _read(work / SETTINGS_FILE) != sandbox.recorded["config-settings"]:
                 return GroundTruth(
                     ok=False, detail=f"{SETTINGS_FILE} was changed; it was already current"
                 )

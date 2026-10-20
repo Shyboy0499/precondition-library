@@ -483,7 +483,12 @@ class SubmoduleMovedFault(FaultSpec):
                 "submodule_moved.check needs the injected state; build the sandbox through "
                 "tasks.faults.build_sandbox, which records it on the sandbox"
             )
-        path = sandbox.recorded[RECORDED_SUBMODULE_PATH]
+        path = sandbox.recorded.get(RECORDED_SUBMODULE_PATH)
+        if path is None:
+            raise ValueError(
+                "submodule_moved.check needs the submodule's recorded path; build the sandbox "
+                "through tasks.faults.build_sandbox, whose injector records it"
+            )
 
         if state == "init":
             if not _is_initialised(work, path):

@@ -71,14 +71,17 @@ def _config_tree(work: Path) -> tuple[list[str], list[str], list[str]]:
     renames_path = work / RENAMES_FILE
     if not renames_path.is_file():
         return [], [], []
-    renames = dict(config_assignments(renames_path.read_text(encoding="utf-8")))
+    # Observing must not fail on a checkout's own files: an undecodable byte is replaced,
+    # and every other key still reads.
+    renames = dict(config_assignments(renames_path.read_text(encoding="utf-8", errors="replace")))
     stale: list[str] = []
     twice: list[str] = []
     for path in sorted((work / CONFIG_DIR).glob("*.conf")):
         relative = f"{CONFIG_DIR}/{path.name}"
         if relative == RENAMES_FILE or not path.is_file():
             continue
-        keys = {key for key, _ in config_assignments(path.read_text(encoding="utf-8"))}
+        text = path.read_text(encoding="utf-8", errors="replace")
+        keys = {key for key, _ in config_assignments(text)}
         for old, new in sorted(renames.items()):
             if old in keys:
                 stale.append(f"{relative}: {old} -> {new}")

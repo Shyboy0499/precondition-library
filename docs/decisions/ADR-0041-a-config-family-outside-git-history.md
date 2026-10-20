@@ -77,14 +77,28 @@ need a provider key and are not part of this decision.
 
    Each state accepts exactly its own resolution, unlike the git families, where `merge`
    is accepted widely (ADR-0028).
+
+   *Amended 2026-10-20:* each rule holds only where its resolution fixes every stale entry.
+   The rules first read the tree as a whole: one key set twice in any file labelled it
+   `drop_old`, whose body leaves a stale key in another file as it was. A checkout that
+   needs two resolutions is now unlabelled. No injected state moves.
 7. **The admit set gains one episode per resolution** (ADR-0032), at seeds below the tune
-   and eval blocks: `rename` at 0 then 7, `drop_old` at 23 then 35, `migrate_local` at 14
-   then 18.
+   and eval blocks: `rename` at 0 then 8, `drop_old` at 31 then 23, `migrate_local` at 12
+   then 2.
+
+   *Amended 2026-10-20:* the first table drew one instance twice (23 and 35) and put every
+   episode on `timeout_s`. The six seeds now draw six instances, and each resolution is first
+   built on its own key.
 8. **The guard recognises a quoted assignment before `read`.** A `key = value` file is
    split with `IFS=' =' read -r key value`. The guard took a `read`'s own assignment only
    when its value had no space, so it read `$key` there as an environment read and refused
    the gold body. A quoted value is now allowed. The names that count as assigned are still
    only those after `read`, and an unassigned name in the same loop is still refused.
+
+   *Amended 2026-10-20:* the assignment scan now reads the body with quoted text and comments
+   blanked. Quoted text had counted as statements, so `echo 'x; IFS=" " read HOME'` made a
+   later `$HOME` look assigned, and the quoted-value pattern widened that. The 605 committed
+   and gold bodies get the same verdicts as before.
 
 ## Consequences
 

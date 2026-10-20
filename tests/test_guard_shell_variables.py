@@ -56,6 +56,9 @@ LIVE_PROBE = (
         'git diff HEAD | while read -r line; do echo "$line" >> notes.txt; done',
         'while IFS= read -r pkg; do test -n "$pkg"; done < .git/lock-additions',
         "grep x f | while IFS=' =' read -r old new; do test -n \"$old$new\"; done",
+        "IFS=$' \\t' read -r k v < f; test -n \"$k\"",
+        'echo "it\'s"; n=1; test "$n" = 1',
+        'cat f # don\'t\nn=1; test "$n" = 1',
         'while IFS=" =" read -r key value; do\n  test -n "$key" && test -n "$value"\ndone < f',
         'until read -r n; do :; done; test -n "$n"',
         'if read -r first < deps.lock; then test -n "$first"; fi',
@@ -83,6 +86,12 @@ def test_a_variable_the_body_assigned_first_is_allowed(body: str) -> None:
         ('echo "$x"; while read -r x; do :; done', "$x"),
         ('case x in x) echo "$PATH";; esac', "$PATH"),
         ('echo "$name"; case x in x) name=1;; esac', "$name"),
+        # Quoted text and comments assign nothing, however much they look like a `read`.
+        ("echo 'x; IFS=\" \" read HOME'; echo $HOME", "$HOME"),
+        ("X='a read HOME' true; echo $HOME", "$HOME"),
+        ('echo "x; read HOME"; echo $HOME', "$HOME"),
+        ("echo $'x; read HOME'; echo $HOME", "$HOME"),
+        ("# read HOME\necho $HOME", "$HOME"),
     ],
 )
 def test_an_unassigned_or_early_read_is_still_refused(body: str, named: str) -> None:

@@ -259,3 +259,80 @@ def test_no_phrasing_names_a_resolution() -> None:
 
 def test_few_requests_name_the_fault() -> None:
     assert INTENT.naming_fraction(range(200)) <= 0.35
+
+
+@pytest.mark.parametrize(
+    ("damage", "refusal"),
+    [
+        ("rm config/renames.conf", "renames.conf was changed"),
+        ("rm .gitignore", ".gitignore was changed"),
+        ("mkdir config/extra.conf", "config/extra.conf is not a readable config file"),
+        ("printf 'x = \\377\\n' > config/legacy.conf", "legacy.conf is not a readable config"),
+        ("rm config/settings.conf", "settings.conf is gone"),
+    ],
+)
+def test_a_fix_that_deletes_or_breaks_a_file_fails_rather_than_raising(
+    damage: str, refusal: str
+) -> None:
+    """A raise drops the episode as invalid, so a wrong fix would never be scored as one."""
+    box = build_sandbox(SEED_FOR["stale_key"], ["config_renamed"])
+    try:
+        replay(_gold("rename"), box)
+        _fix(box, damage)
+        verdict = SPEC.check(box)
+    finally:
+        box.destroy()
+    assert not verdict.ok
+    assert refusal in verdict.detail, verdict.detail
+
+
+def test_observing_a_config_file_that_is_not_utf8_does_not_fail() -> None:
+    """Observe runs for every intent, so one Latin-1 file must not stop dispatch on a checkout."""
+    box = build_sandbox(SEED_FOR["stale_key"], ["config_renamed"])
+    try:
+        (box.work / "config" / "legacy.conf").write_bytes(b"motd = caf\xe9\n")
+        observed = StateFingerprint.observe(box)
+    finally:
+        box.destroy()
+    assert observed.config_stale_keys == ["config/settings.conf: timeout_s -> request_timeout_s"]
+    assert INTENT.correct_variant(observed).id == "rename"
+
+
+def test_a_checkout_that_needs_two_resolutions_is_labelled_with_neither() -> None:
+    """Each rule must fix every stale entry, so a state mixing them takes no fixed resolution.
+
+    Before, a key set twice in one file labelled the whole tree `drop_old`, whose body leaves
+    a stale key elsewhere as it was.
+    """
+    both = CONFIG_RENAMED_STATES["both_keys"]
+    mixed = both.model_copy(
+        update={
+            "config_stale_keys": [
+                *both.config_stale_keys,
+                "config/extra.conf: retries -> max_retries",
+            ]
+        }
+    )
+    assert INTENT.correct_variant(mixed) is None
+    assert INTENT.acceptable_variants(mixed) == ()
+    local = CONFIG_RENAMED_STATES["local_override"]
+    tracked_too = local.model_copy(
+        update={
+            "config_stale_keys": [
+                *local.config_stale_keys,
+                "config/settings.conf: retries -> max_retries",
+            ]
+        }
+    )
+    assert INTENT.correct_variant(tracked_too) is None
+
+
+def test_a_file_name_holding_the_separator_is_not_misread_as_tracked() -> None:
+    local = CONFIG_RENAMED_STATES["local_override"]
+    odd = local.model_copy(
+        update={
+            "config_stale_keys": ["config/a: b.conf: timeout_s -> request_timeout_s"],
+            "config_ignored_files": ["config/a: b.conf"],
+        }
+    )
+    assert INTENT.correct_variant(odd).id == "migrate_local"

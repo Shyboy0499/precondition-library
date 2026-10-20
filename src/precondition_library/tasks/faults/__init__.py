@@ -73,12 +73,7 @@ def declared_resolution_matches(fault: str, seed: int, sandbox: Sandbox) -> None
             f"observed fingerprint, but variant_for_seed declared {declared!r}; the axis "
             f"draw flipped the label, so the build is refused (ADR-0005 decision 3). "
             f"Declared instance: {FAULTS[fault].instance_for_seed(seed)!r}. Observed "
-            f"discriminators: has_local_only_commits={observed.has_local_only_commits}, "
-            f"local_touched_files={observed.local_touched_files}, "
-            f"upstream_touched_files={observed.upstream_touched_files}, "
-            f"submodule_initialised={observed.submodule_initialised}, "
-            f"upstream_still_references_submodule={observed.upstream_still_references_submodule}, "
-            f"submodule_pin_matches_upstream={observed.submodule_pin_matches_upstream}"
+            f"state, every field the rules read:\n{observed.as_text()}"
         )
 
 

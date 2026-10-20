@@ -240,6 +240,55 @@ def _credential_effect(body: str) -> str | None:
     return match.group(0) if match else None
 
 
+def _mask_literal_text(body: str) -> str:
+    """`body` with text that cannot assign a variable blanked out, offsets kept.
+
+    Only `_assigned_from` reads the mask, so it can only take assignments away, never add a
+    read. Blanked: the inside of a single-quoted or `$'...'` string, of a double-quoted string
+    with no command substitution in it, and of a comment. Without this, `echo 'x; read HOME'`
+    or `X='a read HOME' cmd` counted as the body assigning `HOME`, and a later `$HOME` was let
+    through as the body's own value. A quote left open is not masked from where it opens.
+    """
+    out = list(body)
+    i, n = 0, len(body)
+
+    def blank(start: int, end: int) -> None:
+        for at in range(start, end):
+            if out[at] != "\n":
+                out[at] = "_"
+
+    while i < n:
+        char = body[i]
+        if char == "\\":
+            i += 2
+        elif char == "'" or (char == "$" and body.startswith("$'", i)):
+            start = i + (2 if char == "$" else 1)
+            at = start
+            while at < n and body[at] != "'":
+                at += 2 if char == "$" and body[at] == "\\" else 1
+            if at >= n:
+                break
+            blank(start, at)
+            i = at + 1
+        elif char == '"':
+            at = i + 1
+            while at < n and body[at] != '"':
+                at += 2 if body[at] == "\\" else 1
+            if at >= n:
+                break
+            if "$(" not in body[i + 1 : at] and "`" not in body[i + 1 : at]:
+                blank(i + 1, at)
+            i = at + 1
+        elif char == "#" and (i == 0 or body[i - 1] in " \t\n;&|("):
+            end = body.find("\n", i)
+            end = n if end < 0 else end
+            blank(i + 1, end)
+            i = end
+        else:
+            i += 1
+    return "".join(out)
+
+
 def _assigned_from(body: str) -> dict[str, int]:
     """Each variable the body assigns itself, and the offset from which it holds that value.
 
@@ -252,18 +301,19 @@ def _assigned_from(body: str) -> dict[str, int]:
     which can only let through a read of a variable whose name the body itself chose.
     """
     assigned: dict[str, int] = {}
+    masked = _mask_literal_text(body)
 
     def note(name: str, at: int) -> None:
-        end = _STATEMENT_END.search(body, at)
+        end = _STATEMENT_END.search(masked, at)
         effective = end.end() if end else len(body)
         assigned[name] = min(assigned.get(name, effective), effective)
 
-    for match in _ASSIGNED_NAME.finditer(body):
+    for match in _ASSIGNED_NAME.finditer(masked):
         note(match.group(1), match.end())
-    for match in _READ_NAMES.finditer(body):
+    for match in _READ_NAMES.finditer(masked):
         for name in match.group(1).split():
             note(name, match.end())
-    for match in _FOR_NAME.finditer(body):
+    for match in _FOR_NAME.finditer(masked):
         note(match.group(1), match.end())
     return assigned
 

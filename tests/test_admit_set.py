@@ -81,6 +81,26 @@ def test_the_request_is_the_faults_phrasing_then_a_directive(fault, episode, see
     )
 
 
+def test_config_renamed_builds_six_instances_on_four_keys() -> None:
+    """A fallback that drew its first seed's instance would retry the same environment.
+
+    Pinned for `config_renamed`, the one family no committed replicate was built on. The
+    tables the replicates were built with stay as they ran: `diverged`'s `rebase` pair
+    draws one instance twice.
+    """
+    episodes = ADMIT_SET["config_renamed"]
+    instances = [
+        FAULTS["config_renamed"].instance_for_seed(s) for s in admit_seeds("config_renamed")
+    ]
+    assert len(set(instances)) == len(instances)
+    firsts = {
+        instances[2 * index].split("/key=")[1].split("/")[0] for index in range(len(episodes))
+    }
+    assert len(firsts) == len(episodes), "each resolution is first built on its own key"
+    keys = {instance.split("/key=")[1].split("/")[0] for instance in instances}
+    assert len(keys) == 4
+
+
 class _FinishThenNoProgram:
     """Declares every solve done at once and answers every compile with no program."""
 
