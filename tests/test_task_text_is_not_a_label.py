@@ -424,11 +424,16 @@ def test_same_declared_phrasings_imply_same_text_for_every_seed(make_state) -> N
                 upstream_ahead=0,
                 upstream_behind=0,
                 has_locked_branch=False,
+                # Every stale key set twice: a key stale alone beside it would need `rename`
+                # too, and a state needing two resolutions is unlabelled (ADR-0041, amended).
                 config_stale_keys=[
                     "config/app.conf: log -> log_level",
                     "config/app.conf: timeout_s -> request_timeout_s",
                 ],
-                config_keys_set_twice=["config/app.conf: log -> log_level"],
+                config_keys_set_twice=[
+                    "config/app.conf: log -> log_level",
+                    "config/app.conf: timeout_s -> request_timeout_s",
+                ],
                 config_ignored_files=["config/local.conf"],
                 remotes=["origin"],
             ),

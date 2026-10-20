@@ -260,7 +260,7 @@ def _in_an_ignored_file(state: StateFingerprint, entry: str) -> bool:
 
 
 def _needs_rename(s: StateFingerprint) -> bool:
-    """Every stale key is in a tracked file, set under its old name only."""
+    """Every stale key is in a file git does not ignore, set under its old name only."""
     return (
         has_stale_config(s)
         and not s.config_keys_set_twice
@@ -269,7 +269,7 @@ def _needs_rename(s: StateFingerprint) -> bool:
 
 
 def _needs_drop_old(s: StateFingerprint) -> bool:
-    """Every stale key is in a tracked file, set under both names."""
+    """Every stale key is in a file git does not ignore, set under both names."""
     return (
         has_stale_config(s)
         and set(s.config_stale_keys) == set(s.config_keys_set_twice)
