@@ -1,0 +1,40 @@
+{
+  "source": "results/replicates-2026-10-05/run-12",
+  "library_root": "results/replicates-2026-10-05/run-12/library-two-sided",
+  "library_hash_before": "ad311de65eb51b120ea97aabb83fe22492c89812232e21bf2c5f1cde4dc8c8c1",
+  "library_hash_after": "ad311de65eb51b120ea97aabb83fe22492c89812232e21bf2c5f1cde4dc8c8c1",
+  "scorer": {
+    "scorer": "lexical"
+  },
+  "faults": [
+    "lockfile_conflict"
+  ],
+  "seeds": [
+    2000,
+    2004,
+    2008,
+    2012,
+    2016,
+    2020,
+    2024,
+    2028,
+    2032,
+    2036
+  ],
+  "distinct_instances": {
+    "lockfile_conflict": 9
+  },
+  "pairs": 20,
+  "programs": 14,
+  "admitted": 14,
+  "arm3_fires": 6,
+  "arm3_wrong": 0,
+  "arm2_at_matched": "arm 2 (threshold 0.12195121951219512) mismatches 5/5 at arm 3's coverage, coverage gap -0.050, mismatch difference (arm 2 - arm 3) +1.0000",
+  "smallest_detectable_difference": 0.8482220477654027,
+  "wording": "no held-out floor is measured, so this stage may not say precondition dispatch beats text similarity; it reports the held-out coverage, the mis-fire counts and the comparison",
+  "figure": "Primary metric, uninformed regime, 20 labelled pairs (spec §7 item 1, ADR-0008)\n  arm 3 (pre-registered coverage point): coverage 6/20, mismatch 0/6\n  arm 2 curve: 12 operating point(s), each with a 95% Wilson interval in figure1.csv\n  at matched coverage arm 2 (threshold 0.12195121951219512) has mismatch 5/5; coverage gap -0.050; mismatch difference (arm 2 - arm 3) +1.0000\n  power (item 3): with 5 and 6 fires, alpha 0.05 two-sided and power 0.8, the smallest detectable mismatch difference is 0.848 at a 50% base rate and 0.845 at the observed 0.455\n  baseline arm 2b (soft vote): curve, 3 operating point(s) -- context, not part of the claim\n  baseline arm 2c (intent key): point, 1 operating point(s) -- context, not part of the claim\n",
+  "wrong_fires": [],
+  "artifacts": {
+    "primary": "primary"
+  }
+}

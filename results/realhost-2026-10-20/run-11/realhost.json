@@ -1,0 +1,241 @@
+{
+  "sources": [
+    "results/replicates-2026-10-05/run-11"
+  ],
+  "hosts": [
+    {
+      "name": "psf/requests",
+      "url": "https://github.com/psf/requests",
+      "commit": "611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60",
+      "depth": 50,
+      "seeds": [
+        2000,
+        2004,
+        2008,
+        2012,
+        2016,
+        2020,
+        2024,
+        2028,
+        2032,
+        2036
+      ]
+    },
+    {
+      "name": "pallets/click",
+      "url": "https://github.com/pallets/click",
+      "commit": "2247b35ea1c47c727d7a06e51fa280e12a863ff6",
+      "depth": 50,
+      "seeds": [
+        2001,
+        2005,
+        2009,
+        2013,
+        2017,
+        2021,
+        2025,
+        2029,
+        2033,
+        2037
+      ]
+    },
+    {
+      "name": "junegunn/fzf",
+      "url": "https://github.com/junegunn/fzf",
+      "commit": "55c122f1a0e1340546c8709682bea5561fe0e8fd",
+      "depth": 50,
+      "seeds": [
+        2002,
+        2006,
+        2010,
+        2014,
+        2018,
+        2022,
+        2026,
+        2030,
+        2034,
+        2038
+      ]
+    },
+    {
+      "name": "expressjs/express",
+      "url": "https://github.com/expressjs/express",
+      "commit": "0dee2c52c7c873498f8ed7d8ee4ddd0a04d3ada8",
+      "depth": 50,
+      "seeds": [
+        2003,
+        2007,
+        2011,
+        2015,
+        2019,
+        2023,
+        2027,
+        2031,
+        2035,
+        2039
+      ]
+    }
+  ],
+  "blocks": [
+    {
+      "host": "expressjs/express",
+      "fault": "branch_renamed",
+      "seeds": 10,
+      "arm3_fires": 10,
+      "arm3_wrong": 0,
+      "fault_free_fires": 0
+    },
+    {
+      "host": "expressjs/express",
+      "fault": "dirty_tree",
+      "seeds": 10,
+      "arm3_fires": 10,
+      "arm3_wrong": 0,
+      "fault_free_fires": 0
+    },
+    {
+      "host": "expressjs/express",
+      "fault": "diverged",
+      "seeds": 10,
+      "arm3_fires": 10,
+      "arm3_wrong": 0,
+      "fault_free_fires": 0
+    },
+    {
+      "host": "expressjs/express",
+      "fault": "lockfile_conflict",
+      "seeds": 10,
+      "arm3_fires": 8,
+      "arm3_wrong": 0,
+      "fault_free_fires": 0
+    },
+    {
+      "host": "expressjs/express",
+      "fault": "submodule_moved",
+      "seeds": 10,
+      "arm3_fires": 10,
+      "arm3_wrong": 0,
+      "fault_free_fires": 0
+    },
+    {
+      "host": "junegunn/fzf",
+      "fault": "branch_renamed",
+      "seeds": 10,
+      "arm3_fires": 10,
+      "arm3_wrong": 0,
+      "fault_free_fires": 0
+    },
+    {
+      "host": "junegunn/fzf",
+      "fault": "dirty_tree",
+      "seeds": 10,
+      "arm3_fires": 10,
+      "arm3_wrong": 0,
+      "fault_free_fires": 0
+    },
+    {
+      "host": "junegunn/fzf",
+      "fault": "diverged",
+      "seeds": 10,
+      "arm3_fires": 10,
+      "arm3_wrong": 0,
+      "fault_free_fires": 0
+    },
+    {
+      "host": "junegunn/fzf",
+      "fault": "lockfile_conflict",
+      "seeds": 10,
+      "arm3_fires": 5,
+      "arm3_wrong": 0,
+      "fault_free_fires": 0
+    },
+    {
+      "host": "junegunn/fzf",
+      "fault": "submodule_moved",
+      "seeds": 10,
+      "arm3_fires": 10,
+      "arm3_wrong": 0,
+      "fault_free_fires": 0
+    },
+    {
+      "host": "pallets/click",
+      "fault": "branch_renamed",
+      "seeds": 10,
+      "arm3_fires": 10,
+      "arm3_wrong": 0,
+      "fault_free_fires": 0
+    },
+    {
+      "host": "pallets/click",
+      "fault": "dirty_tree",
+      "seeds": 10,
+      "arm3_fires": 10,
+      "arm3_wrong": 0,
+      "fault_free_fires": 0
+    },
+    {
+      "host": "pallets/click",
+      "fault": "diverged",
+      "seeds": 10,
+      "arm3_fires": 10,
+      "arm3_wrong": 0,
+      "fault_free_fires": 0
+    },
+    {
+      "host": "pallets/click",
+      "fault": "lockfile_conflict",
+      "seeds": 10,
+      "arm3_fires": 8,
+      "arm3_wrong": 0,
+      "fault_free_fires": 0
+    },
+    {
+      "host": "pallets/click",
+      "fault": "submodule_moved",
+      "seeds": 10,
+      "arm3_fires": 10,
+      "arm3_wrong": 0,
+      "fault_free_fires": 0
+    },
+    {
+      "host": "psf/requests",
+      "fault": "branch_renamed",
+      "seeds": 10,
+      "arm3_fires": 10,
+      "arm3_wrong": 0,
+      "fault_free_fires": 0
+    },
+    {
+      "host": "psf/requests",
+      "fault": "dirty_tree",
+      "seeds": 10,
+      "arm3_fires": 10,
+      "arm3_wrong": 0,
+      "fault_free_fires": 0
+    },
+    {
+      "host": "psf/requests",
+      "fault": "diverged",
+      "seeds": 10,
+      "arm3_fires": 10,
+      "arm3_wrong": 0,
+      "fault_free_fires": 0
+    },
+    {
+      "host": "psf/requests",
+      "fault": "lockfile_conflict",
+      "seeds": 10,
+      "arm3_fires": 6,
+      "arm3_wrong": 0,
+      "fault_free_fires": 0
+    },
+    {
+      "host": "psf/requests",
+      "fault": "submodule_moved",
+      "seeds": 10,
+      "arm3_fires": 10,
+      "arm3_wrong": 0,
+      "fault_free_fires": 0
+    }
+  ]
+}

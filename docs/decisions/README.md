@@ -50,6 +50,7 @@ commit message is not a record.
 | [ADR-0040](ADR-0040-repository-derived-bindings-must-be-shell-safe.md) | accepted | A **repository-derived binding** (`upstream_remote`, `upstream_branch`, `submodule_path`) is bound only when it is **shell-safe**; anything else is left unbound, after a remote's branch name `x;>PWNED` was shown running in a probe on a checkout. |
 | [ADR-0041](ADR-0041-a-config-family-outside-git-history.md) | accepted | A sixth family, **`config_renamed`**, whose state is config files rather than git history (#266 step 1); its fingerprint fields render only when set, so no earlier state's arm-2 text moves. |
 | [ADR-0042](ADR-0042-branch-names-and-submodule-paths-are-held-out.md) | accepted | **Held-out branch names and submodule paths**, so every git fault has a held-out axis; arm 3 fired on all 240 held-out positives with none wrong, because every program binds the name or path as a parameter. |
+| [ADR-0043](ADR-0043-a-held-out-source-over-real-repositories.md) | accepted | **A held-out source over real repositories' histories**: the eval states built over four pinned public repositories drew the same 563 fires as the synthetic base, none wrong. |
 
 ## When to write one
 

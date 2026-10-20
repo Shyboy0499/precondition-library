@@ -1,0 +1,40 @@
+{
+  "source": "results/replicates-2026-10-05/run-11",
+  "library_root": "results/replicates-2026-10-05/run-11/library-two-sided",
+  "library_hash_before": "d8db771131354cf1b84e27bd19a0d83a126d1a712928737323e79cb11b26c572",
+  "library_hash_after": "d8db771131354cf1b84e27bd19a0d83a126d1a712928737323e79cb11b26c572",
+  "scorer": {
+    "scorer": "lexical"
+  },
+  "faults": [
+    "submodule_moved"
+  ],
+  "seeds": [
+    2003,
+    2007,
+    2011,
+    2015,
+    2019,
+    2023,
+    2027,
+    2031,
+    2035,
+    2039
+  ],
+  "distinct_instances": {
+    "submodule_moved": 8
+  },
+  "pairs": 20,
+  "programs": 16,
+  "admitted": 13,
+  "arm3_fires": 10,
+  "arm3_wrong": 0,
+  "arm2_at_matched": "no comparison: arm 3 decides all 20 pairs correctly, so it is the labelling rule rather than a dispatcher: the comparison needs fallible (compiled) programs",
+  "smallest_detectable_difference": 0.612050344077056,
+  "wording": "no held-out floor is measured, so this stage may not say precondition dispatch beats text similarity; it reports the held-out coverage, the mis-fire counts and the comparison",
+  "figure": "Primary metric, uninformed regime, 20 labelled pairs (spec §7 item 1, ADR-0008)\n  arm 3 (pre-registered coverage point): coverage 10/20, mismatch 0/10\n  arm 2 curve: 11 operating point(s), each with a 95% Wilson interval in figure1.csv\n  NO COMPARISON: arm 3 decides all 20 pairs correctly, so it is the labelling rule rather than a dispatcher: the comparison needs fallible (compiled) programs\n  power (item 3): with 11 and 10 fires, alpha 0.05 two-sided and power 0.8, the smallest detectable mismatch difference is 0.612 at a 50% base rate and 0.611 at the observed 0.476\n  baseline arm 2b (soft vote): curve, 2 operating point(s) -- context, not part of the claim\n  baseline arm 2c (intent key): point, 1 operating point(s) -- context, not part of the claim\n",
+  "wrong_fires": [],
+  "artifacts": {
+    "primary": "primary"
+  }
+}

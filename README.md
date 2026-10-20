@@ -19,7 +19,8 @@
 > **held-out** states no build ever drew, it mis-fired once in 480 fires on new paths, a new
 > shape, new branch names and new submodule paths, but on **41 of 101** when the lock file moved
 > to new paths. All 42 of those mis-fires were on a file name with a space or a non-ASCII
-> character
+> character. Built over four real repositories' histories instead of the generator's two-file
+> base, the same states drew the same 563 fires, none wrong
 > ([Held-out states](#held-out-states)). The numbers, their provenance and their limits are in
 > [Primary result](#primary-result). What is **not** measured yet is everything at
 > episode level -- the frozen benchmark, the admission factorial and the online arms --
@@ -380,8 +381,8 @@ detectable difference.
 - **States outside the generators, except in part.** Every pair here comes from the
   injectors admission tests each program against. Five held-out sources are measured below,
   one per git fault. On one of them, file names with a space or a non-ASCII character, arm 3
-  mis-fired often.
-  Real repositories are not measured.
+  mis-fired often. A sixth builds the same states over real repositories' histories. Real
+  faults, ones no injector built, are not measured.
 - **Nothing at episode level.** Mis-fires that end in a wrong repository, cost, the
   admission factorial and the online arms are separate stages, not run here.
 - **Arm 2b cannot separate the two.** At arm 3's coverage the soft vote's matched point
@@ -463,9 +464,29 @@ non-ASCII paths, 41 of 60 fires were wrong. On its nested and dotfile paths, non
 - **A comparison with arm 2.** No held-out floor is measured, so no sentence may say arm 3 beats
   text similarity on these states (ADR-0033).
 - **States of a different kind.** All five sources keep the fault's kind of state, with new
-  names, paths and counts. Real checkouts are not measured.
+  names, paths and counts.
 
-The details are in [`results/heldout-2026-10-19/`](results/heldout-2026-10-19/README.md) (branch
+**Over real repositories (ADR-0043).** The five sources above change something inside the
+generator's base: two files, one commit, no `.gitignore`. A sixth changes the base. Each state's
+history starts from a pinned public repository and its last 50 commits (`psf/requests`,
+`pallets/click`, `junegunn/fzf`, `expressjs/express`), with the fault injected on top as before.
+The seeds are the eval block, so each state is paired with one Figure 1 measured.
+
+| | replicate 1 (run 11) | replicate 2 (run 12) | replicate 3 (run 13) |
+| --- | --- | --- | --- |
+| real-host base: arm 3 fires on 200 positives, mis-fires | 187, 0 | 187, 0 | 189, 0 |
+| synthetic base, same seeds (Figure 1) | 187, 0 | 187, 0 | 189, 0 |
+| fires on the 200 fault-free negatives, real-host base | 0 | 0 | 0 |
+
+The real base changed nothing measured: the same fire counts, no wrong fire, and the positives
+arm 3 sat out are the same `lockfile_conflict` seeds it sits out on the synthetic base. An
+independent recount, evaluating every program directly, agrees on all 60 blocks. It found one real
+interaction: fzf ignores `vendor`, where the submodule goes, so the injector now adds it with
+`--force`. Four projects are not a sample of repositories, and the faults are still the
+generator's.
+
+The details are in [`results/realhost-2026-10-20/`](results/realhost-2026-10-20/README.md) (real
+repositories' histories), [`results/heldout-2026-10-19/`](results/heldout-2026-10-19/README.md) (branch
 names and submodule paths), [`results/heldout-2026-10-18/`](results/heldout-2026-10-18/README.md) (the
 lock-file block), [`results/heldout-2026-10-16/`](results/heldout-2026-10-16/README.md) and
 [`results/heldout-2026-10-10/`](results/heldout-2026-10-10/README.md).

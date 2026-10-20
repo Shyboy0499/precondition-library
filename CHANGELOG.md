@@ -12,6 +12,13 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **A held-out source over real repositories' histories (ADR-0043).** `bench.realhost` builds the
+  eval states over four pinned public repositories (`psf/requests`, `pallets/click`,
+  `junegunn/fzf`, `expressjs/express`), each its pinned commit and last 50 commits, and measures
+  the committed libraries through `bench.heldout` unchanged. They drew 187, 187 and 189 fires on
+  the 200 positives, none wrong, and none on the fault-free negatives: Figure 1's counts on the
+  synthetic base. `submodule_moved` adds its submodule with `--force`, because fzf ignores
+  `vendor`; synthetic states are byte-identical. `results/realhost-2026-10-20/`.
 - **Held-out states, part 4 (#263, ADR-0042).** `branch_renamed` gains held-out branch names
   (two with a `/`) and `submodule_moved` held-out submodule paths, so every git fault has a
   held-out axis. Arm 3 fired on all 240 held-out positives, none wrong
