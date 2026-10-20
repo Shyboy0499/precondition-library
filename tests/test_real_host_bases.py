@@ -133,6 +133,20 @@ def test_the_host_is_fetched_once(local_host: RealHost, tmp_path: Path) -> None:
     box.destroy()
 
 
+def test_the_cache_carries_no_template(
+    local_host: RealHost, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An operator's `init.templateDir` must not reach the cache, and so every upstream."""
+    template = tmp_path / "template"
+    (template / "hooks").mkdir(parents=True)
+    (template / "hooks" / "post-receive").write_text("#!/bin/sh\ntouch PWNED\n")
+    (template / "config").write_text("[core]\n\tfsmonitor = true\n")
+    monkeypatch.setenv("GIT_TEMPLATE_DIR", str(template))
+    cache = fetch_real_host(local_host)
+    assert not (cache / "hooks" / "post-receive").exists()
+    assert "fsmonitor" not in (cache / "config").read_text(encoding="utf-8")
+
+
 def test_a_commit_the_host_does_not_have_is_refused(local_host: RealHost) -> None:
     missing = RealHost(local_host.name, local_host.url, "0" * 40)
     with pytest.raises(subprocess.CalledProcessError):

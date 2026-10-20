@@ -662,7 +662,9 @@ def fetch_real_host(host: RealHost) -> Path:
                 text=True,
             )
 
-        git("init", "-q", "--bare", str(staged))
+        # No template: an operator's `init.templateDir` would copy its hooks and config into
+        # the cache, and from there into every sandbox's upstream.
+        git("init", "-q", "--bare", "--template=", str(staged))
         git("-C", str(staged), "fetch", "-q", "--depth", str(host.depth), host.url, host.commit)
         git("-C", str(staged), "rev-parse", "--verify", "-q", f"{host.commit}^{{commit}}")
         (staged / "FETCH_HEAD").unlink(missing_ok=True)
