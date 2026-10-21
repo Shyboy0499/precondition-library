@@ -55,6 +55,8 @@ report's (`results/replicates-2026-10-05/run-N/primary/primary.txt`):
 | changed something | 0 | 0 | 0 | 0 |
 | any fire that lost a recorded commit or rewrote upstream | 0 | 0 | 0 | 0 |
 
+A rerun of run-11 from scratch reproduced `consequences.jsonl` and the summary exactly.
+
 
 ## What it shows
 
