@@ -16,7 +16,11 @@ says which invariant broke.
 
 from __future__ import annotations
 
+import pytest
+
 from precondition_library.sandbox import run_git
+from precondition_library.tasks.faults import FAULTS
+from precondition_library.tasks.faults.lockfile_conflict import lock_path_for_seed
 from precondition_library.tasks.invariants import recorded_state_intact
 
 FAULT = "diverged"
@@ -111,3 +115,30 @@ def test_legitimate_work_does_not_trip_the_invariants(make_sandbox) -> None:
     verdict = recorded_state_intact(box)
 
     assert verdict.ok, verdict.detail
+
+
+@pytest.mark.parametrize(
+    "seed",
+    [
+        pytest.param(3001, id="web app/deps.lock"),
+        pytest.param(3002, id="vendor/abhängigkeiten.lock"),
+    ],
+)
+def test_a_change_inside_a_surface_git_would_quote_is_inside_it(make_sandbox, seed: int) -> None:
+    """Without `-z`, git printed `vendor/abhängigkeiten.lock` escaped and quoted, so a commit
+    to the very file the fault allows was refused as outside its surface (ADR-0044)."""
+    box = make_sandbox(seed, ["lockfile_conflict"])
+    path = lock_path_for_seed(seed)
+    surface = FAULTS["lockfile_conflict"].change_surface_for_seed(seed)
+    assert path in surface
+    run_git(("checkout", "-q", "--theirs", "--", path), cwd=box.work, check=False)
+    with (box.work / path).open("a", encoding="utf-8") as handle:
+        handle.write("resolved\n")
+    run_git(("add", "--", path), cwd=box.work)
+    run_git(("commit", "-q", "--no-edit", "-m", "resolve the lock file"), cwd=box.work)
+
+    verdict = recorded_state_intact(box, surface=surface)
+
+    assert verdict.ok, verdict.detail
+    outside = recorded_state_intact(box, surface=())
+    assert not outside.ok and path in outside.detail, "the raw name is what is reported"

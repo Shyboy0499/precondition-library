@@ -167,10 +167,12 @@ def recorded_state_intact(sandbox: Sandbox, *, surface: Sequence[str] | None = N
                 "committed diff cannot be checked against it"
             ),
         )
-    changed = run_git(("diff", "--name-only", base, "HEAD"), cwd=sandbox.work, check=False)
-    # One path per line: a path may contain a space, and whitespace-splitting one makes the
-    # check refuse a committed change that *is* inside the declared surface (#263).
-    outside = sorted(set(changed.stdout.splitlines()) - set(surface))
+    changed = run_git(("diff", "--name-only", "-z", base, "HEAD"), cwd=sandbox.work, check=False)
+    # NUL-separated and unquoted: a path may contain a space (#263), and without `-z` git
+    # prints a non-ASCII name escaped and quoted, so `vendor/abhängigkeiten.lock` read as
+    # `"vendor/abh\303\244ngigkeiten.lock"` and a change inside the surface was refused as
+    # outside it (ADR-0044).
+    outside = sorted({path for path in changed.stdout.split("\0") if path} - set(surface))
     if outside:
         return GroundTruth(
             ok=False,
