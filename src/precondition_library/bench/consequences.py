@@ -11,8 +11,8 @@ fires its first accepted program, and arm 2 fires its top-1 when its score reach
 threshold at which the primary report matched it to arm 3's coverage. Each fired program is
 then replayed on a fresh build of the pair's state and graded:
 
-* on a fault's state, by `bench.run._grade`, the grader every episode uses: the fault's own
-  checker, then `recorded_state_intact` over the fault's change surface;
+* on a fault's state, by the two clauses `bench.run._grade` applies to every episode:
+  `recorded_state_intact` over the fault's change surface, and the fault's own checker;
 * on a fault-free state, by whether anything changed at all: HEAD, the branch, every ref in
   both repositories and the working tree's status, before against after.
 
@@ -45,7 +45,6 @@ from .heldout import HELD_OUT_FAULTS
 from .library_pairs import FAULT_FREE, library_pair_outcomes
 from .primary import primary_report
 from .rescore import scorer
-from .run import _grade
 from .splits import EVAL_SEEDS
 
 FIXED = "fixed"
@@ -53,8 +52,8 @@ FIXED = "fixed"
 NOT_FIXED = "not fixed"
 """A fault's state: the checker refused it, and nothing recorded was lost."""
 LOST = "lost recorded state"
-"""A fault's state: the checker passed or not, but a recorded commit or upstream's history was
-lost, or a commit landed outside the fault's change surface."""
+"""A fault's state: a recorded commit's object is gone, upstream's history was rewritten, or a
+commit landed outside the fault's change surface -- whatever the checker would say."""
 NOTHING_RAN = "nothing ran"
 """The guard refused the body or it named a parameter the state cannot bind."""
 UNCHANGED = "unchanged"
@@ -115,17 +114,16 @@ def consequence_of(program: Program, seed: int, environment: str) -> tuple[str, 
             moved = _snapshot(box) != before
             return (CHANGED if moved else UNCHANGED), result.ok, result.reason
         fault = FAULTS[environment]
-        try:
-            fixed, _, _ = _grade(fault, box, seed)
-            verdict = fault.check(box)
-        except Exception as error:  # noqa: BLE001 - a checker that raises is the finding
-            return UNGRADABLE, result.ok, f"{type(error).__name__}: {error}"
-        if fixed:
-            return FIXED, result.ok, verdict.detail
+        # The two clauses `bench.run._grade` applies, the recorded state first: a checker can
+        # raise on a repository whose recorded objects are gone, and that loss is the finding.
         intact = recorded_state_intact(box, surface=fault.change_surface_for_seed(seed))
         if not intact.ok:
             return LOST, result.ok, intact.detail
-        return NOT_FIXED, result.ok, verdict.detail
+        try:
+            verdict = fault.check(box)
+        except Exception as error:  # noqa: BLE001 - a checker that raises is the finding
+            return UNGRADABLE, result.ok, f"{type(error).__name__}: {error}"
+        return (FIXED if verdict.ok else NOT_FIXED), result.ok, verdict.detail
     finally:
         box.destroy()
 
