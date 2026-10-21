@@ -107,7 +107,7 @@ programs:
         probe: 'test -n "$(comm -12 <(git ls-files --others --exclude-standard | sort) <(git ls-tree -r --name-only {upstream_remote}/{upstream_branch} | sort))"'
     body: |
       git fetch -q {upstream_remote}
-      for f in $(comm -12 <(git ls-files --others --exclude-standard | sort) <(git ls-tree -r --name-only {upstream_remote}/{upstream_branch} | sort)); do mv "$f" "$f.local"; done
+      comm -z -12 <(git ls-files -z --others --exclude-standard | sort -z) <(git ls-tree -r -z --name-only {upstream_remote}/{upstream_branch} | sort -z) | while IFS= read -r -d '' f; do mv -- "$f" "$f.local"; done
       git stash push --include-untracked -q
       git merge --ff-only {upstream_remote}/{upstream_branch}
       git stash pop -q

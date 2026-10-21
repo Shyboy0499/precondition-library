@@ -132,8 +132,18 @@ _ASSIGNED_NAME = re.compile(
 # `key = value` file is split); before #266 the quote's space ended the prefix, and the
 # names read were then refused as environment reads.
 _READ_PREFIX = r"(?:[A-Za-z_][A-Za-z0-9_]*=(?:'[^'\n]*'|\"[^\"\n]*\"|\S*)\s+)*"
+# `read`'s options, some with an argument: `-d ''` (read to a NUL, how a `-z` list is
+# walked), `-t 5`, `-p "prompt"`. An option cluster ending in one of those letters takes the
+# next token, so it is not read as the first name, and the names after it still count.
+_READ_OPTIONS = (
+    r"(?:\s+-[A-Za-z]*[dnNtupi]\s+(?:'[^'\n]*'|\"[^\"\n]*\"|[^\s;|&'\"]+)|\s+-[A-Za-z]+)*"
+)
 _READ_NAMES = re.compile(
-    _STATEMENT_START + _READ_PREFIX + r"read\b(?:\s+-\w+)*((?:\s+[A-Za-z_][A-Za-z0-9_]*)+)",
+    _STATEMENT_START
+    + _READ_PREFIX
+    + r"read\b"
+    + _READ_OPTIONS
+    + r"((?:\s+[A-Za-z_][A-Za-z0-9_]*)+)",
     re.MULTILINE,
 )
 _FOR_NAME = re.compile(_STATEMENT_START + r"for\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\b", re.MULTILINE)

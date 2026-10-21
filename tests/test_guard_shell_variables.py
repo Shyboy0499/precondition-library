@@ -57,6 +57,10 @@ LIVE_PROBE = (
         'while IFS= read -r pkg; do test -n "$pkg"; done < .git/lock-additions',
         "grep x f | while IFS=' =' read -r old new; do test -n \"$old$new\"; done",
         "IFS=$' \\t' read -r k v < f; test -n \"$k\"",
+        "git ls-files -z | while IFS= read -r -d '' f; do test -n \"$f\"; done",
+        "while read -rd '' f; do test -n \"$f\"; done < l",
+        'read -t 5 x; test -n "$x"',
+        'read -p "name? " who; test -n "$who"',
         'echo "it\'s"; n=1; test "$n" = 1',
         'cat f # don\'t\nn=1; test "$n" = 1',
         'while IFS=" =" read -r key value; do\n  test -n "$key" && test -n "$value"\ndone < f',
@@ -92,6 +96,9 @@ def test_a_variable_the_body_assigned_first_is_allowed(body: str) -> None:
         ('echo "x; read HOME"; echo $HOME', "$HOME"),
         ("echo $'x; read HOME'; echo $HOME", "$HOME"),
         ("# read HOME\necho $HOME", "$HOME"),
+        # An option's argument is not a name the read assigns.
+        ("read -d '' x; echo $HOME", "$HOME"),
+        ('read -t 5; echo "$x"', "$x"),
     ],
 )
 def test_an_unassigned_or_early_read_is_still_refused(body: str, named: str) -> None:
