@@ -12,6 +12,12 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **Replayed dispatch fires are graded (ADR-0044, exploratory).** `bench.consequences` replays
+  Figure 1's decisions on the eval pairs and grades each with the episode loop's two clauses, with
+  no model call. Arm 3's 563 fires fixed 536; the 27 failures are two run-13 programs that pass
+  their own postconditions while the checker refuses the result. Arm 2's 318 fires on fault-free
+  states changed nothing, and 147 of its 241 on fault states fixed them.
+  `results/consequences-2026-10-21/`.
 - **A held-out source over real repositories' histories (ADR-0043).** `bench.realhost` builds the
   eval states over four pinned public repositories (`psf/requests`, `pallets/click`,
   `junegunn/fzf`, `expressjs/express`), each its pinned commit and last 50 commits, and measures

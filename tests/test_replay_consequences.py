@@ -9,10 +9,15 @@ names what happened to the repository:
 * a body that destroys a recorded commit's object is `lost recorded state`;
 * on a fault-free state, a no-op is `unchanged` and anything that moves is `changed`;
 * a body the guard refuses, or one naming a parameter the state cannot bind, is `nothing ran`;
-* a checker that raises is `ungradable`, not a crash of the stage.
+* a checker that raises is `ungradable`, not a crash of the stage;
+* the committed results are Figure 1's decisions, and their summaries are their rows.
 """
 
 from __future__ import annotations
+
+import re
+from collections import Counter
+from pathlib import Path
 
 import pytest
 from conftest import gold_program
@@ -25,6 +30,8 @@ from precondition_library.bench.consequences import (
     NOTHING_RAN,
     UNCHANGED,
     UNGRADABLE,
+    Consequence,
+    ConsequenceSummary,
     consequence_of,
 )
 from precondition_library.bench.library_pairs import FAULT_FREE
@@ -113,3 +120,37 @@ def test_a_checker_that_raises_is_ungradable(monkeypatch: pytest.MonkeyPatch) ->
     outcome, _, detail = consequence_of(gold_program("merge"), MERGE_SEED, "diverged")
     assert outcome == UNGRADABLE
     assert "could not read the state" in detail
+
+
+RESULTS = Path(__file__).resolve().parents[1] / "results"
+
+
+@pytest.mark.parametrize("run", ["run-11", "run-12", "run-13"])
+def test_the_committed_replays_are_figure_1s_decisions(run: str) -> None:
+    """Each run's arm-2 threshold and its fires and wrong fires there are the committed primary
+    report's, arm 3's fires are its 187-189, and the summary is the rows on disk."""
+    out = RESULTS / "consequences-2026-10-21" / run
+    summary = ConsequenceSummary.model_validate_json((out / "summary.json").read_text("utf-8"))
+    rows = [
+        Consequence.model_validate_json(line)
+        for line in (out / "consequences.jsonl").read_text("utf-8").splitlines()
+    ]
+    primary = (RESULTS / "replicates-2026-10-05" / run / "primary" / "primary.txt").read_text(
+        "utf-8"
+    )
+    matched = re.search(r"arm 2 \(threshold ([0-9.]+)\) has mismatch (\d+)/(\d+)", primary)
+    assert matched is not None
+    assert summary.arm2_threshold == float(matched.group(1))
+    arm2 = [row for row in rows if row.arm == "arm2"]
+    assert sum(not row.correct for row in arm2) == int(matched.group(2))
+    assert len(arm2) == int(matched.group(3))
+    arm3 = [row for row in rows if row.arm == "arm3"]
+    assert all(row.correct for row in arm3)
+    assert len(arm3) == {"run-11": 187, "run-12": 187, "run-13": 189}[run]
+
+    recounted: dict[str, Counter[str]] = {}
+    for row in rows:
+        key = f"{row.arm}/{'correct' if row.correct else 'wrong'}"
+        recounted.setdefault(key, Counter())[row.outcome] += 1
+    assert summary.counts == {key: dict(value) for key, value in recounted.items()}
+    assert not any(row.outcome in (LOST, CHANGED) for row in rows), "nothing was destroyed"

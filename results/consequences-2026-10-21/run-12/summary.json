@@ -1,0 +1,24 @@
+{
+  "source": "results/replicates-2026-10-05/run-12",
+  "library_hash": "ad311de65eb51b120ea97aabb83fe22492c89812232e21bf2c5f1cde4dc8c8c1",
+  "scorer": {
+    "scorer": "lexical"
+  },
+  "arm2_threshold": 0.13592233009708737,
+  "pairs": 400,
+  "replays": 341,
+  "counts": {
+    "arm2/correct": {
+      "fixed": 36
+    },
+    "arm2/wrong": {
+      "fixed": 13,
+      "not fixed": 22,
+      "nothing ran": 9,
+      "unchanged": 105
+    },
+    "arm3/correct": {
+      "fixed": 187
+    }
+  }
+}

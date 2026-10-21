@@ -1,0 +1,4 @@
+Replayed fires (exploratory), results/replicates-2026-10-05/run-13: 400 pairs, 349 distinct replays, arm 2 at its matched threshold 0.14516129032258066
+  arm2/correct: 44 fires -- fixed 38, not fixed 6
+  arm2/wrong: 143 fires -- fixed 9, not fixed 20, nothing ran 37, unchanged 77
+  arm3/correct: 189 fires -- fixed 162, not fixed 27

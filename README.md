@@ -383,7 +383,8 @@ detectable difference.
   one per git fault. On one of them, file names with a space or a non-ASCII character, arm 3
   mis-fired often. A sixth builds the same states over real repositories' histories. Real
   faults, ones no injector built, are not measured.
-- **Nothing at episode level.** Mis-fires that end in a wrong repository, cost, the
+- **Nothing at episode level, except replayed fires.** Replaying each fire shows what it leaves
+  (Measured since). A fire is not an episode: cost, the misses the agent would solve, the
   admission factorial and the online arms are separate stages, not run here.
 - **Arm 2b cannot separate the two.** At arm 3's coverage the soft vote's matched point
   is the hard rule itself, so Claim 2 keeps its wording without showing that requiring
@@ -493,7 +494,18 @@ lock-file block), [`results/heldout-2026-10-16/`](results/heldout-2026-10-16/REA
 
 ### Measured since
 
-Both of these re-read the committed libraries, with no model call:
+All three re-read the committed libraries, with no model call:
+
+- **What a fire does when it is replayed** (ADR-0044, exploratory,
+  [`results/consequences-2026-10-21/`](results/consequences-2026-10-21/README.md)). Each of
+  Figure 1's fires is replayed on a fresh build of its state and graded the way an episode is.
+  - **A correct choice is not always a correct outcome.** Arm 3's 563 fires fixed 536. The other
+    27 are all in replicate 3, from two admitted programs that pass their own postconditions while
+    the checker refuses what they leave. One was compiled from a solve the checker had refused,
+    which admission may not read (issue #9).
+  - **Arm 2's mis-fires mostly do nothing.** Its 318 fires on fault-free states changed nothing.
+    On a fault's state, 147 of its 241 fires fixed it and 86 left it wrong.
+  - **Nothing was destroyed.** No replay of either arm lost a recorded commit or rewrote upstream.
 
 - **Retrieve by text, then gate by checks** (ADR-0035,
   [`results/hybrid-2026-10-11/`](results/hybrid-2026-10-11/README.md)).

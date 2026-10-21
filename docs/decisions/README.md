@@ -51,6 +51,7 @@ commit message is not a record.
 | [ADR-0041](ADR-0041-a-config-family-outside-git-history.md) | accepted | A sixth family, **`config_renamed`**, whose state is config files rather than git history (#266 step 1); its fingerprint fields render only when set, so no earlier state's arm-2 text moves. |
 | [ADR-0042](ADR-0042-branch-names-and-submodule-paths-are-held-out.md) | accepted | **Held-out branch names and submodule paths**, so every git fault has a held-out axis; arm 3 fired on all 240 held-out positives with none wrong, because every program binds the name or path as a parameter. |
 | [ADR-0043](ADR-0043-a-held-out-source-over-real-repositories.md) | accepted | **A held-out source over real repositories' histories**: the eval states built over four pinned public repositories drew the same 563 fires as the synthetic base, none wrong. |
+| [ADR-0044](ADR-0044-replayed-fires-are-graded.md) | accepted | **Each dispatch arm's fires are replayed and graded** (exploratory, no model): arm 3's 563 fires fixed 536, the 27 failures from two run-13 programs; arm 2's 318 fires on fault-free states changed nothing, and 147 of its 241 on fault states fixed them. |
 
 ## When to write one
 
