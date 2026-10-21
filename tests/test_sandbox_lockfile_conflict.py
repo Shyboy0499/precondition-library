@@ -214,3 +214,35 @@ def test_destroy_is_idempotent(make_sandbox) -> None:
     box.destroy()
     assert not root.exists()
     box.destroy()
+
+
+_UNDERLINED_HEADINGS = "History\n=======\n\nRelease 1\n============\n\nAll ======= fine.\n"
+"""A real project's docs: setext headings underlined with `=`, which no conflict leaves alone."""
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_a_heading_underline_is_not_a_conflict_marker(seed: int, make_sandbox) -> None:
+    """Every real-host state carried a `HISTORY.md` or `README` like this, and the checker read
+    its underline as a leftover conflict, refusing a correct resolution (ADR-0044)."""
+    box = make_sandbox(seed, ["lockfile_conflict"])
+    _start_conflicted_merge(box)
+    _write_lock(box, [local_dependency_for_seed(seed), upstream_dependency_for_seed(seed)])
+    (box.work / "HISTORY.md").write_text(_UNDERLINED_HEADINGS, encoding="utf-8")
+    _commit_resolution(box, "merge: keep both dependencies")
+
+    result = SPEC.check(box)
+    assert result.ok, result.detail
+
+
+@pytest.mark.parametrize("marker", ["<<<<<<< HEAD", ">>>>>>> upstream/main", "||||||| base"])
+def test_any_one_conflict_marker_left_anywhere_is_still_refused(marker: str, make_sandbox) -> None:
+    seed = SEEDS[0]
+    box = make_sandbox(seed, ["lockfile_conflict"])
+    _start_conflicted_merge(box)
+    _write_lock(box, [local_dependency_for_seed(seed), upstream_dependency_for_seed(seed)])
+    (box.work / "notes.md").write_text(f"text\n{marker}\nmore\n", encoding="utf-8")
+    _commit_resolution(box, "merge: one marker left in another file")
+
+    result = SPEC.check(box)
+    assert not result.ok
+    assert "conflict markers" in result.detail and marker in result.detail

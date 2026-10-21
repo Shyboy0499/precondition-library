@@ -111,9 +111,12 @@ _REMOVABLE_PACKAGE = "zlib"
 # clone: no branch rewrite can drop it, the graded code cannot read it, and the
 # checker need not re-derive it from a seed it is never given (#103, #161).
 
-# A conflict marker starts a line: `<<<<<<<`, `=======` (separator), `>>>>>>>`
-# (end) or `|||||||` (diff3 base).
-_MARKER_PATTERN = r"^(<{7}|={7}|>{7}|\|{7})"
+# A conflict leaves a start marker `<<<<<<<`, an end marker `>>>>>>>` and, in diff3 style,
+# a base marker `|||||||`, each seven characters then a space or the end of the line. The
+# `=======` separator is not matched: it only ever stands between a start and an end, and a
+# real project's docs underline headings with it -- `HISTORY.md`'s `============` read as a
+# leftover conflict on every real-host state (ADR-0044).
+_MARKER_PATTERN = r"^(<{7}|>{7}|\|{7})( |$)"
 
 
 def lock_path_for_seed(seed: int) -> str:
