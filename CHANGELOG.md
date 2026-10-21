@@ -12,6 +12,10 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **Replayed fires on the held-out block and over real histories (ADR-0044, ADR-0045).**
+  `bench.consequences --seeds held-out` and `--real-host`. Over the pinned real histories every
+  fire has the synthetic base's outcome, row for row. On the held-out block arm 3's 539 correct
+  choices fixed 503 and its 42 wrong ones fixed none; every failure is a program's.
 - **Replayed dispatch fires are graded (ADR-0044, exploratory).** `bench.consequences` replays
   Figure 1's decisions on the eval pairs and grades each with the episode loop's two clauses, with
   no model call. Arm 3's 563 fires fixed 536; the 27 failures are two run-13 programs that pass
@@ -97,6 +101,12 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Fixed
 
+- **Four graders refused correct resolutions (ADR-0045).**
+  - `recorded_state_intact` read a non-ASCII path quoted and escaped.
+  - The `lockfile_conflict` checker read a heading underline as a conflict marker.
+  - The `dirty_tree` checker pinned the work's patch to the top of its file.
+  - The gold `aside` split a spaced file name; the guard now allows the `read -d ''` its fix
+    needs.
 - **Security: quoted text no longer counts as assigning a variable.** The guard's scan for a
   body's own variables read inside quotes and comments, so `echo 'x; read HOME'; echo $HOME`
   passed as reading the body's own `HOME`. It now blanks quoted text and comments first. An

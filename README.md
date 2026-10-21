@@ -506,6 +506,14 @@ All three re-read the committed libraries, with no model call:
   - **Arm 2's mis-fires mostly do nothing.** Its 318 fires on fault-free states changed nothing.
     On a fault's state, 147 of its 241 fires fixed it and 86 left it wrong.
   - **Nothing was destroyed.** No replay of either arm lost a recorded commit or rewrote upstream.
+  - **Held out and over real histories** (ADR-0045,
+    [`held-out`](results/consequences-heldout-2026-10-21/README.md),
+    [`real-host`](results/consequences-realhost-2026-10-21/README.md)).
+    - Over the four pinned real histories every replayed fire has the synthetic base's outcome.
+    - On the held-out block arm 3's 539 correct choices fixed 503, and its 42 wrong ones fixed
+      none. The worst are `diverged` `discard` programs that drop the local dependency change on
+      a lock-file state.
+    - Getting there found four grader defects, each refusing a correct resolution, now fixed.
 
 - **Retrieve by text, then gate by checks** (ADR-0035,
   [`results/hybrid-2026-10-11/`](results/hybrid-2026-10-11/README.md)).

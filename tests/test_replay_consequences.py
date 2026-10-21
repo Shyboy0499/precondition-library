@@ -180,3 +180,57 @@ def test_real_hosts_scope_every_build_to_the_pinned_histories(
     )
     assert seen == [REAL_HOSTS[0] if real_hosts else None]
     assert sandbox._REAL_HOST_FOR_SEED.get() is None, "the scope ends with the stage"
+
+
+def _rows(directory: Path) -> list[Consequence]:
+    return [
+        Consequence.model_validate_json(line)
+        for line in (directory / "consequences.jsonl").read_text("utf-8").splitlines()
+    ]
+
+
+def _held_out_block(fault: str, run: str) -> Path:
+    """Where each committed held-out block of the held-out stage lives (parts 1-4)."""
+    if fault == "dirty_tree":
+        part = "heldout-2026-10-10" if run == "run-12" else "heldout-2026-10-16/dirty_tree"
+        return RESULTS / part / run / "summary.json"
+    part = {
+        "diverged": "heldout-2026-10-16",
+        "lockfile_conflict": "heldout-2026-10-18",
+        "branch_renamed": "heldout-2026-10-19",
+        "submodule_moved": "heldout-2026-10-19",
+    }[fault]
+    return RESULTS / part / fault / run / "summary.json"
+
+
+@pytest.mark.parametrize("run", ["run-11", "run-12", "run-13"])
+def test_the_held_out_replays_are_the_held_out_stages_choices(run: str) -> None:
+    """Arm 3's fires and wrong fires per fault are the committed held-out blocks', the
+    summary is the rows, and no fire on a fault-free state changed anything."""
+    from precondition_library.bench.heldout import HELD_OUT_FAULTS, HeldOutSummary
+
+    out = RESULTS / "consequences-heldout-2026-10-21" / run
+    rows = _rows(out)
+    summary = ConsequenceSummary.model_validate_json((out / "summary.json").read_text("utf-8"))
+    assert summary.seeds == list(range(3000, 3040)) and summary.base == "synthetic"
+    for fault in HELD_OUT_FAULTS:
+        block = HeldOutSummary.model_validate_json(_held_out_block(fault, run).read_text("utf-8"))
+        mine = [row for row in rows if row.arm == "arm3" and row.environment == fault]
+        assert len(mine) == block.arm3_fires, fault
+        assert sum(not row.correct for row in mine) == block.arm3_wrong, fault
+    assert not any(row.outcome == CHANGED for row in rows)
+
+
+@pytest.mark.parametrize("run", ["run-11", "run-12", "run-13"])
+def test_the_real_host_replays_agree_with_the_synthetic_ones_row_for_row(run: str) -> None:
+    """Over the pinned real histories every fire has the synthetic base's outcome (ADR-0045)."""
+
+    def key(row: Consequence) -> tuple:
+        return (row.arm, row.seed, row.environment, row.program_id, row.correct, row.outcome)
+
+    real_out = RESULTS / "consequences-realhost-2026-10-21" / run
+    summary = ConsequenceSummary.model_validate_json((real_out / "summary.json").read_text("utf-8"))
+    assert summary.base == "real-host"
+    real = _rows(real_out)
+    synthetic = _rows(RESULTS / "consequences-2026-10-21" / run)
+    assert [key(row) for row in real] == [key(row) for row in synthetic]

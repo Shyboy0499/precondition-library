@@ -56,6 +56,8 @@ report's (`results/replicates-2026-10-05/run-N/primary/primary.txt`):
 | any fire that lost a recorded commit or rewrote upstream | 0 | 0 | 0 | 0 |
 
 A rerun of run-11 from scratch reproduced `consequences.jsonl` and the summary exactly.
+After the grader fixes of ADR-0045 (code `c5d6e09`), all three runs were replayed again and
+reproduced their `consequences.jsonl` byte for byte: no eval state met a defective clause.
 
 
 ## What it shows
