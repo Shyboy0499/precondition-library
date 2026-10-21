@@ -154,3 +154,29 @@ def test_the_committed_replays_are_figure_1s_decisions(run: str) -> None:
         recounted.setdefault(key, Counter())[row.outcome] += 1
     assert summary.counts == {key: dict(value) for key, value in recounted.items()}
     assert not any(row.outcome in (LOST, CHANGED) for row in rows), "nothing was destroyed"
+
+
+@pytest.mark.parametrize("real_hosts", [False, True])
+def test_real_hosts_scope_every_build_to_the_pinned_histories(
+    real_hosts: bool, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The arms' decisions and the replays are both built inside `_run`, so the resolver must be
+    active for the whole of it, and only when asked for."""
+    from precondition_library import sandbox
+    from precondition_library.bench import consequences
+    from precondition_library.bench.realhost import REAL_HOSTS
+
+    seen: list[object] = []
+
+    def capture(*args, **kwargs):
+        resolver = sandbox._REAL_HOST_FOR_SEED.get()
+        seen.append(None if resolver is None else resolver(2000))
+        return "measured"
+
+    monkeypatch.setattr(consequences, "_run", capture)
+    assert (
+        consequences.run_consequences(tmp_path / "run", tmp_path / "out", real_hosts=real_hosts)
+        == "measured"
+    )
+    assert seen == [REAL_HOSTS[0] if real_hosts else None]
+    assert sandbox._REAL_HOST_FOR_SEED.get() is None, "the scope ends with the stage"
