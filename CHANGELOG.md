@@ -12,6 +12,10 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **The gold sweep is a stage (ADR-0045, amended).** `bench.gold_sweep` replays every applicable
+  gold program and grades it as an episode is, exiting non-zero on a refusal or a gold mis-fire.
+  On the eval, held-out and real-host sources it found none, with exactly one gold program
+  applying per state. A sample, including a local stand-in for a real host, runs in CI.
 - **Replayed fires on the held-out block and over real histories (ADR-0044, ADR-0045).**
   `bench.consequences --seeds held-out` and `--real-host`. Over the pinned real histories every
   fire has the synthetic base's outcome, row for row. On the held-out block arm 3's 539 correct

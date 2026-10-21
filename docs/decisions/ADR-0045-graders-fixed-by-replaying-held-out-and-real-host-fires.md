@@ -77,6 +77,29 @@ every state it is accepted on) found the fourth defect, and is cheap to run agai
 **New obligations:** a new state source -- held-out axis, host, family -- is not trusted until
 gold passes on it. A gold refusal there is a grader or gold defect until shown otherwise.
 
+*Amended 2026-10-21: the obligation is a stage.* `python -m precondition_library.bench.gold_sweep`
+replays each gold program where its own preconditions hold and the state accepts its resolution,
+and grades it with both of the episode loop's clauses. It exits non-zero on a refusal, or on a
+gold mis-fire (gold preconditions holding where the state does not accept the resolution).
+
+| | eval | held-out | real-host (eval seeds) |
+| --- | ---: | ---: | ---: |
+| graded ok | 240 | 200 | 240 |
+| refused or mis-fired | 0 | 0 | 0 |
+
+- **Exactly one gold program applies on every state** of every family, in all three sources:
+  40 per family.
+- **The exception is held-out `lockfile_conflict`, where no gold applies.** The gold lock-file
+  programs require `deps.lock`, so the sweep does not check that grader on held-out paths. That
+  is a coverage gap, not a pass.
+
+`tests/test_gold_sweep.py` runs it in CI on sampled states: the held-out ones that exposed this
+ADR's defects, eval ones, and a local repository standing in for a real host, which carries
+heading underlines, an ignored `vendor` and quoted names. With each fix reverted in turn, the
+sample catches the marker, `dirty_tree` and gold `aside` defects. The `-z` diff defect needs a
+gold program committing to a quoted path, which no gold does, so its own test in
+`tests/test_non_destructive_invariants.py` is what guards it.
+
 ## Alternatives rejected
 
 | Alternative | Why rejected |
