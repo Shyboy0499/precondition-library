@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 from collections.abc import Sequence
+from contextlib import nullcontext
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -37,15 +38,16 @@ from ..library import Library
 from ..program import Program
 from ..runtime.probes import evaluate_preconditions
 from ..runtime.replay import replay
-from ..sandbox import Sandbox, git_out, run_git
+from ..sandbox import Sandbox, git_out, real_host_bases, run_git
 from ..tasks.faults import FAULTS, build_sandbox
 from ..tasks.invariants import recorded_state_intact
 from .coverage import _fires
 from .heldout import HELD_OUT_FAULTS
 from .library_pairs import FAULT_FREE, library_pair_outcomes
 from .primary import primary_report
+from .realhost import host_for_seed
 from .rescore import scorer
-from .splits import EVAL_SEEDS
+from .splits import EVAL_SEEDS, HELD_OUT_SEEDS
 
 FIXED = "fixed"
 """A fault's state: the checker passed and the recorded state is intact."""
@@ -88,6 +90,12 @@ class ConsequenceSummary(BaseModel):
     replays: int
     counts: dict[str, dict[str, int]]
     """Per `arm/correct` or `arm/wrong`, the number of fires with each outcome."""
+    seeds: list[int] = []
+    """The seeds measured. Empty in records written before the stage took other seed blocks,
+    which measured the eval block."""
+    base: str = "synthetic"
+    """`synthetic`, or `real-host` when each state was built over `bench.realhost`'s pinned
+    histories (ADR-0043)."""
 
 
 def _snapshot(box: Sandbox) -> tuple[str, ...]:
@@ -135,8 +143,27 @@ def run_consequences(
     scorer_name: str = "lexical",
     faults: Sequence[str] = HELD_OUT_FAULTS,
     seeds: Sequence[int] = EVAL_SEEDS,
+    real_hosts: bool = False,
 ) -> ConsequenceSummary:
-    """Replay every fire of arms 3 and 2 on `run`'s frozen library and grade what it left."""
+    """Replay every fire of arms 3 and 2 on `run`'s frozen library and grade what it left.
+
+    With `real_hosts`, every state -- the ones the arms decide on and the ones replayed -- is
+    built over `bench.realhost`'s pinned histories, the host chosen by seed (ADR-0043). On any
+    other seed block than the eval one, arm 2's threshold is the one matched to arm 3's coverage
+    on that block, so it is that block's operating point, not Figure 1's.
+    """
+    with real_host_bases(host_for_seed) if real_hosts else nullcontext():
+        return _run(run, out, scorer_name, faults, seeds, real_hosts)
+
+
+def _run(
+    run: Path,
+    out: Path,
+    scorer_name: str,
+    faults: Sequence[str],
+    seeds: Sequence[int],
+    real_hosts: bool,
+) -> ConsequenceSummary:
     if out.exists():
         raise ValueError(f"{out} already exists; the stage writes a fresh directory")
     similarity, identity = scorer(scorer_name)
@@ -199,6 +226,8 @@ def run_consequences(
         pairs=len(outcomes.pairs),
         replays=len(replayed),
         counts={key: dict(sorted(value.items())) for key, value in sorted(counts.items())},
+        seeds=list(seeds),
+        base="real-host" if real_hosts else "synthetic",
     )
     out.mkdir(parents=True)
     with (out / "consequences.jsonl").open("w", encoding="utf-8") as handle:
@@ -211,7 +240,8 @@ def run_consequences(
 
 def text(summary: ConsequenceSummary) -> str:
     lines = [
-        f"Replayed fires (exploratory), {summary.source}: {summary.pairs} pairs, "
+        f"Replayed fires (exploratory), {summary.source}, {summary.base} base: "
+        f"{summary.pairs} pairs, "
         f"{summary.replays} distinct replays, arm 2 at its matched threshold "
         f"{summary.arm2_threshold}",
     ]
@@ -232,12 +262,27 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--scorer", choices=("lexical", "embedding", "cross-encoder"), default="lexical"
     )
+    parser.add_argument(
+        "--seeds",
+        choices=("eval", "held-out"),
+        default="eval",
+        help="the eval block (2000-2039, Figure 1's) or the held-out block (3000-3039)",
+    )
+    parser.add_argument(
+        "--real-host",
+        action="store_true",
+        help="build every state over the pinned real histories (ADR-0043); needs network once",
+    )
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
-    print(text(run_consequences(args.run, args.out, scorer_name=args.scorer)), end="")
+    seeds = EVAL_SEEDS if args.seeds == "eval" else HELD_OUT_SEEDS
+    summary = run_consequences(
+        args.run, args.out, scorer_name=args.scorer, seeds=seeds, real_hosts=args.real_host
+    )
+    print(text(summary), end="")
     return 0
 
 
