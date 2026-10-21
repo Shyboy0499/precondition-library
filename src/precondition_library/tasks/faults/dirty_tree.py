@@ -45,6 +45,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 
 from ...sandbox import Sandbox, git_out, record_base, run_git, tip_contained
 from ...signatures import StateFingerprint
@@ -392,6 +393,14 @@ def _surface(paths: _Paths) -> tuple[str, ...]:
     return (paths.upstream_file, paths.tracked_file, paths.untracked_path, paths.aside_path)
 
 
+def _read_text(path: Path) -> str | None:
+    """A file's text, or None where a resolution left no readable file there."""
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
 class DirtyTreeFault(FaultSpec):
     name = "dirty_tree"
     description = "Uncommitted local changes present while upstream has new commits"
@@ -451,13 +460,13 @@ class DirtyTreeFault(FaultSpec):
         # changed, on the same-file state -- plus an untracked file where the state
         # has one. The untracked path is recorded so `check` grades the same path the
         # injection wrote, whichever path set this seed drew.
-        if state == "same_file":
-            with (work / paths.upstream_file).open("a", encoding="utf-8") as handle:
-                handle.write(flavour.same_file_work)
-        else:
-            with (work / paths.tracked_file).open("a", encoding="utf-8") as handle:
-                handle.write(flavour.local_work)
+        work_path = paths.upstream_file if state == "same_file" else paths.tracked_file
+        work_text = flavour.same_file_work if state == "same_file" else flavour.local_work
+        with (work / work_path).open("a", encoding="utf-8") as handle:
+            handle.write(work_text)
         sandbox.recorded["patch"] = run_git(("diff",), cwd=work).stdout
+        sandbox.recorded["work-path"] = work_path
+        sandbox.recorded["work-text"] = work_text
         sandbox.recorded["untracked_path"] = paths.untracked_path
         if draw.untracked:
             untracked = work / paths.untracked_path
@@ -526,16 +535,19 @@ class DirtyTreeFault(FaultSpec):
                 detail=f"upstream tip {upstream_tip[:12]} is not contained in the local branch",
             )
 
-        patch = sandbox.recorded["patch"]
-        if patch.strip():
-            reverts = run_git(
-                ("apply", "--reverse", "--check", "-"), cwd=work, check=False, stdin=patch
+        # The tracked work is the text the injection appended to one file; it survives if the
+        # file still holds it, whatever upstream did around it. Reverse-applying the recorded
+        # patch asked more: its hunk starts at line 1, and `git apply` pins such a hunk to the
+        # top of the file, so a work that survived below a line upstream added at the top
+        # read as discarded -- every held-out state whose upstream edits the same file
+        # (ADR-0044).
+        work_text = sandbox.recorded["work-text"]
+        held = _read_text(work / sandbox.recorded["work-path"])
+        if held is None or work_text not in held:
+            return GroundTruth(
+                ok=False,
+                detail="uncommitted tracked changes are no longer in the tree (discarded)",
             )
-            if reverts.returncode != 0:
-                return GroundTruth(
-                    ok=False,
-                    detail="uncommitted tracked changes are no longer in the tree (discarded)",
-                )
 
         has_untracked = "untracked" in sandbox.recorded
         if has_untracked:

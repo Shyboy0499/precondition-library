@@ -15,7 +15,9 @@ checker cannot cheat by re-deriving the answer from the request.
 from __future__ import annotations
 
 import pytest
+from conftest import gold_program
 
+from precondition_library.runtime.replay import replay
 from precondition_library.sandbox import Sandbox, run_git
 from precondition_library.signatures import StateFingerprint
 from precondition_library.tasks.faults.dirty_tree import (
@@ -244,3 +246,36 @@ def test_moving_aside_counts_only_on_a_collision(make_sandbox) -> None:
     _move_aside_then_stash_sync_restore(box)
     result = SPEC.check(box)
     assert not result.ok and "untracked work" in result.detail
+
+
+HELD_OUT_UPSTREAM_EDITS_THE_WORK_FILE = 3006
+"""A held-out seed whose upstream prepends a line to the very file the work is appended to."""
+
+
+def test_work_that_survives_below_an_upstream_line_is_kept(make_sandbox) -> None:
+    """Reverse-applying the recorded patch pinned its hunk to the top of the file, so the
+    stash program's correct result, with the work intact, read as discarded (ADR-0044)."""
+    box = make_sandbox(HELD_OUT_UPSTREAM_EDITS_THE_WORK_FILE, ["dirty_tree"])
+    work_path = box.recorded["work-path"]
+    upstream_changed = run_git(
+        ("diff", "--name-only", "-z", "HEAD", "upstream/main"), cwd=box.work
+    ).stdout.split("\0")
+    assert work_path in upstream_changed, "the seed must still exercise the case"
+
+    replay(gold_program("stash", "keep_uncommitted_work_and_sync"), box)
+
+    assert box.recorded["work-text"] in (box.work / work_path).read_text(encoding="utf-8")
+    verdict = SPEC.check(box)
+    assert verdict.ok, verdict.detail
+
+
+@pytest.mark.parametrize("seed", [0, HELD_OUT_UPSTREAM_EDITS_THE_WORK_FILE])
+def test_work_dropped_before_syncing_is_still_discarded(make_sandbox, seed: int) -> None:
+    box = make_sandbox(seed, ["dirty_tree"])
+    run_git(("stash", "push", "-q", "-u"), cwd=box.work)
+    run_git(("stash", "drop", "-q"), cwd=box.work)
+    run_git(("merge", "-q", "--ff-only", "upstream/main"), cwd=box.work)
+
+    verdict = SPEC.check(box)
+    assert not verdict.ok
+    assert "discarded" in verdict.detail, verdict.detail
