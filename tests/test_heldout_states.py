@@ -509,22 +509,38 @@ def test_a_held_out_lockfile_state_keeps_its_label_and_resolves_at_its_path(seed
         box.destroy()
 
 
-def test_the_gold_lockfile_programs_refuse_a_file_they_do_not_rebuild() -> None:
-    """The gold bodies rebuild `deps.lock` by name, so on a held-out path they must not fire.
+def _one_seed_per_path_and_resolution() -> list[int]:
+    seen: dict[tuple[str, str], int] = {}
+    for seed in HELD_OUT_SEEDS:
+        seen.setdefault((lock_path_for_seed(seed), LOCKFILE.variant_for_seed(seed)), seed)
+    return sorted(seen.values())
 
-    Before they required the file, every `git show <rev>:deps.lock` read nothing on such a
-    state, the removal checks held vacuously, and `take_upstream` fired on every held-out
-    `keep_local` state -- 15 wrong fires of 40 over the held-out block (ADR-0039).
+
+@pytest.mark.parametrize("seed", _one_seed_per_path_and_resolution())
+def test_on_a_held_out_path_only_the_states_own_gold_program_fires(seed: int) -> None:
+    """The gold bodies find the conflicted lock-shaped file instead of naming `deps.lock`.
+
+    Named, every `git show <rev>:deps.lock` read nothing on a held-out path, the removal checks
+    held vacuously, and `take_upstream` fired on every held-out `keep_local` state -- 15 wrong
+    fires of 40 (ADR-0039). Then they refused such a state; now each path and resolution fires
+    its own program and no other (ADR-0046), and `bench.gold_sweep` grades the replays.
     """
-    seeds = [s for s in HELD_OUT_SEEDS if LOCKFILE.variant_for_seed(s) == "keep_local"][:2]
-    for seed in seeds:
-        box = build_sandbox(seed, ["lockfile_conflict"])
-        try:
-            for program in gold_programs("sync_through_a_conflicting_lockfile"):
-                verdict = evaluate_preconditions(program, box)
-                assert not verdict.ok, f"{program.variant} fired at {lock_path_for_seed(seed)}"
-        finally:
-            box.destroy()
+    box = build_sandbox(seed, ["lockfile_conflict"])
+    try:
+        fired = [
+            program.variant
+            for program in gold_programs("sync_through_a_conflicting_lockfile")
+            if evaluate_preconditions(program, box).ok
+        ]
+    finally:
+        box.destroy()
+    assert fired == [LOCKFILE.variant_for_seed(seed)], lock_path_for_seed(seed)
+
+
+def test_every_held_out_path_and_resolution_is_exercised() -> None:
+    pairs = {(lock_path_for_seed(s), LOCKFILE.variant_for_seed(s)) for s in HELD_OUT_SEEDS}
+    assert {path for path, _ in pairs} == set(HELD_OUT_LOCK_PATHS)
+    assert len(pairs) == len(HELD_OUT_LOCK_PATHS) * 2, "both resolutions at every path"
 
 
 def test_every_shipped_seed_keeps_its_branch_name_and_submodule_path() -> None:

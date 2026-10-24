@@ -8,6 +8,7 @@ accepts its resolution, and grades it with the fault's checker. These tests pin:
 * a sample of states that exposed the four defects of ADR-0045 -- a spaced and a non-ASCII
   lock-file path, a work file upstream edits, a spaced untracked file -- and of the eval block,
   with no defect, so a grader regression or a broken gold program fails CI.
+  With each of the four ADR-0045 fixes reverted in turn, this sample fails (ADR-0046).
 
 The full sweep is `python -m precondition_library.bench.gold_sweep --seeds held-out` (and
 `--seeds eval`, `--real-host`); it exits non-zero on any defect.

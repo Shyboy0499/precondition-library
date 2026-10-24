@@ -105,6 +105,9 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Fixed
 
+- **The gold lock-file programs resolve any path (ADR-0046).** They found nothing to do outside
+  `deps.lock` and refused; they now find the conflicted file. They are unchanged on every shipped
+  state, and the gold sweep now covers the held-out lock-file states.
 - **Four graders refused correct resolutions (ADR-0045).**
   - `recorded_state_intact` read a non-ASCII path quoted and escaped.
   - The `lockfile_conflict` checker read a heading underline as a conflict marker.

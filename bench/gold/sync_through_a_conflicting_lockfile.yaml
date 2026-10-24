@@ -17,19 +17,27 @@
 # Descriptions state the applicability condition in the vocabulary a request would
 # use, without naming a resolution label.
 #
-# The bodies rebuild `deps.lock` by name, so each program first requires that file on
-# both sides. Without that check, a state that keeps the file elsewhere made every
-# `git show <rev>:deps.lock` read nothing, the removal checks held vacuously, and the
-# take_upstream program fired on every held-out keep_local state (ADR-0039).
+# The lock-shaped file is found, not named: it is the one path a merge of upstream would
+# leave conflicted (`git merge-tree --write-tree --name-only -z`, which writes nothing), and it
+# must be lock-shaped on both sides. Every probe and the body read that path, quoted, so a
+# held-out `web app/deps.lock` or `vendor/abhängigkeiten.lock` is read whole. The first version
+# named `deps.lock`; a state keeping the file elsewhere then made every `git show
+# <rev>:deps.lock` read nothing, the removal checks held vacuously, and take_upstream fired on
+# every held-out keep_local state (ADR-0039). The next refused such a state instead; this one
+# resolves it (ADR-0046).
 programs:
   - id: rebuild-the-lock-from-upstreams
     intent: sync_through_a_conflicting_lockfile
     variant: take_upstream
     parameters: [upstream_remote, upstream_branch]
     preconditions:
-      - name: the_dependency_file_is_deps_lock
-        description: Both sides keep the dependency file at deps.lock, the file this body rebuilds.
-        probe: 'git cat-file -e HEAD:deps.lock && git cat-file -e {upstream_remote}/{upstream_branch}:deps.lock'
+      - name: the_conflict_is_one_dependency_file
+        description: A merge of upstream would conflict in exactly one file, a dependency file on both sides.
+        probe: |-
+          test "$(git merge-tree --write-tree --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | awk 'NR > 1 && $0 == "" {exit} NR > 1 {n++} END {print n + 0}')" = 1 &&
+          lock=$(git merge-tree --write-tree --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sed -n 2p) &&
+          git show HEAD:"$lock" | grep -q '^packages = \[$' &&
+          git show {upstream_remote}/{upstream_branch}:"$lock" | grep -q '^packages = \[$'
       - name: both_sides_have_commits
         description: Upstream and the local branch each have commits the other lacks.
         probe: 'test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0 && test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0'
@@ -38,24 +46,30 @@ programs:
         probe: 'git merge-tree "$(git merge-base HEAD {upstream_remote}/{upstream_branch})" HEAD {upstream_remote}/{upstream_branch} | grep -q "^+<<<<<<<"'
       - name: local_side_removed_nothing
         description: The local side removed no dependency that upstream still lists.
-        probe: 'base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) && test -z "$(comm -12 <(comm -23 <(git show "$base":deps.lock | sort -u) <(git show HEAD:deps.lock | sort -u)) <(git show {upstream_remote}/{upstream_branch}:deps.lock | sort -u))"'
+        probe: |-
+          lock=$(git merge-tree --write-tree --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sed -n 2p) &&
+          base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+          test -z "$(comm -12 <(comm -23 <(git show "$base:$lock" | sort -u) <(git show "HEAD:$lock" | sort -u)) <(git show "{upstream_remote}/{upstream_branch}:$lock" | sort -u))"
     body: |
       git fetch -q {upstream_remote} &&
+      lock=$(git merge-tree --write-tree --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sed -n 2p) &&
+      test -n "$lock" &&
       base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
-      git diff "$base" HEAD -- deps.lock | sed -n 's/^+\(    ".*",\)$/\1/p' > .git/lock-additions &&
+      git diff "$base" HEAD -- "$lock" | sed -n 's/^+\(    ".*",\)$/\1/p' > .git/lock-additions &&
       { git merge --no-edit {upstream_remote}/{upstream_branch} || true; } &&
-      git checkout --theirs deps.lock &&
-      sed -i '\%^packages = \[$%r .git/lock-additions' deps.lock &&
+      git checkout --theirs -- "$lock" &&
+      sed -i '\%^packages = \[$%r .git/lock-additions' "$lock" &&
       rm .git/lock-additions &&
-      git add deps.lock &&
+      git add -- "$lock" &&
       git commit -q --no-edit
     postconditions:
       - name: upstream_contained
         description: The local branch now contains upstream's tip.
         probe: 'git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD'
       - name: no_conflict_markers
-        description: No conflict marker is left in the dependency file.
-        probe: '! grep -qE "^(<<<<<<<|=======|>>>>>>>)" deps.lock'
+        description: No conflict marker is left in any tracked file.
+        probe: |-
+          ! git grep -qE '^(<{7}|>{7})( |$)'
     provenance:
       compiled_from_task: hand-written gold resolution for benchmarking
       model: human
@@ -69,9 +83,13 @@ programs:
     variant: keep_local
     parameters: [upstream_remote, upstream_branch]
     preconditions:
-      - name: the_dependency_file_is_deps_lock
-        description: Both sides keep the dependency file at deps.lock, the file this body rebuilds.
-        probe: 'git cat-file -e HEAD:deps.lock && git cat-file -e {upstream_remote}/{upstream_branch}:deps.lock'
+      - name: the_conflict_is_one_dependency_file
+        description: A merge of upstream would conflict in exactly one file, a dependency file on both sides.
+        probe: |-
+          test "$(git merge-tree --write-tree --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | awk 'NR > 1 && $0 == "" {exit} NR > 1 {n++} END {print n + 0}')" = 1 &&
+          lock=$(git merge-tree --write-tree --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sed -n 2p) &&
+          git show HEAD:"$lock" | grep -q '^packages = \[$' &&
+          git show {upstream_remote}/{upstream_branch}:"$lock" | grep -q '^packages = \[$'
       - name: both_sides_have_commits
         description: Upstream and the local branch each have commits the other lacks.
         probe: 'test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0 && test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0'
@@ -80,27 +98,36 @@ programs:
         probe: 'git merge-tree "$(git merge-base HEAD {upstream_remote}/{upstream_branch})" HEAD {upstream_remote}/{upstream_branch} | grep -q "^+<<<<<<<"'
       - name: local_side_removed_something
         description: The local side removed a dependency that upstream still lists.
-        probe: 'base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) && test -n "$(comm -12 <(comm -23 <(git show "$base":deps.lock | sort -u) <(git show HEAD:deps.lock | sort -u)) <(git show {upstream_remote}/{upstream_branch}:deps.lock | sort -u))"'
+        probe: |-
+          lock=$(git merge-tree --write-tree --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sed -n 2p) &&
+          base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+          test -n "$(comm -12 <(comm -23 <(git show "$base:$lock" | sort -u) <(git show "HEAD:$lock" | sort -u)) <(git show "{upstream_remote}/{upstream_branch}:$lock" | sort -u))"
       - name: upstream_removed_nothing
         description: Upstream removed no dependency that the local side still lists.
-        probe: 'base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) && test -z "$(comm -12 <(comm -23 <(git show "$base":deps.lock | sort -u) <(git show {upstream_remote}/{upstream_branch}:deps.lock | sort -u)) <(git show HEAD:deps.lock | sort -u))"'
+        probe: |-
+          lock=$(git merge-tree --write-tree --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sed -n 2p) &&
+          base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+          test -z "$(comm -12 <(comm -23 <(git show "$base:$lock" | sort -u) <(git show "{upstream_remote}/{upstream_branch}:$lock" | sort -u)) <(git show "HEAD:$lock" | sort -u))"
     body: |
       git fetch -q {upstream_remote} &&
+      lock=$(git merge-tree --write-tree --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sed -n 2p) &&
+      test -n "$lock" &&
       base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
-      git diff "$base" {upstream_remote}/{upstream_branch} -- deps.lock | sed -n 's/^+\(    ".*",\)$/\1/p' > .git/lock-additions &&
+      git diff "$base" {upstream_remote}/{upstream_branch} -- "$lock" | sed -n 's/^+\(    ".*",\)$/\1/p' > .git/lock-additions &&
       { git merge --no-edit {upstream_remote}/{upstream_branch} || true; } &&
-      git checkout --ours deps.lock &&
-      sed -i '\%^packages = \[$%r .git/lock-additions' deps.lock &&
+      git checkout --ours -- "$lock" &&
+      sed -i '\%^packages = \[$%r .git/lock-additions' "$lock" &&
       rm .git/lock-additions &&
-      git add deps.lock &&
+      git add -- "$lock" &&
       git commit -q --no-edit
     postconditions:
       - name: upstream_contained
         description: The local branch now contains upstream's tip.
         probe: 'git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD'
       - name: no_conflict_markers
-        description: No conflict marker is left in the dependency file.
-        probe: '! grep -qE "^(<<<<<<<|=======|>>>>>>>)" deps.lock'
+        description: No conflict marker is left in any tracked file.
+        probe: |-
+          ! git grep -qE '^(<{7}|>{7})( |$)'
     provenance:
       compiled_from_task: hand-written gold resolution for benchmarking
       model: human

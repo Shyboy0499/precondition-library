@@ -84,21 +84,21 @@ gold mis-fire (gold preconditions holding where the state does not accept the re
 
 | | eval | held-out | real-host (eval seeds) |
 | --- | ---: | ---: | ---: |
-| graded ok | 240 | 200 | 240 |
+| graded ok | 240 | 200 (240 since ADR-0046) | 240 |
 | refused or mis-fired | 0 | 0 | 0 |
 
 - **Exactly one gold program applies on every state** of every family, in all three sources:
   40 per family.
-- **The exception is held-out `lockfile_conflict`, where no gold applies.** The gold lock-file
-  programs require `deps.lock`, so the sweep does not check that grader on held-out paths. That
-  is a coverage gap, not a pass.
+- **The exception was held-out `lockfile_conflict`, where no gold applied.** The gold lock-file
+  programs required `deps.lock`, so the sweep did not check that grader on held-out paths. ADR-0046
+  closes the gap: they now find the file, and all 40 held-out lock-file states grade ok.
 
 `tests/test_gold_sweep.py` runs it in CI on sampled states: the held-out ones that exposed this
 ADR's defects, eval ones, and a local repository standing in for a real host, which carries
 heading underlines, an ignored `vendor` and quoted names. With each fix reverted in turn, the
-sample catches the marker, `dirty_tree` and gold `aside` defects. The `-z` diff defect needs a
-gold program committing to a quoted path, which no gold does, so its own test in
-`tests/test_non_destructive_invariants.py` is what guards it.
+sample caught the marker, `dirty_tree` and gold `aside` defects. The `-z` diff defect needed a
+gold program committing to a quoted path; since ADR-0046 the lock-file gold does, and the
+sample catches all four.
 
 ## Alternatives rejected
 

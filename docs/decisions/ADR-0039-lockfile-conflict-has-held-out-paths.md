@@ -1,6 +1,6 @@
 # ADR-0039 — `lockfile_conflict` has held-out paths, and the fingerprint reads paths with `-z`
 
-- **Status:** accepted
+- **Status:** accepted; decision 4 superseded by ADR-0046 (the gold programs find the file)
 - **Date:** 2026-10-18
 - **Supersedes:** nothing. It adds a third held-out source to the stage ADR-0033 registered,
   and corrects ADR-0038's audit count.

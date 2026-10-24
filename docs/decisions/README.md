@@ -53,6 +53,7 @@ commit message is not a record.
 | [ADR-0043](ADR-0043-a-held-out-source-over-real-repositories.md) | accepted | **A held-out source over real repositories' histories**: the eval states built over four pinned public repositories drew the same 563 fires as the synthetic base, none wrong. |
 | [ADR-0044](ADR-0044-replayed-fires-are-graded.md) | accepted | **Each dispatch arm's fires are replayed and graded** (exploratory, no model): arm 3's 563 fires fixed 536, the 27 failures from two run-13 programs; arm 2's 318 fires on fault-free states changed nothing, and 147 of its 241 on fault states fixed them. |
 | [ADR-0045](ADR-0045-graders-fixed-by-replaying-held-out-and-real-host-fires.md) | accepted | **Four grader defects found by replaying held-out and real-host fires**: a quoted non-ASCII path, a heading underline read as a conflict marker, a work check pinned to the top of its file, and a gold body that split a spaced name. Each refused a correct resolution; after them, real-host replays agree with synthetic ones row for row. |
+| [ADR-0046](ADR-0046-gold-lockfile-programs-find-the-file.md) | accepted | **The gold lock-file programs find the conflicted file** instead of requiring `deps.lock` (supersedes ADR-0039 decision 4): identical on all 232 shipped combinations, and the gold sweep now grades all 40 held-out lock-file states. |
 
 ## When to write one
 
