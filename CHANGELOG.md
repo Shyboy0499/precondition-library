@@ -12,6 +12,12 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **A state-reading control (ADR-0047, #295).** `bench.state_classifier` fits a decision tree per
+  intent over generic fingerprint features, on the build's 56 states, with no model call and no
+  compiled program. On Figure 1's pairs it fires 190/400 eval pairs with none wrong, matching
+  arm 3, and 200/400 held-out pairs with none wrong, where arm 3 had 8–21. Figure 1's claim is
+  narrowed to reading the state against not reading it. `results/state-classifier-2026-10-26/`;
+  scikit-learn is a dev dependency and the `controls` extra.
 - **The gold sweep is a stage (ADR-0045, amended).** `bench.gold_sweep` replays every applicable
   gold program and grades it as an episode is, exiting non-zero on a refusal or a gold mis-fire.
   On the eval, held-out and real-host sources it found none, with exactly one gold program

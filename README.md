@@ -363,6 +363,16 @@ A pinned local reranker, which clears the floor clearly where those two only jus
 narrows it to +0.71 to +0.76 and no further: still about five times the smallest
 detectable difference.
 
+**What reading the state alone does (ADR-0047).** Each pair's correct resolution is a rule over
+the observed state, so the comparison above does not separate executing compiled checks from
+reading the state at all. A decision tree per intent over generic fingerprint features, fit on the
+build's 56 states with no model call and no compiled program, fires on 190 of the 400 eval pairs
+with none wrong, and on 200 held-out pairs with none wrong where arm 3 had 8–21
+([state-reading control](results/state-classifier-2026-10-26/README.md)). So the claim this table
+supports is that a dispatcher that reads the state beats one that does not, and compiled
+preconditions are one such dispatcher. Whether executability adds anything is open: #295 (a
+control limited to what probes can see) and #296 (real merges, labels this project did not write).
+
 **What it does not show.**
 
 - **Replicate 1 may not be worded as a win.** Its library held one lockfile

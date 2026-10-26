@@ -1440,6 +1440,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+controls = [
+    { name = "scikit-learn" },
+]
 dev = [
     { name = "matplotlib" },
     { name = "mypy" },
@@ -1448,6 +1451,7 @@ dev = [
     { name = "pytest-cov" },
     { name = "pytest-xdist" },
     { name = "ruff" },
+    { name = "scikit-learn" },
 ]
 embedding = [
     { name = "sentence-transformers" },
@@ -1465,9 +1469,11 @@ requires-dist = [
     { name = "pytest-xdist", marker = "extra == 'dev'", specifier = ">=3.6" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.5.0" },
+    { name = "scikit-learn", marker = "extra == 'controls'", specifier = ">=1.5" },
+    { name = "scikit-learn", marker = "extra == 'dev'", specifier = ">=1.5" },
     { name = "sentence-transformers", marker = "extra == 'embedding'", specifier = ">=6.1" },
 ]
-provides-extras = ["dev", "embedding"]
+provides-extras = ["dev", "embedding", "controls"]
 
 [[package]]
 name = "pydantic"

@@ -1,0 +1,38 @@
+{
+  "block": "eval",
+  "training_states": 56,
+  "pairs": 400,
+  "at_every_fire": {
+    "threshold": null,
+    "coverage": {
+      "numerator": 190,
+      "denominator": 400
+    },
+    "mismatch": {
+      "numerator": 0,
+      "denominator": 190
+    },
+    "mismatch_interval": {
+      "low": 0.0,
+      "high": 0.019818243349208835
+    }
+  },
+  "curve": [
+    {
+      "threshold": 1.0,
+      "coverage": {
+        "numerator": 190,
+        "denominator": 400
+      },
+      "mismatch": {
+        "numerator": 0,
+        "denominator": 190
+      },
+      "mismatch_interval": {
+        "low": 0.0,
+        "high": 0.019818243349208835
+      }
+    }
+  ],
+  "wrong_fires": []
+}

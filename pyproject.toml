@@ -24,6 +24,7 @@ dev = [
     "pandas>=2.2",
     "matplotlib>=3.9",
     "pytest-xdist>=3.6",
+    "scikit-learn>=1.5",
 ]
 # Arm 2's optional embedding scorer (#104). A separate extra rather than a core
 # dependency: the shipped seam is lexical (ADR-0003), so an install that never fills
@@ -31,6 +32,11 @@ dev = [
 # embedding` adds exactly this; plain `uv sync --extra dev` still leaves it out.
 embedding = [
     "sentence-transformers>=6.1",
+]
+# The state-reading control (#295) fits a decision tree; its import is lazy, so a core install
+# never needs it. Also in `dev`, so CI runs the control's tests.
+controls = [
+    "scikit-learn>=1.5",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -68,4 +74,10 @@ ignore_missing_imports = true
 # is what keeps `mypy src` green without the extra, for the same reason as `yaml`.
 [[tool.mypy.overrides]]
 module = ["sentence_transformers", "sentence_transformers.*"]
+ignore_missing_imports = true
+
+# scikit-learn ships no type information. It is the state-reading control's optional extra
+# (#295), imported lazily, so the override keeps `mypy src` green as for the extras above.
+[[tool.mypy.overrides]]
+module = ["sklearn", "sklearn.*"]
 ignore_missing_imports = true

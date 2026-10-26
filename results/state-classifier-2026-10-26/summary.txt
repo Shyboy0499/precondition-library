@@ -1,0 +1,3 @@
+Fingerprint classifier control (#295): no model call, no compiled program
+  eval: 400 pairs, trained on 56 states; fires 190/400, wrong 0/190
+  held-out: 400 pairs, trained on 56 states; fires 200/400, wrong 0/200

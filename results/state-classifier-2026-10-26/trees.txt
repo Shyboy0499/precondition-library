@@ -1,0 +1,75 @@
+== keep_uncommitted_work_and_sync (depth 3, 4 leaves)
+|--- dirty_worktree <= 0.50
+|   |--- class: (none)
+|--- dirty_worktree >  0.50
+|   |--- |upstream_touched_files & dirty_files| <= 0.50
+|   |   |--- |upstream_touched_files & untracked_upstream_collisions| <= 0.50
+|   |   |   |--- class: stash
+|   |   |--- |upstream_touched_files & untracked_upstream_collisions| >  0.50
+|   |   |   |--- class: aside
+|   |--- |upstream_touched_files & dirty_files| >  0.50
+|   |   |--- class: commit
+
+== sync_fork_with_upstream (depth 3, 5 leaves)
+|--- upstream_behind <= 1.50
+|   |--- len(local_touched_files) <= 1.50
+|   |   |--- class: (none)
+|   |--- len(local_touched_files) >  1.50
+|   |   |--- class: merge
+|--- upstream_behind >  1.50
+|   |--- len(local_touched_files) <= 0.50
+|   |   |--- class: discard
+|   |--- len(local_touched_files) >  0.50
+|   |   |--- len(local_touched_files) <= 1.50
+|   |   |   |--- class: rebase
+|   |   |--- len(local_touched_files) >  1.50
+|   |   |   |--- class: merge
+
+== sync_through_a_conflicting_lockfile (depth 2, 3 leaves)
+|--- |upstream_touched_files & merge_conflicted_files| <= 0.50
+|   |--- class: (none)
+|--- |upstream_touched_files & merge_conflicted_files| >  0.50
+|   |--- len(local_dropped_lines) <= 0.50
+|   |   |--- class: take_upstream
+|   |--- len(local_dropped_lines) >  0.50
+|   |   |--- class: keep_local
+
+== follow_renamed_upstream_branch (depth 6, 9 leaves)
+|--- len(local_branches) <= 1.50
+|   |--- upstream_ahead <= 0.50
+|   |   |--- class: (none)
+|   |--- upstream_ahead >  0.50
+|   |   |--- len(local_touched_files) <= 0.50
+|   |   |   |--- len(dirty_files) <= 0.50
+|   |   |   |   |--- submodule_initialised <= 0.50
+|   |   |   |   |   |--- upstream_behind <= 1.00
+|   |   |   |   |   |   |--- class: rename
+|   |   |   |   |   |--- upstream_behind >  1.00
+|   |   |   |   |   |   |--- class: (none)
+|   |   |   |   |--- submodule_initialised >  0.50
+|   |   |   |   |   |--- class: (none)
+|   |   |   |--- len(dirty_files) >  0.50
+|   |   |   |   |--- class: (none)
+|   |   |--- len(local_touched_files) >  0.50
+|   |   |   |--- |local_touched_files & upstream_touched_files| <= 0.50
+|   |   |   |   |--- upstream_behind <= 1.50
+|   |   |   |   |   |--- class: merge
+|   |   |   |   |--- upstream_behind >  1.50
+|   |   |   |   |   |--- class: (none)
+|   |   |   |--- |local_touched_files & upstream_touched_files| >  0.50
+|   |   |   |   |--- class: (none)
+|--- len(local_branches) >  1.50
+|   |--- class: retrack
+
+== restore_submodule_state (depth 3, 4 leaves)
+|--- has_submodule_reference <= 0.50
+|   |--- class: (none)
+|--- has_submodule_reference >  0.50
+|   |--- upstream_still_references_submodule <= 0.50
+|   |   |--- class: remove
+|   |--- upstream_still_references_submodule >  0.50
+|   |   |--- submodule_pin_matches_upstream <= 0.50
+|   |   |   |--- class: repin
+|   |   |--- submodule_pin_matches_upstream >  0.50
+|   |   |   |--- class: init
+
