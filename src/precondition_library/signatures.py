@@ -19,6 +19,7 @@ structurally different repos must not resolve to the same program.
 from __future__ import annotations
 
 import tempfile
+from collections.abc import Iterable
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -49,6 +50,18 @@ RENAMES_FILE = "config/renames.conf"
 """The app's key-rename table (ADR-0041): one `old = new` per line."""
 
 _CONFIG_FIELDS = frozenset({"config_stale_keys", "config_keys_set_twice", "config_ignored_files"})
+_LOCK_FIELDS = frozenset(
+    {
+        "lock_bumped_by_both",
+        "lock_removed_here_changed_upstream",
+        "lock_moved_upstream_only",
+        "lock_added",
+    }
+)
+"""Rendered only when set, like `_CONFIG_FIELDS`: a state with no conflicted `Cargo.lock` reads
+exactly as it did before they existed, so no committed arm-2 score moves (#306)."""
+
+CARGO_LOCK = "Cargo.lock"
 """Fields `as_text` renders only when set. Every state before ADR-0041 has none of them, so
 leaving them out when empty keeps each such state's text, and every arm-2 figure taken from it,
 byte for byte what it was."""
@@ -120,6 +133,23 @@ class _ThreeWay:
             merged = run_git(("merge-file", "-p", "-q", *names), cwd=self._work, check=False)
         return merged.returncode != 0
 
+    def crate_versions(self) -> tuple[dict[str, set[str]], ...] | None:
+        """Each side's `Cargo.lock` as {crate: versions} -- base, local, upstream -- or None if a
+        side does not parse (a lock with conflict markers left in, say)."""
+        import tomllib
+
+        read: list[dict[str, set[str]]] = []
+        for text in (self.base, self.local, self.upstream):
+            try:
+                data = tomllib.loads(text)
+            except tomllib.TOMLDecodeError:
+                return None
+            versions: dict[str, set[str]] = {}
+            for package in data.get("package", []):
+                versions.setdefault(str(package["name"]), set()).add(str(package["version"]))
+            read.append(versions)
+        return read[0], read[1], read[2]
+
     def dropped_by(self, side: str) -> list[str]:
         """Base lines `side` removed that the other side still has.
 
@@ -131,6 +161,32 @@ class _ThreeWay:
             (self.upstream, self.local) if side == "upstream" else (self.local, self.upstream)
         )
         return sorted((base - set(dropper.splitlines())) & set(keeper.splitlines()))
+
+
+def _cargo_lock_changes(threes: Iterable[_ThreeWay]) -> dict[str, list[str]]:
+    """The package-level fields over every conflicted `Cargo.lock` (#306)."""
+    bumped, removed, upstream_only, added = set(), set(), set(), set()
+    for three in threes:
+        read = three.crate_versions()
+        if read is None:
+            continue
+        base, local, upstream = read
+        for crate, was in base.items():
+            here, there = local.get(crate), upstream.get(crate)
+            if here is None and there is not None and there != was:
+                removed.add(crate)
+            elif here is not None and there is not None:
+                if here != was and there != was and here != there:
+                    bumped.add(crate)
+                elif here == was and there != was:
+                    upstream_only.add(crate)
+        added.update((set(local) | set(upstream)) - set(base))
+    return {
+        "lock_bumped_by_both": sorted(bumped),
+        "lock_removed_here_changed_upstream": sorted(removed),
+        "lock_moved_upstream_only": sorted(upstream_only),
+        "lock_added": sorted(added),
+    }
 
 
 def _has_locked_branch(work: Path, branch: str) -> bool:
@@ -217,6 +273,17 @@ class StateFingerprint(BaseModel):
     # Discriminators for the renamed-config-key intent (#266, ADR-0041). Read from files, not
     # from git history: the app keeps its key renames in `config/renames.conf`, one `old = new`
     # per line, and its settings in the other `config/*.conf` files, one `key = value` per line.
+    # Discriminators for the real-`Cargo.lock` intent (#306), read package by package from each
+    # conflicted `Cargo.lock` at the merge base, HEAD and upstream. Crate names, sorted.
+    lock_bumped_by_both: list[str] = []
+    """Crates both sides moved off the base's version, to different versions."""
+    lock_removed_here_changed_upstream: list[str] = []
+    """Crates the local side removed that upstream moved to another version."""
+    lock_moved_upstream_only: list[str] = []
+    """Crates upstream moved that the local side left at the base's version."""
+    lock_added: list[str] = []
+    """Crates the base did not lock that either side added."""
+
     config_stale_keys: list[str] = []
     """Each renamed key a config file still sets, as `<path>: <old> -> <new>`, over every
     `config/*.conf` but the renames table, tracked or not."""
@@ -359,6 +426,11 @@ class StateFingerprint(BaseModel):
                     conflicted_names.append(path)
 
         config_stale, config_twice, config_ignored = _config_tree(work)
+        lock_changes = _cargo_lock_changes(
+            three
+            for three, name in zip(conflicted, conflicted_names, strict=True)
+            if name.rsplit("/", 1)[-1] == CARGO_LOCK
+        )
 
         return cls(
             dirty_worktree=bool(out("status", "--porcelain")),
@@ -392,6 +464,7 @@ class StateFingerprint(BaseModel):
             config_stale_keys=config_stale,
             config_keys_set_twice=config_twice,
             config_ignored_files=config_ignored,
+            **lock_changes,
         )
 
     def as_text(self) -> str:
@@ -416,7 +489,7 @@ class StateFingerprint(BaseModel):
         return "\n".join(
             f"{name}: {_render(getattr(self, name))}"
             for name in type(self).model_fields
-            if name not in _CONFIG_FIELDS or getattr(self, name)
+            if name not in _CONFIG_FIELDS | _LOCK_FIELDS or getattr(self, name)
         )
 
 
