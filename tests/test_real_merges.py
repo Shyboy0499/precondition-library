@@ -311,7 +311,9 @@ def test_the_built_state_is_the_first_parent_tracking_the_second(
         assert state.sync_would_conflict
         assert state.merge_conflicted_files == ["Cargo.lock"]
         assert state.local_dropped_lines == ['name = "beta"']
-        assert rm.INTENT.correct_variant(state) is not None
+        # The lock-shaped intent refuses a conflicted Cargo.lock (#306): its line unions never
+        # resolved a real one, and the real-format family decides it package by package.
+        assert rm.INTENT.correct_variant(state) is None
     finally:
         box.destroy()
     assert not box.root.exists()
