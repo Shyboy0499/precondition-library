@@ -347,21 +347,65 @@ def _gitlink_conflict(repo: Path) -> None:
     commit("two\n", "3", "two")
 
 
-def test_merge_tree_reads_past_gits_submodule_advice(tmp_path: Path) -> None:
+# What git 2.43 prints after the conflicted entries for `_gitlink_conflict`, recorded: the
+# structured messages, then free text outside their format. Later git (2.56 on CI) omits the
+# free text in -z mode, so the parser is tested against this recording, not the installed git.
+GIT_2_43_MESSAGES = (
+    "\0\0"
+    "1\0Cargo.lock\0Auto-merging\0Auto-merging Cargo.lock\n\0"
+    "1\0Cargo.lock\0CONFLICT (contents)\0CONFLICT (content): Merge conflict in Cargo.lock\n\0"
+    "1\0vendor/s\0CONFLICT (submodule not initialized)\0"
+    "Failed to merge submodule vendor/s (not checked out)\n\0"
+    "1\0vendor/s\0CONFLICT (contents)\0CONFLICT (submodule): Merge conflict in vendor/s\n\0"
+    "Recursive merging with submodules currently only supports trivial cases.\n"
+    "Please manually handle the merging of each conflicted submodule.\n"
+    "This can be accomplished with the following steps:\n"
+    " - come back to superproject and run:\n\n"
+    "      git add vendor/s\n\n"
+    "   to record the above merge or update\n"
+    " - resolve any other conflicts in the superproject\n"
+    " - commit the resulting index in the superproject\n"
+)
+
+
+def _messages_replaced(monkeypatch: pytest.MonkeyPatch, messages: str) -> None:
+    """Keep the installed git's tree and conflicted entries; replace what follows them."""
+    real = rm._git
+
+    def git(cache: Path, *argv: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+        result = real(cache, *argv, check=check)
+        if argv[:1] != ("merge-tree",):
+            return result
+        head = result.stdout.partition("\0\0")[0]
+        return subprocess.CompletedProcess(
+            result.args, result.returncode, head + messages, result.stderr
+        )
+
+    monkeypatch.setattr(rm, "_git", git)
+
+
+SUBMODULE_CONFLICT = (False, ["Cargo.lock", "vendor/s"], True)
+
+
+def test_merge_tree_reads_a_submodule_conflict(tmp_path: Path) -> None:
+    """With whatever git is installed, advice or none."""
     repo = tmp_path / "repo"
     repo.mkdir()
     _gitlink_conflict(repo)
-    shown = run_git(
-        ("merge-tree", "--write-tree", "-z", "--messages", "one", "two"), cwd=repo, check=False
-    ).stdout
-    assert "Recursive merging with submodules" in shown, "the advice this test is about"
-
     tree = rm.merge_tree(repo, "one", "two")
-    assert (tree.clean, tree.conflicted, tree.submodule_or_binary) == (
-        False,
-        ["Cargo.lock", "vendor/s"],
-        True,
-    )
+    assert (tree.clean, tree.conflicted, tree.submodule_or_binary) == SUBMODULE_CONFLICT
+
+
+def test_merge_tree_reads_past_git_2_43s_submodule_advice(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The output that stopped stage B on wasmerio/wasmer (ValueError reading a count)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _gitlink_conflict(repo)
+    _messages_replaced(monkeypatch, GIT_2_43_MESSAGES)
+    tree = rm.merge_tree(repo, "one", "two")
+    assert (tree.clean, tree.conflicted, tree.submodule_or_binary) == SUBMODULE_CONFLICT
 
 
 def test_merge_tree_refuses_a_message_it_does_not_know(
@@ -370,8 +414,11 @@ def test_merge_tree_refuses_a_message_it_does_not_know(
     repo = tmp_path / "repo"
     repo.mkdir()
     _gitlink_conflict(repo)
-    monkeypatch.setattr(rm, "_SUBMODULE_ADVICE", "Some other advice")
-    with pytest.raises(RuntimeError, match="unexpected message 'Recursive merging"):
+    unknown = GIT_2_43_MESSAGES.replace(
+        "Recursive merging with submodules", "Something git has not said before"
+    )
+    _messages_replaced(monkeypatch, unknown)
+    with pytest.raises(RuntimeError, match="unexpected message 'Something git has not said"):
         rm.merge_tree(repo, "one", "two")
 
 
