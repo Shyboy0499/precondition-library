@@ -12,6 +12,12 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **Lock-file actions, measured package by package (#306, exploratory).**
+  `bench.lock_actions` reads lock files into their `(package, version)` sets. On stage A's 30
+  real conflicts, some action reproduces the maintainer's lock file on 10, where stage A's line
+  unions reproduced none. The best single action is a package-level three-way merge with
+  compatible versions unified. ADR-0050 records the rebuild this starts: tasks from observed
+  practice, libraries as a population, and study 2 registered first.
 - **The real-merge study is amended before stage B (ADR-0049).** A clean merge is now
   labelled by the maintainer: `merge` is acceptable where their tree is the clean merge's. A
   refusal hypothesis (H3) is added, and stage B is sized at 247 cases. Stage A, which
