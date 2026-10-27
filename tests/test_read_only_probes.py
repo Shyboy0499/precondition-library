@@ -135,9 +135,9 @@ def test_a_warm_snapshot_equals_a_cold_one_and_reads_nothing_unchanged(
     assert read == []
 
 
-@pytest.mark.skipif(os.name == "nt", reason="Windows keeps no digests")
 def test_a_rewrite_that_restores_size_and_mtime_is_still_seen(make_sandbox, monkeypatch) -> None:
-    """ctime moves on every write and cannot be set back, so the kept digest is not used."""
+    """ctime moves on every write and cannot be set back, so the kept digest is not used.
+    (On Windows nothing is kept, and the file is read again.)"""
     box = make_sandbox(DISCARD_SEED, ["diverged"])
     monkeypatch.setattr(probes, "_RACY_NS", -1)
     probes._DIGESTS.clear()
