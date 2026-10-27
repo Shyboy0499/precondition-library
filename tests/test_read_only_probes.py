@@ -125,14 +125,16 @@ def _counting_reads(monkeypatch) -> list[str]:
 def test_a_warm_snapshot_equals_a_cold_one_and_reads_nothing_unchanged(
     make_sandbox, monkeypatch
 ) -> None:
+    """On Windows, where ctime is the creation time, nothing is kept and every file is read."""
     box = make_sandbox(DISCARD_SEED, ["diverged"])
     monkeypatch.setattr(probes, "_RACY_NS", -1)  # every file is old enough to keep
     probes._DIGESTS.clear()
     cold = probes.sandbox_state(box)
-    assert str(box.work / "app.py") in probes._DIGESTS
+    keeps = os.name != "nt"
+    assert (str(box.work / "app.py") in probes._DIGESTS) == keeps
     read = _counting_reads(monkeypatch)
     assert probes.sandbox_state(box) == cold
-    assert read == []
+    assert (read == []) == keeps
 
 
 def test_a_rewrite_that_restores_size_and_mtime_is_still_seen(make_sandbox, monkeypatch) -> None:
