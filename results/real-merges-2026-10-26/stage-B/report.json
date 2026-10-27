@@ -1,0 +1,868 @@
+{
+  "figures": {
+    "stage": "B",
+    "positives": 161,
+    "negatives": 113,
+    "expressible": 1,
+    "descriptive": {
+      "matches take_upstream": 2,
+      "other": 48,
+      "regenerated": 79,
+      "took local": 20,
+      "took upstream": 12
+    },
+    "rule_disagreements": [
+      {
+        "index": 56,
+        "repo": "jupyterlab/jupyterlab",
+        "merge": "6ae81a082f32d5dc253805ef687888a8acf35948",
+        "rule": "take_upstream",
+        "maintainer": [],
+        "descriptive": "took upstream"
+      },
+      {
+        "index": 63,
+        "repo": "jupyterlab/jupyterlab",
+        "merge": "58dbb5b65afa089af91afcddfc675927a61d77e7",
+        "rule": "take_upstream",
+        "maintainer": [],
+        "descriptive": "took upstream"
+      },
+      {
+        "index": 64,
+        "repo": "jupyterlab/jupyterlab",
+        "merge": "a40f1278595db79bf2fb56d721a5be720ebd2e00",
+        "rule": "keep_local",
+        "maintainer": [],
+        "descriptive": "took local"
+      },
+      {
+        "index": 65,
+        "repo": "jupyterlab/jupyterlab",
+        "merge": "625e60788a037deb18c0db7c71b17fda19c2bd18",
+        "rule": "take_upstream",
+        "maintainer": [],
+        "descriptive": "took local"
+      },
+      {
+        "index": 106,
+        "repo": "composer/composer",
+        "merge": "c311f1fc455dc3f871a36186787c76c92b76dad6",
+        "rule": "take_upstream",
+        "maintainer": [],
+        "descriptive": "regenerated"
+      },
+      {
+        "index": 108,
+        "repo": "composer/composer",
+        "merge": "bf6c7f8ea216fe82dff133c65122f15a99a9ac43",
+        "rule": "take_upstream",
+        "maintainer": [],
+        "descriptive": "regenerated"
+      },
+      {
+        "index": 109,
+        "repo": "composer/composer",
+        "merge": "cc653161c3c86090fa88c9c4e856ece17eb0db31",
+        "rule": "take_upstream",
+        "maintainer": [],
+        "descriptive": "took local"
+      },
+      {
+        "index": 110,
+        "repo": "composer/composer",
+        "merge": "9a69c12a0799d5a974f5ec5d2e78be3495b0b06c",
+        "rule": "take_upstream",
+        "maintainer": [],
+        "descriptive": "regenerated"
+      },
+      {
+        "index": 114,
+        "repo": "composer/composer",
+        "merge": "367012513daa8539de513898a65a75ef82d62009",
+        "rule": "keep_local",
+        "maintainer": [],
+        "descriptive": "regenerated"
+      },
+      {
+        "index": 116,
+        "repo": "composer/composer",
+        "merge": "1734d8690766dfd0a21c9623c9308d65185cdc30",
+        "rule": "keep_local",
+        "maintainer": [],
+        "descriptive": "regenerated"
+      },
+      {
+        "index": 117,
+        "repo": "composer/composer",
+        "merge": "9d074555143462de9315e54e46637cdd00f1924e",
+        "rule": "keep_local",
+        "maintainer": [],
+        "descriptive": "regenerated"
+      },
+      {
+        "index": 120,
+        "repo": "composer/composer",
+        "merge": "7f1808501a514d0c3f8511561b747c792d0c309d",
+        "rule": "keep_local",
+        "maintainer": [],
+        "descriptive": "regenerated"
+      },
+      {
+        "index": 121,
+        "repo": "composer/composer",
+        "merge": "9efe4290b6df65bda369ef1b5ee1d566f7e2228a",
+        "rule": "keep_local",
+        "maintainer": [],
+        "descriptive": "took local"
+      },
+      {
+        "index": 123,
+        "repo": "composer/composer",
+        "merge": "f0e178c31802c535088436b25d72cffc12752f41",
+        "rule": "keep_local",
+        "maintainer": [],
+        "descriptive": "took local"
+      },
+      {
+        "index": 124,
+        "repo": "composer/composer",
+        "merge": "991985792d236a002dce6adfb50f2bf0625fbab0",
+        "rule": "keep_local",
+        "maintainer": [],
+        "descriptive": "regenerated"
+      },
+      {
+        "index": 129,
+        "repo": "composer/composer",
+        "merge": "0408207e350d3be0a7b2c8a9795841f6f235826e",
+        "rule": "keep_local",
+        "maintainer": [],
+        "descriptive": "regenerated"
+      },
+      {
+        "index": 130,
+        "repo": "composer/composer",
+        "merge": "348964f2ed429ea2a55e30bfc30814155bf5a196",
+        "rule": "keep_local",
+        "maintainer": [],
+        "descriptive": "regenerated"
+      },
+      {
+        "index": 131,
+        "repo": "composer/composer",
+        "merge": "6f91e038ea5bdd2af008342c4e229a520f38688f",
+        "rule": "keep_local",
+        "maintainer": [],
+        "descriptive": "took local"
+      },
+      {
+        "index": 133,
+        "repo": "composer/composer",
+        "merge": "242b48eae474d0881cfca009e1f87fbb240bfe3a",
+        "rule": "keep_local",
+        "maintainer": [],
+        "descriptive": "took local"
+      },
+      {
+        "index": 134,
+        "repo": "composer/composer",
+        "merge": "50ab8a7b5ff5698113867695afb3c25f442c7a7c",
+        "rule": "keep_local",
+        "maintainer": [],
+        "descriptive": "other"
+      },
+      {
+        "index": 165,
+        "repo": "nushell/nushell",
+        "merge": "5fabfda57baff78703e4ec7de8cb08806d99b2e6",
+        "rule": "keep_local",
+        "maintainer": [],
+        "descriptive": "regenerated"
+      },
+      {
+        "index": 166,
+        "repo": "nushell/nushell",
+        "merge": "68601629c0724e62a761fca5658b93a68e822eba",
+        "rule": "keep_local",
+        "maintainer": [],
+        "descriptive": "regenerated"
+      },
+      {
+        "index": 167,
+        "repo": "nushell/nushell",
+        "merge": "d481d5ca96289f472ae36170ca7f8df7855ce017",
+        "rule": "take_upstream",
+        "maintainer": [],
+        "descriptive": "took upstream"
+      },
+      {
+        "index": 170,
+        "repo": "nushell/nushell",
+        "merge": "07db14f72e96bc04ddf758c0a9295ba7f52653f3",
+        "rule": "take_upstream",
+        "maintainer": [],
+        "descriptive": "regenerated"
+      },
+      {
+        "index": 171,
+        "repo": "nushell/nushell",
+        "merge": "707af3f3cae796526d3b2f27664358ef443a9067",
+        "rule": "take_upstream",
+        "maintainer": [],
+        "descriptive": "took upstream"
+      },
+      {
+        "index": 187,
+        "repo": "rust-lang/cargo",
+        "merge": "8cab274319ae3a539c74687e1c53fa59c063790e",
+        "rule": "keep_local",
+        "maintainer": [],
+        "descriptive": "other"
+      },
+      {
+        "index": 189,
+        "repo": "rust-lang/cargo",
+        "merge": "1750307c11ba045894e35e2385cc92ae76b20ba3",
+        "rule": "take_upstream",
+        "maintainer": [],
+        "descriptive": "other"
+      },
+      {
+        "index": 193,
+        "repo": "servo/servo",
+        "merge": "bd918238e5e61f6398ee40c03629fae67e7b84e2",
+        "rule": "keep_local",
+        "maintainer": [],
+        "descriptive": "took local"
+      },
+      {
+        "index": 207,
+        "repo": "pypa/pipenv",
+        "merge": "6043547ae6b8f13e58af9e6abc66bf4d27f9aeed",
+        "rule": "keep_local",
+        "maintainer": [],
+        "descriptive": "regenerated"
+      },
+      {
+        "index": 208,
+        "repo": "pypa/pipenv",
+        "merge": "f5d2f24fc56ad073d60df7db33d05e6dfb606049",
+        "rule": "take_upstream",
+        "maintainer": [],
+        "descriptive": "other"
+      },
+      {
+        "index": 209,
+        "repo": "pypa/pipenv",
+        "merge": "a9a0cf550b0ccd7098ac21e9d247c095c3333b28",
+        "rule": "keep_local",
+        "maintainer": [],
+        "descriptive": "other"
+      },
+      {
+        "index": 217,
+        "repo": "wasmerio/wasmer",
+        "merge": "ed07fcd039d17cb988d76a02e5346b06d02bef51",
+        "rule": "take_upstream",
+        "maintainer": [],
+        "descriptive": "took upstream"
+      },
+      {
+        "index": 219,
+        "repo": "wasmerio/wasmer",
+        "merge": "8186c40bfc8f71825b047ed6c9b3798379933e94",
+        "rule": "keep_local",
+        "maintainer": [],
+        "descriptive": "took local"
+      },
+      {
+        "index": 220,
+        "repo": "wasmerio/wasmer",
+        "merge": "1524c68e3f23a1a818f88edef2c0c617f91b160f",
+        "rule": "keep_local",
+        "maintainer": [],
+        "descriptive": "other"
+      },
+      {
+        "index": 232,
+        "repo": "wasmerio/wasmer",
+        "merge": "964f75109902804288c383b873272abd613ac0c6",
+        "rule": "take_upstream",
+        "maintainer": [],
+        "descriptive": "other"
+      },
+      {
+        "index": 236,
+        "repo": "wasmerio/wasmer",
+        "merge": "3377910f260a37de8016453cc97ac5684392b799",
+        "rule": "take_upstream",
+        "maintainer": [],
+        "descriptive": "other"
+      },
+      {
+        "index": 237,
+        "repo": "wasmerio/wasmer",
+        "merge": "f759854b8536b74bd3d6f0518ac7b8bf5498a8a8",
+        "rule": "keep_local",
+        "maintainer": [],
+        "descriptive": "other"
+      }
+    ],
+    "replicates": [
+      {
+        "library": "results/replicates-2026-10-05/run-11/library-two-sided",
+        "arm3": {
+          "threshold": null,
+          "coverage": {
+            "numerator": 150,
+            "denominator": 274
+          },
+          "mismatch": {
+            "numerator": 62,
+            "denominator": 150
+          },
+          "mismatch_interval": {
+            "low": 0.3376520916836594,
+            "high": 0.4933429057682652
+          }
+        },
+        "arm2_matched": {
+          "threshold": 0.06002143622722401,
+          "coverage": {
+            "numerator": 150,
+            "denominator": 274
+          },
+          "mismatch": {
+            "numerator": 140,
+            "denominator": 150
+          },
+          "mismatch_interval": {
+            "low": 0.8816364734751868,
+            "high": 0.9633885392651903
+          }
+        },
+        "control_matched": {
+          "threshold": 1.0,
+          "coverage": {
+            "numerator": 160,
+            "denominator": 274
+          },
+          "mismatch": {
+            "numerator": 159,
+            "denominator": 160
+          },
+          "mismatch_interval": {
+            "low": 0.9654501546624841,
+            "high": 0.9988958966456083
+          }
+        },
+        "arm3_fires_on_positives": 37,
+        "fires_on_inexpressible": {
+          "arm 3": 36,
+          "arm 2": 51,
+          "control": 159
+        }
+      },
+      {
+        "library": "results/replicates-2026-10-05/run-12/library-two-sided",
+        "arm3": {
+          "threshold": null,
+          "coverage": {
+            "numerator": 122,
+            "denominator": 274
+          },
+          "mismatch": {
+            "numerator": 10,
+            "denominator": 122
+          },
+          "mismatch_interval": {
+            "low": 0.045130355407972465,
+            "high": 0.1443268670049657
+          }
+        },
+        "arm2_matched": {
+          "threshold": 0.06583072100313479,
+          "coverage": {
+            "numerator": 122,
+            "denominator": 274
+          },
+          "mismatch": {
+            "numerator": 122,
+            "denominator": 122
+          },
+          "mismatch_interval": {
+            "low": 0.9694727339766817,
+            "high": 1.0
+          }
+        },
+        "control_matched": {
+          "threshold": 1.0,
+          "coverage": {
+            "numerator": 160,
+            "denominator": 274
+          },
+          "mismatch": {
+            "numerator": 159,
+            "denominator": 160
+          },
+          "mismatch_interval": {
+            "low": 0.9654501546624841,
+            "high": 0.9988958966456083
+          }
+        },
+        "arm3_fires_on_positives": 9,
+        "fires_on_inexpressible": {
+          "arm 3": 9,
+          "arm 2": 32,
+          "control": 159
+        }
+      },
+      {
+        "library": "results/replicates-2026-10-05/run-13/library-two-sided",
+        "arm3": {
+          "threshold": null,
+          "coverage": {
+            "numerator": 244,
+            "denominator": 274
+          },
+          "mismatch": {
+            "numerator": 132,
+            "denominator": 244
+          },
+          "mismatch_interval": {
+            "low": 0.47830462350081776,
+            "high": 0.6023920795546823
+          }
+        },
+        "arm2_matched": {
+          "threshold": 0.01254180602006689,
+          "coverage": {
+            "numerator": 244,
+            "denominator": 274
+          },
+          "mismatch": {
+            "numerator": 239,
+            "denominator": 244
+          },
+          "mismatch_interval": {
+            "low": 0.9529351650665636,
+            "high": 0.9912162606827861
+          }
+        },
+        "control_matched": {
+          "threshold": 1.0,
+          "coverage": {
+            "numerator": 160,
+            "denominator": 274
+          },
+          "mismatch": {
+            "numerator": 159,
+            "denominator": 160
+          },
+          "mismatch_interval": {
+            "low": 0.9654501546624841,
+            "high": 0.9988958966456083
+          }
+        },
+        "arm3_fires_on_positives": 131,
+        "fires_on_inexpressible": {
+          "arm 3": 131,
+          "arm 2": 132,
+          "control": 159
+        }
+      }
+    ],
+    "control": {
+      "threshold": null,
+      "coverage": {
+        "numerator": 160,
+        "denominator": 274
+      },
+      "mismatch": {
+        "numerator": 159,
+        "denominator": 160
+      },
+      "mismatch_interval": {
+        "low": 0.9654501546624841,
+        "high": 0.9988958966456083
+      }
+    },
+    "arm3_positive_share": 0.36645962732919257
+  },
+  "repositories": [
+    {
+      "repo": "phpmyadmin/phpmyadmin",
+      "url": "https://github.com/phpmyadmin/phpmyadmin",
+      "default_branch": "master",
+      "tip": "c7bb2a19e557d6345800bf5f2fed859aafdbae60",
+      "licence": "LICENSE: GPL",
+      "two_parent_merges": 16683,
+      "positives": 43,
+      "negatives": 6,
+      "exclusions": 1
+    },
+    {
+      "repo": "jupyterlab/jupyterlab",
+      "url": "https://github.com/jupyterlab/jupyterlab",
+      "default_branch": "main",
+      "tip": "7dfda76f13ea6c84f3665fbad4307ee1a2442a1c",
+      "licence": "LICENSE: unrecognised",
+      "two_parent_merges": 4699,
+      "positives": 19,
+      "negatives": 19,
+      "exclusions": 0
+    },
+    {
+      "repo": "babel/babel",
+      "url": "https://github.com/babel/babel",
+      "default_branch": "main",
+      "tip": "b8a65cf8c3a77180fab12ee19116390d9047ea27",
+      "licence": "LICENSE: MIT",
+      "two_parent_merges": 1396,
+      "positives": 12,
+      "negatives": 2,
+      "exclusions": 0
+    },
+    {
+      "repo": "nextcloud/server",
+      "url": "https://github.com/nextcloud/server",
+      "default_branch": "master",
+      "tip": "491efe43fbe74df55de44ade02783d4e89f413b4",
+      "licence": "COPYING: AGPL; COPYING-README: unrecognised; LICENSES/AGPL-3.0-only.txt: AGPL; LICENSES/AGPL-3.0-or-later.txt: AGPL; LICENSES/Apache-2.0.txt: Apache; LICENSES/BSD-2-Clause.txt: unrecognised; LICENSES/BSD-3-Clause.txt: unrecognised; LICENSES/CC-BY-2.0.txt: unrecognised; LICENSES/CC-BY-4.0.txt: unrecognised; LICENSES/CC-BY-SA-2.0.txt: unrecognised; LICENSES/CC-BY-SA-3.0-IGO.txt: unrecognised; LICENSES/CC-BY-SA-3.0.txt: unrecognised; LICENSES/CC-BY-SA-4.0.txt: unrecognised; LICENSES/CC0-1.0.txt: unrecognised; LICENSES/GPL-2.0-only.txt: GPL; LICENSES/GPL-3.0-or-later.txt: GPL; LICENSES/ISC.txt: unrecognised; LICENSES/LicenseRef-AppleAppStoreBadge.txt: unrecognised; LICENSES/LicenseRef-CollaboraTrademarks.txt: unrecognised; LICENSES/LicenseRef-DCO.txt: unrecognised; LICENSES/LicenseRef-DiasporaTrademarks.txt: unrecognised; LICENSES/LicenseRef-FacebookTrademarks.txt: unrecognised; LICENSES/LicenseRef-GooglePlayBadge.txt: unrecognised; LICENSES/LicenseRef-MastodonTrademarks.txt: unrecognised; LICENSES/LicenseRef-Nasa.txt: unrecognised; LICENSES/LicenseRef-NextcloudTrademarks.txt: unrecognised; LICENSES/LicenseRef-TheDocumentFoundationTrademarks.txt: unrecognised; LICENSES/LicenseRef-Unsplash.txt: unrecognised; LICENSES/LicenseRef-XTrademarks.txt: unrecognised; LICENSES/MIT.txt: MIT; LICENSES/MPL-2.0.txt: MPL; LICENSES/OFL-1.1-RFN.txt: MIT; LICENSES/OFL-1.1.txt: MIT",
+      "two_parent_merges": 28145,
+      "positives": 2,
+      "negatives": 2,
+      "exclusions": 0
+    },
+    {
+      "repo": "jupyter/notebook",
+      "url": "https://github.com/jupyter/notebook",
+      "default_branch": "main",
+      "tip": "6cde9b9ddec821312b1ca16492233becfe145fca",
+      "licence": "LICENSE: BSD",
+      "two_parent_merges": 3345,
+      "positives": 0,
+      "negatives": 0,
+      "exclusions": 0
+    },
+    {
+      "repo": "voila-dashboards/voila",
+      "url": "https://github.com/voila-dashboards/voila",
+      "default_branch": "main",
+      "tip": "2993413ffb950476ff7b44abf84fe56f656e7772",
+      "licence": "LICENSE: BSD",
+      "two_parent_merges": 408,
+      "positives": 0,
+      "negatives": 0,
+      "exclusions": 0
+    },
+    {
+      "repo": "composer/composer",
+      "url": "https://github.com/composer/composer",
+      "default_branch": "main",
+      "tip": "b56a3f558a53e37497612dfad3ef0070c2bafc82",
+      "licence": "LICENSE: MIT",
+      "two_parent_merges": 2818,
+      "positives": 30,
+      "negatives": 30,
+      "exclusions": 0
+    },
+    {
+      "repo": "nushell/nushell",
+      "url": "https://github.com/nushell/nushell",
+      "default_branch": "main",
+      "tip": "c7c8ebaa9e0d0f61322d01fabb14dc075a828147",
+      "licence": "LICENSE: MIT",
+      "two_parent_merges": 866,
+      "positives": 11,
+      "negatives": 11,
+      "exclusions": 0
+    },
+    {
+      "repo": "rust-lang/cargo",
+      "url": "https://github.com/rust-lang/cargo",
+      "default_branch": "master",
+      "tip": "31d3246e0e8d3a80d4a90b54aa48ff180adb408b",
+      "licence": "LICENSE-APACHE: Apache; LICENSE-MIT: MIT; LICENSE-THIRD-PARTY: unrecognised",
+      "two_parent_merges": 7613,
+      "positives": 3,
+      "negatives": 3,
+      "exclusions": 0
+    },
+    {
+      "repo": "servo/servo",
+      "url": "https://github.com/servo/servo",
+      "default_branch": "main",
+      "tip": "4320b9aa43f360b44d81735f8f960912e90ea329",
+      "licence": "LICENSE: MPL; LICENSE_WHATWG_SPECS: BSD",
+      "two_parent_merges": 15148,
+      "positives": 4,
+      "negatives": 4,
+      "exclusions": 0
+    },
+    {
+      "repo": "jupyter-widgets/ipywidgets",
+      "url": "https://github.com/jupyter-widgets/ipywidgets",
+      "default_branch": "main",
+      "tip": "8ada3542abe85fdc52e2bfeeecc07f8db351cb9c",
+      "licence": "LICENSE: unrecognised",
+      "two_parent_merges": 2006,
+      "positives": 3,
+      "negatives": 3,
+      "exclusions": 0
+    },
+    {
+      "repo": "bokeh/bokeh",
+      "url": "https://github.com/bokeh/bokeh",
+      "default_branch": "branch-4.0",
+      "tip": "63d066b5b8748a288f44b2e43381f9cfdbcfdf25",
+      "licence": "LICENSE.txt: unrecognised",
+      "two_parent_merges": 3320,
+      "positives": 0,
+      "negatives": 0,
+      "exclusions": 0
+    },
+    {
+      "repo": "holoviz/panel",
+      "url": "https://github.com/holoviz/panel",
+      "default_branch": "main",
+      "tip": "dba1b46e6ed0d836adcc6ce38eb7fd5bec106270",
+      "licence": "LICENSE.txt: unrecognised",
+      "two_parent_merges": 4,
+      "positives": 0,
+      "negatives": 0,
+      "exclusions": 0
+    },
+    {
+      "repo": "pypa/pipenv",
+      "url": "https://github.com/pypa/pipenv",
+      "default_branch": "main",
+      "tip": "e945ca66e544658f97e4dcfc08be89cfeae522a5",
+      "licence": "LICENSE: MIT",
+      "two_parent_merges": 2053,
+      "positives": 4,
+      "negatives": 3,
+      "exclusions": 0
+    },
+    {
+      "repo": "gfx-rs/wgpu",
+      "url": "https://github.com/gfx-rs/wgpu",
+      "default_branch": "trunk",
+      "tip": "50204b649efd45c61901eacebe601ce248b277ea",
+      "licence": "LICENSE.APACHE: Apache; LICENSE.MIT: MIT",
+      "two_parent_merges": 1223,
+      "positives": 0,
+      "negatives": 0,
+      "exclusions": 0
+    },
+    {
+      "repo": "wasmerio/wasmer",
+      "url": "https://github.com/wasmerio/wasmer",
+      "default_branch": "main",
+      "tip": "3ce7845baff75860084883bb74a2e7aca747cb20",
+      "licence": "LICENSE: MIT",
+      "two_parent_merges": 4304,
+      "positives": 30,
+      "negatives": 30,
+      "exclusions": 2
+    }
+  ],
+  "cases": 274,
+  "repositories_with_a_case": 11,
+  "underpowered": false,
+  "verdicts": [
+    {
+      "library": "results/replicates-2026-10-05/run-11/library-two-sided",
+      "h1": {
+        "statistic": 0.52,
+        "interval": {
+          "low": 0.35659340659340655,
+          "high": 0.6868686868686869
+        },
+        "discordant": [
+          66,
+          3
+        ],
+        "p_value": 1.857035033560328e-16,
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "h2": {
+        "statistic": 0.5804166666666667,
+        "interval": {
+          "low": 0.42708333333333337,
+          "high": 0.7365853658536585
+        },
+        "discordant": [
+          0,
+          0
+        ],
+        "p_value": null,
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "h3": {
+        "statistic": 0.76875,
+        "interval": {
+          "low": 0.6052631578947368,
+          "high": 0.8928571428571429
+        },
+        "discordant": [
+          124,
+          1
+        ],
+        "p_value": 5.924491528144329e-36,
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "decisions": [
+        {
+          "rule": "1 applicability",
+          "outcome": "tested: arm 3 fired 150"
+        },
+        {
+          "rule": "2 arm 3's reliability",
+          "outcome": "falsified: Wilson lower bound above 0.10"
+        },
+        {
+          "rule": "3 against similarity (H1)",
+          "outcome": "supported: lower bound above 0"
+        },
+        {
+          "rule": "4 against reading the state (H2)",
+          "outcome": "supported: lower bound above 0"
+        }
+      ]
+    },
+    {
+      "library": "results/replicates-2026-10-05/run-12/library-two-sided",
+      "h1": {
+        "statistic": 0.9180327868852459,
+        "interval": {
+          "low": 0.8095238095238095,
+          "high": 0.983739837398374
+        },
+        "discordant": [
+          89,
+          0
+        ],
+        "p_value": 3.2311742677852644e-27,
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "h2": {
+        "statistic": 0.9117827868852459,
+        "interval": {
+          "low": 0.8026272577996716,
+          "high": 0.983739837398374
+        },
+        "discordant": [
+          0,
+          0
+        ],
+        "p_value": null,
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "h3": {
+        "statistic": 0.9375,
+        "interval": {
+          "low": 0.8478260869565217,
+          "high": 0.9903381642512077
+        },
+        "discordant": [
+          151,
+          1
+        ],
+        "p_value": 5.359966626042425e-44,
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "decisions": [
+        {
+          "rule": "1 applicability",
+          "outcome": "tested: arm 3 fired 122"
+        },
+        {
+          "rule": "2 arm 3's reliability",
+          "outcome": "not falsified"
+        },
+        {
+          "rule": "3 against similarity (H1)",
+          "outcome": "supported: lower bound above 0"
+        },
+        {
+          "rule": "4 against reading the state (H2)",
+          "outcome": "supported: lower bound above 0"
+        }
+      ]
+    },
+    {
+      "library": "results/replicates-2026-10-05/run-13/library-two-sided",
+      "h1": {
+        "statistic": 0.4385245901639344,
+        "interval": {
+          "low": 0.2786885245901639,
+          "high": 0.5596026490066225
+        },
+        "discordant": [
+          105,
+          0
+        ],
+        "p_value": 4.930380657631324e-32,
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "h2": {
+        "statistic": 0.4527663934426229,
+        "interval": {
+          "low": 0.2824614760746147,
+          "high": 0.589041095890411
+        },
+        "discordant": [
+          0,
+          0
+        ],
+        "p_value": null,
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "h3": {
+        "statistic": 0.175,
+        "interval": {
+          "low": 0.046242774566473986,
+          "high": 0.3445378151260504
+        },
+        "discordant": [
+          29,
+          1
+        ],
+        "p_value": 5.774199962615967e-8,
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "decisions": [
+        {
+          "rule": "1 applicability",
+          "outcome": "tested: arm 3 fired 244"
+        },
+        {
+          "rule": "2 arm 3's reliability",
+          "outcome": "falsified: Wilson lower bound above 0.10"
+        },
+        {
+          "rule": "3 against similarity (H1)",
+          "outcome": "supported: lower bound above 0"
+        },
+        {
+          "rule": "4 against reading the state (H2)",
+          "outcome": "supported: lower bound above 0"
+        }
+      ]
+    }
+  ],
+  "h1_supported": true,
+  "h2_supported": true,
+  "h3_supported": true
+}

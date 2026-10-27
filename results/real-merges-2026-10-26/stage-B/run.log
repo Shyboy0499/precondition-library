@@ -1,0 +1,42 @@
+code 99f6351 (src = main + f60b857 snapshot cache + b943f99 licence fix + 119c12f submodule advice), resumed 2026-10-27T17:40:04Z at wasmer
+Real lock-file merges, stage B (#296; registered in docs/preregistration/real-merges.md)
+  positives 161, negatives 113; expressible 1/161
+  classes: {'matches take_upstream': 2, 'other': 48, 'regenerated': 79, 'took local': 20, 'took upstream': 12}
+  rule against maintainer: 37 disagreements
+  results/replicates-2026-10-05/run-11/library-two-sided: arm 3 fires 150/274 (37 on positives), wrong 62
+    arm 2 at matched coverage: fires 150, wrong 140
+    control at matched coverage: fires 160, wrong 159
+  results/replicates-2026-10-05/run-12/library-two-sided: arm 3 fires 122/274 (9 on positives), wrong 10
+    arm 2 at matched coverage: fires 122, wrong 122
+    control at matched coverage: fires 160, wrong 159
+  results/replicates-2026-10-05/run-13/library-two-sided: arm 3 fires 244/274 (131 on positives), wrong 132
+    arm 2 at matched coverage: fires 244, wrong 239
+    control at matched coverage: fires 160, wrong 159
+  control at every fire: fires 160/274, wrong 159
+  arm 3's share of positives fired on (c, §8): 0.36645962732919257
+  cases 274 from 11 repositories; underpowered: False
+  results/replicates-2026-10-05/run-11/library-two-sided:
+    H1: +0.520, 95% interval [+0.357, +0.687], McNemar b/c 66/3, p 1.857035033560328e-16
+    H2: +0.580, 95% interval [+0.427, +0.737], McNemar b/c 0/0, p None
+    H3: +0.769, 95% interval [+0.605, +0.893], McNemar b/c 124/1, p 5.924491528144329e-36
+    rule 1 applicability: tested: arm 3 fired 150
+    rule 2 arm 3's reliability: falsified: Wilson lower bound above 0.10
+    rule 3 against similarity (H1): supported: lower bound above 0
+    rule 4 against reading the state (H2): supported: lower bound above 0
+  results/replicates-2026-10-05/run-12/library-two-sided:
+    H1: +0.918, 95% interval [+0.810, +0.984], McNemar b/c 89/0, p 3.2311742677852644e-27
+    H2: +0.912, 95% interval [+0.803, +0.984], McNemar b/c 0/0, p None
+    H3: +0.938, 95% interval [+0.848, +0.990], McNemar b/c 151/1, p 5.359966626042425e-44
+    rule 1 applicability: tested: arm 3 fired 122
+    rule 2 arm 3's reliability: not falsified
+    rule 3 against similarity (H1): supported: lower bound above 0
+    rule 4 against reading the state (H2): supported: lower bound above 0
+  results/replicates-2026-10-05/run-13/library-two-sided:
+    H1: +0.439, 95% interval [+0.279, +0.560], McNemar b/c 105/0, p 4.930380657631324e-32
+    H2: +0.453, 95% interval [+0.282, +0.589], McNemar b/c 0/0, p None
+    H3: +0.175, 95% interval [+0.046, +0.345], McNemar b/c 29/1, p 5.774199962615967e-08
+    rule 1 applicability: tested: arm 3 fired 244
+    rule 2 arm 3's reliability: falsified: Wilson lower bound above 0.10
+    rule 3 against similarity (H1): supported: lower bound above 0
+    rule 4 against reading the state (H2): supported: lower bound above 0
+  supported in every replicate: H1 True, H2 True, H3 True

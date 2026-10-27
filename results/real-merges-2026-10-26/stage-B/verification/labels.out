@@ -1,0 +1,6 @@
+jupyter-widgets/ipywidgets: cases 6 labels agree 6/6; two-parent merges 2006 (reported 2006); re-mined positives 3 (kept 3), clean candidates 21 (kept 3 = min(positives, candidates)?), criss-cross 0 (excl 0)
+pypa/pipenv: cases 7 labels agree 7/7; two-parent merges 2053 (reported 2053); re-mined positives 4 (kept 4), clean candidates 3 (kept 3 = min(positives, candidates)?), criss-cross 3 (excl 0)
+nushell/nushell: cases 22 labels agree 22/22; two-parent merges 866 (reported 866); re-mined positives 11 (kept 11), clean candidates 11 (kept 11 = min(positives, candidates)?), criss-cross 0 (excl 0)
+babel/babel: cases 14 labels agree 14/14; two-parent merges 1396 (reported 1396); re-mined positives 12 (kept 12), clean candidates 2 (kept 2 = min(positives, candidates)?), criss-cross 0 (excl 0)
+rust-lang/cargo: cases 6 labels agree 6/6; two-parent merges 7613 (reported 7613); re-mined positives 3 (kept 3), clean candidates 117 (kept 3 = min(positives, candidates)?), criss-cross 0 (excl 0)
+problems 0

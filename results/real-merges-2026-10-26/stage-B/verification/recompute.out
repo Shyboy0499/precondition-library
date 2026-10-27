@@ -1,0 +1,29 @@
+cases 274 Counter({'positive': 161, 'negative': 113}) repos 11
+per repo [('composer/composer', 60), ('wasmerio/wasmer', 60), ('phpmyadmin/phpmyadmin', 49), ('jupyterlab/jupyterlab', 38), ('nushell/nushell', 22), ('babel/babel', 14), ('servo/servo', 8), ('pypa/pipenv', 7), ('rust-lang/cargo', 6), ('jupyter-widgets/ipywidgets', 6), ('nextcloud/server', 4)] cap 25% of 247 = 61
+
+run-11: arm3 fires 150/274, wrong 62, mismatch 0.413, Wilson low 0.338  rule2 falsified: True
+  arm3 by (kind, wrong): {('negative', False): 87, ('positive', True): 36, ('negative', True): 26, ('positive', False): 1}  variants: [('merge', 87), ('take_upstream', 55), ('init', 8)]
+  arm2 matched: fires 150, wrong 140, d1 = +0.520
+  control matched: fires 160, wrong 159, d2 = +0.580; control variants [('keep_local', 144), ('take_upstream', 16)]
+  jointly fired with control: 36; control fires by kind Counter({'positive': 160})
+  H3 cases 160: arm3 fires 36, control fires 159, diff +0.769
+  H1 own bootstrap (2000): [+0.347, +0.677]
+  H2 own bootstrap (2000): [+0.425, +0.734]
+
+run-12: arm3 fires 122/274, wrong 10, mismatch 0.082, Wilson low 0.045  rule2 falsified: False
+  arm3 by (kind, wrong): {('negative', False): 112, ('positive', True): 9, ('negative', True): 1}  variants: [('merge', 112), ('init', 10)]
+  arm2 matched: fires 122, wrong 122, d1 = +0.918
+  control matched: fires 160, wrong 159, d2 = +0.912; control variants [('keep_local', 144), ('take_upstream', 16)]
+  jointly fired with control: 8; control fires by kind Counter({'positive': 160})
+  H3 cases 160: arm3 fires 9, control fires 159, diff +0.938
+  H1 own bootstrap (2000): [+0.810, +0.986]
+  H2 own bootstrap (2000): [+0.803, +0.986]
+
+run-13: arm3 fires 244/274, wrong 132, mismatch 0.541, Wilson low 0.478  rule2 falsified: True
+  arm3 by (kind, wrong): {('positive', True): 131, ('negative', False): 112, ('negative', True): 1}  variants: [('keep_local', 120), ('merge', 115), ('take_upstream', 5), ('init', 3), ('discard', 1)]
+  arm2 matched: fires 244, wrong 239, d1 = +0.439
+  control matched: fires 160, wrong 159, d2 = +0.453; control variants [('keep_local', 144), ('take_upstream', 16)]
+  jointly fired with control: 130; control fires by kind Counter({'positive': 160})
+  H3 cases 160: arm3 fires 131, control fires 159, diff +0.175
+  H1 own bootstrap (2000): [+0.278, +0.560]
+  H2 own bootstrap (2000): [+0.285, +0.592]

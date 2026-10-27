@@ -12,6 +12,12 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **Stage B of the real-merge study (#296, ADR-0052).** 274 real lock-file merges from 11
+  repositories, measured as registered. Arm 3's mismatch on real merges is 0.08-0.54 by library,
+  so "arm 3 rarely mis-fires" is falsified there (§9 rule 2). H1-H3 hold as registered, but H2's
+  margin comes from the control being unable to fire `merge`, not from executing preconditions.
+  No library resolves a real lock-file conflict. The figures were recomputed independently, and
+  55 of the 274 labels were re-derived from git.
 - **Lock-file actions, measured package by package (#306, exploratory).**
   `bench.lock_actions` reads lock files into their `(package, version)` sets. On stage A's 30
   real conflicts, some action reproduces the maintainer's lock file on 10, where stage A's line
