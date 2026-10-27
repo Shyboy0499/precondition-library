@@ -8,6 +8,7 @@ has to be catchable, and it can only be caught by states that require refusal.
 
 from __future__ import annotations
 
+import hashlib
 import math
 import os
 import subprocess
@@ -67,6 +68,33 @@ def git_status_porcelain() -> str | None:
     except (subprocess.CalledProcessError, FileNotFoundError):
         # 128: not a git repository. FileNotFoundError: git is not installed.
         return None
+
+
+def shard_of(nodeid: str, shards: int) -> int:
+    """Which of `shards` CI shards runs this test: a stable hash of its node id.
+
+    Per test rather than per file, so one heavy module cannot make its shard the long pole,
+    and stable across processes, so every xdist worker selects the same tests.
+    """
+    return int(hashlib.sha256(nodeid.encode("utf-8")).hexdigest(), 16) % shards
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Run only this shard's tests when `PYTEST_SHARD=<i>/<n>` is set (CI; 1-based `i`).
+
+    Unset, every test runs, as it always has locally.
+    """
+    shard = os.environ.get("PYTEST_SHARD")
+    if not shard:
+        return
+    index, _, total = shard.partition("/")
+    which, shards = int(index), int(total)
+    if not 1 <= which <= shards:
+        raise pytest.UsageError(f"PYTEST_SHARD={shard!r}: expected <i>/<n> with 1 <= i <= n")
+    kept = [item for item in items if shard_of(item.nodeid, shards) == which - 1]
+    dropped = [item for item in items if shard_of(item.nodeid, shards) != which - 1]
+    items[:] = kept
+    config.hook.pytest_deselected(items=dropped)
 
 
 # Snapshotted before any test runs, so "unchanged since import" proves the suite

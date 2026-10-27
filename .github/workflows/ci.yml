@@ -11,13 +11,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest]
-        python: ["3.12"]
+  # Lint, format and types: fast, so they run once, beside the test shards.
+  static:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -26,8 +22,8 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Set up Python ${{ matrix.python }}
-        run: uv python install ${{ matrix.python }}
+      - name: Set up Python 3.12
+        run: uv python install 3.12
 
       - name: Install dependencies
         run: uv sync --extra dev
@@ -41,8 +37,48 @@ jobs:
       - name: Type check
         run: uv run mypy src
 
+  # The suite, split three ways (PYTEST_SHARD, tests/conftest.py). Every test builds real
+  # repositories, and one runner took 13-18 minutes for all of them; three take about a
+  # third each. The split is by a hash of each test's id, and `tests/test_ci_shards.py`
+  # checks that the shards together run every test exactly once.
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    name: tests (shard ${{ matrix.shard }}/3)
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
       - name: Tests
+        env:
+          PYTEST_SHARD: ${{ matrix.shard }}/3
         run: uv run pytest -q -n auto
+
+  # The check branch protection requires, under the name it has always had. It passes only if
+  # the static checks and every shard passed, so the requirement means what it meant before.
+  check:
+    name: check (ubuntu-latest, 3.12)
+    runs-on: ubuntu-latest
+    needs: [static, tests]
+    if: always()
+    steps:
+      - name: Every job before this one passed
+        run: |
+          test "${{ needs.static.result }}" = success
+          test "${{ needs.tests.result }}" = success
 
   # Scoped Windows coverage (issue #89). Every defect in #87 passed on Linux and failed
   # on Windows, and two of them failed *silently*: `shutil.rmtree` discarding an
