@@ -58,6 +58,7 @@ commit message is not a record.
 | [ADR-0048](ADR-0048-real-data-studies-are-pre-registered.md) | accepted | **A study on data this project did not make is pre-registered, and bound by code.** `docs/preregistration/real-merges.md` fixes the real-merge comparison (maintainer labels, pilot then confirmatory, four ordered decision rules); `bench.preregistration` pins its SHA-256 and refuses a measurement against an edited or uncommitted registration. |
 | [ADR-0049](ADR-0049-clean-merges-are-labelled-by-the-maintainer.md) | accepted | **The real-merge study is amended before stage B (Amendment 1).** A clean merge accepts `merge` where the maintainer's tree is the clean merge's; H3 (refusing inexpressible conflicts) is added; stage B is 247 cases. Written after stage A, which it says, so stage A tests nothing. |
 | [ADR-0050](ADR-0050-rebuild-the-research-layer-from-real-merges.md) | accepted | **Rebuild the research layer from real merges; keep the harness.** Tasks from observed practice, judged on package sets (#306); libraries as a population with refusal-tested admission (#307); study 2 registered first; the headline rewritten last (#300). |
+| [ADR-0051](ADR-0051-a-sandbox-can-provide-cargo.md) | accepted | **A sandbox can provide cargo, through homes inside its own root.** The operator's toolchain is linked into a sandbox-private `RUSTUP_HOME`; `run_env` adds the cargo variables only for a sandbox that asked, so a body can run cargo offline without reading a path into the operator's home. |
 
 ## When to write one
 
