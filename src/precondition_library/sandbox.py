@@ -306,6 +306,53 @@ def upstream_ref(env: Sandbox) -> str:
 _PINNED_DATES = ("GIT_AUTHOR_DATE", "GIT_COMMITTER_DATE")
 
 
+_RUSTUP = ".rustup"
+_CARGO = ".cargo"
+_TOOLCHAIN_NAME = "toolchain-name"
+
+
+def provide_rust_toolchain(sandbox: Sandbox) -> bool:
+    """Let commands run in `sandbox` call cargo, offline, through homes inside its root (ADR-0051).
+
+    The operator's toolchain directory is linked into a sandbox-private `RUSTUP_HOME`, beside an
+    empty sandbox-private `CARGO_HOME`, and `run_env` names those two and nothing of the
+    operator's. False when there is no toolchain to link or the platform will not make the
+    link; the sandbox then simply has no cargo.
+    """
+    found = subprocess.run(
+        ["rustc", "--print", "sysroot"],
+        env={**os.environ, "RUSTUP_TOOLCHAIN": os.environ.get("RUSTUP_TOOLCHAIN", "stable")},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if found.returncode != 0 or not found.stdout.strip():
+        return False
+    toolchain = Path(found.stdout.strip())
+    link = sandbox.root / _RUSTUP / "toolchains" / toolchain.name
+    link.parent.mkdir(parents=True, exist_ok=True)
+    (sandbox.root / _CARGO).mkdir(exist_ok=True)
+    try:
+        link.symlink_to(toolchain, target_is_directory=True)
+    except OSError:
+        return False
+    (sandbox.root / _RUSTUP / _TOOLCHAIN_NAME).write_text(toolchain.name, encoding="utf-8")
+    return True
+
+
+def _rust_variables(root: Path) -> dict[str, str]:
+    """The cargo variables a sandbox with a provided toolchain adds; none otherwise."""
+    name = root / _RUSTUP / _TOOLCHAIN_NAME
+    if not name.is_file():
+        return {}
+    return {
+        "RUSTUP_HOME": str(root / _RUSTUP),
+        "CARGO_HOME": str(root / _CARGO),
+        "RUSTUP_TOOLCHAIN": name.read_text(encoding="utf-8").strip(),
+        "CARGO_NET_OFFLINE": "true",
+    }
+
+
 def run_env(env: Sandbox) -> dict[str, str]:
     """The environment a probe, body or step runs under in `env`.
 
@@ -317,6 +364,7 @@ def run_env(env: Sandbox) -> dict[str, str]:
     site. Network isolation is `runtime.confine`'s and does not change.
     """
     values = git_env(home=env.root)
+    values.update(_rust_variables(env.root))
     context = env.checkout
     if context is None:
         return values

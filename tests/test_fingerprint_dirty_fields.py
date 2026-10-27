@@ -66,9 +66,11 @@ def test_arm_2_sees_them_now_the_intent_is_registered() -> None:
         untracked_upstream_collisions=["notes/tracked.txt"],
     )
     lines = seen.as_text().splitlines()
-    rendered = [name for name in StateFingerprint.model_fields if not name.startswith("config_")]
+    rendered = [
+        name for name in StateFingerprint.model_fields if not name.startswith(("config_", "lock_"))
+    ]
     assert [line.split(":", 1)[0] for line in lines] == rendered, (
-        "every field in order; the config fields are left out when empty (ADR-0041)"
+        "every field in order; the config and lock fields are left out when empty (ADR-0041, #306)"
     )
     assert "dirty_files: app.py" in lines
     assert "untracked_upstream_collisions: notes/tracked.txt" in lines
