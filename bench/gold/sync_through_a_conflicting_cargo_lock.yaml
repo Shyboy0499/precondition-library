@@ -1,0 +1,94 @@
+# Hand-written resolutions for the `sync_through_a_conflicting_cargo_lock` intent (#306).
+#
+# The intent is defined in tasks/faults/cargo_lock_conflict.py. Its acceptable sets are pinned
+# against the fault's own checker by replay (tests/test_cargo_lock_conflict.py).
+#
+# Each body resolves the conflict the way a maintainer does: take one side's Cargo.lock, then
+# let cargo reconcile it with the merged manifest -- and, to keep the local side's bumps, move
+# on each crate only upstream moved. Cargo runs offline from the repository's vendored crates
+# (ADR-0051); `run_env` sets CARGO_NET_OFFLINE.
+#
+# Preconditions are probes, written independently of the intent's rules (decided_by), and must
+# agree with them. They read each side's lock as `name version` pairs (awk over the lock's
+# `name = ` and `version = ` lines) and compare them with `comm` and `join`, read-only.
+programs:
+  - id: keep-local-lock-and-move-upstreams-crates
+    intent: sync_through_a_conflicting_cargo_lock
+    variant: keep_local_bumps
+    parameters: [upstream_remote, upstream_branch]
+    preconditions:
+      - name: the_conflict_is_in_cargo_lock
+        description: A merge of upstream would conflict in Cargo.lock.
+        probe: 'git merge-tree --write-tree --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr ''\0'' ''\n'' | sed 1d | grep -qx ''\(.*/\)\{0,1\}Cargo.lock'''
+      - name: both_sides_have_commits
+        description: Upstream and the local branch each have commits the other lacks.
+        probe: 'test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0 && test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0'
+      - name: a_crate_was_moved_by_both_sides
+        description: Both sides moved one locked crate on, to different versions.
+        probe: |-
+          base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+          join <(comm -13 <(git show "$base:Cargo.lock" | awk '/^name = /{n=$3} /^version = /{print n, $3}' | sort -u) <(git show HEAD:Cargo.lock | awk '/^name = /{n=$3} /^version = /{print n, $3}' | sort -u) | sort) <(comm -13 <(git show "$base:Cargo.lock" | awk '/^name = /{n=$3} /^version = /{print n, $3}' | sort -u) <(git show {upstream_remote}/{upstream_branch}:Cargo.lock | awk '/^name = /{n=$3} /^version = /{print n, $3}' | sort -u) | sort) | awk '$2 != $3 {print $1}' | grep -qxFf <(git show "$base:Cargo.lock" | awk '/^name = /{print $3}')
+    body: |
+      base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+      { git merge --no-edit {upstream_remote}/{upstream_branch} || true; } &&
+      git checkout --ours -- Cargo.lock &&
+      cargo update --workspace &&
+      join <(git show "$base:Cargo.lock" | awk '/^name = /{n=$3} /^version = /{print n, $3}' | sort -u) <(git show HEAD:Cargo.lock | awk '/^name = /{n=$3} /^version = /{print n, $3}' | sort -u) | awk '$2 == $3 {print $1}' | tr -d '"' > .git/kept-crates &&
+      git show "$base:Cargo.lock" | awk '/^name = /{n=$3} /^version = /{print n, $3}' | sort -u > .git/base-crates &&
+      git show {upstream_remote}/{upstream_branch}:Cargo.lock | awk '/^name = /{n=$3} /^version = /{print n, $3}' | sort -u > .git/upstream-crates &&
+      comm -13 .git/base-crates .git/upstream-crates | cut -d' ' -f1 | tr -d '"' | sort -u | comm -12 - <(sort -u .git/kept-crates) > .git/move-on &&
+      while read -r crate; do cargo update -p "$crate" || exit 1; done < .git/move-on &&
+      rm .git/kept-crates .git/base-crates .git/upstream-crates .git/move-on &&
+      git add -- Cargo.lock &&
+      git commit -q --no-edit
+    postconditions:
+      - name: upstream_contained
+        description: The local branch now contains upstream's tip.
+        probe: 'git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD'
+      - name: cargo_accepts_the_lock
+        description: Cargo accepts the committed lock for the merged manifest as it stands.
+        probe: 'cargo metadata --locked --format-version 1 > /dev/null'
+    provenance:
+      compiled_from_task: hand-written gold resolution for benchmarking
+      model: human
+      compiler_version: human
+      episode_id: gold/sync_through_a_conflicting_cargo_lock/keep_local_bumps
+      fault: cargo_lock_conflict
+    status: candidate
+
+  - id: reconcile-upstreams-lock
+    intent: sync_through_a_conflicting_cargo_lock
+    variant: reconcile_upstream_lock
+    parameters: [upstream_remote, upstream_branch]
+    preconditions:
+      - name: the_conflict_is_in_cargo_lock
+        description: A merge of upstream would conflict in Cargo.lock.
+        probe: 'git merge-tree --write-tree --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr ''\0'' ''\n'' | sed 1d | grep -qx ''\(.*/\)\{0,1\}Cargo.lock'''
+      - name: both_sides_have_commits
+        description: Upstream and the local branch each have commits the other lacks.
+        probe: 'test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0 && test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0'
+      - name: no_crate_was_moved_by_both_sides
+        description: No locked crate was moved on by both sides to different versions.
+        probe: |-
+          base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+          ! join <(comm -13 <(git show "$base:Cargo.lock" | awk '/^name = /{n=$3} /^version = /{print n, $3}' | sort -u) <(git show HEAD:Cargo.lock | awk '/^name = /{n=$3} /^version = /{print n, $3}' | sort -u) | sort) <(comm -13 <(git show "$base:Cargo.lock" | awk '/^name = /{n=$3} /^version = /{print n, $3}' | sort -u) <(git show {upstream_remote}/{upstream_branch}:Cargo.lock | awk '/^name = /{n=$3} /^version = /{print n, $3}' | sort -u) | sort) | awk '$2 != $3 {print $1}' | grep -qxFf <(git show "$base:Cargo.lock" | awk '/^name = /{print $3}')
+    body: |
+      { git merge --no-edit {upstream_remote}/{upstream_branch} || true; } &&
+      git checkout --theirs -- Cargo.lock &&
+      cargo update --workspace &&
+      git add -- Cargo.lock &&
+      git commit -q --no-edit
+    postconditions:
+      - name: upstream_contained
+        description: The local branch now contains upstream's tip.
+        probe: 'git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD'
+      - name: cargo_accepts_the_lock
+        description: Cargo accepts the committed lock for the merged manifest as it stands.
+        probe: 'cargo metadata --locked --format-version 1 > /dev/null'
+    provenance:
+      compiled_from_task: hand-written gold resolution for benchmarking
+      model: human
+      compiler_version: human
+      episode_id: gold/sync_through_a_conflicting_cargo_lock/reconcile_upstream_lock
+      fault: cargo_lock_conflict
+    status: candidate

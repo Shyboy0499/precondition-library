@@ -60,7 +60,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from ...sandbox import Sandbox, git_out, record_base, run_git, tip_contained
-from ...signatures import StateFingerprint
+from ...signatures import CARGO_LOCK, StateFingerprint
 from ..intent import IntentSpec, ResolutionVariant, sample_index
 from ..spec import HELD_OUT_SEED_BASE, FaultSpec, GroundTruth
 
@@ -162,8 +162,14 @@ def sync_conflicts_in_a_shared_file(state: StateFingerprint) -> bool:
 
     `StateFingerprint.sync_would_conflict` is the shared test; every other family that
     syncs commits refuses it (#191).
+
+    A conflicted `Cargo.lock` is not this family's: its resolutions are line unions of a
+    lock-shaped file, which real Cargo.lock merges never are (#306), and the real-format
+    family `cargo_lock_conflict` decides it package by package instead.
     """
-    return state.sync_would_conflict
+    return state.sync_would_conflict and not any(
+        path.rsplit("/", 1)[-1] == CARGO_LOCK for path in state.merge_conflicted_files
+    )
 
 
 VARIANTS = [
