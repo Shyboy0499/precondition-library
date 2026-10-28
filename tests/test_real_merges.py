@@ -25,7 +25,7 @@ import pytest
 
 from precondition_library.bench import preregistration
 from precondition_library.bench import real_merges as rm
-from precondition_library.sandbox import run_git
+from precondition_library.sandbox import git_out, run_git
 
 BASE = ["[[package]]", 'name = "alpha"', 'name = "beta"', 'version = "1"', "", "# end"]
 
@@ -215,6 +215,27 @@ def test_the_repository_summary(history: dict[str, object]) -> None:
     assert (summary.positives, summary.negatives, summary.exclusions) == (4, 2, 0)
     assert summary.tip == history["tip"]
     assert summary.licence == "LICENSE: MIT"
+
+
+def test_a_licence_directory_is_read_one_level_down(tmp_path: Path) -> None:
+    """nextcloud/server keeps REUSE's `LICENSES/`, a tree; reading it as a blob stopped stage B."""
+    repo = tmp_path / "repo"
+    (repo / "LICENSES" / "nested").mkdir(parents=True)
+    (repo / "LICENSES" / "AGPL-3.0-or-later.txt").write_text(
+        "GNU AFFERO GENERAL PUBLIC LICENSE\n", encoding="utf-8"
+    )
+    (repo / "LICENSES" / "MIT.txt").write_text("MIT License\n", encoding="utf-8")
+    (repo / "LICENSES" / "nested" / "deeper.txt").write_text("BSD\n", encoding="utf-8")
+    (repo / "COPYING").write_text("Apache License\n", encoding="utf-8")
+    (repo / "README").write_text("not a licence\n", encoding="utf-8")
+    run_git(("init", "-q"), cwd=repo)
+    run_git(("add", "-A"), cwd=repo)
+    run_git(("commit", "-q", "-m", "licences"), cwd=repo)
+    tip = git_out("rev-parse", "HEAD", cwd=repo)
+
+    assert rm.licence(repo, tip) == (
+        "COPYING: Apache; LICENSES/AGPL-3.0-or-later.txt: AGPL; LICENSES/MIT.txt: MIT"
+    )
 
 
 @pytest.mark.parametrize(

@@ -44,6 +44,7 @@ import os
 import re
 import shutil
 import string
+import time
 from pathlib import Path
 
 from ..program import GroundTruthResult, Predicate, PredicateResult, Program
@@ -395,19 +396,24 @@ def sandbox_state(env: Sandbox) -> dict[str, str]:
     refuse every probe that asked for status.
     """
     tree = hashlib.sha256()
-    for directory, subdirs, files in os.walk(env.work):
+    now = time.time_ns()
+    # Paths as strings, not `Path`s: on a real repository building a `Path` per file cost
+    # more than reading it once its digest was kept.
+    root = str(env.work)
+    for directory, subdirs, files in os.walk(root):
         subdirs[:] = sorted(name for name in subdirs if name != ".git")
+        below = directory[len(root) :].lstrip(os.sep).replace(os.sep, "/")
         for name in sorted(files):
             if name == ".git":
                 continue
-            path = Path(directory) / name
-            relative = path.relative_to(env.work).as_posix()
+            path = os.path.join(directory, name)
+            relative = f"{below}/{name}" if below else name
             tree.update(relative.encode("utf-8") + b"\0")
-            if path.is_symlink():
+            if os.path.islink(path):
                 tree.update(b"link:" + os.readlink(path).encode("utf-8") + b"\0")
                 continue
             tree.update(b"x" if os.access(path, os.X_OK) else b"-")
-            tree.update(hashlib.sha256(path.read_bytes()).digest())
+            tree.update(_content_digest(path, now))
 
     def git(args: tuple[str, ...], cwd: Path) -> str:
         return run_git(args, cwd=cwd, check=False).stdout
@@ -431,6 +437,47 @@ def sandbox_state(env: Sandbox) -> dict[str, str]:
     return {
         name: hashlib.sha256(value.encode("utf-8")).hexdigest() for name, value in parts.items()
     }
+
+
+_DIGESTS: dict[str, tuple[tuple[int, ...], bytes]] = {}
+"""A file's content digest by path, kept with the `os.stat` it was read under (#296).
+
+`sandbox_state` runs twice per probe, and on a real repository (thousands of files) reading
+every byte each time dominated a run: 0.7 s per snapshot of phpMyAdmin. A file whose stat is
+unchanged is not read again. That is exact on POSIX: the stat includes `st_ctime_ns`, which the
+kernel sets on every write or chmod and no process can set back, so content cannot change
+without it. The one gap is timestamp granularity -- a second write in the same clock tick as the
+first leaves ctime as it was -- and it is closed as git closes its racy index entries: a digest
+is kept only for a file whose ctime was already `_RACY_NS` old when it was read, so any later
+write lands in a later tick. On Windows, where ctime is the creation time, nothing is kept.
+"""
+
+_RACY_NS = 2_000_000_000
+_DIGESTS_MAX = 200_000
+
+
+def _file_sha256(path: str) -> bytes:
+    with open(path, "rb") as handle:
+        return hashlib.sha256(handle.read()).digest()
+
+
+def _content_digest(path: str, now: int) -> bytes:
+    """The file's SHA-256, from `_DIGESTS` when its stat says it is unchanged."""
+    if os.name == "nt":
+        return _file_sha256(path)
+    st = os.stat(path)
+    key = (st.st_dev, st.st_ino, st.st_size, st.st_mode, st.st_mtime_ns, st.st_ctime_ns)
+    kept = _DIGESTS.get(path)
+    if kept is not None and kept[0] == key:
+        return kept[1]
+    digest = _file_sha256(path)
+    if now - st.st_ctime_ns > _RACY_NS:
+        if len(_DIGESTS) >= _DIGESTS_MAX:
+            _DIGESTS.clear()
+        _DIGESTS[path] = (key, digest)
+    else:
+        _DIGESTS.pop(path, None)
+    return digest
 
 
 def _changed_parts(before: dict[str, str], after: dict[str, str]) -> list[str]:

@@ -224,14 +224,32 @@ _LICENCES = (
 )
 
 
+def _entries(cache: Path, treeish: str) -> list[tuple[str, str]]:
+    """`(type, name)` for each entry of a tree, `type` being git's (`blob`, `tree`, `commit`)."""
+    listed = _git(cache, "ls-tree", "-z", treeish).stdout.split("\0")
+    return [(line.split(" ", 2)[1], line.split("\t", 1)[1]) for line in listed if line]
+
+
 def licence(cache: Path, tip: str) -> str:
-    """Which licence the tip's licence files name, from their opening lines."""
-    names = _git(cache, "ls-tree", "--name-only", tip).stdout.splitlines()
+    """Which licence the tip's licence files name, from their opening lines.
+
+    A top-level licence entry may be a directory, as REUSE lays one out (`LICENSES/`, one file
+    per licence); its files are read one level down. Recorded in the manifest, decides nothing.
+    """
+    paths = []
+    for kind, name in _entries(cache, tip):
+        if not name.upper().startswith(("LICENSE", "LICENCE", "COPYING")):
+            continue
+        if kind == "blob":
+            paths.append(name)
+        elif kind == "tree":
+            inner = _entries(cache, f"{tip}:{name}")
+            paths.extend(f"{name}/{leaf}" for leaf_kind, leaf in inner if leaf_kind == "blob")
     found = []
-    for name in sorted(n for n in names if n.upper().startswith(("LICENSE", "LICENCE", "COPYING"))):
-        head = _git(cache, "cat-file", "blob", f"{tip}:{name}").stdout[:2000]
+    for path in sorted(paths):
+        head = _git(cache, "cat-file", "blob", f"{tip}:{path}").stdout[:2000]
         kind = next((label for marker, label in _LICENCES if marker in head), "unrecognised")
-        found.append(f"{name}: {kind}")
+        found.append(f"{path}: {kind}")
     return "; ".join(found) or "no licence file at the tip"
 
 
