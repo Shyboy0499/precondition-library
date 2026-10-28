@@ -147,6 +147,14 @@ measured result, at pair level; everything before it is design and apparatus. Se
   zero-mismatch point per `k` is reported as a description of these pairs within its own Wilson
   upper limit.
 
+### Changed
+
+- **The README reports results in two tiers, by what grades them (#300, ADR-0052).** The
+  headline is now the real-merge result: graded by maintainers' merge commits, precondition
+  dispatch mis-fired on 8–54% of its fires by library, and "it rarely mis-fires" is falsified
+  there. The synthetic 0 of 563 stays, under results graded by this project's own labels, each
+  section saying what grades it. No figure changed.
+
 ### Fixed
 
 - **A probe's read-only check no longer re-reads an unchanged repository (#296).** The sandbox

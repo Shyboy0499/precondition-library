@@ -6,25 +6,32 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2EA44F?style=flat" alt="MIT License"></a>
-  <img src="https://img.shields.io/badge/status-primary%20claim%20measured%20%C2%B7%203%20replicates-2EA44F?style=flat" alt="Status: primary claim measured over three replicate builds">
+  <img src="https://img.shields.io/badge/status-falsified%20on%20real%20merges-B35900?style=flat" alt="Status: the rarely-mis-fires claim is falsified on real merges">
   <img src="https://img.shields.io/badge/python-3.12%2B-3776AB?style=flat" alt="Python 3.12+">
 </p>
 
-> **Status: the primary claim is measured, at pair level, over three replicate builds.**
-> At matched dispatch coverage, executable-precondition dispatch mis-fired on **0 of 563**
-> fires across the three libraries, against text-similarity dispatch's **76–81%**; arm 2
-> cleared its pre-registered baseline floor in the two replicates built on the final
-> code. The strongest text scorer screened, a local reranker, still mis-fires on
-> **71–76%**. Those states come from the same generators admission tests against. On
-> **held-out** states no build ever drew, it mis-fired once in 480 fires on new paths, a new
-> shape, new branch names and new submodule paths, but on **41 of 101** when the lock file moved
-> to new paths. All 42 of those mis-fires were on a file name with a space or a non-ASCII
-> character. Built over four real repositories' histories instead of the generator's two-file
-> base, the same states drew the same 563 fires, none wrong
-> ([Held-out states](#held-out-states)). The numbers, their provenance and their limits are in
-> [Primary result](#primary-result). What is **not** measured yet is everything at
-> episode level -- the frozen benchmark, the admission factorial and the online arms --
-> and an earlier smoke pass, [First demonstration](#first-demonstration), is kept as
+> **Status: measured on real merges, where the near-zero mis-fire rate does not hold.**
+> Results here come in two tiers, named by what grades them (#300).
+>
+> **Graded outside this project.** On **274 real lock-file merges** from 11 public repositories,
+> labelled by what each maintainer committed and pre-registered before the data was seen,
+> precondition dispatch mis-fired on **62 of 150**, **10 of 122** and **132 of 244** fires across
+> the three libraries. So the registered claim that it rarely mis-fires is **falsified** on real
+> merges (ADR-0052). It still mis-fired less than text similarity at matched coverage in every
+> library, but almost all of that margin is `merge` fired on merges that had no conflict. On real
+> lock-file conflicts every dispatcher is almost always wrong: precondition dispatch was right on
+> 1 of 177 fires there. Maintainers regenerate or hand-edit lock files, which none of this
+> project's resolutions does: they express 1 of 161 conflicts. See
+> [Results graded outside this project](#results-graded-outside-this-project).
+>
+> **Graded by this project's own labels.** On states its own injectors build, judged by its own
+> rules, precondition dispatch mis-fired on **0 of 563** fires, against text similarity's
+> **71–90%** across three scorers ([Primary result](#primary-result)). These figures show that the
+> dispatchers agree, or not, with rules this project wrote. They are not evidence about states it
+> did not make, and on the one external test the near-zero rate did not carry over.
+>
+> Nothing at episode level is measured yet: not the frozen benchmark, the admission factorial or
+> the online arms. An earlier smoke pass, [First demonstration](#first-demonstration), is kept as
 > the record of the mechanism, not of the claim. The apparatus's suite is green in
 > [CI](https://github.com/Shyboy0499/precondition-library/actions/workflows/ci.yml).
 >
@@ -49,6 +56,7 @@ Stated first, because the prior art is real and the honest framing depends on it
 | That dispatching a cached plan by testing **executable preconditions** is a new mechanism | It is MACROPS, 1972: a cached generalized plan is dispatched by testing precondition *kernels* against live state, with an explicit replan fallback. |
 | That "the most similar case is not the most reusable" is a new insight | Smyth & Keane argued it in 1998, in a peer-reviewed journal, at length. |
 | That these token counts are a **cost** | They are tokens. Pricing input needs a rate table, and the provider's rates differ by peak and off-peak hours, so no currency figure is reported — input is metered as uncached, cache-read and cache-write so one can be computed once rates exist. |
+| That precondition dispatch rarely mis-fires | On this project's own states it did not mis-fire (0 of 563). On real lock-file merges, graded by maintainers, it mis-fired on 8–54% of its fires depending on the library, and the registered claim is falsified there ([Results graded outside this project](#results-graded-outside-this-project), ADR-0052). |
 | That an episode-level comparison has been made | Only the pair-level primary metric has been measured ([Primary result](#primary-result)). The frozen benchmark, the admission factorial and the online arms have not been run at scale; the one smoke pass that ran them ([First demonstration](#first-demonstration)) demonstrates the mechanism and measures nothing. |
 | That no text scorer could close the gap | Three were measured on the same three libraries: the shipped lexical arm (ADR-0003), the pinned embedding arm (#104) and a pinned local reranker, the strongest of thirteen models screened on arm 2's floor (lower bounds 0.571 and 0.508 against chance 0.333, where the other two only just clear it). The reranker narrows the gap to +0.71 to +0.76, from lexical +0.76 to +0.81, and no further. That is a screen of local models, not a search; a scorer reading the state through an LLM call is implemented and registered (ADR-0034) and has not been run, so it closes no gap here. |
 
@@ -84,6 +92,11 @@ So the gap is narrow, and narrow is the point: it is small enough to close with
 one person and one well-controlled experiment, and it is the only *measurement*
 claim here that prior art does not already settle. The negative-sandbox admission
 criterion is a second candidate, and its novelty is not confirmed.
+
+On real lock-file merges this project now has an answer to the question, with a qualification.
+Precondition dispatch mis-fired less than text similarity at matched coverage, but it mis-fired
+often, and almost all of its advantage came from merges that had no conflict ([Results graded
+outside this project](#results-graded-outside-this-project)).
 
 ## How the measurement works
 
@@ -227,6 +240,10 @@ reports success while being wrong.
 - **Text-similarity dispatch is already good enough.** Falsifies the claim, and
   leaves the benchmark as a null result with intervals attached — which is still a
   publishable-shaped outcome, and the reason this design is cheap to falsify.
+- **The result does not carry to states this project did not make.** This one has happened,
+  on real lock-file merges: precondition dispatch mis-fired on 8–54% of its fires there, and the
+  registered claim that it rarely mis-fires is falsified (ADR-0052). The synthetic result stands
+  as a measurement of agreement with this project's own rules, and is reported as such.
 
 ## Layout
 
@@ -317,7 +334,70 @@ places, both checked:
   by a test. Since #189, #190 and #191 (ADR-0027 to ADR-0029) every fault is
   measured, and the set is empty.
 
-## Primary result
+## Results graded outside this project
+
+**Graded by:** the merge commit each maintainer made in a public repository, read from git, under
+a study registered before its data was mined (ADR-0048, ADR-0049). The label is what the
+maintainer committed. This project's code only compares a dispatcher's choice with it, by a rule
+fixed in the registration: it neither builds the states nor decides what is right.
+
+### Real lock-file merges
+
+[`results/real-merges-2026-10-26/stage-B/`](results/real-merges-2026-10-26/stage-B/README.md)
+holds 274 merges from 11 public repositories. 161 of them conflicted in a lock file, and 113
+changed a lock file on both sides and merged cleanly. Each library from the three replicate builds
+dispatched every case, read-only, with no model call. A fire is right if it is what the maintainer
+did: one of the lock-file intent's resolutions that reproduces their lock file, or `merge` on a
+clean merge whose tree is the one they committed.
+
+| | replicate 1 (run 11) | replicate 2 (run 12) | replicate 3 (run 13) |
+| --- | --- | --- | --- |
+| precondition dispatch: fires, wrong (95% Wilson) | 150, **62** (0.34–0.49) | 122, **10** (0.05–0.14) | 244, **132** (0.48–0.60) |
+| of those, right on clean merges | 87 of 113 | 112 of 113 | 112 of 113 |
+| of those, right on conflicts | 1 of 37 | 0 of 9 | 0 of 131 |
+| text similarity at matched coverage: wrong | 140 of 150 | 122 of 122 | 239 of 244 |
+| state-reading control: wrong | 159 of 160 | 159 of 160 | 159 of 160 |
+
+**What it decides**, by the registered rules in order:
+
+- **Precondition dispatch rarely mis-fires: falsified.** The lower bound of its mis-fire rate is
+  above the registered 0.10 in two of the three libraries.
+- **It mis-fires less than text similarity at matched coverage: supported** in every library.
+- **It mis-fires less than reading the state: supported as registered, but not read as a win for
+  executing checks** (ADR-0052). The control decides with the lock-file intent's own resolutions,
+  so it can never fire `merge`, and almost all of precondition dispatch's right fires are `merge`
+  on clean merges. On conflicts, where both can fire, both are almost always wrong.
+- **It declines more of the conflicts nothing can resolve than the control does: supported**, by a
+  wide margin in two libraries and barely in the third.
+
+**What it shows.** No library resolves a real lock-file conflict. Maintainers regenerated the file
+on 79 of the 161 conflicts and did something else on 48; the lock-file intent's resolutions
+reproduce 1 of the 161. The synthetic result's near-zero mis-fire rate does not carry to these
+states. What does carry is narrower: precondition dispatch fires `merge` on clean merges, where
+text similarity does not, and two of three libraries mostly decline the conflicts they cannot
+resolve.
+
+**What it does not show.** It covers only lock-file merges in 11 repositories, and it says nothing
+about episodes. An LLM state judge (#295) has not been run, and the external oracles of #297 (the
+ecosystem's lock-file tools, the project's own tests) are not built. Every figure here was
+recomputed by a script that does not use this project's code. For 55 of the cases, the labels were
+re-derived from git and all agree. A pilot stage on 44 merges came first
+([stage A](results/real-merges-2026-10-26/stage-A/README.md)). It motivated the amendment, so it
+tests nothing.
+
+## Results graded by this project's own labels
+
+**Graded by:** states built by this project's injectors, and labels from its own rules and
+checkers. These sections measure whether each dispatcher agrees with rules this project wrote.
+They are kept because they are the controlled comparison the design registered. They are not
+evidence about states the project did not make: on the one external test above, the near-zero
+mis-fire rate did not carry over (#300).
+
+### Primary result
+
+**Graded by:** each pair's acceptable resolutions, computed from the injected state by this
+project's rules (ADR-0022).
+
 
 **The question**, as [The open question](#the-open-question) states it, measured as the
 spec registers it (ADR-0022): Figure 1 over **400 labelled dispatch pairs** from the
@@ -370,8 +450,10 @@ build's 56 states with no model call and no compiled program, fires on 190 of th
 with none wrong, and on 200 held-out pairs with none wrong where arm 3 had 8–21
 ([state-reading control](results/state-classifier-2026-10-26/README.md)). So the claim this table
 supports is that a dispatcher that reads the state beats one that does not, and compiled
-preconditions are one such dispatcher. Whether executability adds anything is open: #295 (a
-control limited to what probes can see) and #296 (real merges, labels this project did not write).
+preconditions are one such dispatcher. Whether executability adds anything is still open. #295, a
+control limited to what probes can see, is not run. #296 has run on real merges, but its registered
+control could not fire `merge`, so it cannot separate the two either
+([Results graded outside this project](#results-graded-outside-this-project), ADR-0052).
 
 **What it does not show.**
 
@@ -392,7 +474,8 @@ control limited to what probes can see) and #296 (real merges, labels this proje
   injectors admission tests each program against. Five held-out sources are measured below,
   one per git fault. On one of them, file names with a space or a non-ASCII character, arm 3
   mis-fired often. A sixth builds the same states over real repositories' histories. Real
-  faults, ones no injector built, are not measured.
+  faults, ones no injector built, are measured only for lock-file merges, in the tier above, and
+  there arm 3 mis-fired often.
 - **Nothing at episode level, except replayed fires.** Replaying each fire shows what it leaves
   (Measured since). A fire is not an episode: cost, the misses the agent would solve, the
   admission factorial and the online arms are separate stages, not run here.
@@ -407,6 +490,9 @@ the defects found on the way are in
 [#214](https://github.com/Shyboy0499/precondition-library/issues/214#issuecomment-5999250801).
 
 ### Held-out states
+
+**Graded by:** the same rules, on seeds and paths no build drew. The states are still built by this
+project's injectors.
 
 The 0 of 563 describes this generator: admission tests every program on states built by the
 same injectors as the evaluation pairs (#263). The held-out stage (ADR-0033, ADR-0037, ADR-0039,
@@ -503,6 +589,8 @@ lock-file block), [`results/heldout-2026-10-16/`](results/heldout-2026-10-16/REA
 [`results/heldout-2026-10-10/`](results/heldout-2026-10-10/README.md).
 
 ### Measured since
+
+**Graded by:** each fault's own checker, written here, applied to what a replayed fire leaves.
 
 All three re-read the committed libraries, with no model call:
 
