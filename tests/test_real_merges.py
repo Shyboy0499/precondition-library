@@ -25,6 +25,7 @@ import pytest
 
 from precondition_library.bench import preregistration
 from precondition_library.bench import real_merges as rm
+from precondition_library.sandbox import git_out, run_git
 
 BASE = ["[[package]]", 'name = "alpha"', 'name = "beta"', 'version = "1"', "", "# end"]
 
@@ -216,6 +217,27 @@ def test_the_repository_summary(history: dict[str, object]) -> None:
     assert summary.licence == "LICENSE: MIT"
 
 
+def test_a_licence_directory_is_read_one_level_down(tmp_path: Path) -> None:
+    """nextcloud/server keeps REUSE's `LICENSES/`, a tree; reading it as a blob stopped stage B."""
+    repo = tmp_path / "repo"
+    (repo / "LICENSES" / "nested").mkdir(parents=True)
+    (repo / "LICENSES" / "AGPL-3.0-or-later.txt").write_text(
+        "GNU AFFERO GENERAL PUBLIC LICENSE\n", encoding="utf-8"
+    )
+    (repo / "LICENSES" / "MIT.txt").write_text("MIT License\n", encoding="utf-8")
+    (repo / "LICENSES" / "nested" / "deeper.txt").write_text("BSD\n", encoding="utf-8")
+    (repo / "COPYING").write_text("Apache License\n", encoding="utf-8")
+    (repo / "README").write_text("not a licence\n", encoding="utf-8")
+    run_git(("init", "-q"), cwd=repo)
+    run_git(("add", "-A"), cwd=repo)
+    run_git(("commit", "-q", "-m", "licences"), cwd=repo)
+    tip = git_out("rev-parse", "HEAD", cwd=repo)
+
+    assert rm.licence(repo, tip) == (
+        "COPYING: Apache; LICENSES/AGPL-3.0-or-later.txt: AGPL; LICENSES/MIT.txt: MIT"
+    )
+
+
 @pytest.mark.parametrize(
     ("name", "acceptable", "descriptive"),
     [
@@ -325,6 +347,102 @@ def test_merge_tree_reads_a_clean_merge(history: dict[str, object]) -> None:
     clean = _case(history, "clean")
     tree = rm.merge_tree(cache, clean.first, clean.second)
     assert (tree.clean, tree.conflicted, tree.submodule_or_binary) == (True, [], False)
+
+
+def _gitlink_conflict(repo: Path) -> None:
+    """Both sides move a submodule `vendor/s` (gitlinks only, to commits the repository lacks)
+    and change `Cargo.lock`: the shape that stopped stage B on wasmerio/wasmer."""
+    run_git(("init", "-q"), cwd=repo)
+
+    def commit(lock: str, gitlink: str, message: str) -> None:
+        (repo / "Cargo.lock").write_text(lock, encoding="utf-8")
+        run_git(("add", "Cargo.lock"), cwd=repo)
+        run_git(
+            ("update-index", "--add", "--cacheinfo", f"160000,{gitlink * 40},vendor/s"), cwd=repo
+        )
+        run_git(("commit", "-q", "-m", message), cwd=repo)
+
+    commit("base\n", "1", "base")
+    run_git(("branch", "base"), cwd=repo)
+    run_git(("checkout", "-q", "-b", "one"), cwd=repo)
+    commit("one\n", "2", "one")
+    run_git(("checkout", "-q", "-b", "two", "base"), cwd=repo)
+    commit("two\n", "3", "two")
+
+
+# What git 2.43 prints after the conflicted entries for `_gitlink_conflict`, recorded: the
+# structured messages, then free text outside their format. Later git (2.56 on CI) omits the
+# free text in -z mode, so the parser is tested against this recording, not the installed git.
+GIT_2_43_MESSAGES = (
+    "\0\0"
+    "1\0Cargo.lock\0Auto-merging\0Auto-merging Cargo.lock\n\0"
+    "1\0Cargo.lock\0CONFLICT (contents)\0CONFLICT (content): Merge conflict in Cargo.lock\n\0"
+    "1\0vendor/s\0CONFLICT (submodule not initialized)\0"
+    "Failed to merge submodule vendor/s (not checked out)\n\0"
+    "1\0vendor/s\0CONFLICT (contents)\0CONFLICT (submodule): Merge conflict in vendor/s\n\0"
+    "Recursive merging with submodules currently only supports trivial cases.\n"
+    "Please manually handle the merging of each conflicted submodule.\n"
+    "This can be accomplished with the following steps:\n"
+    " - come back to superproject and run:\n\n"
+    "      git add vendor/s\n\n"
+    "   to record the above merge or update\n"
+    " - resolve any other conflicts in the superproject\n"
+    " - commit the resulting index in the superproject\n"
+)
+
+
+def _messages_replaced(monkeypatch: pytest.MonkeyPatch, messages: str) -> None:
+    """Keep the installed git's tree and conflicted entries; replace what follows them."""
+    real = rm._git
+
+    def git(cache: Path, *argv: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+        result = real(cache, *argv, check=check)
+        if argv[:1] != ("merge-tree",):
+            return result
+        head = result.stdout.partition("\0\0")[0]
+        return subprocess.CompletedProcess(
+            result.args, result.returncode, head + messages, result.stderr
+        )
+
+    monkeypatch.setattr(rm, "_git", git)
+
+
+SUBMODULE_CONFLICT = (False, ["Cargo.lock", "vendor/s"], True)
+
+
+def test_merge_tree_reads_a_submodule_conflict(tmp_path: Path) -> None:
+    """With whatever git is installed, advice or none."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _gitlink_conflict(repo)
+    tree = rm.merge_tree(repo, "one", "two")
+    assert (tree.clean, tree.conflicted, tree.submodule_or_binary) == SUBMODULE_CONFLICT
+
+
+def test_merge_tree_reads_past_git_2_43s_submodule_advice(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The output that stopped stage B on wasmerio/wasmer (ValueError reading a count)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _gitlink_conflict(repo)
+    _messages_replaced(monkeypatch, GIT_2_43_MESSAGES)
+    tree = rm.merge_tree(repo, "one", "two")
+    assert (tree.clean, tree.conflicted, tree.submodule_or_binary) == SUBMODULE_CONFLICT
+
+
+def test_merge_tree_refuses_a_message_it_does_not_know(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _gitlink_conflict(repo)
+    unknown = GIT_2_43_MESSAGES.replace(
+        "Recursive merging with submodules", "Something git has not said before"
+    )
+    _messages_replaced(monkeypatch, unknown)
+    with pytest.raises(RuntimeError, match="unexpected message 'Something git has not said"):
+        rm.merge_tree(repo, "one", "two")
 
 
 def test_mining_refuses_without_the_registration(monkeypatch: pytest.MonkeyPatch) -> None:

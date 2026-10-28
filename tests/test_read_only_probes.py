@@ -13,11 +13,15 @@ shell command does to a real repository.
 
 from __future__ import annotations
 
+import os
+import time
+
 import pytest
 from test_episode_runner import DISCARD_SEED, _discard_program
 
 from precondition_library.agents.compile import admit
 from precondition_library.program import Predicate
+from precondition_library.runtime import probes
 from precondition_library.runtime.probes import bindings, evaluate_predicate, evaluate_predicates
 
 
@@ -101,3 +105,62 @@ def test_the_compile_prompt_says_how_to_check_absence() -> None:
 
     assert "can only require that something is present" in SYSTEM_PROMPT
     assert "! git stash list | grep -q" in SYSTEM_PROMPT
+
+
+# --- the snapshot reads a file again only when its stat moved (#296) --------------------------
+
+
+def _counting_reads(monkeypatch) -> list[str]:
+    read: list[str] = []
+    original = probes._file_sha256
+
+    def counted(path: str) -> bytes:
+        read.append(path)
+        return original(path)
+
+    monkeypatch.setattr(probes, "_file_sha256", counted)
+    return read
+
+
+def test_a_warm_snapshot_equals_a_cold_one_and_reads_nothing_unchanged(
+    make_sandbox, monkeypatch
+) -> None:
+    """On Windows, where ctime is the creation time, nothing is kept and every file is read."""
+    box = make_sandbox(DISCARD_SEED, ["diverged"])
+    monkeypatch.setattr(probes, "_RACY_NS", -1)  # every file is old enough to keep
+    probes._DIGESTS.clear()
+    cold = probes.sandbox_state(box)
+    keeps = os.name != "nt"
+    assert (str(box.work / "app.py") in probes._DIGESTS) == keeps
+    read = _counting_reads(monkeypatch)
+    assert probes.sandbox_state(box) == cold
+    assert (read == []) == keeps
+
+
+def test_a_rewrite_that_restores_size_and_mtime_is_still_seen(make_sandbox, monkeypatch) -> None:
+    """ctime moves on every write and cannot be set back, so the kept digest is not used.
+    (On Windows nothing is kept, and the file is read again.)"""
+    box = make_sandbox(DISCARD_SEED, ["diverged"])
+    monkeypatch.setattr(probes, "_RACY_NS", -1)
+    probes._DIGESTS.clear()
+    target = box.work / "app.py"
+    text = target.read_bytes()
+    before = probes.sandbox_state(box)
+    stat = target.stat()
+    time.sleep(0.05)  # past any timestamp tick, so the rewrite's ctime differs
+    target.write_bytes(text.swapcase())  # same length, other bytes
+    os.utime(target, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+    assert target.stat().st_size == stat.st_size and target.stat().st_mtime_ns == stat.st_mtime_ns
+    assert target.read_bytes() != text
+    after = probes.sandbox_state(box)
+    assert after["working tree"] != before["working tree"]
+
+
+def test_a_file_changed_within_the_racy_window_is_not_kept(make_sandbox) -> None:
+    """A digest is kept only for a file whose ctime was already old when it was read, so a
+    second write in the same clock tick can never be answered from the cache."""
+    box = make_sandbox(DISCARD_SEED, ["diverged"])
+    fresh = box.work / "written-just-now.txt"
+    fresh.write_text("now\n", encoding="utf-8")
+    probes.sandbox_state(box)
+    assert str(fresh) not in probes._DIGESTS
