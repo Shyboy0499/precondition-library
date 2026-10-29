@@ -11,8 +11,9 @@ import pytest
 from precondition_library.bench import preregistration as pr
 
 
-def test_the_committed_registration_holds() -> None:
-    assert pr.require("real-merges") == pr.document("real-merges")
+@pytest.mark.parametrize("name", sorted(pr.REGISTRATIONS))
+def test_the_committed_registration_holds(name: str) -> None:
+    assert pr.require(name) == pr.document(name)
 
 
 def test_every_pin_is_a_sha256() -> None:
