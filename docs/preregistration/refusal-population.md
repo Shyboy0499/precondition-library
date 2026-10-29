@@ -47,8 +47,8 @@ executability.
 
 ### 3.1 Repositories
 
-Repositories are taken from these lists, in order, and nowhere else. None was listed, mined or
-used as a host base by any earlier study or stage. A repository is pinned at its default
+Repositories are taken from these lists, in order, and nowhere else. None was listed, mined,
+counted (study 1's §11) or used as a host base by any earlier study or stage. A repository is pinned at its default
 branch's tip on the day it is first mined, and its history is read up to that commit only.
 
 **Admission (A): the refusal set's source.**
@@ -60,7 +60,7 @@ branch's tip on the day it is first mined, and its history is read up to that co
 
 **Evaluation (E), in order:**
 
-1. [`mastodon/mastodon`](https://github.com/mastodon/mastodon)
+1. [`openproject/openproject`](https://github.com/openproject/openproject)
 2. [`PrestaShop/PrestaShop`](https://github.com/PrestaShop/PrestaShop)
 3. [`home-assistant/frontend`](https://github.com/home-assistant/frontend)
 4. [`rust-lang/rust-analyzer`](https://github.com/rust-lang/rust-analyzer)
