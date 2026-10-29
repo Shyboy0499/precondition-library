@@ -1,0 +1,174 @@
+start 2026-10-28T07:28:41Z on 720ddaf
+killed   src/precondition_library/tasks/invariants.py:85 _recorded Is -> IsNot
+killed   src/precondition_library/tasks/invariants.py:92 _recorded not removed
+killed   src/precondition_library/tasks/invariants.py:92 _recorded and -> or
+killed   src/precondition_library/tasks/invariants.py:94 _recorded Eq -> NotEq
+killed   src/precondition_library/tasks/invariants.py:106 _descends_from Eq -> NotEq
+killed   src/precondition_library/tasks/invariants.py:107 _descends_from 0 -> 1
+killed   src/precondition_library/tasks/invariants.py:107 _descends_from 0 -> -1
+killed   src/precondition_library/tasks/invariants.py:106 _descends_from False -> True
+killed   src/precondition_library/tasks/invariants.py:119 recorded_state_intact Is -> IsNot
+killed   src/precondition_library/tasks/invariants.py:150 recorded_state_intact Is -> IsNot
+killed   src/precondition_library/tasks/invariants.py:162 recorded_state_intact Is -> IsNot
+killed   src/precondition_library/tasks/invariants.py:171 recorded_state_intact NotEq -> Eq
+killed   src/precondition_library/tasks/invariants.py:127 recorded_state_intact not removed
+killed   src/precondition_library/tasks/invariants.py:139 recorded_state_intact Is -> IsNot
+killed   src/precondition_library/tasks/invariants.py:141 recorded_state_intact not removed
+killed   src/precondition_library/tasks/invariants.py:171 recorded_state_intact 0 -> 1
+killed   src/precondition_library/tasks/invariants.py:171 recorded_state_intact 0 -> -1
+killed   src/precondition_library/tasks/invariants.py:170 recorded_state_intact False -> True
+killed   src/precondition_library/tasks/invariants.py:196 recorded_state_intact True -> False
+killed   src/precondition_library/tasks/invariants.py:123 recorded_state_intact True -> False
+killed   src/precondition_library/tasks/invariants.py:154 recorded_state_intact True -> False
+killed   src/precondition_library/tasks/invariants.py:164 recorded_state_intact False -> True
+killed   src/precondition_library/tasks/invariants.py:176 recorded_state_intact False -> True
+killed   src/precondition_library/tasks/invariants.py:189 recorded_state_intact False -> True
+killed   src/precondition_library/tasks/invariants.py:129 recorded_state_intact False -> True
+killed   src/precondition_library/tasks/invariants.py:140 recorded_state_intact False -> True
+killed   src/precondition_library/tasks/invariants.py:143 recorded_state_intact False -> True
+survived src/precondition_library/tasks/invariants.py:199 recorded_state_intact or -> and
+survived src/precondition_library/tasks/invariants.py:179 recorded_state_intact or -> and
+survived src/precondition_library/tasks/invariants.py:192 recorded_state_intact or -> and
+survived src/precondition_library/tasks/invariants.py:178 recorded_state_intact 12 -> 13
+survived src/precondition_library/tasks/invariants.py:178 recorded_state_intact 12 -> 11
+survived src/precondition_library/tasks/invariants.py:131 recorded_state_intact 12 -> 13
+survived src/precondition_library/tasks/invariants.py:131 recorded_state_intact 12 -> 11
+survived src/precondition_library/tasks/invariants.py:145 recorded_state_intact 12 -> 13
+survived src/precondition_library/tasks/invariants.py:145 recorded_state_intact 12 -> 11
+survived src/precondition_library/tasks/invariants.py:146 recorded_state_intact 12 -> 13
+survived src/precondition_library/tasks/invariants.py:146 recorded_state_intact 12 -> 11
+killed   src/precondition_library/tasks/faults/lockfile_conflict.py:459 check not removed
+killed   src/precondition_library/tasks/faults/lockfile_conflict.py:477 check not removed
+killed   src/precondition_library/tasks/faults/lockfile_conflict.py:483 check NotIn -> In
+killed   src/precondition_library/tasks/faults/lockfile_conflict.py:488 check NotIn -> In
+killed   src/precondition_library/tasks/faults/lockfile_conflict.py:495 check and -> or
+killed   src/precondition_library/tasks/faults/lockfile_conflict.py:501 check NotEq -> Eq
+killed   src/precondition_library/tasks/faults/lockfile_conflict.py:495 check IsNot -> Is
+killed   src/precondition_library/tasks/faults/lockfile_conflict.py:495 check In -> NotIn
+killed   src/precondition_library/tasks/faults/lockfile_conflict.py:501 check 1 -> 2
+killed   src/precondition_library/tasks/faults/lockfile_conflict.py:501 check 1 -> 0
+killed   src/precondition_library/tasks/faults/lockfile_conflict.py:466 check False -> True
+killed   src/precondition_library/tasks/faults/lockfile_conflict.py:469 check 0 -> 1
+survived src/precondition_library/tasks/faults/lockfile_conflict.py:469 check 0 -> -1
+killed   src/precondition_library/tasks/faults/lockfile_conflict.py:508 check True -> False
+killed   src/precondition_library/tasks/faults/lockfile_conflict.py:461 check False -> True
+killed   src/precondition_library/tasks/faults/lockfile_conflict.py:471 check False -> True
+killed   src/precondition_library/tasks/faults/lockfile_conflict.py:478 check False -> True
+killed   src/precondition_library/tasks/faults/lockfile_conflict.py:485 check False -> True
+killed   src/precondition_library/tasks/faults/lockfile_conflict.py:490 check False -> True
+killed   src/precondition_library/tasks/faults/lockfile_conflict.py:497 check False -> True
+killed   src/precondition_library/tasks/faults/lockfile_conflict.py:503 check False -> True
+survived src/precondition_library/tasks/faults/lockfile_conflict.py:462 check 12 -> 13
+survived src/precondition_library/tasks/faults/lockfile_conflict.py:462 check 12 -> 11
+killed   src/precondition_library/tasks/faults/dirty_tree.py:532 check not removed
+killed   src/precondition_library/tasks/faults/dirty_tree.py:546 check or -> and
+killed   src/precondition_library/tasks/faults/dirty_tree.py:552 check In -> NotIn
+killed   src/precondition_library/tasks/faults/dirty_tree.py:546 check Is -> IsNot
+killed   src/precondition_library/tasks/faults/dirty_tree.py:546 check NotIn -> In
+killed   src/precondition_library/tasks/faults/dirty_tree.py:559 check In -> NotIn
+killed   src/precondition_library/tasks/faults/dirty_tree.py:561 check not removed
+killed   src/precondition_library/tasks/faults/dirty_tree.py:571 check True -> False
+killed   src/precondition_library/tasks/faults/dirty_tree.py:534 check False -> True
+killed   src/precondition_library/tasks/faults/dirty_tree.py:548 check False -> True
+killed   src/precondition_library/tasks/faults/dirty_tree.py:562 check and -> or
+killed   src/precondition_library/tasks/faults/dirty_tree.py:566 check False -> True
+killed   src/precondition_library/tasks/faults/dirty_tree.py:562 check Eq -> NotEq
+survived src/precondition_library/tasks/faults/dirty_tree.py:535 check 12 -> 13
+survived src/precondition_library/tasks/faults/dirty_tree.py:535 check 12 -> 11
+killed   src/precondition_library/tasks/faults/diverged.py:532 check not removed
+killed   src/precondition_library/tasks/faults/diverged.py:547 check NotEq -> Eq
+killed   src/precondition_library/tasks/faults/diverged.py:547 check 0 -> 1
+killed   src/precondition_library/tasks/faults/diverged.py:547 check 0 -> -1
+killed   src/precondition_library/tasks/faults/diverged.py:553 check True -> False
+killed   src/precondition_library/tasks/faults/diverged.py:534 check False -> True
+killed   src/precondition_library/tasks/faults/diverged.py:545 check False -> True
+killed   src/precondition_library/tasks/faults/diverged.py:549 check False -> True
+survived src/precondition_library/tasks/faults/diverged.py:535 check 12 -> 13
+survived src/precondition_library/tasks/faults/diverged.py:535 check 12 -> 11
+killed   src/precondition_library/tasks/faults/branch_renamed.py:386 check or -> and
+killed   src/precondition_library/tasks/faults/branch_renamed.py:393 check Eq -> NotEq
+killed   src/precondition_library/tasks/faults/branch_renamed.py:398 check not removed
+killed   src/precondition_library/tasks/faults/branch_renamed.py:408 check not removed
+killed   src/precondition_library/tasks/faults/branch_renamed.py:418 check IsNot -> Is
+killed   src/precondition_library/tasks/faults/branch_renamed.py:429 check IsNot -> Is
+killed   src/precondition_library/tasks/faults/branch_renamed.py:386 check not removed
+killed   src/precondition_library/tasks/faults/branch_renamed.py:386 check not removed
+killed   src/precondition_library/tasks/faults/branch_renamed.py:396 check 0 -> 1
+killed   src/precondition_library/tasks/faults/branch_renamed.py:396 check 0 -> -1
+killed   src/precondition_library/tasks/faults/branch_renamed.py:423 check NotEq -> Eq
+killed   src/precondition_library/tasks/faults/branch_renamed.py:438 check not removed
+killed   src/precondition_library/tasks/faults/branch_renamed.py:423 check 0 -> 1
+killed   src/precondition_library/tasks/faults/branch_renamed.py:423 check 0 -> -1
+killed   src/precondition_library/tasks/faults/branch_renamed.py:448 check True -> False
+killed   src/precondition_library/tasks/faults/branch_renamed.py:388 check False -> True
+killed   src/precondition_library/tasks/faults/branch_renamed.py:400 check False -> True
+killed   src/precondition_library/tasks/faults/branch_renamed.py:410 check False -> True
+killed   src/precondition_library/tasks/faults/branch_renamed.py:421 check False -> True
+killed   src/precondition_library/tasks/faults/branch_renamed.py:394 check False -> True
+killed   src/precondition_library/tasks/faults/branch_renamed.py:425 check False -> True
+killed   src/precondition_library/tasks/faults/branch_renamed.py:440 check False -> True
+survived src/precondition_library/tasks/faults/branch_renamed.py:412 check 12 -> 13
+survived src/precondition_library/tasks/faults/branch_renamed.py:412 check 12 -> 11
+survived src/precondition_library/tasks/faults/branch_renamed.py:443 check 12 -> 13
+survived src/precondition_library/tasks/faults/branch_renamed.py:443 check 12 -> 11
+killed   src/precondition_library/tasks/faults/submodule_moved.py:486 check Is -> IsNot
+killed   src/precondition_library/tasks/faults/submodule_moved.py:492 check Is -> IsNot
+killed   src/precondition_library/tasks/faults/submodule_moved.py:498 check Eq -> NotEq
+killed   src/precondition_library/tasks/faults/submodule_moved.py:508 check Eq -> NotEq
+killed   src/precondition_library/tasks/faults/submodule_moved.py:531 check Eq -> NotEq
+killed   src/precondition_library/tasks/faults/submodule_moved.py:499 check not removed
+killed   src/precondition_library/tasks/faults/submodule_moved.py:513 check not removed
+killed   src/precondition_library/tasks/faults/submodule_moved.py:518 check NotEq -> Eq
+survived src/precondition_library/tasks/faults/submodule_moved.py:534 check and -> or
+survived src/precondition_library/tasks/faults/submodule_moved.py:555 check False -> True
+killed   src/precondition_library/tasks/faults/submodule_moved.py:505 check True -> False
+killed   src/precondition_library/tasks/faults/submodule_moved.py:527 check True -> False
+killed   src/precondition_library/tasks/faults/submodule_moved.py:548 check False -> True
+killed   src/precondition_library/tasks/faults/submodule_moved.py:501 check False -> True
+survived src/precondition_library/tasks/faults/submodule_moved.py:515 check False -> True
+killed   src/precondition_library/tasks/faults/submodule_moved.py:520 check False -> True
+survived src/precondition_library/tasks/faults/submodule_moved.py:522 check or -> and
+killed   src/precondition_library/tasks/faults/submodule_moved.py:542 check True -> False
+survived src/precondition_library/tasks/faults/submodule_moved.py:528 check 12 -> 13
+survived src/precondition_library/tasks/faults/submodule_moved.py:528 check 12 -> 11
+survived src/precondition_library/tasks/faults/submodule_moved.py:523 check 12 -> 13
+survived src/precondition_library/tasks/faults/submodule_moved.py:523 check 12 -> 11
+survived src/precondition_library/tasks/faults/submodule_moved.py:522 check 12 -> 13
+survived src/precondition_library/tasks/faults/submodule_moved.py:522 check 12 -> 11
+killed   src/precondition_library/tasks/faults/config_renamed.py:426 check NotEq -> Eq
+killed   src/precondition_library/tasks/faults/config_renamed.py:428 check NotEq -> Eq
+killed   src/precondition_library/tasks/faults/config_renamed.py:448 check Is -> IsNot
+killed   src/precondition_library/tasks/faults/config_renamed.py:452 check NotEq -> Eq
+killed   src/precondition_library/tasks/faults/config_renamed.py:456 check NotEq -> Eq
+killed   src/precondition_library/tasks/faults/config_renamed.py:462 check NotEq -> Eq
+killed   src/precondition_library/tasks/faults/config_renamed.py:465 check Eq -> NotEq
+killed   src/precondition_library/tasks/faults/config_renamed.py:434 check Eq -> NotEq
+killed   src/precondition_library/tasks/faults/config_renamed.py:437 check Is -> IsNot
+killed   src/precondition_library/tasks/faults/config_renamed.py:452 check 1 -> 2
+killed   src/precondition_library/tasks/faults/config_renamed.py:452 check 1 -> 0
+killed   src/precondition_library/tasks/faults/config_renamed.py:469 check Eq -> NotEq
+killed   src/precondition_library/tasks/faults/config_renamed.py:473 check NotEq -> Eq
+killed   src/precondition_library/tasks/faults/config_renamed.py:451 check Eq -> NotEq
+killed   src/precondition_library/tasks/faults/config_renamed.py:456 check 0 -> 1
+survived src/precondition_library/tasks/faults/config_renamed.py:456 check 0 -> -1
+killed   src/precondition_library/tasks/faults/config_renamed.py:469 check 0 -> 1
+killed   src/precondition_library/tasks/faults/config_renamed.py:469 check 0 -> -1
+killed   src/precondition_library/tasks/faults/config_renamed.py:479 check True -> False
+killed   src/precondition_library/tasks/faults/config_renamed.py:427 check False -> True
+killed   src/precondition_library/tasks/faults/config_renamed.py:429 check False -> True
+killed   src/precondition_library/tasks/faults/config_renamed.py:449 check False -> True
+killed   src/precondition_library/tasks/faults/config_renamed.py:454 check False -> True
+survived src/precondition_library/tasks/faults/config_renamed.py:458 check False -> True
+killed   src/precondition_library/tasks/faults/config_renamed.py:461 check NotEq -> Eq
+survived src/precondition_library/tasks/faults/config_renamed.py:463 check False -> True
+killed   src/precondition_library/tasks/faults/config_renamed.py:467 check False -> True
+killed   src/precondition_library/tasks/faults/config_renamed.py:438 check False -> True
+killed   src/precondition_library/tasks/faults/config_renamed.py:442 check False -> True
+killed   src/precondition_library/tasks/faults/config_renamed.py:471 check False -> True
+survived src/precondition_library/tasks/faults/config_renamed.py:475 check False -> True
+killed   src/precondition_library/tasks/faults/config_renamed.py:461 check 0 -> 1
+killed   src/precondition_library/tasks/faults/config_renamed.py:461 check 0 -> -1
+survived src/precondition_library/tasks/faults/config_renamed.py:459 check 0 -> 1
+survived src/precondition_library/tasks/faults/config_renamed.py:459 check 0 -> -1
+{"selection": ["tests/test_checkers_against_gold.py", "tests/test_non_destructive_invariants.py", "tests/test_sandbox_diverged.py", "tests/test_sandbox_dirty_tree.py", "tests/test_sandbox_lockfile_conflict.py", "tests/test_sandbox_submodule_moved.py", "tests/test_sandbox_branch_renamed.py", "tests/test_lockfile_intent.py", "tests/test_lockfile_states.py", "tests/test_dirty_tree_intent.py", "tests/test_branch_renamed_intent.py", "tests/test_config_renamed_intent.py", "tests/test_gold_sweep.py", "tests/test_heldout_states.py", "tests/test_grader_properties.py"], "baseline_seconds": 88.7, "mutants": 171, "killed": 133, "survived": 38, "timeout": 0, "message_only": 30, "score": 0.9432624113475178}
+exit 0

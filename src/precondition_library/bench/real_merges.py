@@ -1061,6 +1061,74 @@ def text(report: StageReport) -> str:
     return "\n".join(lines) + "\n"
 
 
+# --- the observed states, recorded after a run (ADR-0052) -------------------------------------
+
+
+class ObservedState(BaseModel):
+    """One case's state as `StateFingerprint.observe` reads it, rebuilt from the manifest."""
+
+    index: int
+    state: StateFingerprint
+    control_matches: bool
+    """The registered control's decision on the rebuilt state equals the one the run recorded:
+    the control is deterministic and reads nothing but the state, so a mismatch means the
+    state did not rebuild as it was."""
+
+
+def observe_states(stage: Path) -> list[ObservedState]:
+    """Rebuild every case of a finished stage and record its observed state in `states.jsonl`.
+
+    A run records what each dispatcher fired, not the state it fired on, so a control added
+    later (the library-scoped one, an LLM judge) could only be measured by mining again. Each
+    row is appended as its case is observed, and cases already written are skipped, so a
+    stopped run resumes. One repository's history is fetched at a time and removed after.
+    """
+    manifest = Manifest.model_validate_json((stage / "manifest.json").read_text("utf-8"))
+    recorded = {
+        row.index: row
+        for row in (
+            Decisions.model_validate_json(line)
+            for line in (stage / "decisions.jsonl").read_text("utf-8").splitlines()
+            if line.strip()
+        )
+    }
+    out = stage / "states.jsonl"
+    written = (
+        [ObservedState.model_validate_json(line) for line in out.read_text("utf-8").splitlines()]
+        if out.exists()
+        else []
+    )
+    done = {row.index for row in written}
+    repositories = {repository.repo: repository for repository in manifest.repositories}
+    classifier = control_classifier()
+    with out.open("a", encoding="utf-8") as rows:
+        for repo in dict.fromkeys(case.repo for case in manifest.cases):
+            todo = [c for c in manifest.cases if c.repo == repo and c.index not in done]
+            if not todo:
+                continue
+            repository = repositories[repo]
+            cache = fetch_real_host(host(repo, repository.tip))
+            try:
+                for case in todo:
+                    box = build_state(case, cache, repository.default_branch)
+                    try:
+                        state = StateFingerprint.observe(box)
+                    finally:
+                        box.destroy()
+                    control = classifier.decide(INTENT, state)
+                    row = ObservedState(
+                        index=case.index,
+                        state=state,
+                        control_matches=tuple(control) == tuple(recorded[case.index].control),
+                    )
+                    written.append(row)
+                    rows.write(row.model_dump_json() + "\n")
+                    rows.flush()
+            finally:
+                shutil.rmtree(cache, ignore_errors=True)
+    return written
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m precondition_library.bench.real_merges")
     parser.add_argument("--stage", choices=("A", "B"), default="A")
@@ -1074,7 +1142,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--out", type=Path, default=None, help="default: results/real-merges-<today>/stage-<x>"
     )
+    parser.add_argument(
+        "--observe-states",
+        type=Path,
+        default=None,
+        metavar="STAGE_DIR",
+        help="rebuild a finished stage's cases and record each observed state (states.jsonl)",
+    )
     args = parser.parse_args(argv)
+    if args.observe_states is not None:
+        observed = observe_states(args.observe_states)
+        mismatched = sum(not row.control_matches for row in observed)
+        print(f"{len(observed)} states recorded; control differs on {mismatched}")
+        return 1 if mismatched else 0
     if args.relabel_pilot is not None:
         out = args.out or args.relabel_pilot / "amendment-1-exploratory"
         print(confirmatory_text(relabel_pilot(args.relabel_pilot, out)), end="")

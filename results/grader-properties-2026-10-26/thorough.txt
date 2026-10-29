@@ -1,0 +1,21 @@
+..                                                                       [100%]
+============================ Hypothesis Statistics =============================
+tests/test_grader_properties.py::test_dirty_tree_gold_passes_and_discarding_the_work_fails:
+  - during generate phase (622.57 seconds):
+    - Typical runtimes: ~ 3-2454 ms, of which ~ 2-21 ms in data generation
+    - 300 passing, 0 failing, and 639 invalid test cases
+    - Events:
+      * 6.60%, Retried draw from builds(lambda d, n: _join(root, *d, n), ListStrategy(text(characters(max_codepoint=591, categories=('Lt', 'Nl', 'Nd', 'Lm', 'No', 'Lo', 'Lu', 'Ll'), include_characters=" $'`&;()#!~-_.,=+@%"), min_size=1, max_size=8).filter(_segment_ok), min_size=0, max_size=4), text(characters(max_codepoint=591, categories=('Lt', 'Nl', 'Nd', 'Lm', 'No', 'Lo', 'Lu', 'Ll'), include_characters=" $'`&;()#!~-_.,=+@%"), min_size=1, max_size=8).filter(_segment_ok)).filter(not_yet_in_unique_list) to satisfy filter
+      * 5.22%, Retried draw from text(characters(max_codepoint=591, categories=('Lt', 'Nl', 'Nd', 'Lm', 'No', 'Lo', 'Lu', 'Ll'), include_characters=" $'`&;()#!~-_.,=+@%"), min_size=1, max_size=8).filter(_segment_ok) to satisfy filter
+      * 3.62%, gave up because: Aborted test because unable to satisfy builds(lambda d, n: _join(root, *d, n), ListStrategy(text(characters(max_codepoint=591, categories=('Lt', 'Nl', 'Nd', 'Lm', 'No', 'Lo', 'Lu', 'Ll'), include_characters=" $'`&;()#!~-_.,=+@%"), min_size=1, max_size=8).filter(_segment_ok), min_size=0, max_size=4), text(characters(max_codepoint=591, categories=('Lt', 'Nl', 'Nd', 'Lm', 'No', 'Lo', 'Lu', 'Ll'), include_characters=" $'`&;()#!~-_.,=+@%"), min_size=1, max_size=8).filter(_segment_ok)).filter(not_yet_in_unique_list)
+      * 0.43%, Retried draw from text(characters(max_codepoint=591, categories=('Lt', 'Nl', 'Nd', 'Lm', 'No', 'Lo', 'Lu', 'Ll'), include_characters=" $'`&;()#!~-_.,=+@%"), min_size=1, max_size=8).filter(_segment_ok).filter(lambda s: s.casefold() not in {'docs', 'notes'}) to satisfy filter
+  - Stopped because settings.max_examples=300
+tests/test_grader_properties.py::test_lockfile_gold_passes_and_taking_upstream_whole_fails:
+  - during generate phase (653.16 seconds):
+    - Typical runtimes: ~ 7-2975 ms, of which ~ 0-10 ms in data generation
+    - 300 passing, 0 failing, and 19 invalid test cases
+    - Events:
+      * 9.09%, Retried draw from sampled_from(['=======', '======= heading', '<<<<<<<<', '<<<<<<', '<<<<<<<x', '>>>>>>>>>', '>>>>>>>-', '||||||| ', '||||||', '|||||||x', '# <<<<<<< not at the start']).filter(lambda line: not re.match(lock._MARKER_PATTERN, line)) to satisfy filter
+      * 1.57%, Retried draw from text(characters(max_codepoint=591, categories=('Lt', 'Nl', 'Nd', 'Lm', 'No', 'Lo', 'Lu', 'Ll'), include_characters=" $'`&;()#!~-_.,=+@%"), min_size=1, max_size=8).filter(_segment_ok) to satisfy filter
+  - Stopped because settings.max_examples=300
+exit 0

@@ -168,6 +168,17 @@ def recorded_state_intact(sandbox: Sandbox, *, surface: Sequence[str] | None = N
             ),
         )
     changed = run_git(("diff", "--name-only", "-z", base, "HEAD"), cwd=sandbox.work, check=False)
+    if changed.returncode != 0:
+        # A diff that fails prints nothing, and nothing would read as "nothing outside the
+        # surface": the clause passed a repository whose base it could no longer read
+        # (found by mutation testing, #299).
+        return GroundTruth(
+            ok=False,
+            detail=(
+                f"the committed diff against the recorded base {base[:12]} could not be read: "
+                f"{changed.stderr.strip() or f'git exited {changed.returncode}'}"
+            ),
+        )
     # NUL-separated and unquoted: a path may contain a space (#263), and without `-z` git
     # prints a non-ASCII name escaped and quoted, so `vendor/abhängigkeiten.lock` read as
     # `"vendor/abh\303\244ngigkeiten.lock"` and a change inside the surface was refused as

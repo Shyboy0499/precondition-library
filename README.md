@@ -381,7 +381,10 @@ resolve.
 about episodes. An LLM state judge (#295) has not been run, and the external oracles of #297 (the
 ecosystem's lock-file tools, the project's own tests) are not built. Every figure here was
 recomputed by a script that does not use this project's code. For 55 of the cases, the labels were
-re-derived from git and all agree. A pilot stage on 44 merges came first
+re-derived from git and all agree. Afterwards, and exploratory because the data had been seen, a
+state-reading control given arm 3's scope was right on clean merges as often as arm 3, but fired
+on every conflict where two of three libraries mostly declined
+([library-scoped control](results/real-merges-2026-10-26/stage-B/library-control-exploratory/README.md)). A pilot stage on 44 merges came first
 ([stage A](results/real-merges-2026-10-26/stage-A/README.md)). It motivated the amendment, so it
 tests nothing.
 

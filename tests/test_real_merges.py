@@ -17,6 +17,7 @@ from __future__ import annotations
 import itertools
 import os
 import re
+import shutil
 import subprocess
 from collections import Counter
 from pathlib import Path
@@ -483,3 +484,91 @@ def test_the_lock_files_are_the_registered_ones() -> None:
 def test_the_libraries_are_committed() -> None:
     for path in rm.LIBRARIES:
         assert (preregistration.REPOSITORY / path / "build.json").is_file(), path
+
+
+# --- recording a finished stage's observed states ---------------------------------------------
+
+
+class _StubControl:
+    """Fires `keep_local` on a state that would conflict, nothing otherwise: a function of the
+    observed state alone, as the registered control is."""
+
+    def decide(self, intent: object, state: object) -> tuple[str | None, float]:
+        return ("keep_local", 1.0) if state.sync_would_conflict else (None, 1.0)  # type: ignore[attr-defined]
+
+
+def _finished_stage(
+    history: dict[str, object], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, list[int]]:
+    """A stage directory as a run leaves it, whose fetches copy the fixture's cache."""
+    cases = [c.model_copy(update={"index": i}) for i, c in enumerate(history["cases"])]  # type: ignore[arg-type]
+    summary = history["summary"]
+    assert isinstance(summary, rm.Repository)
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    manifest = rm.Manifest(stage="B", repositories=[summary], cases=cases, exclusions=[])
+    (stage / "manifest.json").write_text(manifest.model_dump_json(), encoding="utf-8")
+    control = _StubControl()
+    rows = [
+        rm.Decisions(
+            index=c.index,
+            rule=None,
+            arm3=[],
+            arm2=[],
+            control=("keep_local", 1.0) if c.kind == "positive" else (None, 1.0),
+        )
+        for c in cases
+    ]
+    (stage / "decisions.jsonl").write_text(
+        "".join(r.model_dump_json() + "\n" for r in rows), encoding="utf-8"
+    )
+    fetched: list[int] = []
+
+    def fetch(host: object) -> Path:
+        fetched.append(1)
+        copy = tmp_path / f"cache-{len(fetched)}.git"
+        shutil.copytree(history["cache"], copy)  # type: ignore[arg-type]
+        return copy
+
+    monkeypatch.setattr(rm, "fetch_real_host", fetch)
+    monkeypatch.setattr(rm, "control_classifier", lambda: control)
+    return stage, fetched
+
+
+def test_every_case_is_rebuilt_and_its_state_recorded(
+    history: dict[str, object], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stage, fetched = _finished_stage(history, tmp_path, monkeypatch)
+    observed = rm.observe_states(stage)
+    cases = history["cases"]
+    assert isinstance(cases, list)
+    assert [row.index for row in observed] == list(range(len(cases)))
+    assert all(row.control_matches for row in observed), "each state rebuilt as it was"
+    for row, case in zip(observed, cases, strict=True):
+        assert row.state.sync_would_conflict == (case.kind == "positive")
+    lines = (stage / "states.jsonl").read_text(encoding="utf-8").splitlines()
+    assert [rm.ObservedState.model_validate_json(line) for line in lines] == observed
+    assert fetched == [1], "one fetch for the one repository"
+
+
+def test_a_state_that_rebuilds_differently_is_flagged(
+    history: dict[str, object], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stage, _ = _finished_stage(history, tmp_path, monkeypatch)
+    rows = (stage / "decisions.jsonl").read_text(encoding="utf-8").splitlines()
+    first = rm.Decisions.model_validate_json(rows[0])
+    rows[0] = first.model_copy(update={"control": ("take_upstream", 0.5)}).model_dump_json()
+    (stage / "decisions.jsonl").write_text("\n".join(rows) + "\n", encoding="utf-8")
+    observed = rm.observe_states(stage)
+    assert [row.control_matches for row in observed][0] is False
+    assert all(row.control_matches for row in observed[1:])
+
+
+def test_recording_resumes_without_fetching_again(
+    history: dict[str, object], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stage, fetched = _finished_stage(history, tmp_path, monkeypatch)
+    first = rm.observe_states(stage)
+    again = rm.observe_states(stage)
+    assert again == first and fetched == [1], "nothing left to rebuild, nothing fetched"
+    assert len((stage / "states.jsonl").read_text(encoding="utf-8").splitlines()) == len(first)

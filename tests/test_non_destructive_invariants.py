@@ -21,7 +21,7 @@ import pytest
 from precondition_library.sandbox import run_git
 from precondition_library.tasks.faults import FAULTS
 from precondition_library.tasks.faults.lockfile_conflict import lock_path_for_seed
-from precondition_library.tasks.invariants import recorded_state_intact
+from precondition_library.tasks.invariants import RECORDED_REFS_AT_START, recorded_state_intact
 
 FAULT = "diverged"
 SEED = 0
@@ -142,3 +142,48 @@ def test_a_change_inside_a_surface_git_would_quote_is_inside_it(make_sandbox, se
     assert verdict.ok, verdict.detail
     outside = recorded_state_intact(box, surface=())
     assert not outside.ok and path in outside.detail, "the raw name is what is reported"
+
+
+# --- clauses mutation testing found unexercised (#299) ---------------------------------
+
+
+def test_a_hand_built_sandbox_without_a_snapshot_is_not_a_violation(make_sandbox) -> None:
+    """No snapshot is a caller's shortcut, not a lost state."""
+    box = make_sandbox(SEED, [FAULT])
+    box.recorded.pop(RECORDED_REFS_AT_START)
+
+    verdict = recorded_state_intact(box, surface=("anything",))
+
+    assert verdict.ok, verdict.detail
+    assert "no ref snapshot" in verdict.detail
+
+
+def test_a_surface_without_a_recorded_base_is_refused(make_sandbox) -> None:
+    box = make_sandbox(SEED, [FAULT])
+    box.recorded.pop("base")
+
+    verdict = recorded_state_intact(box, surface=FAULTS[FAULT].change_surface_for_seed(SEED))
+
+    assert not verdict.ok
+    assert "no pre-injection base was recorded" in verdict.detail
+
+
+def test_a_base_the_diff_cannot_read_is_refused(make_sandbox) -> None:
+    """A failed diff prints nothing; it must not read as nothing outside the surface."""
+    box = make_sandbox(SEED, [FAULT])
+    box.recorded["base"] = "0" * 40
+
+    verdict = recorded_state_intact(box, surface=FAULTS[FAULT].change_surface_for_seed(SEED))
+
+    assert not verdict.ok
+    assert "could not be read" in verdict.detail, verdict.detail
+
+
+def test_a_malformed_snapshot_line_is_skipped_not_read_as_a_ref(make_sandbox) -> None:
+    """A line with a name and no object is ignored, so it cannot name a missing object."""
+    box = make_sandbox(SEED, [FAULT])
+    box.recorded[RECORDED_REFS_AT_START] += "\nwork refs/heads/half-written\nwork \n"
+
+    verdict = recorded_state_intact(box)
+
+    assert verdict.ok, verdict.detail

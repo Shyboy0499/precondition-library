@@ -246,3 +246,18 @@ def test_any_one_conflict_marker_left_anywhere_is_still_refused(marker: str, mak
     result = SPEC.check(box)
     assert not result.ok
     assert "conflict markers" in result.detail and marker in result.detail
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_deleting_the_lock_file_to_end_the_conflict_fails_check(seed: int, make_sandbox) -> None:
+    """`git rm` the conflicted file: upstream is contained and no marker remains, and the file
+    every dependency lived in is gone. Mutation testing found no test reached this clause."""
+    box = make_sandbox(seed, ["lockfile_conflict"])
+    _start_conflicted_merge(box)
+    run_git(("rm", "-q", "-f", "--", LOCK_PATH), cwd=box.work)
+    _commit_resolution(box, "merge: drop the file that conflicted")
+
+    assert _upstream_contained(box)
+    result = SPEC.check(box)
+    assert not result.ok
+    assert "is missing after the sync" in result.detail, result.detail

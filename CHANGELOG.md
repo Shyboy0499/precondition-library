@@ -12,6 +12,20 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **A library-scoped state-reading control, and stage B's states recorded (ADR-0052,
+  exploratory).** `StateClassifier.decide_library` may fire any intent's resolution, as arm 3 may.
+  `real_merges --observe-states` rebuilt all 274 stage-B states, each checked against the run's
+  recorded control decision (274 of 274 agree). On those states the library-scoped control is right
+  on clean merges as often as arm 3, but fires on every conflict, where two of three libraries
+  mostly decline. Refusal is what separates them. Exploratory: the data had been seen.
+- **The graders are mutation-tested, and their properties tested on generated states (#299).**
+  `bench.grader_mutation` made 171 mutants of every grader. 133 were killed, and 30 only change a
+  verdict's message. Of the 8 that could change a verdict, 5 named failure clauses no test
+  exercised, in `config_renamed` and `submodule_moved`. Each now has a test that kills it, and the
+  other 3 are equivalent. An earlier partial run found that `recorded_state_intact` accepted a diff
+  it could not read; it now refuses one. Hypothesis properties check the `lockfile_conflict` and
+  `dirty_tree` graders on 300 generated states each, none failing. The runner writes each result
+  as it finishes and resumes a stopped run.
 - **Study 2 is pre-registered (ADR-0053, #307).** It covers refusal over a population of 20
   builds, in two admission configurations of 10, on real merges from repositories never used
   before. Its primary hypothesis gives the state-reading control the same refusal evidence as the

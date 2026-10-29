@@ -336,3 +336,58 @@ def test_a_file_name_holding_the_separator_is_not_misread_as_tracked() -> None:
         }
     )
     assert INTENT.correct_variant(odd).id == "migrate_local"
+
+
+# --- clauses mutation testing found unexercised (#299) -----------------------------------------
+
+
+def _edit(box, relative: str, change) -> None:
+    path = box.work / relative
+    path.write_text(change(path.read_text(encoding="utf-8")), encoding="utf-8")
+
+
+def _resolved(state: str):
+    box = build_sandbox(SEED_FOR[state], ["config_renamed"])
+    replay(_gold(STATE_VARIANT[state]), box)
+    assert SPEC.check(box).ok, "the gold resolution passes before anything is broken"
+    return box
+
+
+def test_the_new_key_set_to_another_value_fails() -> None:
+    box = _resolved("stale_key")
+    try:
+        target, new = box.recorded["config-target"], box.recorded["config-new"]
+        _edit(
+            box,
+            target,
+            lambda text: re.sub(
+                rf"(?m)^(\s*{re.escape(new)}\s*=\s*)(.*)$", r"\g<1>\g<2>-changed", text
+            ),
+        )
+        verdict = SPEC.check(box)
+    finally:
+        box.destroy()
+    assert not verdict.ok
+    assert "not the value it must keep" in verdict.detail, verdict.detail
+
+
+def test_another_setting_changed_in_the_target_fails() -> None:
+    box = _resolved("stale_key")
+    try:
+        _edit(box, box.recorded["config-target"], lambda text: text + "unrelated_setting = 1\n")
+        verdict = SPEC.check(box)
+    finally:
+        box.destroy()
+    assert not verdict.ok
+    assert "other settings in" in verdict.detail, verdict.detail
+
+
+def test_editing_the_already_current_settings_in_a_local_override_state_fails() -> None:
+    box = _resolved("local_override")
+    try:
+        _edit(box, SETTINGS_FILE, lambda text: text + "# a stray edit\n")
+        verdict = SPEC.check(box)
+    finally:
+        box.destroy()
+    assert not verdict.ok
+    assert "it was already current" in verdict.detail, verdict.detail

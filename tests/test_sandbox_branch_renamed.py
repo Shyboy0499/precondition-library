@@ -181,3 +181,22 @@ def test_destroy_is_idempotent(make_sandbox) -> None:
     box.destroy()
     assert not root.exists()
     box.destroy()
+
+
+@pytest.mark.parametrize("key", ["remote", "merge"])
+def test_a_branch_tracking_half_an_upstream_fails(key: str, make_sandbox) -> None:
+    """A correct retrack, then one of the two tracking keys unset: the branch tracks nothing.
+
+    Mutation testing found no test that set one key without the other.
+    """
+    box = make_sandbox(SEED_FOR["plain"], ["branch_renamed"])
+    new_name = renamed_branch_for_seed(SEED_FOR["plain"])
+    _retrack(box, new_name)
+    _git(box, "merge", "-q", "--ff-only", f"upstream/{new_name}")
+    assert SPEC.check(box).ok, "the resolution passes before a key is removed"
+
+    _git(box, "config", "--unset", f"branch.{OLD_BRANCH}.{key}")
+
+    result = SPEC.check(box)
+    assert not result.ok
+    assert "does not track any upstream branch" in result.detail, result.detail

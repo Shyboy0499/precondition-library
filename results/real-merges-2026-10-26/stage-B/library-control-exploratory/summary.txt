@@ -1,0 +1,13 @@
+The library-scoped control on stage B (exploratory, ADR-0052)
+  cases 274; library-scoped control fires {'merge': 270, 'rebase': 2, 'take_upstream': 1}
+  library-scoped control: clean 110/112 right, conflicted 0/161 right
+  registered control: clean 0/0 right, conflicted 1/160 right
+  results/replicates-2026-10-05/run-11/library-two-sided: arm 3 62/150 wrong; control at 273/274 coverage, 163/273 wrong
+    H2 with this control: +0.184 [-0.014, +0.416], McNemar b/c 3/26
+    H3 with this control: +0.775 [+0.615, +0.896], McNemar b/c 124/0
+  results/replicates-2026-10-05/run-12/library-two-sided: arm 3 10/122 wrong; control at 273/274 coverage, 163/273 wrong
+    H2 with this control: +0.515 [+0.381, +0.668], McNemar b/c 2/1
+    H3 with this control: +0.944 [+0.860, +0.990], McNemar b/c 151/0
+  results/replicates-2026-10-05/run-13/library-two-sided: arm 3 132/244 wrong; control at 273/274 coverage, 163/273 wrong
+    H2 with this control: +0.056 [+0.018, +0.111], McNemar b/c 2/1
+    H3 with this control: +0.181 [+0.053, +0.345], McNemar b/c 29/0

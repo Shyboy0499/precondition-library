@@ -25,6 +25,8 @@ dev = [
     "matplotlib>=3.9",
     "pytest-xdist>=3.6",
     "scikit-learn>=1.5",
+    # Property tests of the graders (#299): generated paths and file contents, not seeds.
+    "hypothesis>=6.100",
 ]
 # Arm 2's optional embedding scorer (#104). A separate extra rather than a core
 # dependency: the shipped seam is lexical (ADR-0003), so an install that never fills

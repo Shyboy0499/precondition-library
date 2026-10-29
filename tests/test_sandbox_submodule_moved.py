@@ -360,3 +360,30 @@ def test_the_selector_is_not_written_into_the_clone(make_sandbox) -> None:
         != 0
     ), "the submodule path is harness bookkeeping and must not be in the clone (#161)"
     assert box.recorded[RECORDED_SUBMODULE_PATH] == SUBMODULE_PATH
+
+
+# --- clauses mutation testing found unexercised (#299) -----------------------------------------
+
+
+def test_repin_fails_when_upstream_no_longer_records_the_submodule(make_sandbox, tmp_path) -> None:
+    """The repin clause compares the recorded pin with upstream's; with no upstream pin there is
+    nothing to match, and the clause must fail rather than compare against an empty string."""
+    box = make_sandbox(SEED_BY_STATE["repin"], ["submodule_moved"])
+    _repin_to_upstream(box)
+    assert SPEC.check(box).ok
+    clone = tmp_path / "upstream-clone"
+    run_git(("clone", "-q", str(box.upstream), str(clone)), cwd=tmp_path)
+    run_git(("rm", "-q", "--", SUBMODULE_PATH), cwd=clone)
+    run_git(("commit", "-q", "-m", "drop the nested library"), cwd=clone)
+    run_git(("push", "-q", "origin", "HEAD:main"), cwd=clone)
+    verdict = SPEC.check(box)
+    assert not verdict.ok
+    assert "upstream no longer records" in verdict.detail, verdict.detail
+
+
+def test_an_unknown_injected_state_fails(make_sandbox) -> None:
+    box = make_sandbox(SEED_BY_STATE["init"], ["submodule_moved"])
+    _init_submodule(box)
+    assert SPEC.check(box).ok
+    verdict = SPEC.check(replace(box, injected_state="not-a-state"))
+    assert not verdict.ok and "unknown injected state" in verdict.detail
