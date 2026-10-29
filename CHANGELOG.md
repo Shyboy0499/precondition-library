@@ -26,6 +26,10 @@ measured result, at pair level; everything before it is design and apparatus. Se
   it could not read; it now refuses one. Hypothesis properties check the `lockfile_conflict` and
   `dirty_tree` graders on 300 generated states each, none failing. The runner writes each result
   as it finishes and resumes a stopped run.
+- **Study 2 is pre-registered (ADR-0053, #307).** It covers refusal over a population of 20
+  builds, in two admission configurations of 10, on real merges from repositories never used
+  before. Its primary hypothesis gives the state-reading control the same refusal evidence as the
+  refusal-tested builds. Nothing is measured: the code comes next, and the builds need an API key.
 - **Stage B of the real-merge study (#296, ADR-0052).** 274 real lock-file merges from 11
   repositories, measured as registered. Arm 3's mismatch on real merges is 0.08-0.54 by library,
   so "arm 3 rarely mis-fires" is falsified there (§9 rule 2). H1-H3 hold as registered, but H2's
