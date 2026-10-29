@@ -46,10 +46,11 @@ Submitting is an act of authorship, so it has to be done by you, from your own a
 ## Before you submit, check
 
 - [ ] **Your name and affiliation** in `author.tex`. arXiv lists authors by name, not by username.
-- [ ] **The citations.** Each recent preprint was found by searching for its arXiv identifier, but
-      these entries have no author list yet. Open each abstract page and complete the entry:
-      `ding2026rightfamily` (2606.10388), `jaber2026auto` (2607.04542) and `wix2026gating`
-      (2608.01050). The others were checked against their published versions.
+- [ ] **The citations.** Each was checked against its source's listing, except that arXiv
+      itself cannot be reached from the session that wrote this, so the three 2026 preprints'
+      authors come from their HTML versions and citing papers. `ding2026rightfamily` changed title
+      and authors between versions: the entry cites v4, "Right Family, Wrong Skill". Glance at each
+      abstract page once.
 - [ ] **The disclosure.** arXiv does not allow AI tools as authors, and it requires significant use
       of generative AI to be reported. The "Use of generative AI" section does that. Keep it.
 - [ ] **The commit.** The report cites commit `b1ddfd1`. If you change results before submitting,
