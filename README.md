@@ -277,6 +277,9 @@ src/precondition_library/
     └── report.py    the ablation table and the two demo figures
 ```
 
+[`paper/`](paper/SUBMITTING.md) holds a technical report of the results so far, written for
+arXiv, with how to build and submit it.
+
 `library/` holds every compiled program, admitted or not, and **is committed on
 purpose** — it is the artifact, and the point of committing it is that a program
 demoted after it mis-fired stays visible in the history.

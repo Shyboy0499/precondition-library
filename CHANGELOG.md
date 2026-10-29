@@ -12,6 +12,11 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **A technical report (`paper/`).** An 8-page LaTeX report covers the synthetic primary result,
+  study 1 on real lock-file merges (including the falsified claim and the control's scope flaw),
+  the grader checks, and study 2's registered design. It discloses the use of generative AI.
+  `paper/SUBMITTING.md` says how to build it, what only the author can do to submit it, and what to
+  check first. The author block is kept out of the repository.
 - **A library-scoped state-reading control, and stage B's states recorded (ADR-0052,
   exploratory).** `StateClassifier.decide_library` may fire any intent's resolution, as arm 3 may.
   `real_merges --observe-states` rebuilt all 274 stage-B states, each checked against the run's

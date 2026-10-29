@@ -26,3 +26,13 @@ bench/figures/
 
 # OS
 .DS_Store
+
+# The report's author block and build outputs (paper/SUBMITTING.md)
+paper/author.tex
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/*.fls
+paper/*.fdb_latexmk
+paper/main.pdf
+paper/arxiv-upload.tar.gz
