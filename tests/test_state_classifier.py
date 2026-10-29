@@ -128,3 +128,38 @@ def test_fit_on_the_build_the_library_control_fires_what_the_states_own_intent_a
             assert variant in accepted, (seed, fault, variant, accepted)
             fired += 1
     assert fired == 2 * len(HELD_OUT_FAULTS)
+
+
+def test_control_r_declines_the_refusal_states_it_was_given() -> None:
+    """Study 2's Control-R (refusal-population §6), on real conflicts nothing can express: ten of
+    stage B's recorded states, which the plain fit fires on, are declined once given as refusals,
+    and every training state keeps its rule's label."""
+    from precondition_library.bench.library_control import _read
+
+    stage = Path(__file__).resolve().parents[1] / "results/real-merges-2026-10-26/stage-B"
+    manifest, labels, _, observed = _read(stage)
+    kinds = {case.index: case.kind for case in manifest.cases}
+    inexpressible = {
+        lab.index for lab in labels if kinds[lab.index] == "positive" and not lab.acceptable
+    }
+    refusals = [o.state for o in observed if o.index in inexpressible][:10]
+    assert len(refusals) == 10
+
+    intents = _measured_intents(HELD_OUT_FAULTS)
+    training = sc._states(HELD_OUT_FAULTS, {f: admit_seeds(f) for f in HELD_OUT_FAULTS})
+    states = [state for _, _, state in training]
+    trained = [sc.features(state) for state in states]
+    assert not any(sc.features(r) in trained for r in refusals), (
+        "no refusal repeats a training state"
+    )
+    plain = sc.StateClassifier(intents).fit(states)
+    assert all(plain.decide_library(state)[0] is not None for state in refusals)
+
+    control_r = sc.StateClassifier(intents).fit(states, refusals=refusals)
+    for state in refusals:
+        assert control_r.decide_library(state) == (None, 0.0)
+    for state in states:
+        for intent in intents:
+            variant = intent.correct_variant(state)
+            expected = variant.id if variant is not None else None
+            assert control_r.decide(intent, state)[0] == expected, "the training rules still hold"

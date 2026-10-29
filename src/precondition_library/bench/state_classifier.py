@@ -98,17 +98,32 @@ class StateClassifier:
         self._trees: dict[str, object] = {}
         self._vectoriser: object | None = None
 
-    def fit(self, states: Sequence[StateFingerprint]) -> StateClassifier:
+    def fit(
+        self,
+        states: Sequence[StateFingerprint],
+        refusals: Sequence[StateFingerprint] = (),
+    ) -> StateClassifier:
+        """Fit each intent's tree on `states`, labelled by the intent's rule, and on `refusals`,
+        labelled "fire nothing" for every intent whatever the rule says.
+
+        `refusals` is study 2's Control-R (`docs/preregistration/refusal-population.md` §6):
+        the real conflicts no resolution can express that configuration R's admission is
+        given, so the state reader gets the same refusal evidence. A refusal whose features
+        equal a training state's cannot be told apart from it: the tree predicts whichever label
+        those identical rows hold more often.
+        """
         from sklearn.feature_extraction import DictVectorizer
         from sklearn.tree import DecisionTreeClassifier
 
+        everything = [*states, *refusals]
         vectoriser = DictVectorizer(sparse=False)
-        matrix = vectoriser.fit_transform([features(state) for state in states])
+        matrix = vectoriser.fit_transform([features(state) for state in everything])
         for intent in self.intents:
             labels = []
             for state in states:
                 variant = intent.correct_variant(state)
                 labels.append(variant.id if variant is not None else NONE)
+            labels.extend(NONE for _ in refusals)
             self._trees[intent.name] = DecisionTreeClassifier(random_state=0).fit(matrix, labels)
         self._vectoriser = vectoriser
         return self

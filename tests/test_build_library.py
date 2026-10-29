@@ -196,3 +196,23 @@ def test_a_frozen_run_refuses_a_library_with_nothing_to_dispatch(tmp_path: Path)
             provider=FakeProvider(),
             frozen_library=tmp_path / "absent",
         )
+
+
+def test_a_build_order_is_recorded_in_the_manifest(tmp_path: Path) -> None:
+    """Study 2's build index (refusal-population §5) is written to build.json, and a build
+    without one records `null`."""
+    import json
+
+    for order, name in ((4, "ordered"), (None, "registered")):
+        provider = FakeProvider(*_resolves_discard(), _completion(_reply_text(_discard_program())))
+        build_library(
+            faults=["diverged"],
+            root=tmp_path / name,
+            ledger=tmp_path / f"{name}.jsonl",
+            provider=provider,
+            model="fake",
+            seeds=(DISCARD_SEED,),
+            order=order,
+        )
+        manifest = json.loads((tmp_path / name / "build.json").read_text(encoding="utf-8"))
+        assert manifest["order"] == order
