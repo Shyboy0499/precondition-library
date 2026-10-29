@@ -123,6 +123,23 @@ class StateClassifier:
         predicted = str(tree.classes_[best])  # type: ignore[attr-defined]
         return (None if predicted == NONE else predicted), float(probabilities[best])
 
+    def decide_library(self, state: StateFingerprint) -> tuple[str | None, float]:
+        """The resolution the library-scoped control fires on `state`, whatever was asked.
+
+        `decide` reads one intent's tree, so it can fire only that intent's resolutions; arm 3
+        searches the whole library and fires any program whose preconditions hold. Comparing the
+        two compares what each may fire as much as how each decides (ADR-0052). This control
+        reads every intent's tree and fires the most probable resolution any of them predicts,
+        ties going to the intent listed first; it abstains, with score 0, when every tree
+        predicts none.
+        """
+        best: tuple[str | None, float] = (None, 0.0)
+        for intent in self.intents:
+            variant, probability = self.decide(intent, state)
+            if variant is not None and probability > best[1]:
+                best = (variant, probability)
+        return best
+
 
 class ClassifierReport(BaseModel):
     block: str

@@ -88,6 +88,9 @@ preconditions on conflicts.
   repositories, mined in the registered order and stopped once the target was reached
   (`paritytech/substrate` and `ruffle-rs/ruffle` were not mined).
 - Anything about the LLM state judge (#295), which did not run (no key).
+- **Afterwards, exploratory:** a control given arm 3's scope is right on clean merges as often as
+  arm 3, but fires on every conflict. Refusal is what separates them
+  ([`library-control-exploratory/`](library-control-exploratory/README.md)).
 
 ## The cases
 

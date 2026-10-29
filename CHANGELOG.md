@@ -12,6 +12,12 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **A library-scoped state-reading control, and stage B's states recorded (ADR-0052,
+  exploratory).** `StateClassifier.decide_library` may fire any intent's resolution, as arm 3 may.
+  `real_merges --observe-states` rebuilt all 274 stage-B states, each checked against the run's
+  recorded control decision (274 of 274 agree). On those states the library-scoped control is right
+  on clean merges as often as arm 3, but fires on every conflict, where two of three libraries
+  mostly decline. Refusal is what separates them. Exploratory: the data had been seen.
 - **The graders are mutation-tested, and their properties tested on generated states (#299).**
   `bench.grader_mutation` made 171 mutants of every grader. 133 were killed, and 30 only change a
   verdict's message. Of the 8 that could change a verdict, 5 named failure clauses no test

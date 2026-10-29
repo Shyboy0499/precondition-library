@@ -78,3 +78,53 @@ def test_the_committed_figures(block: str, fires: int, wrong: int) -> None:
     assert point["mismatch"]["numerator"] == wrong == len(report["wrong_fires"])
     assert report["training_states"] == 56
     assert (RESULTS / "trees.txt").is_file()
+
+
+# --- the library-scoped control (ADR-0052) ----------------------------------------------------
+
+
+def test_the_library_control_fires_the_most_probable_resolution_of_any_intent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    intents = _measured_intents(HELD_OUT_FAULTS)
+    classifier = sc.StateClassifier(intents)
+    first, second, third = intents[0].name, intents[1].name, intents[2].name
+    said = {first: (None, 0.9), second: ("take_upstream", 0.6), third: ("merge", 0.8)}
+    monkeypatch.setattr(
+        classifier, "decide", lambda intent, state: said.get(intent.name, (None, 1.0))
+    )
+    state = StateFingerprint.model_validate(_empty_state())
+    assert classifier.decide_library(state) == ("merge", 0.8)
+
+    said[second] = ("take_upstream", 0.8)  # a tie goes to the intent listed first
+    assert classifier.decide_library(state) == ("take_upstream", 0.8)
+
+    said.clear()
+    assert classifier.decide_library(state) == (None, 0.0), "every tree predicts none"
+
+
+def test_fit_on_the_build_the_library_control_fires_what_the_states_own_intent_accepts() -> None:
+    """On unseen eval states, whatever intent it borrows from, its fire is one the rule of the
+    injected fault's own intent accepts, and it fires nothing on a fault-free state."""
+    from precondition_library.tasks.faults import build_sandbox
+
+    intents = _measured_intents(HELD_OUT_FAULTS)
+    by_fault = {intent.fault: intent for intent in intents}
+    training = sc._states(HELD_OUT_FAULTS, {f: admit_seeds(f) for f in HELD_OUT_FAULTS})
+    classifier = sc.StateClassifier(intents).fit([state for _, _, state in training])
+    fired = 0
+    for seed in (2000, 2001):
+        for fault in (None, *HELD_OUT_FAULTS):
+            box = build_sandbox(seed, [] if fault is None else [fault])
+            try:
+                state = StateFingerprint.observe(box)
+            finally:
+                box.destroy()
+            variant, _ = classifier.decide_library(state)
+            if fault is None:
+                assert variant is None, f"seed {seed}: fired {variant} on a fault-free state"
+                continue
+            accepted = set(by_fault[fault].acceptable_variants(state))
+            assert variant in accepted, (seed, fault, variant, accepted)
+            fired += 1
+    assert fired == 2 * len(HELD_OUT_FAULTS)

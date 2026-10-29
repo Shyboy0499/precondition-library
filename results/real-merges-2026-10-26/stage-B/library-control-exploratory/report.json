@@ -1,0 +1,209 @@
+{
+  "cases": 274,
+  "control_clean": {
+    "fires": 112,
+    "right": 110
+  },
+  "control_conflicted": {
+    "fires": 161,
+    "right": 0
+  },
+  "registered_clean": {
+    "fires": 0,
+    "right": 0
+  },
+  "registered_conflicted": {
+    "fires": 160,
+    "right": 1
+  },
+  "fired": {
+    "merge": 270,
+    "rebase": 2,
+    "take_upstream": 1
+  },
+  "replicates": [
+    {
+      "library": "results/replicates-2026-10-05/run-11/library-two-sided",
+      "arm3": {
+        "threshold": null,
+        "coverage": {
+          "numerator": 150,
+          "denominator": 274
+        },
+        "mismatch": {
+          "numerator": 62,
+          "denominator": 150
+        },
+        "mismatch_interval": {
+          "low": 0.3376520916836594,
+          "high": 0.4933429057682652
+        }
+      },
+      "control_matched": {
+        "threshold": 1.0,
+        "coverage": {
+          "numerator": 273,
+          "denominator": 274
+        },
+        "mismatch": {
+          "numerator": 163,
+          "denominator": 273
+        },
+        "mismatch_interval": {
+          "low": 0.537928192208898,
+          "high": 0.6535170241169722
+        }
+      },
+      "h2": {
+        "statistic": 0.18373626373626373,
+        "interval": {
+          "low": -0.013691883372734415,
+          "high": 0.41560398794342684
+        },
+        "discordant": [
+          3,
+          26
+        ],
+        "p_value": 0.000015236437320709229,
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "h3": {
+        "statistic": 0.775,
+        "interval": {
+          "low": 0.6153846153846154,
+          "high": 0.8955223880597015
+        },
+        "discordant": [
+          124,
+          0
+        ],
+        "p_value": 9.4039548065783e-38,
+        "resamples": 2000,
+        "skipped": 0
+      }
+    },
+    {
+      "library": "results/replicates-2026-10-05/run-12/library-two-sided",
+      "arm3": {
+        "threshold": null,
+        "coverage": {
+          "numerator": 122,
+          "denominator": 274
+        },
+        "mismatch": {
+          "numerator": 10,
+          "denominator": 122
+        },
+        "mismatch_interval": {
+          "low": 0.045130355407972465,
+          "high": 0.1443268670049657
+        }
+      },
+      "control_matched": {
+        "threshold": 1.0,
+        "coverage": {
+          "numerator": 273,
+          "denominator": 274
+        },
+        "mismatch": {
+          "numerator": 163,
+          "denominator": 273
+        },
+        "mismatch_interval": {
+          "low": 0.537928192208898,
+          "high": 0.6535170241169722
+        }
+      },
+      "h2": {
+        "statistic": 0.515102383954843,
+        "interval": {
+          "low": 0.3811807331628303,
+          "high": 0.6681451612903226
+        },
+        "discordant": [
+          2,
+          1
+        ],
+        "p_value": 1.0,
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "h3": {
+        "statistic": 0.94375,
+        "interval": {
+          "low": 0.8596491228070176,
+          "high": 0.9903381642512077
+        },
+        "discordant": [
+          151,
+          0
+        ],
+        "p_value": 7.006492321624085e-46,
+        "resamples": 2000,
+        "skipped": 0
+      }
+    },
+    {
+      "library": "results/replicates-2026-10-05/run-13/library-two-sided",
+      "arm3": {
+        "threshold": null,
+        "coverage": {
+          "numerator": 244,
+          "denominator": 274
+        },
+        "mismatch": {
+          "numerator": 132,
+          "denominator": 244
+        },
+        "mismatch_interval": {
+          "low": 0.47830462350081776,
+          "high": 0.6023920795546823
+        }
+      },
+      "control_matched": {
+        "threshold": 1.0,
+        "coverage": {
+          "numerator": 273,
+          "denominator": 274
+        },
+        "mismatch": {
+          "numerator": 163,
+          "denominator": 273
+        },
+        "mismatch_interval": {
+          "low": 0.537928192208898,
+          "high": 0.6535170241169722
+        }
+      },
+      "h2": {
+        "statistic": 0.05608599051221996,
+        "interval": {
+          "low": 0.017967700723949265,
+          "high": 0.11063314711359407
+        },
+        "discordant": [
+          2,
+          1
+        ],
+        "p_value": 1.0,
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "h3": {
+        "statistic": 0.18125,
+        "interval": {
+          "low": 0.05263157894736842,
+          "high": 0.34502923976608185
+        },
+        "discordant": [
+          29,
+          0
+        ],
+        "p_value": 3.725290298461914e-9,
+        "resamples": 2000,
+        "skipped": 0
+      }
+    }
+  ]
+}
