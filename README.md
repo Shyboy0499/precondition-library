@@ -10,6 +10,23 @@
   <img src="https://img.shields.io/badge/python-3.12%2B-3776AB?style=flat" alt="Python 3.12+">
 </p>
 
+## In plain language
+
+This library tests two ways to decide whether a saved fix should run: inspect
+the repository, or choose the fix whose description sounds most similar. On
+states made by this project, the checks chose the wrong fix 0 times in 563
+attempts; three text methods were wrong on 71–90% of their attempts. On new
+generated names, paths and history shapes, the checks chose wrongly 42 of the 581
+times they acted, all involving a file name with a space or a non-ASCII character.
+On 274 real lock-file merges, graded by what each maintainer committed, the checks
+were wrong on 8–54% of their attempts, depending on the library. That is still less
+often than text similarity when both acted equally often, but mostly because the
+checks chose a plain merge where there was no conflict; on the real conflicts,
+every method was almost always wrong. This does not yet measure complete task runs.
+Read [Results graded outside this project](#results-graded-outside-this-project),
+[Primary result](#primary-result), [Held-out states](#held-out-states),
+[Running it](#running-it), and the [issue tracker](https://github.com/Shyboy0499/precondition-library/issues).
+
 > **Status: measured on real merges, where the near-zero mis-fire rate does not hold.**
 > Results here come in two tiers, named by what grades them (#300).
 >
