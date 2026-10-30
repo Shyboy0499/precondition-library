@@ -324,16 +324,30 @@ def test_an_interrupted_run_resumes_without_mining_again(run: dict[str, object])
 
 
 def test_the_controls_differ_only_by_the_refusal_states(run: dict[str, object]) -> None:
-    out, refusal_dir, _, _ = run["args"]  # type: ignore[misc]
+    """Control-R declines R's states and agrees with Control-0 on training states R does not
+    repeat. The training states here are a fault-free and a diverged state, which no lock-file
+    conflict can share features with on any git."""
+    _, refusal_dir, _, _ = run["args"]  # type: ignore[misc]
     _, refusal_states = rs.load(refusal_dir)
-    training = _fault_states()
+    training = [s for s in _fault_states() if not s.sync_would_conflict]
+    assert len(training) == 2
+    assert study.collisions(training, refusal_states) == 0
     zero, refusal = study.controls(training, refusal_states)
     for state in refusal_states:
         assert refusal.decide_library(state) == (None, 0.0), "Control-R declines R's states"
     for state in training:
         assert zero.decide_library(state) == refusal.decide_library(state)
-    assert study.collisions(training, refusal_states) == 0
-    assert study.collisions(training, training) == len(training)
+
+
+def test_a_refusal_state_that_repeats_a_training_state_takes_the_majority_label() -> None:
+    """ADR-0054 item 6: Control-R cannot tell apart identical feature rows, so it predicts the
+    label they hold more often. One training lock-file state against two copies of it as
+    refusals: "fire nothing" wins, and both copies count as collisions."""
+    (lock,) = [s for s in _fault_states() if s.sync_would_conflict]
+    zero, refusal = study.controls([lock], [lock, lock])
+    assert zero.decide_library(lock)[0] is not None, "Control-0 fires on its training state"
+    assert refusal.decide_library(lock)[0] is None
+    assert study.collisions([lock], [lock, lock]) == 2
 
 
 def test_evaluation_refuses_without_the_registration(
