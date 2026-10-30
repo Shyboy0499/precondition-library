@@ -47,8 +47,10 @@ configured; `tests/test_build_library.py` exercises it with a scripted provider.
 from __future__ import annotations
 
 import json
+import random
 import shutil
 import tempfile
+from collections.abc import Sequence
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -106,6 +108,7 @@ def build_library(
     seeds: tuple[int, ...] | None = None,
     positive_only_root: Path | None = None,
     resume: bool = False,
+    order: int | None = None,
 ) -> BuildReport:
     """Solve, compile and gate every `(fault, seed)` into one frozen library at `root`.
 
@@ -126,6 +129,9 @@ def build_library(
 
     `resume` continues a build that was interrupted, from the episodes its progress file
     committed; see the module docstring.
+
+    `order` permutes the admit-set plan with that seed (`permuted_plan`), study 2's build
+    index; `None` keeps the registered order. A resumed build must pass the same `order`.
     """
     _require_measurable(faults)
     progress = progress_path(ledger)
@@ -151,6 +157,8 @@ def build_library(
     built: list[BuiltProgram] = []
     ungated: list[BuiltProgram] = []
     plan = _episode_plan(faults, seeds)
+    if order is not None:
+        plan = permuted_plan(plan, faults, order)
     for fault in faults:
         run_seeds: list[int] = []
         for group in plan[fault]:
@@ -210,10 +218,10 @@ def build_library(
                 if admitted_here:
                     break
 
-    _write_manifest(root, AdmissionGate.TWO_SIDED, faults, plan)
+    _write_manifest(root, AdmissionGate.TWO_SIDED, faults, plan, order)
     second: BuildReport | None = None
     if positive_only_root is not None:
-        _write_manifest(positive_only_root, AdmissionGate.POSITIVE_ONLY, faults, plan)
+        _write_manifest(positive_only_root, AdmissionGate.POSITIVE_ONLY, faults, plan, order)
         second = BuildReport(
             root=positive_only_root,
             ledger=ledger,
@@ -331,8 +339,32 @@ def _episode_plan(faults: list[str], seeds: tuple[int, ...] | None) -> dict[str,
     }
 
 
+def permuted_plan(
+    plan: dict[str, list[_Group]], faults: Sequence[str], order: int
+) -> dict[str, list[_Group]]:
+    """Study 2's build `order` (`docs/preregistration/refusal-population.md` §5).
+
+    Within each fault, in `faults`' order, the seeds of each resolution are shuffled, and then
+    the resolutions themselves, all from one `random.Random(order)`. A resolution's seeds are
+    still tried in their new order until one admits a program (ADR-0032).
+    """
+    rng = random.Random(order)
+    permuted: dict[str, list[_Group]] = {}
+    for fault in faults:
+        groups = [list(group) for group in plan[fault]]
+        for group in groups:
+            rng.shuffle(group)
+        rng.shuffle(groups)
+        permuted[fault] = groups
+    return permuted
+
+
 def _write_manifest(
-    root: Path, gate: AdmissionGate, faults: list[str], plan: dict[str, list[_Group]]
+    root: Path,
+    gate: AdmissionGate,
+    faults: list[str],
+    plan: dict[str, list[_Group]],
+    order: int | None = None,
 ) -> None:
     """`build.json`: the gate, and per fault the registered plan -- each resolution with
     the seeds it may try, in order, or `null` for a seed run with the fault's own request.
@@ -344,5 +376,10 @@ def _write_manifest(
         ]
         for fault in faults
     }
-    manifest = {"admission_gate": gate.value, "faults": faults, "episodes": episodes}
+    manifest = {
+        "admission_gate": gate.value,
+        "faults": faults,
+        "episodes": episodes,
+        "order": order,
+    }
     (root / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")

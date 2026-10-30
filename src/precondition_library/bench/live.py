@@ -139,6 +139,9 @@ class LivePlan(BaseModel):
     replicates: int = 1
     """Whole-run replicates of every episode stage; the registered plan is
     `DEFAULT_REPLICATES` (spec §7 item 2), the smoke default one."""
+    build_order: int | None = None
+    """Study 2's build index: the admit-set plan permuted with this seed
+    (`build_library.permuted_plan`). `None` keeps the registered order."""
 
 
 class BuildEpisode(BaseModel):
@@ -325,6 +328,7 @@ def run_live(
         seeds=plan.build_seeds,
         positive_only_root=positive_only,
         resume=resume,
+        order=plan.build_order,
     )
     if build.positive_only is None:
         raise RuntimeError("the build returned no positive-only library; the factorial needs it")
@@ -595,6 +599,14 @@ def _parser() -> argparse.ArgumentParser:
         "Claim 2); skips the frozen benchmark and the online arms",
     )
     parser.add_argument(
+        "--build-order",
+        type=int,
+        default=None,
+        metavar="N",
+        help="permute the admit-set plan with seed N (study 2's build index); default: the "
+        "registered order",
+    )
+    parser.add_argument(
         "--replicates",
         type=int,
         default=1,
@@ -615,6 +627,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         online=not (args.skip_online or args.primary_only),
         episodes=not args.primary_only,
         replicates=args.replicates,
+        build_order=args.build_order,
     )
     api_key = (
         read_api_key_env(args.api_key_env)
