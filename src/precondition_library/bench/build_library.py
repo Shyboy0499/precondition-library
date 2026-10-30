@@ -52,10 +52,11 @@ import shutil
 import tempfile
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Protocol
 
 from pydantic import BaseModel
 
-from ..agents.compile import AdmissionGate, admit
+from ..agents.compile import AdmissionGate, RefusalStates, admit
 from ..library import Library
 from ..program import Program, ProgramStatus
 from ..provider import Provider
@@ -79,6 +80,12 @@ class BuiltProgram(BaseModel):
     admitted: bool
     resolution: str | None = None
     """The resolution the admit-set episode asked for (ADR-0032); `None` for `seeds`."""
+
+
+class FrozenRefusals(RefusalStates, Protocol):
+    """A refusal set as a build is given it: its states, and the SHA-256 that names it."""
+
+    digest: str
 
 
 class BuildReport(BaseModel):
@@ -109,6 +116,7 @@ def build_library(
     positive_only_root: Path | None = None,
     resume: bool = False,
     order: int | None = None,
+    refusals: FrozenRefusals | None = None,
 ) -> BuildReport:
     """Solve, compile and gate every `(fault, seed)` into one frozen library at `root`.
 
@@ -132,6 +140,11 @@ def build_library(
 
     `order` permutes the admit-set plan with that seed (`permuted_plan`), study 2's build
     index; `None` keeps the registered order. A resumed build must pass the same `order`.
+
+    `refusals` makes this a configuration R build (refusal-population §5): every episode's
+    compile must also refuse the refusal set's states to enter the two-sided library, and
+    `build.json` records the frozen set's SHA-256 (`refusals.digest`), so a library says which
+    set gated it. The positive-only library, which has no negative side, is gated as before.
     """
     _require_measurable(faults)
     progress = progress_path(ledger)
@@ -189,6 +202,7 @@ def build_library(
                         model=model,
                         transcript_log=transcripts_path(ledger),
                         request=request,
+                        refusals=refusals,
                     )
                     append(ledger, record)
                     admitted_here = False
@@ -218,7 +232,14 @@ def build_library(
                 if admitted_here:
                     break
 
-    _write_manifest(root, AdmissionGate.TWO_SIDED, faults, plan, order)
+    _write_manifest(
+        root,
+        AdmissionGate.TWO_SIDED,
+        faults,
+        plan,
+        order,
+        refusals.digest if refusals is not None else None,
+    )
     second: BuildReport | None = None
     if positive_only_root is not None:
         _write_manifest(positive_only_root, AdmissionGate.POSITIVE_ONLY, faults, plan, order)
@@ -365,10 +386,12 @@ def _write_manifest(
     faults: list[str],
     plan: dict[str, list[_Group]],
     order: int | None = None,
+    refusal_digest: str | None = None,
 ) -> None:
     """`build.json`: the gate, and per fault the registered plan -- each resolution with
     the seeds it may try, in order, or `null` for a seed run with the fault's own request.
-    Which of them ran is in the build ledger."""
+    Which of them ran is in the build ledger. `refusal_set` is the SHA-256 of the refusal set
+    that also gated the library, or `null`."""
     episodes = {
         fault: [
             {"resolution": group[0][1], "seeds": [seed for seed, _, _ in group]}
@@ -381,5 +404,6 @@ def _write_manifest(
         "faults": faults,
         "episodes": episodes,
         "order": order,
+        "refusal_set": refusal_digest,
     }
     (root / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")

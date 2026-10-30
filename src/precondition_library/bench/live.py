@@ -85,6 +85,7 @@ from .build_library import build_library
 from .coverage import operating_point, sweep
 from .ledger import Arm, EpisodeOutcome, read
 from .library_pairs import library_pair_outcomes
+from .preregistration import require
 from .primary import primary_report, summary, write_primary_report
 from .report import (
     ARM2_CANDIDATES_PER_DECISION,
@@ -112,6 +113,10 @@ FROZEN_ARMS: tuple[Arm, ...] = (
     Arm.GOLD,
 )
 """Every arm a frozen run supports; arm 1b learns, so it is online only (ADR-0017)."""
+STUDY_2 = "refusal-population"
+"""Study 2's registration (`bench.refusal_set.REGISTRATION`), which a build with a build order
+or a refusal set is bound by."""
+
 FACTORIAL_ARMS: tuple[Arm, ...] = (Arm.SEMANTIC, Arm.PRECONDITION)
 ONLINE_ARMS: tuple[Arm, ...] = (Arm.REACT, Arm.REACT_MEMORY)
 SMOKE_EPISODE_SEEDS: tuple[int, ...] = EVAL_SEEDS[:4]
@@ -142,6 +147,10 @@ class LivePlan(BaseModel):
     build_order: int | None = None
     """Study 2's build index: the admit-set plan permuted with this seed
     (`build_library.permuted_plan`). `None` keeps the registered order."""
+    refusal_set: str | None = None
+    """Study 2's configuration R: the frozen refusal set's directory
+    (`bench.refusal_set`), whose states every admitted program must also refuse. `None` is
+    configuration 0, or any run outside study 2."""
 
 
 class BuildEpisode(BaseModel):
@@ -308,6 +317,15 @@ def run_live(
     """
     if plan.replicates < 1:
         raise ValueError(f"replicates must be at least 1, got {plan.replicates}")
+    if plan.build_order is not None or plan.refusal_set is not None:
+        # A study 2 build: its registration binds the code before anything is written.
+        require(STUDY_2)
+    # Imported here: `refusal_set` reads `real_merges`, which imports `rescore`, which
+    # imports this module. Loaded before anything is written, so a bad set leaves no run.
+    from .refusal_set import RefusalStates
+
+    refusals = RefusalStates(Path(plan.refusal_set)) if plan.refusal_set is not None else None
+
     recorded = {"model": model, "plan": plan.model_dump(mode="json")}
     if resume:
         _check_resumable(out, recorded)
@@ -329,6 +347,7 @@ def run_live(
         positive_only_root=positive_only,
         resume=resume,
         order=plan.build_order,
+        refusals=refusals,
     )
     if build.positive_only is None:
         raise RuntimeError("the build returned no positive-only library; the factorial needs it")
@@ -607,6 +626,13 @@ def _parser() -> argparse.ArgumentParser:
         "registered order",
     )
     parser.add_argument(
+        "--refusal-set",
+        default=None,
+        metavar="DIR",
+        help="study 2's configuration R: admit only programs whose preconditions also refuse "
+        "every state of the frozen refusal set in DIR",
+    )
+    parser.add_argument(
         "--replicates",
         type=int,
         default=1,
@@ -628,6 +654,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         episodes=not args.primary_only,
         replicates=args.replicates,
         build_order=args.build_order,
+        refusal_set=args.refusal_set,
     )
     api_key = (
         read_api_key_env(args.api_key_env)
