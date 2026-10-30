@@ -12,6 +12,14 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **Study 2's runner and refusal-tested admission (refusal-population §4 step 2, ADR-0054).**
+  Under configuration R, `admit` also requires a program's preconditions to refuse every state of
+  the frozen refusal set. That check runs last, and a refusal there gets the one revision, shown
+  the states it fired on. `bench.refusal_set` mines and freezes R and rebuilds its states for the
+  gate, checking each against its frozen copy. `bench.live --refusal-set` builds configuration R,
+  and `build.json` records the set's SHA-256. `bench.refusal_study` mines the evaluation list with
+  §3.4's stopping rule and cap, decides every case with every library and both controls, and
+  writes §7's figures and §9's decisions. Nothing has been mined or built.
 - **A technical report (`paper/`).** An 8-page LaTeX report covers the synthetic primary result,
   study 1 on real lock-file merges (including the falsified claim and the control's scope flaw),
   the grader checks, and study 2's registered design. It discloses the use of generative AI.

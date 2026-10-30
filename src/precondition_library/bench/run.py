@@ -45,7 +45,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from ..agents.compile import AdmissionGate, admit, compile_program, observe_negative_state
+from ..agents.compile import (
+    AdmissionGate,
+    RefusalStates,
+    admit,
+    compile_program,
+    observe_negative_state,
+)
 from ..agents.dispatch import (
     Dispatch,
     dispatch_intent_key,
@@ -439,6 +445,7 @@ def run_episode(
     replicate: int = 1,
     transcript_log: Path | None = None,
     request: str | None = None,
+    refusals: RefusalStates | None = None,
 ) -> EpisodeRecord:
     """One episode: build a sandbox, let the arm act, check ground truth, record.
 
@@ -473,6 +480,10 @@ def run_episode(
     `request` replaces the fault's own request text. Only the build's admit set passes
     one, to ask for the resolution an episode covers (ADR-0032); every measured run
     leaves it `None`, so the request is the fault's phrasing for the seed.
+
+    `refusals` is study 2's refusal set, passed only by a configuration R build: the
+    episode's compile must also refuse every state in it to be admitted (refusal-population
+    §5).
     """
     intent = _intent_for(fault_type)
     fault = FAULTS[fault_type]
@@ -560,7 +571,15 @@ def run_episode(
         box.destroy()
         if not frozen:
             _learn_from_solution(
-                result, signature, box, library, fault_type, seed, occurrence, accounting
+                result,
+                signature,
+                box,
+                library,
+                fault_type,
+                seed,
+                occurrence,
+                accounting,
+                refusals=refusals,
             )
             _record_mismatch(result, library, correct, acceptable, fault_type, seed, occurrence)
 
@@ -959,8 +978,13 @@ def _learn_from_solution(
     seed: int,
     occurrence: int,
     accounting: _AccountingProvider,
+    *,
+    refusals: RefusalStates | None = None,
 ) -> None:
     """Compile the episode's solution into a candidate and gate it, in place.
+
+    `refusals`, when given, is study 2's refusal set, which `admit` checks after its two
+    sides (configuration R); a state it fired on is shown to the revision with the rest.
 
     The decision to compile is read from the result, not from the arm: an episode
     that solved a task and owns a library is compilable, a replay is not (no model
@@ -1053,11 +1077,19 @@ def _learn_from_solution(
             update={"id": _program_id(fault_type, occurrence, compiled.program.id)}
         )
         fired_on: list[tuple[tuple[str, ...], int]] = []
-        admitted, gate_reason = admit(program, fault_type, seeds=[seed], fired_on=fired_on)
+        refused_on: list[StateFingerprint] = []
+        admitted, gate_reason = admit(
+            program,
+            fault_type,
+            seeds=[seed],
+            fired_on=fired_on,
+            refusals=refusals,
+            refused_on=refused_on,
+        )
         if admitted:
             break
         revision = (program, gate_reason)
-        refused_states = [observe_negative_state(*fired) for fired in fired_on]
+        refused_states = [observe_negative_state(*fired) for fired in fired_on] + refused_on
         first_refused = first_refused or revision
     assert program is not None  # the loop returns before here when no program parsed
     try:

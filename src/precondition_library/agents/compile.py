@@ -34,7 +34,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import Any, Protocol
 
 import yaml
 from pydantic import BaseModel, Field, ValidationError
@@ -296,6 +296,28 @@ class AdmissionGate(StrEnum):
     POSITIVE_ONLY = "positive_only"
 
 
+RefusalCheck = tuple[list[tuple[str, StateFingerprint]], str | None]
+"""Each refusal state a program's preconditions accepted, named and as observed, and why
+they could not be evaluated, or `None`."""
+
+
+class RefusalStates(Protocol):
+    """Real states a program's preconditions must refuse: study 2's configuration R.
+
+    `docs/preregistration/refusal-population.md` §5: under configuration R a program is
+    admitted only if its preconditions refuse every state in the refusal set R, real conflicts
+    no resolution can express. `bench.refusal_set.RefusalStates` is the implementation; admission
+    names only this shape, so `agents` imports nothing from `bench`.
+    """
+
+    def __len__(self) -> int: ...
+
+    def accepted_by(self, program: Program) -> RefusalCheck:
+        """Each state whose preconditions all hold, named and as observed, or why they could
+        not be evaluated (a placeholder outside the vocabulary, a refused probe)."""
+        ...
+
+
 class CompileResult(BaseModel):
     """The outcome of one compile, including its cost whether or not it parsed.
 
@@ -487,8 +509,17 @@ def admit(
     seeds: list[int],
     gate: AdmissionGate = AdmissionGate.TWO_SIDED,
     fired_on: list[tuple[tuple[str, ...], int]] | None = None,
+    refusals: RefusalStates | None = None,
+    refused_on: list[StateFingerprint] | None = None,
 ) -> tuple[bool, str]:
     """Two-sided admission gate, or its positive-only counterpart (`gate`).
+
+    `refusals` adds study 2's refusal side (configuration R, refusal-population §5): after
+    everything below has passed, the preconditions must also refuse every state in the
+    refusal set. It runs last because its states are real repositories, the most expensive to
+    build. A program that fires on one is refused, and `refused_on` receives each such state as
+    observed, so a revision can be shown them as it is shown `fired_on`'s (ADR-0030). It is
+    the two-sided gate's extension only: the positive-only gate has no negative side to extend.
 
     `fired_on`, when given, receives the `(faults, seed)` of the negative state whose
     acceptance refused the program -- `()` faults for the clean sandbox -- so a revision
@@ -569,6 +600,8 @@ def admit(
         return False, refusal
 
     if gate is AdmissionGate.POSITIVE_ONLY:
+        if refusals is not None:
+            raise ValueError("the refusal side extends the two-sided gate's negative side only")
         return True, (
             f"admitted under the positive-only gate: postconditions held on {len(seeds)} "
             f"freshly faulted sandbox(es); the negative sandboxes were not checked (the "
@@ -609,6 +642,24 @@ def admit(
             f"Fired on: {', '.join(fired_where)}"
         )
 
+    refusal_note = ""
+    if refusals is not None:
+        accepted, error = refusals.accepted_by(program)
+        if error is not None:
+            return False, f"refusal side failed: preconditions could not be evaluated ({error})"
+        if accepted:
+            if refused_on is not None:
+                refused_on.extend(state for _, state in accepted)
+            return False, (
+                f"refusal side failed: preconditions accepted {len(accepted)} of "
+                f"{len(refusals)} real conflicts no resolution can express (refusal-tested "
+                f"admission, configuration R): {', '.join(name for name, _ in accepted)}"
+            )
+        refusal_note = (
+            f", and refused all {len(refusals)} real conflicts no resolution can express "
+            f"(configuration R)"
+        )
+
     overlap_note = (
         f" (firing correctly on {len(unrelated.fired_correctly)} overlap state(s) its intent "
         f"labels {program.variant!r})"
@@ -620,7 +671,7 @@ def admit(
         f"preconditions rejected 1 clean sandbox, {unrelated.checked} unrelated "
         f"state(s){overlap_note} and {siblings.checked} same-intent state(s), and fired on "
         f"{fired} of {total} sampled states ({fired / total:.0%}), within the "
-        f"{BREADTH_CAP:.0%} breadth cap"
+        f"{BREADTH_CAP:.0%} breadth cap{refusal_note}"
     )
 
 
