@@ -208,4 +208,37 @@ or refuted.
 
 ## Amendments
 
-None.
+### Amendment 1 (2026-10-31, before any data)
+
+**What prompted it: a power analysis of this registration, not data.** No case of R or of the
+evaluation set had been mined, and no build had run, when this amendment was written. It follows
+a Monte Carlo power analysis of §7–§9 run through the registered statistics code
+(`paper/analysis/power.py`, its output `paper/analysis/power.json`, and section 7 of the technical
+report in `paper/`). Where this amendment and the sections above disagree, this amendment governs.
+The original text is left in place, so the change can be read against it.
+
+**Why.** H4's interval is too wide for its margin. With ten builds per configuration, the builds'
+own spread in their right-fire rate on clean cases makes the 95% interval of
+`right(R) − right(0)` about ±0.09 wide at a calm build process, and about ±0.19 at study 1's build
+spread, from builds alone. So with no true difference H4 held in only about half the simulated
+studies at the calmer spread, and in a fifth to a quarter at study 1's. Under §9 rule 5, a
+supported H3 with a failed H4 would then usually be reported as "refusal-tested admission buys
+declining at the cost of clean merges" when there is no cost. A failed non-inferiority test shows
+only that non-inferiority was not shown.
+
+**A1. H4 has three outcomes** (replacing §7's sentence on H4 and §9 rule 5's reading of it):
+
+- **holds:** the interval's lower bound is above −0.10, as §7 says;
+- **cost:** the interval's upper bound is below −0.10, so configuration R loses more than the
+  margin on clean cases;
+- **not shown:** otherwise. The interval is reported, and no cost is claimed.
+
+**A2. Rule 5, restated.** H3 and H4 are reported together. Only if H3 is supported **and** H4's
+outcome is *cost* is the finding that refusal-tested admission buys declining at the cost of
+clean merges. If H3 is supported and H4 is *not shown*, the finding is that refusal-tested admission
+lowers the fire rate, and its effect on clean merges is not resolved at this size.
+
+**A3. Nothing else changes.** The hypotheses, cases, builds, controls, statistics, margin,
+intervals and rules 1–4 are as registered. The power analysis also confirms §8's statements about
+H1 and H3. Its false-positive rates, 2.8–3.8% against a nominal 2.5%, are reported, and the
+registered rule is not adjusted for them.

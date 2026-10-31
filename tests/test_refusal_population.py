@@ -110,7 +110,37 @@ def test_the_rules_in_order_and_the_cost_outcome() -> None:
     ]
     assert outcomes["3 H1"].startswith("supported")
     assert outcomes["4 H2"] == "not supported"
-    assert "at the cost of clean merges" in outcomes["5 H3 and H4"]
+    assert outcomes["5 H3 and H4"].startswith("H3 supported, H4 not shown"), (
+        "an interval across the margin is not a cost (Amendment 1)"
+    )
+
+
+@pytest.mark.parametrize(
+    ("low", "outcome"),
+    [(-0.05, "holds"), (-0.2, "not shown"), (-0.35, "cost")],
+)
+def test_h4_has_three_outcomes(low: float, outcome: str) -> None:
+    """Amendment 1: above the margin it holds, wholly below it is a cost, otherwise not shown.
+    `_hypotheses` gives each interval a width of 0.2, so these are [-0.05, 0.15], [-0.2, 0.0]
+    and [-0.35, -0.15]."""
+    assert rp.h4_outcome(_hypotheses(0.2, 0.2, 0.3, low).h4) == outcome
+
+
+def test_only_a_cost_is_reported_as_one() -> None:
+    def rule_5(h3: float, h4: float) -> str:
+        decided = rp.decide(
+            _hypotheses(0.2, 0.2, h3, h4),
+            underpowered=False,
+            zero=[HALF],
+            refusal=[HALF],
+            cases=CASES,
+        )
+        return decided[-1].outcome
+
+    assert rule_5(0.3, -0.35).endswith("at the cost of clean merges")
+    assert "not resolved at this size" in rule_5(0.3, -0.2)
+    assert rule_5(0.3, -0.05) == "H3 supported, H4 holds"
+    assert rule_5(-0.1, -0.35) == "H3 not supported, H4 cost"
 
 
 def test_a_configuration_that_never_fires_is_not_tested() -> None:
