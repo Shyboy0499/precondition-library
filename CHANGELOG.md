@@ -12,6 +12,19 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **The technical report goes deeper (`paper/`).** It now covers:
+  - the measurement design, with formal definitions and a proof that the uninformed channel's
+    text-control AUC of 0.5 is an identity;
+  - the grader mutation results, by operator and survivor by survivor;
+  - a Monte Carlo power analysis of study 2 through its registered rules
+    (`paper/analysis/power.py`), checked against `bench.refusal_population`;
+  - a comparison with executability gating and retrieval-risk work, including the hybrid arm's
+    cascade results.
+
+  The power analysis confirms H1's stated power (0.28 detected with probability 0.80 at study
+  1's build spread) and finds that H4, the non-inferiority guard, holds only about half the time
+  with no true cost. The report proposes an amendment for the owner to decide before any of
+  study 2's data exists. Figures are drawn from committed files by `paper/analysis/figures.py`.
 - **Study 2's runner and refusal-tested admission (refusal-population §4 step 2, ADR-0054).**
   Under configuration R, `admit` also requires a program's preconditions to refuse every state of
   the frozen refusal set. That check runs last, and a refusal there gets the one revision, shown
