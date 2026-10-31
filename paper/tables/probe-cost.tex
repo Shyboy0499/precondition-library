@@ -1,0 +1,13 @@
+\begin{tabular}{lccccccccc}
+\toprule
+& \multicolumn{3}{c}{library 1} & \multicolumn{3}{c}{library 2} & \multicolumn{3}{c}{library 3} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
+programs tried & checks & fires, wrong & saved & checks & fires, wrong & saved & checks & fires, wrong & saved \\
+\midrule
+every program & 74.0 & 187, 0 & 0\% & 81.0 & 187, 0 & 0\% & 77.0 & 189, 0 & 0\% \\
+lazy, most specific first & 59.5 & 187, 0 & 20\% & 64.6 & 187, 0 & 20\% & 61.5 & 189, 0 & 20\% \\
+lazy, lexical order & 52.5 & 187, 0 & 29\% & 57.5 & 187, 0 & 29\% & 54.5 & 189, 0 & 29\% \\
+lazy, reranker order & 48.6 & 187, 0 & 34\% & 50.8 & 187, 0 & 37\% & 50.2 & 189, 0 & 35\% \\
+reranker order, $k=3$ & 17.0 & 136, 0 & 77\% & 15.5 & 145, 0 & 81\% & 15.6 & 137, 0 & 80\% \\
+\bottomrule
+\end{tabular}

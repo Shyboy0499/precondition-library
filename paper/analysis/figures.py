@@ -96,7 +96,7 @@ def figure_curves(out: Path) -> None:
     axes[0].set_ylabel("mismatch (wrong / fires)")
     axes[0].legend(loc="lower right", fontsize=6.5, handlelength=2.2)
     fig.tight_layout()
-    fig.savefig(out / "curves.pdf")
+    fig.savefig(out / "curves.pdf", metadata={"CreationDate": None})
     plt.close(fig)
 
 
@@ -153,7 +153,7 @@ def figure_power(out: Path) -> None:
     right.set_ylim(-0.02, 1.02)
     right.set_xticks([-0.15, -0.10, -0.05, 0.0])
     fig.tight_layout()
-    fig.savefig(out / "power.pdf")
+    fig.savefig(out / "power.pdf", metadata={"CreationDate": None})
     plt.close(fig)
 
 
@@ -196,7 +196,7 @@ def figure_refusal(out: Path) -> None:
     axis.set_ylim(-0.02, 1.05)
     axis.legend(loc="center left", fontsize=6.5, bbox_to_anchor=(0.0, 0.6))
     fig.tight_layout()
-    fig.savefig(out / "refusal.pdf")
+    fig.savefig(out / "refusal.pdf", metadata={"CreationDate": None})
     plt.close(fig)
 
 

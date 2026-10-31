@@ -211,11 +211,15 @@ def bootstrap(study: Study, rng: np.random.Generator, resamples: int = RESAMPLES
 
 
 def supported(found: dict) -> dict:
+    """H1–H3 supported and H4 holding, as registered; and H4 finding a cost, as Amendment 1
+    defines one: the whole interval below the margin."""
     bounds = {"h1": 0.0, "h2": 0.0, "h3": 0.0, "h4": -rp.H4_MARGIN}
-    return {
+    verdicts = {
         name: found[name][1] is not None and found[name][1] > bound
         for name, bound in bounds.items()
     }
+    verdicts["h4_cost"] = found["h4"][2] is not None and found["h4"][2] < -rp.H4_MARGIN
+    return verdicts
 
 
 def _registered(study: Study) -> rp.Hypotheses:
@@ -274,7 +278,7 @@ def validate(rng: np.random.Generator, studies: int = 3) -> list[dict]:
 
 
 def power(world: World, studies: int, rng: np.random.Generator) -> dict:
-    hits = {"h1": 0, "h2": 0, "h3": 0, "h4": 0}
+    hits = {"h1": 0, "h2": 0, "h3": 0, "h4": 0, "h4_cost": 0}
     for _ in range(studies):
         for name, ok in supported(bootstrap(simulate(world, rng), rng)).items():
             hits[name] += ok

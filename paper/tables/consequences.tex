@@ -1,0 +1,11 @@
+\begin{tabular}{lcccccccccc}
+\toprule
+& \multicolumn{3}{c}{precondition, right choices} & \multicolumn{2}{c}{lexical, right} & \multicolumn{5}{c}{lexical, wrong choices} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-6}\cmidrule(lr){7-11}
+& fires & fixed & not & fires & fixed & fires & fixed & not & nothing ran & unchanged \\
+\midrule
+library 1 & 187 & 187 & 0 & 39 & 33 & 148 & 18 & 32 & 9 & 89 \\
+library 2 & 187 & 187 & 0 & 36 & 36 & 149 & 13 & 22 & 9 & 105 \\
+library 3 & 189 & 162 & 27 & 44 & 38 & 143 & 9 & 20 & 37 & 77 \\
+\bottomrule
+\end{tabular}

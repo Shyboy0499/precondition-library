@@ -16,6 +16,7 @@ It has no BibTeX step. Its figures are in `figures/`, drawn from committed resul
 ```bash
 python paper/analysis/power.py --out paper/analysis     # about two minutes
 python paper/analysis/figures.py --out paper/figures
+python paper/analysis/tables.py --out paper/tables
 ```
 
 ## Build it
@@ -53,7 +54,7 @@ Submitting is an act of authorship, so it has to be done by you, from your own a
 - **Title:** Executable Preconditions versus Text Similarity for Replaying Compiled Agent Programs:
   A Pre-registered Test on Real Lock-file Merges
 - **Primary category:** cs.SE (Software Engineering). **Cross-list:** cs.AI.
-- **Comments:** 16 pages, 3 figures, 6 tables. Code, data and pre-registrations:
+- **Comments:** 18 pages, 3 figures, 13 tables. Code, data and pre-registrations:
   https://github.com/Shyboy0499/precondition-library
 - **Abstract:** use the abstract in `main.tex`, without LaTeX markup.
 
@@ -67,9 +68,6 @@ Submitting is an act of authorship, so it has to be done by you, from your own a
       abstract page once.
 - [ ] **The disclosure.** arXiv does not allow AI tools as authors, and it requires significant use
       of generative AI to be reported. The "Use of generative AI" section does that. Keep it.
-- [ ] **Study 2's guard.** Section 7 finds that H4 holds only about half the time with no true
-      cost, and proposes an amendment. Decide whether to amend the registration before
-      submitting, and make the report say which you chose.
 - [ ] **The commit.** Before submitting, add the commit the report describes to "Data and code
       availability", so a reader can check out exactly what it reports.
 - [ ] **Optional:** archive the repository on Zenodo to get a DOI, and cite it in "Data and code

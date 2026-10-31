@@ -12,6 +12,15 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **The report gains thirteen generated tables and the repeated mutation run.**
+  `paper/analysis/tables.py` writes each table from committed per-pair, per-case and per-program
+  records, and checks each against its run's own figures. The tables cover the three settings,
+  the builds, the scorers, faults, replayed fires, repositories and check costs. Per fault, most of
+  text dispatch's wrong fires are on states that needed nothing: 318 of lexical's 440. The grader
+  mutation run, repeated on main (`results/grader-mutation-2026-10-31/`), kills 138 of 141 mutants
+  that can change a verdict (0.979). The three survivors are the three argued equivalent. The
+  report's limitations are gathered in one Scope section, and it reports study 2's Amendment 1 as
+  adopted, with its simulated effect.
 - **The technical report goes deeper (`paper/`).** It now covers:
   - the measurement design, with formal definitions and a proof that the uninformed channel's
     text-control AUC of 0.5 is an identity;
