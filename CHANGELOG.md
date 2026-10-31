@@ -21,6 +21,11 @@ measured result, at pair level; everything before it is design and apparatus. Se
   that can change a verdict (0.979). The three survivors are the three argued equivalent. The
   report's limitations are gathered in one Scope section, and it reports study 2's Amendment 1 as
   adopted, with its simulated effect.
+- **Study 2's registration is amended before any data (ADR-0055, Amendment 1).** The power
+  analysis showed that H4, the non-inferiority guard, would usually fail with no true cost, so
+  rule 5 would report a cost that is not there. H4 now has three outcomes: holds, cost (the whole
+  interval below −0.10), and not shown. Only a cost is reported as one
+  (`refusal_population.h4_outcome`). The registration's pin is updated. Nothing else changes.
 - **The technical report goes deeper (`paper/`).** It now covers:
   - the measurement design, with formal definitions and a proof that the uninformed channel's
     text-control AUC of 0.5 is an identity;
