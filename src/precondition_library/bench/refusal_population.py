@@ -186,6 +186,20 @@ def _above(estimate: Estimate, bound: float) -> bool:
     return estimate.interval is not None and estimate.interval.low > bound
 
 
+H4Outcome = Literal["holds", "cost", "not shown"]
+
+
+def h4_outcome(estimate: Estimate) -> H4Outcome:
+    """Amendment 1's three readings of H4: it holds when the interval lies above the margin, it
+    finds a cost when the interval lies wholly below it, and otherwise non-inferiority is not
+    shown, which is not a cost."""
+    if _above(estimate, -H4_MARGIN):
+        return "holds"
+    if estimate.interval is not None and estimate.interval.high < -H4_MARGIN:
+        return "cost"
+    return "not shown"
+
+
 def decide(
     hypotheses: Hypotheses,
     *,
@@ -194,7 +208,8 @@ def decide(
     refusal: Sequence[Decisions],
     cases: Sequence[Case],
 ) -> list[Decision]:
-    """§9's rules, in order. Rule 1 stops the rest; rule 2 removes a configuration's tests."""
+    """§9's rules, in order, as Amendment 1 restates rule 5. Rule 1 stops the rest; rule 2
+    removes a configuration's tests."""
     if underpowered:
         return [Decision(rule="1 power", outcome="underpowered: figures reported, nothing decided")]
     decisions = [Decision(rule="1 power", outcome="powered")]
@@ -241,13 +256,20 @@ def decide(
         decisions.append(Decision(rule="5 H3 and H4", outcome="not tested"))
     else:
         h3 = _above(hypotheses.h3, 0.0)
-        h4 = _above(hypotheses.h4, -H4_MARGIN)
-        outcome = (
-            "H3 supported, H4 fails: refusal-tested admission buys declining at the cost of "
-            "clean merges"
-            if h3 and not h4
-            else f"H3 {'supported' if h3 else 'not supported'}, H4 {'holds' if h4 else 'fails'}"
-        )
+        h4 = h4_outcome(hypotheses.h4)
+        h3_text = "H3 supported" if h3 else "H3 not supported"
+        if h3 and h4 == "cost":
+            outcome = (
+                "H3 supported, H4 cost: refusal-tested admission buys declining at the cost of "
+                "clean merges"
+            )
+        elif h3 and h4 == "not shown":
+            outcome = (
+                "H3 supported, H4 not shown: refusal-tested admission lowers the fire rate, and "
+                "its effect on clean merges is not resolved at this size"
+            )
+        else:
+            outcome = f"{h3_text}, H4 {h4}"
         decisions.append(Decision(rule="5 H3 and H4", outcome=outcome))
     return decisions
 
