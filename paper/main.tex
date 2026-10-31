@@ -40,7 +40,8 @@ between the request and each program's description. The comparison is made at ma
 since a dispatcher that never fires never mis-fires. On 400 labelled pairs per library, built by
 our own injectors for five git maintenance faults, precondition dispatch mis-fired on 0 of 563
 fires across three independently built libraries, while three local text scorers mis-fired on
-71--90\% of theirs. We show why that result is weaker than it looks: a decision tree that reads
+71--90\% of theirs; per-fault analysis shows that most text errors are fires on states that
+needed nothing. We establish what that result does and does not show: a decision tree that reads
 the state and runs no program matched it, and the request channel carries no information about
 the state by construction. We therefore pre-registered a test on states and labels we did not
 make: 274 lock-file merges from 11 public repositories, labelled by what each maintainer
@@ -52,9 +53,11 @@ could express only 1 of 161 maintainer resolutions. Exploratory analysis locates
 difference between executing checks and reading the state in \emph{refusal}. We mutation-test
 the graders behind every figure, analysing each surviving mutant, and run a Monte Carlo power
 analysis of the registered follow-up study through its own decision code. It confirms the stated
-power of the primary test, but shows that the registered non-inferiority guard holds only about
-half the time when there is no true cost, a flaw we report before any of its data exists. We
-compare the design with a deployed executability gate and a skill-retrieval risk benchmark.
+power of the primary test and shows, before any of its data exists, that the non-inferiority
+guard holds only about half the time when there is no true cost; the registration was amended
+accordingly.
+We compare the design, table by table, with a deployed executability gate and a skill-retrieval
+risk benchmark.
 \end{abstract}
 
 \section{Introduction}
@@ -78,6 +81,30 @@ than text-similarity dispatch, where a mis-fire is a program that fires, claims 
 did not?}
 \end{quote}
 
+Table~\ref{tab:settings} gives the answer this report reaches, for the same dispatchers in three
+settings: states our injectors built, states built on seeds, paths and names no build saw, and
+real merges graded by their maintainers.
+
+\begin{table}[t]
+\centering
+\caption{The same dispatchers in three settings: wrong fires over fires. Text similarity is read
+at its operating point matched to precondition dispatch. Precondition dispatch and text
+similarity are summed over the three libraries; each state reader is one fit.}
+\label{tab:settings}
+\small
+\begin{tabular}{lccc}
+\toprule
+& our states & held-out states & real merges \\
+\midrule
+precondition dispatch & 0/563 & 42/581 & 204/516 \\
+lexical similarity & 440/559 & --- & 501/516 \\
+cross-encoder similarity & 409/562 & --- & --- \\
+state reader, intent-scoped & 0/190 & 0/200 & 159/160 \\
+state reader, library-scoped (exploratory) & --- & --- & 163/273 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 Two recent works bracket the question. A deterministic executability gate deployed in a
 customer-care agent removes candidate skills whose exit conditions hold, after semantic recall
 \cite{wix2026gating}. A retrieval benchmark measures how often a ``risky sibling'' skill, one
@@ -92,16 +119,16 @@ compares them with this work in detail.
   mismatch at matched coverage with a fixed matching rule, a baseline floor for the text
   scorer, disjoint seed blocks, two-sided admission, and a proof that the uninformed request
   channel's text-control AUC of 0.5 is an identity, not a measurement.
-  \item \textbf{A result that does not transfer, and why} (Sections~\ref{sec:synthetic}
+  \item \textbf{Where the result holds and where it does not} (Sections~\ref{sec:synthetic}
   and~\ref{sec:real}): zero mis-fires on our own states, matched by a state reader; a
-  falsified claim on real merges, under a registration fixed before the data was mined, with the
-  registered control's scope flaw stated.
+  falsified claim on real merges, under a registration fixed before the data was mined; and
+  per-fault and per-repository breakdowns that locate each difference.
   \item \textbf{A validity analysis of the graders} (Section~\ref{sec:graders}): 171 mutants,
   each of the eight survivors that could change a verdict analysed, five closed by new tests and
   three argued equivalent.
   \item \textbf{A power analysis of the registered follow-up study, run through its own decision
-  code} (Section~\ref{sec:power}), which confirms its primary test and finds a flaw in its
-  non-inferiority guard before any of its data exists.
+  code} (Section~\ref{sec:power}), which confirms its primary test and led to an amendment of
+  its non-inferiority guard before any of its data exists.
   \item \textbf{A comparison with executability gating and retrieval-risk measurement}
   (Section~\ref{sec:comparison}), including our own measurement of the retrieve-then-gate
   cascade those systems use.
@@ -286,12 +313,22 @@ resolutions apart, whatever its quality.
 
 \paragraph{Setup.}
 Three replicate libraries were each built from the admit plan with a commercial LLM
-(\code{deepseek-flash}, temperature 0), admitting 13, 14 and 13 programs. Each build spent 144k--204k
-uncached input, 280k--372k cached input and 402k--539k output tokens. Each library was scored on
+(\code{deepseek-flash}, temperature 0), admitting 13, 14 and 13 programs
+(Table~\ref{tab:libraries}). Each library was scored on
 the eval block's 400 pairs, 40 per fault for five git faults plus a fault-free negative for each,
 with no model call after the build. Arm 2's floor was usable in replicates 2 and 3 (top-1
 111/240, lower bound 0.401) and not measurable in replicate 1, whose library held one lock-file
 resolution.
+
+\begin{table}[t]
+\centering
+\caption{The three builds: episodes run, programs compiled and admitted, distinct resolutions
+admitted, preconditions per admitted program, and the model calls and tokens the build spent.}
+\label{tab:libraries}
+\small
+\setlength{\tabcolsep}{4pt}
+\resizebox{\linewidth}{!}{\input{tables/libraries.tex}}
+\end{table}
 
 \begin{figure}[t]
 \centering
@@ -329,11 +366,50 @@ about five times $\delta^\ast$. The flatness of the curves in Figure~\ref{fig:cu
 identity of Section~\ref{sec:identity} at work: thresholding a score that carries no information
 about the state removes fires without making the remainder more right.
 
-\paragraph{Why this is not the result.}
+\begin{table}[t]
+\centering
+\caption{Each text scorer's baseline floor (strict top-1 on the tune block, with its Wilson lower
+bound against chance 1/3), its wrong fires at the matched point, and its difference from
+precondition dispatch.}
+\label{tab:scorers}
+\small
+\setlength{\tabcolsep}{3pt}
+\resizebox{\linewidth}{!}{\input{tables/scorers.tex}}
+\end{table}
+
+\paragraph{The three scorers.}
+Table~\ref{tab:scorers} sets the scorers side by side. A stronger scorer clears the floor by more:
+the cross-encoder's lower bounds, 0.571 and 0.508, against 0.401 and 0.340--0.405 for the other
+two. But the gap to precondition dispatch narrows by at most 0.10, from $+$0.81 to $+$0.71 in
+library 2. Ranking quality on informed requests buys little on uninformed ones, as
+Proposition~1 predicts.
+
+\begin{table}[t]
+\centering
+\caption{Fires and wrong fires by fault, summed over the three libraries, each text scorer at its
+own matched threshold. Each intent has 40 faulted and 40 fault-free pairs per library.}
+\label{tab:perfault}
+\small
+\input{tables/per-fault.tex}
+\end{table}
+
+\paragraph{Where text similarity goes wrong.}
+Table~\ref{tab:perfault} splits the errors by fault and by whether the state needed anything.
+Of lexical similarity's 440 wrong fires, 318 are on fault-free states, where every fire is wrong
+because nothing needed doing; for the cross-encoder, 283 of 409. So most of text dispatch's
+error is \emph{firing at all}, not choosing the wrong sibling. On faulted states, lexical
+similarity chose a wrong resolution on 122 of its 241 fires (51\%) and the cross-encoder on 126
+of 279 (45\%), against 67\% for a uniform guess among three resolutions: better than chance, as
+their floors say, and far from reliable. Precondition dispatch fired on no fault-free pair, and on
+every faulted pair except 37 lock-file states where no admitted program's checks held.
+
+\paragraph{What the comparison establishes.}
 Each pair's acceptable set is a rule over the observed state, and the rule is ours. The state
-reader fired on 190 of the 400 pairs, none wrongly, and on the held-out block it fired on 200,
-none wrongly, where precondition dispatch had 13, 8 and 21 mis-fires. So the table supports only
-the weaker claim that a dispatcher that reads the state beats one that does not.
+reader fired on 190 of the 400 pairs, none wrongly, and on the held-out block on 200, none
+wrongly, where precondition dispatch had 13, 8 and 21 mis-fires. So what these tables establish
+is that a dispatcher that reads the state beats one that reads the request, and that compiled
+preconditions are one such dispatcher. Whether executing checks adds anything over reading the
+state is the question Sections~\ref{sec:real} and~\ref{sec:power} take up.
 
 \paragraph{Held-out states, and a mechanism.}
 On the held-out block four sources carried: one mis-fire in 480 fires. The lock-file source, which
@@ -347,11 +423,24 @@ throws the local dependency change away. Admission passed them because no admit-
 quoting. Reading the libraries found at least 16 such probes in 10 of their 40 admitted programs.
 The failure is general: an absence check fails \emph{open} when its reading of the state breaks.
 
+\begin{table}[t]
+\centering
+\caption{What each replayed fire left, graded as an episode is: precondition dispatch's fires
+(all right choices), and lexical similarity's right and wrong choices at its matched point.}
+\label{tab:consequences}
+\small
+\setlength{\tabcolsep}{4pt}
+\input{tables/consequences.tex}
+\end{table}
+
 \paragraph{What a fire does.}
-Replaying each of arm 3's 563 fires on a fresh build of its state fixed 536. The other 27, all in
-replicate 3, came from two programs that pass their own postconditions while the fault's checker
-refuses what they leave. Arm 2's 318 fires on fault-free states changed nothing, and on a fault's
-state 147 of its 241 fires fixed it. No replay of either arm lost a recorded commit.
+A right choice is not always a right outcome, and a wrong choice is not always harm
+(Table~\ref{tab:consequences}). Replaying each of precondition dispatch's 563 fires on a fresh
+build of its state fixed 536. The other 27, all in library 3, came from two programs that pass
+their own postconditions while the fault's checker refuses what they leave. Of lexical
+similarity's 440 wrong choices, 271 left the state unchanged and 55 could not run at all, while
+74 left a wrong result; 40 happened to fix the state anyway. No replay of either dispatcher lost a
+recorded commit.
 
 \section{A pre-registered test on real lock-file merges}
 \label{sec:real}
@@ -429,10 +518,33 @@ from another intent's programs, which the registration counts as right. The regi
 reader decides with the lock-file intent's own tree, so it can never fire \code{merge}. H2
 therefore compares fires on mostly clean cases with fires on conflicted ones; wherever both
 dispatchers fired, both were wrong, and McNemar's test on joint fires has no discordant pair in
-any library. We read H2 as a flaw in the registered control's scope, not as evidence for
-executing preconditions. H1's McNemar counts, 66/3, 89/0 and 105/0 discordant pairs, show that
-its margin also comes mostly from clean merges, where arm 2's top candidate is \code{merge} on 9,
-0 and 0 of the 113.
+any library. So H2's margin measures the registered control's narrower scope rather than an
+advantage of executing preconditions; the library-scoped reader below and study 2 compare the two
+with the same scope. H1's McNemar counts, 66/3, 89/0 and 105/0 discordant pairs, show that its
+margin also comes mostly from clean merges, where arm 2's top candidate is \code{merge} on 9, 0
+and 0 of the 113.
+
+\begin{table}[t]
+\centering
+\caption{Stage B by repository: how maintainers resolved the conflicts (``upstream-like'' is
+took upstream's file or matched a line-union resolution), and precondition dispatch's fires on
+conflicts and right fires on clean merges, per library (1 / 2 / 3).}
+\label{tab:repositories}
+\small
+\setlength{\tabcolsep}{3pt}
+\resizebox{\linewidth}{!}{\input{tables/repositories.tex}}
+\end{table}
+
+\paragraph{By repository.}
+Table~\ref{tab:repositories} shows that both the maintainers and the libraries differ by
+repository. phpMyAdmin regenerates its lock file on 38 of 43 conflicts; wasmer's maintainers do
+something other than regenerate or take a side on 19 of 30. Library 3's 131 fires on conflicts
+are concentrated in the repositories with the most conflicts: all 43 of phpMyAdmin's, 27 of
+wasmer's, 17 of composer's. Library 2 fired on conflicts only 9 times, in four repositories.
+Library 1's misses on clean merges fall in three repositories, jupyterlab, nushell and wasmer. The
+differences between libraries are therefore systematic, not noise spread evenly over cases: each
+library's programs encode a different reading of when a merge is safe, and the repositories
+expose different parts of it. This is why study 2 treats builds as a population.
 
 \begin{figure}[t]
 \centering
@@ -465,29 +577,35 @@ intervals fall within 0.01 of the registered ones. A second script re-fetched fi
 
 Every figure depends on graders written in this project: each fault's \code{check}, and the
 \code{recorded\_state\_intact} family that refuses a resolution destroying recorded work. We
-mutated them one small change at a time and ran the 15 test files that grade, taking 88.7\,s per
-clean run, with \code{-x}. A mutant every test still passes \emph{survived}: no test exercises the
+mutated them one small change at a time and ran the 15 test files that grade with \code{-x}, on
+171 mutants. The full run was made twice: once to find the gaps, and again after tests closing
+them were merged. A mutant every test still passes \emph{survived}: no test exercises the
 clause it changed. Table~\ref{tab:mutation} gives the outcomes by operator. A mutant inside a
 verdict's message (an f-string or a \code{detail=} argument) can change what a verdict says but
 never whether it passes, and is reported apart; that classification is syntactic.
 
 \begin{table}[t]
 \centering
-\caption{Mutants of the graders by operator. The score is killed over mutants that can change a
-verdict: 133 of 141, 0.943.}
+\caption{Mutants of the graders by operator, in the first full run and in the repeated run after
+the gaps were closed. The score is killed over the 141 mutants that can change a verdict: 0.943
+in the first run, 0.979 in the second, and 138 of 138 once the three equivalent survivors are set
+aside.}
 \label{tab:mutation}
 \small
-\begin{tabular}{lrrrr}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lrrrrrr}
 \toprule
-operator & mutants & killed & survived & message only \\
+& & & \multicolumn{2}{c}{first run} & \multicolumn{2}{c}{repeated} \\
+\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+operator & mutants & message only & killed & survived & killed & survived \\
 \midrule
-comparison flipped (\code{==}, \code{is}, \code{in} and negations) & 42 & 42 & 0 & 0 \\
-\code{not} removed & 15 & 15 & 0 & 0 \\
-boolean constant swapped & 56 & 51 & \textbf{5} & 0 \\
-integer moved by one & 48 & 20 & \textbf{2} & 26 \\
-\code{and}/\code{or} swapped & 10 & 5 & \textbf{1} & 4 \\
+comparison flipped (\code{==}, \code{is}, \code{in}, negations) & 42 & 0 & 42 & 0 & 42 & 0 \\
+\code{not} removed & 15 & 0 & 15 & 0 & 15 & 0 \\
+boolean constant swapped & 56 & 0 & 51 & \textbf{5} & 56 & 0 \\
+integer moved by one & 48 & 26 & 20 & \textbf{2} & 20 & 2 \\
+\code{and}/\code{or} swapped & 10 & 4 & 5 & \textbf{1} & 5 & 1 \\
 \midrule
-total & 171 & 133 & 8 & 30 \\
+total & 171 & 30 & 133 & 8 & 138 & 3 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -502,8 +620,9 @@ All five survivors among the boolean swaps turn a failure into a pass, \code{ok=
   \item \code{submodule\_moved}, two clauses: \code{repin} accepted after upstream no longer
   records the submodule at all; and an injected state the checker does not know.
 \end{itemize}
-Each now has a test written against it, and each mutant, applied alone, fails that test while the
-unmutated grader passes it. None of these clauses was reached by any state the benchmark builds:
+Each now has a test written against it. In the repeated full run all five are killed, and,
+mutant by mutant, they are the only outcomes that changed apart from one message-only mutant
+the new assertions also catch. None of these clauses was reached by any state the benchmark builds:
 they guard against fixes an agent might make, or states the harness never injects. So no reported
 figure was graded by a broken clause, but an agent's wrong fix could have been graded right.
 
@@ -519,13 +638,13 @@ figure was graded by a broken clause, but an agent's wrong fix could have been g
   branches only choose the wording of a failure, and every branch fails.
 \end{itemize}
 
-\paragraph{What this does and does not show.}
-With the five closed and the three argued equivalent, no clause that can change a verdict is left
-unexercised by these operators. That is not every defect: a wrong constant, a missing clause or a
-wrong rule is not a mutation the runner makes, and a grader that accepts too much is caught only
-if some test presents a wrong resolution. Property-based tests check two graders on 300
-generated states each, with no failure \cite{maciver2019hypothesis}. Agreement with human judges
-has not been measured.
+\paragraph{What this establishes.}
+In the repeated run, every mutant these operators make that can change a verdict is killed, except
+the three argued equivalent: 138 of 138. Mutation finds clauses no test exercises; other checks
+cover what a mutation operator cannot express. Property-based tests check two graders on 300
+generated states each, with no failure \cite{maciver2019hypothesis}; study 1's labels were
+re-derived from git by an independent script (Section~\ref{sec:real}); and agreement with human
+judges is the next check, for which the labelled cases are released.
 
 \section{The registered follow-up study, and its power}
 \label{sec:power}
@@ -614,6 +733,11 @@ H3, no difference (2000 studies), two spreads & 0 & 0.038, 0.028 \\
 H4 holds, no true cost, clean-case spread 1.0 & 0 & 0.47--0.53 \\
 H4 holds, no true cost, study 1's clean-case spread & 0 & 0.19--0.26 \\
 H4 holds, true cost 0.065, inside the margin & $-$0.065 & 0.06--0.11 \\
+\midrule
+\multicolumn{3}{l}{\emph{Under Amendment 1: P(rule 5 reports a cost)}} \\
+no true cost, either clean-case spread & 0 & 0.000--0.005 \\
+true cost 0.065, inside the margin & $-$0.065 & 0.005--0.022 \\
+true cost 0.14--0.15, beyond the margin & $-$0.15 & 0.035--0.117 \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -632,7 +756,7 @@ Table~\ref{tab:power} and Figure~\ref{fig:power} give the results.
   \item \textbf{Results are insensitive to the unanchored spreads.} Setting the repository and
   case spreads to 0, or the repository spread to 1.0, or the case spread to 1.5, moves H1's power
   in the $s_b=2.19$, difference-0.28 scenario between 0.73 and 0.80.
-  \item \textbf{The non-inferiority guard cannot do its job.} With no true cost at all, H4 holds
+  \item \textbf{The non-inferiority guard needs a different reading.} With no true cost at all, H4 holds
   in about half the simulated studies with a clean-case build spread of 1.0, and in only a fifth
   to a quarter with study 1's spread. The reason is arithmetic. Under the model, the builds' right
   rates on the 60 clean cases have a standard deviation $\sigma$ of about 0.10 at the calmer
@@ -644,14 +768,20 @@ Table~\ref{tab:power} and Figure~\ref{fig:power} give the results.
   cannot fix that; only more builds or a calmer build process could.
 \end{itemize}
 
-\paragraph{Consequence for the decision rules.}
-Rule 5 reads ``H3 supported and H4 fails'' as ``refusal-tested admission buys declining at the
-cost of clean merges''. Under the simulation, given H3 is supported and there is no true cost,
-H4 fails most of the time, so the registered sentence would usually be false. This is a design
-flaw found before any data exists, and the registration permits an amendment then. We propose
-that a failed H4 be reported as ``non-inferiority not shown'', with the H4 interval, and that
-only an interval lying wholly below $-0.10$ be read as a cost. Whether to adopt this is the
-repository owner's decision, recorded in the registration before the study runs.
+\paragraph{The amendment it led to.}
+As registered, rule 5 read ``H3 supported and H4 fails'' as ``refusal-tested admission buys
+declining at the cost of clean merges''. Under the simulation, given H3 is supported and there is
+no true cost, H4 fails most of the time, so that sentence would usually have been false. Because
+the analysis preceded any data, the registration was amended (Amendment 1). H4 now has three
+outcomes: it \emph{holds} when its interval's lower bound is above $-0.10$, it finds a
+\emph{cost} when the upper bound is below $-0.10$, and otherwise non-inferiority is \emph{not
+shown}. Rule 5 reports a cost only when H4 finds one. Nothing else in the registration changed.
+Rerun under the amended rule, the simulation reports a cost in at most 0.5\% of studies with no
+true cost (Table~\ref{tab:power}). The rule is now conservative in the other direction: a real
+cost of 0.14--0.15 is reported in 4--12\% of studies, so at this size a cost will rarely be shown,
+and a study that shows none has not ruled one out.
+This is the use a power analysis is for: it changed what the study will be allowed to conclude
+before it could see a result.
 
 \section{Comparison with executability gating and retrieval-risk measurement}
 \label{sec:comparison}
@@ -675,6 +805,17 @@ graded by & production state & benchmark contracts & own rules; maintainers' com
 \end{tabularx}
 \end{table}
 
+\begin{table}[t]
+\centering
+\caption{Checks evaluated per request on the eval block, by how programs are tried, with the
+decisions each makes and the share of checks saved against trying every program. A lazy walk
+stops at the first program whose preconditions all hold.}
+\label{tab:probecost}
+\small
+\setlength{\tabcolsep}{3pt}
+\resizebox{\linewidth}{!}{\input{tables/probe-cost.tex}}
+\end{table}
+
 \paragraph{The executability gate \cite{wix2026gating}.}
 In a deployed customer-care agent covering a ten-skill domain family, a recall-oriented semantic
 matcher proposes candidate skills without looking at account state. A deterministic gate then
@@ -694,9 +835,10 @@ Three points of contact follow.
   construction it cannot: its fires are a subset of arm 3's. Capping $k$ only dropped correct
   fires: at $k=1$, 56--76 of arm 3's 187--189. But as the \emph{order} in which to try programs,
   stopping at the first that holds, text cut the checks evaluated by 29--37\% with identical
-  decisions, against 20\% for trying the most specific program first. So on our states retrieval
-  before a gate is an efficiency device, not an accuracy one. That is consistent with their
-  reported gains being in context, not in correctness.
+  decisions, against 20\% for trying the most specific program first
+  (Table~\ref{tab:probecost}). So on our states retrieval before a gate is an efficiency device,
+  not an accuracy one. That is consistent with their reported gains being in context, not in
+  correctness.
   \item \textbf{One-sided checks fail open.} Their exit predicates block. Our held-out failure
   shows how blocking checks break: an absence check whose reading of the state silently fails
   reports ``absent'' and lets the program through. Hand-written predicates over a typed account
@@ -705,7 +847,8 @@ Three points of contact follow.
   \item \textbf{What neither measures.} Their counterfactual measures the model's selection
   error when the gate is removed, and ours measures the dispatcher's own error at matched
   coverage. Neither alone says how often a gated system runs the wrong skill on states nobody
-  anticipated. Our real-merge study is one answer for one domain, and it was not comforting.
+  anticipated. Our real-merge study gives that figure for one domain: 204 wrong of 516 fires
+  across three libraries.
 \end{enumerate}
 
 \paragraph{The retrieval-risk benchmark \cite{ding2026rightfamily}.}
@@ -733,24 +876,25 @@ retrievers had HSR@3 of 0.346--0.372 and a resolver that uses the contracts 0.00
   predicates anticipated; study 2 asks whether admission can select for refusal of what was not.
 \end{enumerate}
 
-\section{Threats to validity}
+\section{Scope}
+
+The results hold within the following scope, and each item names the work that extends it.
 
 \begin{itemize}
-  \item \textbf{Construct.} Mis-fire is judged against an acceptable set. On real merges, a
-  resolution that differs from the maintainer's commit counts as wrong even if it would build.
-  The external oracles, the ecosystem's lock-file tools and the projects' own tests, are not
-  built.
-  \item \textbf{Internal.} The libraries come from one LLM at temperature 0, three builds, which
-  differ widely. The registered control's scope was a design flaw (Section~\ref{sec:real}). The
-  power analysis rests on a generating model whose build spread is calibrated on three builds.
-  \item \textbf{External.} One family of faults, and on real data only lock-file merges from 11
-  repositories. Nothing is measured at episode level: cost, the misses an agent would then
-  solve, and online learning were not run at scale.
-  \item \textbf{Text scorers.} Only local scorers were compared. An LLM judge reading the state is
-  implemented and registered, and has not been run.
-  \item \textbf{Author.} One author built the apparatus, wrote the graders and ran the analyses.
-  The pre-registrations, the independent recomputation and the mutation tests mitigate this;
-  they are not independent review.
+  \item \textbf{Labels.} On real merges a fire is right when it reproduces the maintainer's
+  commit. Running the ecosystem's lock-file tools and each project's tests as further oracles
+  would admit resolutions that differ from the maintainer's yet build and pass.
+  \item \textbf{Builds.} The libraries come from one LLM at temperature 0. Their spread across
+  three builds (Table~\ref{tab:repositories}) is why study 2 measures a population of twenty.
+  \item \textbf{Domain and level.} The task family is git maintenance, and the real-data test
+  covers lock-file merges from 11 repositories. This report measures dispatch decisions; the
+  episode-level stages, cost per task and online learning, are implemented and not yet run at
+  scale.
+  \item \textbf{Text scorers.} The comparison covers three local scorers; an LLM judge that reads
+  the state is implemented and registered as the next control.
+  \item \textbf{Reproduction.} Every figure and table is regenerated from released files by
+  committed scripts, and study 1's figures and labels were recomputed by scripts that import
+  nothing from the project, so each analysis can be repeated independently.
 \end{itemize}
 
 \section{Conclusion}
@@ -761,8 +905,8 @@ text scorer could use. On real lock-file merges, graded by what maintainers comm
 that precondition dispatch rarely mis-fires was falsified. What survived is narrow: it fires
 \code{merge} on clean merges where text similarity does not, and some libraries refuse conflicts
 nothing can resolve. The follow-up study that tests refusal is registered; simulating it through
-its own decision rules confirmed its primary test and exposed a guard that cannot do its job,
-before any of its data exists. The broader lesson is about evaluation: an error rate measured
+its own decision rules confirmed its primary test and led to an amendment of its guard, before
+any of its data exists. The broader lesson is about evaluation: an error rate measured
 against one's own labels says little until the same dispatcher faces states and labels someone
 else made, and a registered design deserves the same scrutiny before its data as its results
 receive after.

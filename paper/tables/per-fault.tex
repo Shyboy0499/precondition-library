@@ -1,0 +1,18 @@
+\begin{tabular}{llccc}
+\toprule
+intent's fault & pairs & precondition & lexical & cross-encoder \\
+\midrule
+branch\_renamed & faulted (120) & 120, 0 & 48, 19 & 58, 31 \\
+ & fault-free (120) & 0, 0 & 70, 70 & 52, 52 \\
+dirty\_tree & faulted (120) & 120, 0 & 69, 43 & 63, 10 \\
+ & fault-free (120) & 0, 0 & 86, 86 & 63, 63 \\
+diverged & faulted (120) & 120, 0 & 45, 3 & 58, 17 \\
+ & fault-free (120) & 0, 0 & 68, 68 & 65, 65 \\
+lockfile\_conflict & faulted (120) & 83, 0 & 21, 13 & 52, 32 \\
+ & fault-free (120) & 0, 0 & 36, 36 & 52, 52 \\
+submodule\_moved & faulted (120) & 120, 0 & 58, 44 & 48, 36 \\
+ & fault-free (120) & 0, 0 & 58, 58 & 51, 51 \\
+\midrule
+all & 1{,}200 & 563, 0 & 559, 440 & 562, 409 \\
+\bottomrule
+\end{tabular}

@@ -7,5 +7,5 @@ if [ ! -f author.tex ]; then
   exit 1
 fi
 latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex
-tar -czf arxiv-upload.tar.gz main.tex author.tex author.example.tex figures/*.pdf
+tar -czf arxiv-upload.tar.gz main.tex author.tex author.example.tex figures/*.pdf tables/*.tex
 echo "wrote paper/main.pdf and paper/arxiv-upload.tar.gz"

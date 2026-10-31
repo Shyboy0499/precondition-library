@@ -1,0 +1,1567 @@
+{
+  "selection": [
+    "tests/test_checkers_against_gold.py",
+    "tests/test_non_destructive_invariants.py",
+    "tests/test_sandbox_diverged.py",
+    "tests/test_sandbox_dirty_tree.py",
+    "tests/test_sandbox_lockfile_conflict.py",
+    "tests/test_sandbox_submodule_moved.py",
+    "tests/test_sandbox_branch_renamed.py",
+    "tests/test_lockfile_intent.py",
+    "tests/test_lockfile_states.py",
+    "tests/test_dirty_tree_intent.py",
+    "tests/test_branch_renamed_intent.py",
+    "tests/test_config_renamed_intent.py",
+    "tests/test_gold_sweep.py",
+    "tests/test_heldout_states.py",
+    "tests/test_grader_properties.py"
+  ],
+  "baseline_seconds": 62.2,
+  "mutants": 171,
+  "killed": 139,
+  "survived": 32,
+  "timeout": 0,
+  "message_only": 30,
+  "score": 0.9787234042553191,
+  "results": [
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "_recorded",
+      "line": 85,
+      "kind": "Is -> IsNot",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 13.2
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "_recorded",
+      "line": 92,
+      "kind": "not removed",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 12.6
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "_recorded",
+      "line": 92,
+      "kind": "and -> or",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 10.2
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "_recorded",
+      "line": 94,
+      "kind": "Eq -> NotEq",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.1
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "_descends_from",
+      "line": 106,
+      "kind": "Eq -> NotEq",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.3
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "_descends_from",
+      "line": 107,
+      "kind": "0 -> 1",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 10.2
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "_descends_from",
+      "line": 107,
+      "kind": "0 -> -1",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 12.8
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "_descends_from",
+      "line": 106,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 12.0
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 119,
+      "kind": "Is -> IsNot",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 10.4
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 150,
+      "kind": "Is -> IsNot",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.5
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 162,
+      "kind": "Is -> IsNot",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 12.1
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 171,
+      "kind": "NotEq -> Eq",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 9.6
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 127,
+      "kind": "not removed",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.2
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 139,
+      "kind": "Is -> IsNot",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.0
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 141,
+      "kind": "not removed",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 10.9
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 171,
+      "kind": "0 -> 1",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.7
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 171,
+      "kind": "0 -> -1",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.0
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 170,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 10.7
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 196,
+      "kind": "True -> False",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 12.1
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 123,
+      "kind": "True -> False",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 14.5
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 154,
+      "kind": "True -> False",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.4
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 164,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.4
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 176,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.6
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 189,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.7
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 129,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.0
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 140,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.5
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 143,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 10.3
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 199,
+      "kind": "or -> and",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 82.5
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 179,
+      "kind": "or -> and",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 72.0
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 192,
+      "kind": "or -> and",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 66.0
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 178,
+      "kind": "12 -> 13",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 69.6
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 178,
+      "kind": "12 -> 11",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 81.6
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 131,
+      "kind": "12 -> 13",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 86.7
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 131,
+      "kind": "12 -> 11",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 71.0
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 145,
+      "kind": "12 -> 13",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 70.6
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 145,
+      "kind": "12 -> 11",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 76.0
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 146,
+      "kind": "12 -> 13",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 72.0
+    },
+    {
+      "path": "src/precondition_library/tasks/invariants.py",
+      "function": "recorded_state_intact",
+      "line": 146,
+      "kind": "12 -> 11",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 62.6
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/lockfile_conflict.py",
+      "function": "check",
+      "line": 459,
+      "kind": "not removed",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 10.1
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/lockfile_conflict.py",
+      "function": "check",
+      "line": 477,
+      "kind": "not removed",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 9.4
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/lockfile_conflict.py",
+      "function": "check",
+      "line": 483,
+      "kind": "NotIn -> In",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 9.2
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/lockfile_conflict.py",
+      "function": "check",
+      "line": 488,
+      "kind": "NotIn -> In",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 10.2
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/lockfile_conflict.py",
+      "function": "check",
+      "line": 495,
+      "kind": "and -> or",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 19.5
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/lockfile_conflict.py",
+      "function": "check",
+      "line": 501,
+      "kind": "NotEq -> Eq",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 20.2
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/lockfile_conflict.py",
+      "function": "check",
+      "line": 495,
+      "kind": "IsNot -> Is",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 20.1
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/lockfile_conflict.py",
+      "function": "check",
+      "line": 495,
+      "kind": "In -> NotIn",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 19.5
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/lockfile_conflict.py",
+      "function": "check",
+      "line": 501,
+      "kind": "1 -> 2",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 21.1
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/lockfile_conflict.py",
+      "function": "check",
+      "line": 501,
+      "kind": "1 -> 0",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 17.5
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/lockfile_conflict.py",
+      "function": "check",
+      "line": 466,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 8.2
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/lockfile_conflict.py",
+      "function": "check",
+      "line": 469,
+      "kind": "0 -> 1",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 17.3
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/lockfile_conflict.py",
+      "function": "check",
+      "line": 469,
+      "kind": "0 -> -1",
+      "in_message": false,
+      "outcome": "survived",
+      "seconds": 62.7
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/lockfile_conflict.py",
+      "function": "check",
+      "line": 508,
+      "kind": "True -> False",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 19.6
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/lockfile_conflict.py",
+      "function": "check",
+      "line": 461,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 8.2
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/lockfile_conflict.py",
+      "function": "check",
+      "line": 471,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 20.0
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/lockfile_conflict.py",
+      "function": "check",
+      "line": 478,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 18.4
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/lockfile_conflict.py",
+      "function": "check",
+      "line": 485,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 20.0
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/lockfile_conflict.py",
+      "function": "check",
+      "line": 490,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 9.4
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/lockfile_conflict.py",
+      "function": "check",
+      "line": 497,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 20.8
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/lockfile_conflict.py",
+      "function": "check",
+      "line": 503,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 20.4
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/lockfile_conflict.py",
+      "function": "check",
+      "line": 462,
+      "kind": "12 -> 13",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 64.8
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/lockfile_conflict.py",
+      "function": "check",
+      "line": 462,
+      "kind": "12 -> 11",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 65.3
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/dirty_tree.py",
+      "function": "check",
+      "line": 532,
+      "kind": "not removed",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 8.0
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/dirty_tree.py",
+      "function": "check",
+      "line": 546,
+      "kind": "or -> and",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 9.2
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/dirty_tree.py",
+      "function": "check",
+      "line": 552,
+      "kind": "In -> NotIn",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 10.0
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/dirty_tree.py",
+      "function": "check",
+      "line": 546,
+      "kind": "Is -> IsNot",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 9.7
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/dirty_tree.py",
+      "function": "check",
+      "line": 546,
+      "kind": "NotIn -> In",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.1
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/dirty_tree.py",
+      "function": "check",
+      "line": 559,
+      "kind": "In -> NotIn",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 19.1
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/dirty_tree.py",
+      "function": "check",
+      "line": 561,
+      "kind": "not removed",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.3
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/dirty_tree.py",
+      "function": "check",
+      "line": 571,
+      "kind": "True -> False",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.1
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/dirty_tree.py",
+      "function": "check",
+      "line": 534,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 19.3
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/dirty_tree.py",
+      "function": "check",
+      "line": 548,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.5
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/dirty_tree.py",
+      "function": "check",
+      "line": 562,
+      "kind": "and -> or",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 9.8
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/dirty_tree.py",
+      "function": "check",
+      "line": 566,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.5
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/dirty_tree.py",
+      "function": "check",
+      "line": 562,
+      "kind": "Eq -> NotEq",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 12.1
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/dirty_tree.py",
+      "function": "check",
+      "line": 535,
+      "kind": "12 -> 13",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 77.9
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/dirty_tree.py",
+      "function": "check",
+      "line": 535,
+      "kind": "12 -> 11",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 69.4
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/diverged.py",
+      "function": "check",
+      "line": 532,
+      "kind": "not removed",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 10.8
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/diverged.py",
+      "function": "check",
+      "line": 547,
+      "kind": "NotEq -> Eq",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 12.3
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/diverged.py",
+      "function": "check",
+      "line": 547,
+      "kind": "0 -> 1",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 12.2
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/diverged.py",
+      "function": "check",
+      "line": 547,
+      "kind": "0 -> -1",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.2
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/diverged.py",
+      "function": "check",
+      "line": 553,
+      "kind": "True -> False",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 12.1
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/diverged.py",
+      "function": "check",
+      "line": 534,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 17.2
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/diverged.py",
+      "function": "check",
+      "line": 545,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 19.6
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/diverged.py",
+      "function": "check",
+      "line": 549,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 19.8
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/diverged.py",
+      "function": "check",
+      "line": 535,
+      "kind": "12 -> 13",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 71.9
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/diverged.py",
+      "function": "check",
+      "line": 535,
+      "kind": "12 -> 11",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 82.3
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/branch_renamed.py",
+      "function": "check",
+      "line": 386,
+      "kind": "or -> and",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 22.7
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/branch_renamed.py",
+      "function": "check",
+      "line": 393,
+      "kind": "Eq -> NotEq",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 23.3
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/branch_renamed.py",
+      "function": "check",
+      "line": 398,
+      "kind": "not removed",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 22.8
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/branch_renamed.py",
+      "function": "check",
+      "line": 408,
+      "kind": "not removed",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 21.6
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/branch_renamed.py",
+      "function": "check",
+      "line": 418,
+      "kind": "IsNot -> Is",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 22.7
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/branch_renamed.py",
+      "function": "check",
+      "line": 429,
+      "kind": "IsNot -> Is",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 23.2
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/branch_renamed.py",
+      "function": "check",
+      "line": 386,
+      "kind": "not removed",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 21.3
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/branch_renamed.py",
+      "function": "check",
+      "line": 386,
+      "kind": "not removed",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 19.8
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/branch_renamed.py",
+      "function": "check",
+      "line": 396,
+      "kind": "0 -> 1",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 22.3
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/branch_renamed.py",
+      "function": "check",
+      "line": 396,
+      "kind": "0 -> -1",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 21.4
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/branch_renamed.py",
+      "function": "check",
+      "line": 423,
+      "kind": "NotEq -> Eq",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 26.3
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/branch_renamed.py",
+      "function": "check",
+      "line": 438,
+      "kind": "not removed",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 27.5
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/branch_renamed.py",
+      "function": "check",
+      "line": 423,
+      "kind": "0 -> 1",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 28.0
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/branch_renamed.py",
+      "function": "check",
+      "line": 423,
+      "kind": "0 -> -1",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 26.4
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/branch_renamed.py",
+      "function": "check",
+      "line": 448,
+      "kind": "True -> False",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 21.8
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/branch_renamed.py",
+      "function": "check",
+      "line": 388,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 20.2
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/branch_renamed.py",
+      "function": "check",
+      "line": 400,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 22.3
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/branch_renamed.py",
+      "function": "check",
+      "line": 410,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 27.9
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/branch_renamed.py",
+      "function": "check",
+      "line": 421,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 25.6
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/branch_renamed.py",
+      "function": "check",
+      "line": 394,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 20.3
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/branch_renamed.py",
+      "function": "check",
+      "line": 425,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 26.2
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/branch_renamed.py",
+      "function": "check",
+      "line": 440,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 26.1
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/branch_renamed.py",
+      "function": "check",
+      "line": 412,
+      "kind": "12 -> 13",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 77.9
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/branch_renamed.py",
+      "function": "check",
+      "line": 412,
+      "kind": "12 -> 11",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 74.9
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/branch_renamed.py",
+      "function": "check",
+      "line": 443,
+      "kind": "12 -> 13",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 71.7
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/branch_renamed.py",
+      "function": "check",
+      "line": 443,
+      "kind": "12 -> 11",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 72.5
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/submodule_moved.py",
+      "function": "check",
+      "line": 486,
+      "kind": "Is -> IsNot",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.4
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/submodule_moved.py",
+      "function": "check",
+      "line": 492,
+      "kind": "Is -> IsNot",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.5
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/submodule_moved.py",
+      "function": "check",
+      "line": 498,
+      "kind": "Eq -> NotEq",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 10.5
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/submodule_moved.py",
+      "function": "check",
+      "line": 508,
+      "kind": "Eq -> NotEq",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.6
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/submodule_moved.py",
+      "function": "check",
+      "line": 531,
+      "kind": "Eq -> NotEq",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.3
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/submodule_moved.py",
+      "function": "check",
+      "line": 499,
+      "kind": "not removed",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 10.7
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/submodule_moved.py",
+      "function": "check",
+      "line": 513,
+      "kind": "not removed",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.9
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/submodule_moved.py",
+      "function": "check",
+      "line": 518,
+      "kind": "NotEq -> Eq",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.5
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/submodule_moved.py",
+      "function": "check",
+      "line": 534,
+      "kind": "and -> or",
+      "in_message": false,
+      "outcome": "survived",
+      "seconds": 80.7
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/submodule_moved.py",
+      "function": "check",
+      "line": 555,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 20.8
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/submodule_moved.py",
+      "function": "check",
+      "line": 505,
+      "kind": "True -> False",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 12.0
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/submodule_moved.py",
+      "function": "check",
+      "line": 527,
+      "kind": "True -> False",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 10.9
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/submodule_moved.py",
+      "function": "check",
+      "line": 548,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 21.0
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/submodule_moved.py",
+      "function": "check",
+      "line": 501,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.1
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/submodule_moved.py",
+      "function": "check",
+      "line": 515,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 22.4
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/submodule_moved.py",
+      "function": "check",
+      "line": 520,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 16.3
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/submodule_moved.py",
+      "function": "check",
+      "line": 522,
+      "kind": "or -> and",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 66.5
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/submodule_moved.py",
+      "function": "check",
+      "line": 542,
+      "kind": "True -> False",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 11.4
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/submodule_moved.py",
+      "function": "check",
+      "line": 528,
+      "kind": "12 -> 13",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 70.2
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/submodule_moved.py",
+      "function": "check",
+      "line": 528,
+      "kind": "12 -> 11",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 68.0
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/submodule_moved.py",
+      "function": "check",
+      "line": 523,
+      "kind": "12 -> 13",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 69.7
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/submodule_moved.py",
+      "function": "check",
+      "line": 523,
+      "kind": "12 -> 11",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 77.5
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/submodule_moved.py",
+      "function": "check",
+      "line": 522,
+      "kind": "12 -> 13",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 64.3
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/submodule_moved.py",
+      "function": "check",
+      "line": 522,
+      "kind": "12 -> 11",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 67.9
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 426,
+      "kind": "NotEq -> Eq",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 26.4
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 428,
+      "kind": "NotEq -> Eq",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 24.7
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 448,
+      "kind": "Is -> IsNot",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 25.5
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 452,
+      "kind": "NotEq -> Eq",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 25.0
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 456,
+      "kind": "NotEq -> Eq",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 22.9
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 462,
+      "kind": "NotEq -> Eq",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 25.7
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 465,
+      "kind": "Eq -> NotEq",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 25.9
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 434,
+      "kind": "Eq -> NotEq",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 26.9
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 437,
+      "kind": "Is -> IsNot",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 23.6
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 452,
+      "kind": "1 -> 2",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 24.2
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 452,
+      "kind": "1 -> 0",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 25.3
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 469,
+      "kind": "Eq -> NotEq",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 27.2
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 473,
+      "kind": "NotEq -> Eq",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 26.8
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 451,
+      "kind": "Eq -> NotEq",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 27.9
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 456,
+      "kind": "0 -> 1",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 26.7
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 456,
+      "kind": "0 -> -1",
+      "in_message": false,
+      "outcome": "survived",
+      "seconds": 77.0
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 469,
+      "kind": "0 -> 1",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 29.5
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 469,
+      "kind": "0 -> -1",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 38.4
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 479,
+      "kind": "True -> False",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 26.5
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 427,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 34.4
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 429,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 27.2
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 449,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 31.3
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 454,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 27.4
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 458,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 38.9
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 461,
+      "kind": "NotEq -> Eq",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 28.4
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 463,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 39.8
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 467,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 31.6
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 438,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 39.6
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 442,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 30.7
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 471,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 41.1
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 475,
+      "kind": "False -> True",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 38.0
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 461,
+      "kind": "0 -> 1",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 27.4
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 461,
+      "kind": "0 -> -1",
+      "in_message": false,
+      "outcome": "killed",
+      "seconds": 27.2
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 459,
+      "kind": "0 -> 1",
+      "in_message": true,
+      "outcome": "killed",
+      "seconds": 39.5
+    },
+    {
+      "path": "src/precondition_library/tasks/faults/config_renamed.py",
+      "function": "check",
+      "line": 459,
+      "kind": "0 -> -1",
+      "in_message": true,
+      "outcome": "survived",
+      "seconds": 75.6
+    }
+  ]
+}
