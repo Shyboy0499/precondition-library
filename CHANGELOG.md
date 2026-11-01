@@ -12,6 +12,12 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **Study 2's refusal set R is mined and frozen (refusal-population §4 step 3).**
+  `results/refusal-population-2026-11-01/R/` holds 35 inexpressible lock-file conflicts from the
+  four admission repositories. List A ran out before 40, since matomo has only 5. R's SHA-256 is
+  `044a77da…`. The refusal check costs about 154 s per candidate program with the histories
+  cached, about 35–60 minutes per configuration R build, so ADR-0054's mechanism stands. No build
+  has run.
 - **The report gains thirteen generated tables and the repeated mutation run.**
   `paper/analysis/tables.py` writes each table from committed per-pair, per-case and per-program
   records, and checks each against its run's own figures. The tables cover the three settings,
