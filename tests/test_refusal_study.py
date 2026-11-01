@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 import re
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -362,3 +364,117 @@ def test_evaluation_refuses_without_the_registration(
 def test_the_command_line() -> None:
     with pytest.raises(SystemExit):
         study.main(["evaluate", "--refusal-set", "R"])
+
+
+# --- the independent recomputation (§10) ------------------------------------------------------
+
+RECOMPUTE = (
+    preregistration.REPOSITORY
+    / "results"
+    / "refusal-population-2026-11-01"
+    / "verification"
+    / "recompute.py"
+)
+
+
+def _recompute(out: Path) -> subprocess.CompletedProcess[str]:
+    """The verification script as a reader would run it: isolated, so it cannot import the
+    project even by accident, with the targets the `run` fixture lowers to 1."""
+    return subprocess.run(
+        [sys.executable, "-I", str(RECOMPUTE), str(out), "--targets", "1,1,1"],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=out,
+    )
+
+
+def test_the_recomputation_agrees_with_a_run(run: dict[str, object]) -> None:
+    out = run["out"]
+    assert isinstance(out, Path)
+    done = _recompute(out)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "MISMATCH" not in done.stdout
+    assert done.stdout.strip().endswith("0 mismatch(es)")
+    assert "h1 statistic" in done.stdout and "§9's decisions" in done.stdout
+
+
+def test_the_recomputation_catches_a_changed_figure(run: dict[str, object]) -> None:
+    out = run["out"]
+    assert isinstance(out, Path)
+    report = json.loads((out / "report.json").read_text("utf-8"))
+    report["hypotheses"]["h3"]["statistic"] = (report["hypotheses"]["h3"]["statistic"] or 0) + 0.25
+    report["counts"]["clean"] += 1
+    (out / "report.json").write_text(json.dumps(report), "utf-8")
+    done = _recompute(out)
+    assert done.returncode == 1
+    assert "MISMATCH h3 statistic" in done.stdout
+    assert "MISMATCH clean cases" in done.stdout
+
+
+def test_the_recomputation_imports_nothing_from_the_project() -> None:
+    source = RECOMPUTE.read_text(encoding="utf-8")
+    assert "precondition_library" not in source.split('"""', 2)[2]
+
+
+def _powered_study(out: Path) -> study.StudyReport:
+    """A study past rule 1: 8 builds per configuration over 24 cases in four repositories, its
+    fires drawn from a seeded generator, written as `evaluate` writes its files."""
+    import random
+
+    rng = random.Random(7)
+    cases, labels, rows = [], [], []
+    for index in range(24):
+        repo = f"r{index % 4}"
+        kind = "negative" if index % 3 == 0 else "positive"
+        cases.append(_case(index, repo, kind))
+        acceptable = ["merge"] if kind == "negative" else ([] if index % 3 == 1 else ["keep_local"])
+        labels.append(Label(index=index, acceptable=acceptable, descriptive=None))
+
+        def fire(p: float, variant: str) -> str | None:
+            return variant if rng.random() < p else None
+
+        variant = "merge" if kind == "negative" else "keep_local"
+        rows.append(
+            study.StudyDecisions(
+                index=index,
+                zero=[fire(0.6, variant) for _ in range(8)],
+                refusal=[fire(0.2 if kind == "positive" else 0.9, variant) for _ in range(8)],
+                control_zero=(fire(0.95, variant), 1.0),
+                control_refusal=(fire(0.5, variant), 1.0),
+            )
+        )
+    builds = [
+        study.Build(configuration=c, order=b, library=f"{c}-{b}", library_hash="h")
+        for c in ("0", "R")
+        for b in range(8)
+    ]
+    manifest = study.EvaluationManifest(repositories=[], cases=cases, exclusions=[])
+    out.mkdir(parents=True)
+    (out / "manifest.json").write_text(manifest.model_dump_json(), "utf-8")
+    (out / "labels.jsonl").write_text("".join(x.model_dump_json() + "\n" for x in labels), "utf-8")
+    (out / "decisions.jsonl").write_text("".join(x.model_dump_json() + "\n" for x in rows), "utf-8")
+    (out / "builds.json").write_text(json.dumps([b.model_dump() for b in builds]), "utf-8")
+    result = study.report(cases, labels, rows, builds, refusal_set="x" * 64, refusal_collisions=0)
+    (out / "report.json").write_text(result.model_dump_json(), "utf-8")
+    return result
+
+
+def test_the_recomputation_agrees_with_every_rule(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Past rule 1, every one of §9's rules is recomputed and agrees, H4 included."""
+    for name in ("TARGET_INEXPRESSIBLE", "TARGET_CLEAN", "MIN_REPOSITORIES"):
+        monkeypatch.setattr(study, name, 1)
+    result = _powered_study(tmp_path / "out")
+    assert not result.underpowered
+    assert [d.rule for d in result.decisions] == [
+        "1 power",
+        "2 applicability",
+        "3 H1",
+        "4 H2",
+        "5 H3 and H4",
+    ]
+    done = _recompute(tmp_path / "out")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "ok       §9's decisions" in done.stdout

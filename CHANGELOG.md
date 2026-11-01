@@ -12,6 +12,14 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **Study 2 can run its builds, and verify its report, before any data exists.**
+  - `bench.population` runs the 20 builds as §5 says. Several run at once, each a `bench.live`
+    process. An interrupted build is resumed up to twice, and one that never finishes is
+    replaced by index 10, 11, then 12. A refused account stops everything, and a build that
+    admits nothing counts as valid. Every attempt is recorded in `population.json`.
+  - `results/refusal-population-2026-11-01/verification/recompute.py` is §10's independent
+    recomputation, written and tested before the data. It uses the standard library only, and
+    recomputes every figure, interval and decision of the report, Amendment 1 included.
 - **Study 2's refusal set R is mined and frozen (refusal-population §4 step 3).**
   `results/refusal-population-2026-11-01/R/` holds 35 inexpressible lock-file conflicts from the
   four admission repositories. List A ran out before 40, since matomo has only 5. R's SHA-256 is
