@@ -1,0 +1,29 @@
+2026-11-01T05:05:53Z
+  279.6s   0 accepted  branch_renamed-occ1-rename-fork-branch-to-upstream
+  143.1s   0 accepted  branch_renamed-occ2-retrack-branch-after-upstream-rename
+  145.3s   0 accepted  branch_renamed-occ3-retarget-upstream-default-and-merge
+  160.5s   0 accepted  dirty_tree-occ1-sync-upstream-stash-restore
+  153.7s   0 accepted  dirty_tree-occ2-dirty-worktree-commit-then-rebase
+  156.2s   0 accepted  dirty_tree-occ3-update-upstream-keep-wip-aside
+  164.4s   0 accepted  diverged-occ1-sync-fork-discard
+  181.5s   0 accepted  diverged-occ2-rebase-local-commits-onto-upstream
+  187.3s   0 accepted  diverged-occ3-diverged-sync-fork-merge
+  158.9s   1 accepted  lockfile_conflict-occ1-lockfile-conflict-take-upstream
+  159.8s   0 accepted  lockfile_conflict-occ2-lockfile-merge-keep-local-removals
+  138.3s   0 accepted  submodule_moved-occ1-submodule-remove-upstream
+  113.1s   5 accepted  submodule_moved-occ2-bring-nested-repo-into-line
+  138.2s   0 accepted  submodule_moved-occ3-submodule-repin-to-upstream
+{
+  "refusal_set": "044a77da17c06b39335dc4e7b8c7a442994fd0f3eb6ace4c6ee0435c19fc46b5",
+  "states": 35,
+  "library": "results/replicates-2026-10-05/run-12/library-two-sided",
+  "programs": 14,
+  "seconds_per_program": {
+    "mean": 162.8,
+    "min": 113.1,
+    "max": 279.6
+  },
+  "programs_refusing_every_state": 12
+}
+exit 0
+2026-11-01T05:43:53Z

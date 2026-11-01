@@ -1,0 +1,881 @@
+{
+  "repositories": [
+    {
+      "repo": "matomo-org/matomo",
+      "url": "https://github.com/matomo-org/matomo",
+      "default_branch": "6.x-dev",
+      "tip": "781186d8170c0f2bb10372f14da0cf4b512923f8",
+      "licence": "LICENSE: GPL",
+      "two_parent_merges": 2635,
+      "positives": 5,
+      "negatives": 0,
+      "exclusions": 5
+    },
+    {
+      "repo": "saleor/saleor",
+      "url": "https://github.com/saleor/saleor",
+      "default_branch": "main",
+      "tip": "cc4aea76e397b1dead74363c266c579ae808770f",
+      "licence": "LICENSE: BSD",
+      "two_parent_merges": 3685,
+      "positives": 10,
+      "negatives": 0,
+      "exclusions": 0
+    },
+    {
+      "repo": "openfoodfoundation/openfoodnetwork",
+      "url": "https://github.com/openfoodfoundation/openfoodnetwork",
+      "default_branch": "master",
+      "tip": "dc210ad0c2cb85ca1ddc4271250921bd28640969",
+      "licence": "LICENCE.txt: AGPL",
+      "two_parent_merges": 7495,
+      "positives": 10,
+      "negatives": 0,
+      "exclusions": 0
+    },
+    {
+      "repo": "RocketChat/Rocket.Chat",
+      "url": "https://github.com/RocketChat/Rocket.Chat",
+      "default_branch": "develop",
+      "tip": "9971f492da4960edce747fa9feb07c7fc332dbac",
+      "licence": "LICENSE: MIT",
+      "two_parent_merges": 5791,
+      "positives": 10,
+      "negatives": 0,
+      "exclusions": 3
+    }
+  ],
+  "cases": [
+    {
+      "index": 0,
+      "repo": "matomo-org/matomo",
+      "kind": "positive",
+      "merge": "3ac997619c177b46a686fa0c3311b1dfe67eceb4",
+      "first": "e81cba56e0087b78385884f774970dc27dd96a99",
+      "second": "bc6ec46620be2805792da6fdfe5f541f9134ca7f",
+      "base": "19af9b6c0a63b07020d935ea88710c80823c9d62",
+      "conflicted": [
+        "composer.lock",
+        "plugins/Marketplace/Api/Client.php"
+      ]
+    },
+    {
+      "index": 1,
+      "repo": "matomo-org/matomo",
+      "kind": "positive",
+      "merge": "0e48dd9887cdb04b6442dce2136dab9cec7ea9ff",
+      "first": "89048aee3381408eeb218cf5aa5d35da4b904500",
+      "second": "dee7a0c3f32d557f2d7ff338badbf38bf9a38ddb",
+      "base": "c3b7f1e582d4089363e0d44022a7c88d5a3e12f3",
+      "conflicted": [
+        "composer.lock"
+      ]
+    },
+    {
+      "index": 2,
+      "repo": "matomo-org/matomo",
+      "kind": "positive",
+      "merge": "524565eb40d8c20080d345be80610ccdea11d8af",
+      "first": "c8c433b9d3afeaca87c3d85b184a2b29f5002d38",
+      "second": "719114577f0a5a7962e37a250db3a8d76a1809b8",
+      "base": "732b759253ea8bb3b4c089d681e98bc8195e0675",
+      "conflicted": [
+        "composer.json",
+        "composer.lock",
+        "config/global.php",
+        "core/Container/StaticContainer.php"
+      ]
+    },
+    {
+      "index": 3,
+      "repo": "matomo-org/matomo",
+      "kind": "positive",
+      "merge": "8d1e15a49d058f113e19eb950478527492fcd8b8",
+      "first": "95014cd9e42691fd07c155141f23e7ff608bd755",
+      "second": "732b759253ea8bb3b4c089d681e98bc8195e0675",
+      "base": "0e058f9cb3c6ca8b8331276e96fa56483015e590",
+      "conflicted": [
+        "composer.lock"
+      ]
+    },
+    {
+      "index": 4,
+      "repo": "matomo-org/matomo",
+      "kind": "positive",
+      "merge": "1cd924d0371a2271798279b78e30585f4c7a80d9",
+      "first": "f5b6b4ccb021a3b082e578fc9a42c715985d1fae",
+      "second": "bca9fdab124fb27aa0a7c04da768011fba26589f",
+      "base": "d9aef0c397045484a3848106b57de99f7cdeddbe",
+      "conflicted": [
+        "composer.json",
+        "composer.lock"
+      ]
+    },
+    {
+      "index": 5,
+      "repo": "saleor/saleor",
+      "kind": "positive",
+      "merge": "a78b116c8d564806f807b6f99d7e38613524e9b5",
+      "first": "7954b7edc15faa9bcfab479513ae3ab9063399d6",
+      "second": "b5a1442fa3233a084c9376a9ff273cb1e4500d95",
+      "base": "90c12d61eca8582da01c38dccdef976851959c76",
+      "conflicted": [
+        "CHANGELOG.md",
+        "package-lock.json",
+        "package.json"
+      ]
+    },
+    {
+      "index": 6,
+      "repo": "saleor/saleor",
+      "kind": "positive",
+      "merge": "f1f268d2115326ffea241a611612c2a0e25697d7",
+      "first": "842453d2742671ddf77fe80f9673dc94c6eaac40",
+      "second": "90c12d61eca8582da01c38dccdef976851959c76",
+      "base": "822f93a5052ce215adf601f871e5cdbcf07711c6",
+      "conflicted": [
+        "CHANGELOG.md",
+        "poetry.lock",
+        "requirements.txt",
+        "requirements_dev.txt",
+        "saleor/graphql/account/tests/test_account.py"
+      ]
+    },
+    {
+      "index": 7,
+      "repo": "saleor/saleor",
+      "kind": "positive",
+      "merge": "b5efc1343e143cc41623da6cdbbce511cbb07184",
+      "first": "5ad0001e1d0cd1f00db497abe687aaf5b7496bda",
+      "second": "822f93a5052ce215adf601f871e5cdbcf07711c6",
+      "base": "f99e832b35195ac2af22f5b554da7cdfe4860de7",
+      "conflicted": [
+        "poetry.lock",
+        "requirements.txt",
+        "requirements_dev.txt",
+        "saleor/checkout/complete_checkout.py",
+        "saleor/checkout/tests/test_checkout_complete.py",
+        "saleor/graphql/order/tests/test_order.py",
+        "saleor/graphql/order/types.py",
+        "saleor/order/tests/test_emails.py",
+        "saleor/order/tests/test_order_actions.py"
+      ]
+    },
+    {
+      "index": 8,
+      "repo": "saleor/saleor",
+      "kind": "positive",
+      "merge": "e3c62ad985ed9d29afa4f7f1797cc8fcc0fb79fc",
+      "first": "16ebb6413c02e1c98325e5393ff5afb66554b675",
+      "second": "ad2c9ccff7d9fe2f800b5104bd47f821ba76d62c",
+      "base": "6abb772191f1210c6489bb2080c2ae1d7eb75a20",
+      "conflicted": [
+        ".isort.cfg",
+        "poetry.lock",
+        "pyproject.toml"
+      ]
+    },
+    {
+      "index": 9,
+      "repo": "saleor/saleor",
+      "kind": "positive",
+      "merge": "ad2c9ccff7d9fe2f800b5104bd47f821ba76d62c",
+      "first": "2411fb3d6ce4bd93a4eb1ca8ed31e87fe2aac182",
+      "second": "f99e832b35195ac2af22f5b554da7cdfe4860de7",
+      "base": "b643aa6685107ae0ba4bac332ea70f74dac531ef",
+      "conflicted": [
+        ".isort.cfg",
+        "poetry.lock",
+        "saleor/order/emails.py"
+      ]
+    },
+    {
+      "index": 10,
+      "repo": "saleor/saleor",
+      "kind": "positive",
+      "merge": "1fef436c133c38d4ce1136dd89e46a5d6a858ff4",
+      "first": "6abb772191f1210c6489bb2080c2ae1d7eb75a20",
+      "second": "0d430c2959e819d2bf38681c38dccb5798109a16",
+      "base": "43a08f7c81a9b3eaeace139d9f41a112c447b81a",
+      "conflicted": [
+        "poetry.lock"
+      ]
+    },
+    {
+      "index": 11,
+      "repo": "saleor/saleor",
+      "kind": "positive",
+      "merge": "4fb40d636d2b69188c407e756bc314ba553ef22b",
+      "first": "0713acb0f004fb2e139fadec4788d7eb66db6bec",
+      "second": "6abb772191f1210c6489bb2080c2ae1d7eb75a20",
+      "base": "a03d35b95b651d2f5950f97c8bd9244b1ce2f059",
+      "conflicted": [
+        ".isort.cfg",
+        "CHANGELOG.md",
+        "poetry.lock"
+      ]
+    },
+    {
+      "index": 12,
+      "repo": "saleor/saleor",
+      "kind": "positive",
+      "merge": "a17dacfeda98dc2e6bd63e5925c7a3c376efd071",
+      "first": "f76d0093b450308b07adaafc930faa660a2a2fd7",
+      "second": "bf0a137836b545f2d22324672e7af6b11c75caf5",
+      "base": "326a5b88207af774aa5cb5ca74094699e66cbe3c",
+      "conflicted": [
+        "poetry.lock",
+        "saleor/checkout/models.py"
+      ]
+    },
+    {
+      "index": 13,
+      "repo": "saleor/saleor",
+      "kind": "positive",
+      "merge": "0e0efbc30033fbc8b28b0b2c18f8c7bd9271d66b",
+      "first": "3e124cca39afbd3c4c0a50e0096116fd55a2e7a9",
+      "second": "326a5b88207af774aa5cb5ca74094699e66cbe3c",
+      "base": "7e75d9383ebc6b9cb6225e7745e80a7f24ebe10f",
+      "conflicted": [
+        "poetry.lock",
+        "requirements_dev.txt",
+        "saleor/checkout/complete_checkout.py",
+        "saleor/graphql/order/tests/test_order.py",
+        "saleor/graphql/order/types.py",
+        "saleor/graphql/schema.graphql",
+        "saleor/order/actions.py",
+        "saleor/plugins/base_plugin.py",
+        "saleor/product/utils/availability.py"
+      ]
+    },
+    {
+      "index": 14,
+      "repo": "saleor/saleor",
+      "kind": "positive",
+      "merge": "9221056ea32158434c31155ec30b7291e05f0942",
+      "first": "d2748852654f26960067d928a7f821915b0f99f4",
+      "second": "dceb1dad09d1610f0282949bf77676e6cb5a42e2",
+      "base": "8a33bfb220c728878bafdbace7cd18e9ef44148a",
+      "conflicted": [
+        ".isort.cfg",
+        "CHANGELOG.md",
+        "poetry.lock",
+        "saleor/graphql/checkout/mutations.py",
+        "saleor/product/utils/availability.py"
+      ]
+    },
+    {
+      "index": 15,
+      "repo": "openfoodfoundation/openfoodnetwork",
+      "kind": "positive",
+      "merge": "df0c98d013c6a93b3244544ac09dc0f4a39a67e0",
+      "first": "87692b06e63c4b575f1cd8ef7cc4c218ff3b9c5f",
+      "second": "e37a065f10c107a543ed05df2ff1a8e723a8f826",
+      "base": "0eea9327780a2554374bd395d14e1cc555186aaa",
+      "conflicted": [
+        "Gemfile.lock"
+      ]
+    },
+    {
+      "index": 16,
+      "repo": "openfoodfoundation/openfoodnetwork",
+      "kind": "positive",
+      "merge": "db809923264a1aed9916350e07fb7a5a823aa876",
+      "first": "430e5ea9cc43ae0e7f72cdf7b20597f465e13712",
+      "second": "444097c75ffc5c2647cdc93d10f5b62243d499b1",
+      "base": "2ae84ad710a96b98ad81e13bc39e3b3efe3b817e",
+      "conflicted": [
+        "Gemfile.lock"
+      ]
+    },
+    {
+      "index": 17,
+      "repo": "openfoodfoundation/openfoodnetwork",
+      "kind": "positive",
+      "merge": "983bed3c4e8c4af6bd85f5205bddb869d2a276e3",
+      "first": "79243303217c823425de1d2343f234fc7b4a1292",
+      "second": "5cca8693b3afe3918a2657f89d811a6ed02a066e",
+      "base": "ca458018cada5a37d354a66c98040ffe37ce4d61",
+      "conflicted": [
+        "Gemfile.lock",
+        "app/controllers/spree/admin/reports_controller.rb"
+      ]
+    },
+    {
+      "index": 18,
+      "repo": "openfoodfoundation/openfoodnetwork",
+      "kind": "positive",
+      "merge": "cce26cb45334ee4c8be3fcb75a2730251f849940",
+      "first": "beb1b3f3bc803716ae6b0ae21796b908b9d04d99",
+      "second": "93dd61c6fc3ee0bfe4220e96c29e2172012556d4",
+      "base": "8bb4310cba2c3e8c4a800fe8764e7a27f122d96d",
+      "conflicted": [
+        "Gemfile.lock"
+      ]
+    },
+    {
+      "index": 19,
+      "repo": "openfoodfoundation/openfoodnetwork",
+      "kind": "positive",
+      "merge": "c9a7a6e897046ded02940dc12eb170f8bf9a213b",
+      "first": "8bb4310cba2c3e8c4a800fe8764e7a27f122d96d",
+      "second": "89c461662f8fdb6bcd47a6269f93dac9f12dec03",
+      "base": "cf534237cde75db7ab727a653e75460a683c601e",
+      "conflicted": [
+        "Gemfile.lock",
+        "spec/features/admin/order_cycles/simple_spec.rb"
+      ]
+    },
+    {
+      "index": 20,
+      "repo": "openfoodfoundation/openfoodnetwork",
+      "kind": "positive",
+      "merge": "f34f6936203bae271c28cc8f603101e7514474e7",
+      "first": "ff0e85c877210d65aed0858d17698a1a25a6a503",
+      "second": "cf534237cde75db7ab727a653e75460a683c601e",
+      "base": "5f7c1474a290a9a8e0ba13c72b0b37a9e4f7a3ca",
+      "conflicted": [
+        "Gemfile.lock",
+        "app/controllers/enterprises_controller.rb",
+        "app/helpers/enterprises_helper.rb",
+        "db/schema.rb"
+      ]
+    },
+    {
+      "index": 21,
+      "repo": "openfoodfoundation/openfoodnetwork",
+      "kind": "positive",
+      "merge": "19da0ba969e65aaf5ca7db7401e5aa5b79207a03",
+      "first": "1671184a3cf4a05c849e25b7ca2d9a3c007dbaa9",
+      "second": "5f7c1474a290a9a8e0ba13c72b0b37a9e4f7a3ca",
+      "base": "c2a9a698f494c3c1accb054029a692ffcbb1b3ce",
+      "conflicted": [
+        "Gemfile.lock",
+        "app/models/schedule.rb",
+        "db/schema.rb"
+      ]
+    },
+    {
+      "index": 22,
+      "repo": "openfoodfoundation/openfoodnetwork",
+      "kind": "positive",
+      "merge": "839b373b5cd14c216feedd8fbf75e17ecd0260c7",
+      "first": "e1c2b7e10507be1f6b16472710440820823c6068",
+      "second": "868929eed3a2f32ae82bb1359fcba499b17b0bc1",
+      "base": "e64d573337241b7a652099ecf629d8b513562325",
+      "conflicted": [
+        "Gemfile",
+        "Gemfile.lock",
+        "app/controllers/admin/customers_controller.rb",
+        "app/controllers/admin/subscription_line_items_controller.rb",
+        "app/controllers/admin/subscriptions_controller.rb",
+        "app/controllers/admin/variant_overrides_controller.rb",
+        "app/controllers/api/enterprises_controller.rb",
+        "app/controllers/api/products_controller.rb",
+        "app/models/schedule.rb",
+        "app/models/spree/variant_decorator.rb",
+        "app/services/subscription_form.rb",
+        "db/migrate/20120327000582_polymorphic_payments.rb",
+        "db/migrate/20120327000584_assign_creditcard_txns_to_payment.rb",
+        "db/migrate/20120919013335_add_shipping_method_to_line_items.rb",
+        "db/migrate/20130805050109_update_line_item_caching.rb",
+        "db/migrate/20130814010857_remove_shipping_methods_using_itemwise_calculator.rb",
+        "db/migrate/20140522044009_add_primary_taxon_to_products.rb",
+        "db/migrate/20141219034321_add_permalink_to_enterprises.rb",
+        "db/migrate/20150115050936_add_address_instances_to_existing_enterprise_groups.rb",
+        "db/migrate/20150508072938_add_customer_to_orders.rb",
+        "db/migrate/20150527004427_add_permalink_to_groups.rb",
+        "db/migrate/20150612045544_make_enterprises_name_unique.rb",
+        "db/migrate/20160224034034_grant_explicit_variant_override_permissions.rb",
+        "db/migrate/20170728140134_remove_email_from_enterprises.rb",
+        "db/schema.rb",
+        "lib/open_food_network/orders_and_fulfillments_report.rb",
+        "lib/open_food_network/proxy_order_syncer.rb",
+        "spec/features/admin/orders_spec.rb",
+        "spec/services/order_cycle_form_spec.rb",
+        "spec/services/subscription_form_spec.rb"
+      ]
+    },
+    {
+      "index": 23,
+      "repo": "openfoodfoundation/openfoodnetwork",
+      "kind": "positive",
+      "merge": "384ca310a34d2224e620649c8deb6577dfedcf56",
+      "first": "a218eab67b86f72760a1044d7c8f06c958ca3ba8",
+      "second": "e64d573337241b7a652099ecf629d8b513562325",
+      "base": "b1a274ea272e7b60c4e23eee8cf8ae1ab09c947e",
+      "conflicted": [
+        "Gemfile",
+        "Gemfile.lock",
+        "app/controllers/admin/bulk_line_items_controller.rb",
+        "app/helpers/application_helper.rb"
+      ]
+    },
+    {
+      "index": 24,
+      "repo": "openfoodfoundation/openfoodnetwork",
+      "kind": "positive",
+      "merge": "1c628fac5824f81888f228ebdc79dc00c92b18b0",
+      "first": "eccaaca907100b1f637b671805e66dba631cbe21",
+      "second": "b1a274ea272e7b60c4e23eee8cf8ae1ab09c947e",
+      "base": "46e23b28fd6217db620cb7f3ad47f283b1765770",
+      "conflicted": [
+        "Gemfile.lock"
+      ]
+    },
+    {
+      "index": 25,
+      "repo": "RocketChat/Rocket.Chat",
+      "kind": "positive",
+      "merge": "80834855d9f922f74f02de214ced12e44a53fa97",
+      "first": "69a52ce39bc873e1ad5f4a36b101767e457f6125",
+      "second": "d0058cbc9aed62e57fb49644fbc68631979b0a93",
+      "base": "7a409f20e20c37f2e05d96f2c334b5f3fdbb3fe1",
+      "conflicted": [
+        "apps/meteor/package.json",
+        "apps/meteor/rocketchat.info",
+        "ee/packages/pdf-worker/src/templates/ChatTranscript/components/MessageList.spec.tsx",
+        "package.json",
+        "packages/core-typings/package.json",
+        "packages/rest-typings/package.json",
+        "packages/ui-client/package.json",
+        "yarn.lock"
+      ]
+    },
+    {
+      "index": 26,
+      "repo": "RocketChat/Rocket.Chat",
+      "kind": "positive",
+      "merge": "8c3125b42215a06b41cd18962de5bbd8f122446b",
+      "first": "889c0af89cde9ede06fa3250bc94bdac1a5f9a8d",
+      "second": "30e1f57b9e0e01e00660fbbfbef6b10ceeaac49e",
+      "base": "def5e5b362b7fe67a5c03a261afc9dd2d9854f53",
+      "conflicted": [
+        "apps/meteor/app/utils/rocketchat.info",
+        "apps/meteor/package.json",
+        "package.json",
+        "packages/core-typings/package.json",
+        "packages/rest-typings/package.json",
+        "packages/ui-conference/package.json",
+        "yarn.lock"
+      ]
+    },
+    {
+      "index": 27,
+      "repo": "RocketChat/Rocket.Chat",
+      "kind": "positive",
+      "merge": "7b858dafdbac5e19eb2a86e6cfa12b9a5ec3a110",
+      "first": "fad30abad1d6807bfc35c412c47b64fd7fb2e6ab",
+      "second": "def5e5b362b7fe67a5c03a261afc9dd2d9854f53",
+      "base": "182dd0b2ec1ae582ab22cef928000712ecf8d664",
+      "conflicted": [
+        "apps/meteor/app/utils/rocketchat.info",
+        "apps/meteor/package.json",
+        "package.json",
+        "packages/core-typings/package.json",
+        "packages/gazzodown/package.json",
+        "packages/rest-typings/package.json",
+        "packages/ui-client/package.json",
+        "packages/ui-composer/package.json",
+        "packages/ui-conference/package.json",
+        "packages/ui-video-conf/package.json",
+        "packages/ui-voip/package.json",
+        "packages/web-ui-registration/package.json",
+        "yarn.lock"
+      ]
+    },
+    {
+      "index": 28,
+      "repo": "RocketChat/Rocket.Chat",
+      "kind": "positive",
+      "merge": "10300a25dcc6b6909f00132390f9f96ceef74000",
+      "first": "bcd8d51a986cc523146b1cb593126e781e116ab2",
+      "second": "dd2f20f9087383fdeb43590ecf4a01127b588e57",
+      "base": "c59f19009d22d42cb86058d58a192982d2b7cca5",
+      "conflicted": [
+        "apps/meteor/CHANGELOG.md",
+        "apps/meteor/app/utils/rocketchat.info",
+        "apps/meteor/client/views/navigation/sidepanel/omnichannel/InquireSidePanelItem.tsx",
+        "apps/meteor/package.json",
+        "apps/uikit-playground/package.json",
+        "docker-compose-ci.yml",
+        "package.json",
+        "packages/core-typings/CHANGELOG.md",
+        "packages/core-typings/package.json",
+        "packages/fuselage-ui-kit/package.json",
+        "packages/gazzodown/package.json",
+        "packages/rest-typings/CHANGELOG.md",
+        "packages/rest-typings/package.json",
+        "packages/storybook-config/package.json",
+        "packages/ui-avatar/package.json",
+        "packages/ui-client/package.json",
+        "packages/ui-composer/package.json",
+        "packages/ui-contexts/package.json",
+        "packages/ui-video-conf/package.json",
+        "packages/ui-voip/package.json",
+        "packages/web-ui-registration/package.json",
+        "yarn.lock"
+      ]
+    },
+    {
+      "index": 29,
+      "repo": "RocketChat/Rocket.Chat",
+      "kind": "positive",
+      "merge": "dd60cf8aefe6722da933e844bd7b7a28bc4719e5",
+      "first": "543c7728da4498e4aff8289a468df7f7df5b5b36",
+      "second": "56fb288a4868d172ea8787eed4f79d37d022dc21",
+      "base": "8116c62bed458592f2587f2a4bae0187a1244c06",
+      "conflicted": [
+        "apps/meteor/app/utils/rocketchat.info",
+        "apps/meteor/package.json",
+        "package.json",
+        "packages/core-typings/package.json",
+        "packages/livechat/package.json",
+        "packages/rest-typings/package.json",
+        "yarn.lock"
+      ]
+    },
+    {
+      "index": 30,
+      "repo": "RocketChat/Rocket.Chat",
+      "kind": "positive",
+      "merge": "828565d5a12feee2c3241b8810e51057d1a82a17",
+      "first": "e6902e8a45a0f2562f080b55e7b361c9d935153b",
+      "second": "1651a370018d929d69c33fe665ab077dc70e4f52",
+      "base": "d0230e1ed86163b5cf9da57fda09fa86ea0b5c9f",
+      "conflicted": [
+        "apps/meteor/CHANGELOG.md",
+        "apps/meteor/app/utils/rocketchat.info",
+        "apps/meteor/package.json",
+        "apps/meteor/server/methods/deleteFileMessage.ts",
+        "ee/packages/federation-matrix/CHANGELOG.md",
+        "ee/packages/federation-matrix/package.json",
+        "package.json",
+        "packages/core-typings/CHANGELOG.md",
+        "packages/core-typings/package.json",
+        "packages/http-router/package.json",
+        "packages/rest-typings/CHANGELOG.md",
+        "packages/rest-typings/package.json",
+        "yarn.lock"
+      ]
+    },
+    {
+      "index": 31,
+      "repo": "RocketChat/Rocket.Chat",
+      "kind": "positive",
+      "merge": "4d9c8735bd2f04ecc8b099012fcde7c38e26ad0d",
+      "first": "10a6f18d52ac0e8aba90520667f07dba190597ec",
+      "second": "44bc40015f5bca0008067c9d921271dc53779893",
+      "base": "bb8c7be629b7cbffc7387285c5cb98e5835ad85f",
+      "conflicted": [
+        ".github/workflows/update-version-durability.yml",
+        "apps/meteor/.docker-mongo/Dockerfile",
+        "apps/meteor/.docker/Dockerfile.alpine",
+        "apps/meteor/.docker/Dockerfile.debian",
+        "apps/meteor/CHANGELOG.md",
+        "apps/meteor/app/meteor-accounts-saml/server/lib/signature/validateRedirectSignature.ts",
+        "apps/meteor/app/utils/rocketchat.info",
+        "apps/meteor/client/views/admin/ABAC/ABACRoomsTab/__snapshots__/RoomFormAttributeField.spec.tsx.snap",
+        "apps/meteor/ee/server/services/Dockerfile",
+        "apps/meteor/package.json",
+        "ee/apps/account-service/Dockerfile",
+        "ee/apps/authorization-service/Dockerfile",
+        "ee/apps/ddp-streamer/Dockerfile",
+        "ee/apps/ddp-streamer/package.json",
+        "ee/apps/omnichannel-transcript/Dockerfile",
+        "ee/apps/presence-service/Dockerfile",
+        "ee/apps/queue-worker/Dockerfile",
+        "package.json",
+        "packages/apps-engine/package.json",
+        "packages/apps/package.json",
+        "packages/core-typings/CHANGELOG.md",
+        "packages/core-typings/package.json",
+        "packages/http-router/package.json",
+        "packages/i18n/CHANGELOG.md",
+        "packages/i18n/package.json",
+        "packages/message-parser/package.json",
+        "packages/model-typings/CHANGELOG.md",
+        "packages/model-typings/package.json",
+        "packages/models/CHANGELOG.md",
+        "packages/models/package.json",
+        "packages/release-action/package.json",
+        "packages/rest-typings/CHANGELOG.md",
+        "packages/rest-typings/package.json",
+        "yarn.lock"
+      ]
+    },
+    {
+      "index": 32,
+      "repo": "RocketChat/Rocket.Chat",
+      "kind": "positive",
+      "merge": "6cd73b0fe9d4b14f62e33e176e848d248ad797c1",
+      "first": "1a8728644f5970059fa83a881e754e9dc283116d",
+      "second": "b57b2cb6057ab0e1e856802925ddda54c73fdbe0",
+      "base": "00a1efa3fde455359510349d827acd91ba67905e",
+      "conflicted": [
+        "apps/meteor/app/utils/rocketchat.info",
+        "apps/meteor/ee/server/apps/communication/endpoints/appGeneralLogsHandler.ts",
+        "apps/meteor/ee/server/apps/communication/endpoints/appLogsHandler.ts",
+        "apps/meteor/package.json",
+        "package.json",
+        "packages/apps-engine/deno-runtime/deno.lock",
+        "packages/core-typings/package.json",
+        "packages/rest-typings/package.json",
+        "yarn.lock"
+      ]
+    },
+    {
+      "index": 33,
+      "repo": "RocketChat/Rocket.Chat",
+      "kind": "positive",
+      "merge": "3340757b7582a8a5d283d523142b66b0cfcf63f2",
+      "first": "2cebe41eab04bb5edc87b2669c543ed4fc33921b",
+      "second": "00a1efa3fde455359510349d827acd91ba67905e",
+      "base": "b7a32f9ec92baa89752699c4aee10b5c53fa4cec",
+      "conflicted": [
+        "apps/meteor/app/utils/rocketchat.info",
+        "apps/meteor/package.json",
+        "package.json",
+        "packages/core-typings/package.json",
+        "packages/rest-typings/package.json",
+        "yarn.lock"
+      ]
+    },
+    {
+      "index": 34,
+      "repo": "RocketChat/Rocket.Chat",
+      "kind": "positive",
+      "merge": "fec3c9f0bab0c26c8a368eaabf54023cc3022bf6",
+      "first": "2103a7aecf159ed39492dc349e6e3a887759331c",
+      "second": "b7a32f9ec92baa89752699c4aee10b5c53fa4cec",
+      "base": "f0e401b3bd7aa2b2c61dc876790efd0740327600",
+      "conflicted": [
+        "apps/meteor/app/utils/rocketchat.info",
+        "apps/meteor/package.json",
+        "package.json",
+        "packages/core-typings/package.json",
+        "packages/rest-typings/package.json",
+        "yarn.lock"
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "index": 0,
+      "acceptable": [],
+      "descriptive": "regenerated"
+    },
+    {
+      "index": 1,
+      "acceptable": [],
+      "descriptive": "other"
+    },
+    {
+      "index": 2,
+      "acceptable": [],
+      "descriptive": "regenerated"
+    },
+    {
+      "index": 3,
+      "acceptable": [],
+      "descriptive": "took upstream"
+    },
+    {
+      "index": 4,
+      "acceptable": [],
+      "descriptive": "regenerated"
+    },
+    {
+      "index": 5,
+      "acceptable": [],
+      "descriptive": "regenerated"
+    },
+    {
+      "index": 6,
+      "acceptable": [],
+      "descriptive": "regenerated"
+    },
+    {
+      "index": 7,
+      "acceptable": [],
+      "descriptive": "regenerated"
+    },
+    {
+      "index": 8,
+      "acceptable": [],
+      "descriptive": "regenerated"
+    },
+    {
+      "index": 9,
+      "acceptable": [],
+      "descriptive": "regenerated"
+    },
+    {
+      "index": 10,
+      "acceptable": [],
+      "descriptive": "regenerated"
+    },
+    {
+      "index": 11,
+      "acceptable": [],
+      "descriptive": "regenerated"
+    },
+    {
+      "index": 12,
+      "acceptable": [],
+      "descriptive": "regenerated"
+    },
+    {
+      "index": 13,
+      "acceptable": [],
+      "descriptive": "other"
+    },
+    {
+      "index": 14,
+      "acceptable": [],
+      "descriptive": "regenerated"
+    },
+    {
+      "index": 15,
+      "acceptable": [],
+      "descriptive": "other"
+    },
+    {
+      "index": 16,
+      "acceptable": [],
+      "descriptive": "other"
+    },
+    {
+      "index": 17,
+      "acceptable": [],
+      "descriptive": "other"
+    },
+    {
+      "index": 18,
+      "acceptable": [],
+      "descriptive": "other"
+    },
+    {
+      "index": 19,
+      "acceptable": [],
+      "descriptive": "other"
+    },
+    {
+      "index": 20,
+      "acceptable": [],
+      "descriptive": "other"
+    },
+    {
+      "index": 21,
+      "acceptable": [],
+      "descriptive": "other"
+    },
+    {
+      "index": 22,
+      "acceptable": [],
+      "descriptive": "regenerated"
+    },
+    {
+      "index": 23,
+      "acceptable": [],
+      "descriptive": "other"
+    },
+    {
+      "index": 24,
+      "acceptable": [],
+      "descriptive": "other"
+    },
+    {
+      "index": 25,
+      "acceptable": [],
+      "descriptive": "regenerated"
+    },
+    {
+      "index": 26,
+      "acceptable": [],
+      "descriptive": "other"
+    },
+    {
+      "index": 27,
+      "acceptable": [],
+      "descriptive": "regenerated"
+    },
+    {
+      "index": 28,
+      "acceptable": [],
+      "descriptive": "took local"
+    },
+    {
+      "index": 29,
+      "acceptable": [],
+      "descriptive": "regenerated"
+    },
+    {
+      "index": 30,
+      "acceptable": [],
+      "descriptive": "other"
+    },
+    {
+      "index": 31,
+      "acceptable": [],
+      "descriptive": "regenerated"
+    },
+    {
+      "index": 32,
+      "acceptable": [],
+      "descriptive": "regenerated"
+    },
+    {
+      "index": 33,
+      "acceptable": [],
+      "descriptive": "regenerated"
+    },
+    {
+      "index": 34,
+      "acceptable": [],
+      "descriptive": "regenerated"
+    }
+  ],
+  "exclusions": [
+    {
+      "repo": "matomo-org/matomo",
+      "merge": "4f696701787398fc2ac8bb8a2d928646dae525ef",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "matomo-org/matomo",
+      "merge": "679e73f1236969db0c2d767655cb84456a727d24",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "matomo-org/matomo",
+      "merge": "31dcb9dbb01460bf9a68dc8b7bc826a05c367f74",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "matomo-org/matomo",
+      "merge": "43bd151e711d5c719cf89d2746c23da5e29dd264",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "matomo-org/matomo",
+      "merge": "d923ba93e59ed334e69a4e3f795f0ca940f23bf9",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "RocketChat/Rocket.Chat",
+      "merge": "2671a2159ace1fb3791e9a3c28d83d173c1020ae",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "RocketChat/Rocket.Chat",
+      "merge": "7af7c03c70496440636edf1943c5bacf629df7a5",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "RocketChat/Rocket.Chat",
+      "merge": "787a7ad50006850ea17976ec9082f288735dac97",
+      "reason": "criss-cross"
+    }
+  ]
+}

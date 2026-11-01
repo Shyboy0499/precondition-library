@@ -1,0 +1,120 @@
+{
+  "refusal_set": "044a77da17c06b39335dc4e7b8c7a442994fd0f3eb6ace4c6ee0435c19fc46b5",
+  "states": 35,
+  "library": "results/replicates-2026-10-05/run-12/library-two-sided",
+  "programs": 14,
+  "seconds_per_program": {
+    "mean": 162.8,
+    "min": 113.1,
+    "max": 279.6
+  },
+  "programs_refusing_every_state": 12,
+  "rows": [
+    {
+      "program": "branch_renamed-occ1-rename-fork-branch-to-upstream",
+      "variant": "rename",
+      "seconds": 279.6,
+      "accepted": [],
+      "error": null
+    },
+    {
+      "program": "branch_renamed-occ2-retrack-branch-after-upstream-rename",
+      "variant": "retrack",
+      "seconds": 143.1,
+      "accepted": [],
+      "error": null
+    },
+    {
+      "program": "branch_renamed-occ3-retarget-upstream-default-and-merge",
+      "variant": "merge",
+      "seconds": 145.3,
+      "accepted": [],
+      "error": null
+    },
+    {
+      "program": "dirty_tree-occ1-sync-upstream-stash-restore",
+      "variant": "stash",
+      "seconds": 160.5,
+      "accepted": [],
+      "error": null
+    },
+    {
+      "program": "dirty_tree-occ2-dirty-worktree-commit-then-rebase",
+      "variant": "commit",
+      "seconds": 153.7,
+      "accepted": [],
+      "error": null
+    },
+    {
+      "program": "dirty_tree-occ3-update-upstream-keep-wip-aside",
+      "variant": "aside",
+      "seconds": 156.2,
+      "accepted": [],
+      "error": null
+    },
+    {
+      "program": "diverged-occ1-sync-fork-discard",
+      "variant": "discard",
+      "seconds": 164.4,
+      "accepted": [],
+      "error": null
+    },
+    {
+      "program": "diverged-occ2-rebase-local-commits-onto-upstream",
+      "variant": "rebase",
+      "seconds": 181.5,
+      "accepted": [],
+      "error": null
+    },
+    {
+      "program": "diverged-occ3-diverged-sync-fork-merge",
+      "variant": "merge",
+      "seconds": 187.3,
+      "accepted": [],
+      "error": null
+    },
+    {
+      "program": "lockfile_conflict-occ1-lockfile-conflict-take-upstream",
+      "variant": "take_upstream",
+      "seconds": 158.9,
+      "accepted": [
+        "saleor/saleor@4fb40d636d2b"
+      ],
+      "error": null
+    },
+    {
+      "program": "lockfile_conflict-occ2-lockfile-merge-keep-local-removals",
+      "variant": "keep_local",
+      "seconds": 159.8,
+      "accepted": [],
+      "error": null
+    },
+    {
+      "program": "submodule_moved-occ1-submodule-remove-upstream",
+      "variant": "remove",
+      "seconds": 138.3,
+      "accepted": [],
+      "error": null
+    },
+    {
+      "program": "submodule_moved-occ2-bring-nested-repo-into-line",
+      "variant": "init",
+      "seconds": 113.1,
+      "accepted": [
+        "matomo-org/matomo@3ac997619c17",
+        "matomo-org/matomo@0e48dd9887cd",
+        "matomo-org/matomo@524565eb40d8",
+        "matomo-org/matomo@8d1e15a49d05",
+        "matomo-org/matomo@1cd924d0371a"
+      ],
+      "error": null
+    },
+    {
+      "program": "submodule_moved-occ3-submodule-repin-to-upstream",
+      "variant": "repin",
+      "seconds": 138.2,
+      "accepted": [],
+      "error": null
+    }
+  ]
+}
