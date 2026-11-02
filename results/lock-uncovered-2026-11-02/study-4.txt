@@ -1,0 +1,21 @@
+ecosystem-unify-2026-11-02: 67 unreproduced conflicted files
+  recombination                              53  (79%)
+  new resolution: moved                      11  (16%)
+  recombination: dropped                      2  (3%)
+  new resolution: moved+added                 1  (1%)
+  Cargo.lock           recombination 1
+  Gemfile.lock         recombination 12
+  composer.lock        recombination 10, new resolution 2
+  package-lock.json    recombination 9, new resolution 6
+  pnpm-lock.yaml       recombination 6, new resolution 1
+  yarn.lock            recombination 17, new resolution 3
+  new pairs as a share of the maintainer's set: median 0.007
+ecosystem-unify-2026-11-02: 55 recombined files
+   21  left out a side's change
+   14  left out a side's change + kept a base version a side changed
+   12  kept a base version a side changed
+    3  removed what both kept
+    2  left out a side's change + removed what both kept
+    2  left out a side's change + kept a pair the other side removed
+    1  left out a side's change + kept a base version a side changed + kept a pair the other side removed
+  pairs differing from the merge: median 1, max 144
