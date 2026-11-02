@@ -19,6 +19,18 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **Study 4's result: the resolver predicts which package-level merge maintainers kept.** It
+  ran as registered on 266 conflicts from 20 fresh repositories
+  (`results/ecosystem-unify-2026-11-02/`). All four hypotheses are supported.
+  - **H1:** discordant files went 91/0 for the prediction, 17 repositories to 0.
+  - **H3, npm's family, the test that could have failed:** the plain merge won all 67 discordant
+    files, in 11 repositories.
+  - **H2 is near-definitional.** That was found after the data and is said plainly in the README.
+  - **H4 replicates study 3's coverage:** 0.760 [0.674, 0.845].
+  - **Verification:** every figure was recomputed with no project imports, and all 290 files were
+    re-read from git independently.
+  - A tie-break in `unify` was found to depend on set order. It decides no verdict here.
+
 - **Study 4 is registered: does the resolver predict the merge? (ADR-0058).**
   - The question: where study 3's two package-level merges disagree, did maintainers keep the one
     the ecosystem's resolver predicts? That is the unified merge for one-version lock files and
