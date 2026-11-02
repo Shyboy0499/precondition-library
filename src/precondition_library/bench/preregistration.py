@@ -23,6 +23,7 @@ REGISTRATIONS: dict[str, str] = {
     "real-merges": "77bc2f861f117bbe7d97b58fb777f1e8e70cc4b92800904f7b1e06efa4e13d30",
     "refusal-population": "f320aeee8c05a4ad07816175f33c2642152c12ca83b0572e937a971b583501c1",
     "lock-oracle": "3e9afab264823c215f70abf11b1a0e7137dfa513350292c343b4228789375afe",
+    "ecosystem-unify": "23f87bb165d52d27d21a11ca7046f3917234adda37ac64d1ab1157be1fc5efdd",
 }
 """Each registered study's document, by name, and the SHA-256 of its bytes."""
 
