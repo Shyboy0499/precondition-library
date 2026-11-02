@@ -12,6 +12,18 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **Study 3's result: real lock-file conflicts have an external oracle (#306).** The study ran as
+  registered on 360 conflicts from 27 fresh repositories (`results/lock-oracle-2026-11-02/`).
+  - **H1 is supported.** An action computed from the base and the two sides alone gives exactly
+    the package set the maintainer committed on 0.686 of a repository's conflicts
+    [0.601, 0.770].
+  - **H2 is supported.** The package-level three-way merge is closer to the maintainer than
+    either side (+0.069 and +0.113 Jaccard).
+  - **Contrast:** study 1's line unions reproduce 0.072 of the same cases.
+  - **Verification:** every figure was recomputed with no project imports, and all 412 files
+    were re-read from git with independent parsers. There were no mismatches.
+  - **Exploratory:** unifying versions helps composer and bundler and hurts npm and yarn.
+
 - **Study 3 is registered: a computed lock-file oracle (#306, ADR-0056).**
   - `docs/preregistration/lock-oracle.md` asks two questions on repositories nobody here has
     mined. How often does an action computed from a conflict's base and two sides give exactly

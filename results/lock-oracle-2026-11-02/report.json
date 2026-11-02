@@ -1,0 +1,119 @@
+{
+  "cases": 360,
+  "repositories_with_a_case": 27,
+  "per_repository": {
+    "BookStackApp/BookStack": 15,
+    "MagicMirrorOrg/MagicMirror": 15,
+    "Textualize/rich": 6,
+    "Textualize/textual": 14,
+    "bolt/core": 15,
+    "consuldemocracy/consuldemocracy": 15,
+    "contao/contao": 15,
+    "diaspora/diaspora": 15,
+    "feedbin/feedbin": 10,
+    "firefly-iii/firefly-iii": 15,
+    "getgrav/grav": 15,
+    "huginn/huginn": 15,
+    "invoiceninja/invoiceninja": 15,
+    "laurent22/joplin": 15,
+    "loomio/loomio": 15,
+    "nightscout/cgm-remote-monitor": 15,
+    "node-red/node-red": 10,
+    "openstreetmap/openstreetmap-website": 15,
+    "otwcode/otwarchive": 15,
+    "phpstan/phpstan-src": 15,
+    "processing/p5.js": 8,
+    "pterodactyl/panel": 9,
+    "rust-lang/crates.io": 15,
+    "rust-lang/rustfmt": 7,
+    "snipe/snipe-it": 15,
+    "wallabag/wallabag": 11,
+    "webpack/webpack": 15
+  },
+  "exclusions": {
+    "criss-cross": 9,
+    "merged lock file unread": 10,
+    "submodule or binary conflict": 2
+  },
+  "underpowered": false,
+  "underpowered_because": [],
+  "coverage": {
+    "statistic": 0.6856341189674523,
+    "interval": {
+      "low": 0.6014403678700871,
+      "high": 0.7698278700648175
+    }
+  },
+  "merge_minus_local": {
+    "statistic": 0.06915020473303715,
+    "interval": {
+      "low": 0.02299007406539949,
+      "high": 0.11531033540067481
+    }
+  },
+  "merge_minus_upstream": {
+    "statistic": 0.11250578880900851,
+    "interval": {
+      "low": 0.06907936016290653,
+      "high": 0.1559322174551105
+    }
+  },
+  "pooled_coverage": 0.6833333333333333,
+  "action_share": {
+    "take_local": 0.28055555555555556,
+    "take_upstream": 0.13055555555555556,
+    "three_way": 0.3888888888888889,
+    "three_way_unified": 0.3194444444444444
+  },
+  "median_jaccard": {
+    "take_local": 0.9743145743145742,
+    "take_upstream": 0.9346209552070086,
+    "three_way": 0.9958237427634791,
+    "three_way_unified": 0.985865547897313
+  },
+  "line_union_share": 0.07222222222222222,
+  "by_ecosystem": {
+    "Cargo.lock": {
+      "files": 18,
+      "reproduced": 9
+    },
+    "Gemfile.lock": {
+      "files": 85,
+      "reproduced": 65
+    },
+    "composer.lock": {
+      "files": 136,
+      "reproduced": 102
+    },
+    "package-lock.json": {
+      "files": 116,
+      "reproduced": 79
+    },
+    "pnpm-lock.yaml": {
+      "files": 3,
+      "reproduced": 2
+    },
+    "poetry.lock": {
+      "files": 20,
+      "reproduced": 11
+    },
+    "yarn.lock": {
+      "files": 34,
+      "reproduced": 20
+    }
+  },
+  "decisions": [
+    {
+      "rule": "1 power",
+      "outcome": "powered"
+    },
+    {
+      "rule": "2 H1",
+      "outcome": "supported: coverage 0.686, lower end 0.601 against 0.1"
+    },
+    {
+      "rule": "3 H2",
+      "outcome": "supported: merge minus local +0.069, minus upstream +0.113"
+    }
+  ]
+}
