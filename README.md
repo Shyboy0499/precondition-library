@@ -408,6 +408,37 @@ on every conflict where two of three libraries mostly declined
 ([stage A](results/real-merges-2026-10-26/stage-A/README.md)). It motivated the amendment, so it
 tests nothing.
 
+### Real lock-file conflicts, read as package sets (studies 3 and 4)
+
+The lock-file intent's line unions reproduce almost nothing maintainers commit. Read as sets of
+resolved `(package, version)` pairs, the picture changes. Two studies, each registered before its
+data and run on repositories this project had never mined, label each conflict by which action
+computed from the merge's base and two sides alone reproduces the maintainer's exact package set.
+Those actions are:
+
+- take either side;
+- a package-level three-way merge;
+- the same merge with compatible versions unified.
+
+No tool or registry is involved in any of them.
+
+| | study 3 ([lock-oracle](results/lock-oracle-2026-11-02/README.md)) | study 4 ([ecosystem-unify](results/ecosystem-unify-2026-11-02/README.md)) |
+| --- | --- | --- |
+| conflicts, repositories | 360, 27 | 266, 20 |
+| coverage: some computed action reproduces the maintainer (mean over repositories, 95% t) | **0.686** [0.601, 0.770] | **0.760** [0.674, 0.845] |
+| study 1's line unions reproduce | 0.072 | — |
+| the merge the resolver predicts wins where the two merges disagree | — | **91 of 91** discordant files, 17 repositories to 0 |
+
+- **External labels for two conflicts in three.** The lock-file task has an external oracle for
+  about two real conflicts in three: the maintainer's own resolution, computed without judgement.
+- **Which merge to compute, per ecosystem.** Unify versions where the resolver installs one
+  version of a package (composer, bundler, poetry). Keep compatible duplicates in npm's family,
+  where the plain merge won all 67 of its discordant files.
+- **One hypothesis tested less than its sign test suggests.** Study 4's one-version hypothesis
+  proved near-definitional, which was found after the data and is said plainly in its README.
+- **Verification.** Both studies' figures were recomputed by scripts that import nothing from this
+  project, and every file was re-read from git with independent parsers.
+
 ## Results graded by this project's own labels
 
 **Graded by:** states built by this project's injectors, and labels from its own rules and
@@ -473,10 +504,14 @@ build's 56 states with no model call and no compiled program, fires on 190 of th
 with none wrong, and on 200 held-out pairs with none wrong where arm 3 had 8–21
 ([state-reading control](results/state-classifier-2026-10-26/README.md)). So the claim this table
 supports is that a dispatcher that reads the state beats one that does not, and compiled
-preconditions are one such dispatcher. Whether executability adds anything is still open. #295, a
-control limited to what probes can see, is not run. #296 has run on real merges, but its registered
-control could not fire `merge`, so it cannot separate the two either
-([Results graded outside this project](#results-graded-outside-this-project), ADR-0052).
+preconditions are one such dispatcher. A control limited to what the probes see (#295 item 3,
+exploratory) narrows it further. A tree per intent over only the verdicts of each library's own
+preconditions, allowed to fire only what the library holds, makes no more wrong fires than arm 3 in
+all six library-blocks, and fewer in two: 8 against 13, and 5 against 21 on held-out states
+([probe-verdict control](results/probe-classifier-2026-11-02/README.md)). On these states, arm 3's
+advantage lies neither in the facts it reads nor in executing them as a conjunction. #296 has run
+on real merges, but its registered control could not fire `merge`, so it cannot separate the two
+either ([Results graded outside this project](#results-graded-outside-this-project), ADR-0052).
 
 **What it does not show.**
 
