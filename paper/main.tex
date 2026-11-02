@@ -721,6 +721,18 @@ In study 3 two do, both on git-branch ``versions''; were both reproduced, covera
 rather than 0.686, and no decision would change. The code now breaks such ties
 deterministically.
 
+\paragraph{What the oracle cannot label (exploratory).}
+Of the conflicted lock files no computed action reproduces, 63 of 124 in study 3 and 12 of 67
+in study 4 hold versions that none of the base, local or upstream files had. A maintainer ran a
+resolver there, and no computed action can match that. The rest use only the sides' versions.
+They differ from the per-ecosystem merge by a median of one or two packages, mostly because the
+maintainer did not take some side's change. A merge restricted to what the merged manifest
+reaches through the lock file's own requirements recovers almost none of these. Worse, it breaks
+the composer files the plain merge reproduced. Maintainers' own \code{composer.lock} files are
+fully reachable from their \code{composer.json} in only 7 of 233 cases, because merge plugins and
+path repositories add requirements the manifest does not show. For a dispatcher, both kinds are
+cases to refuse, or to hand to the ecosystem's tool.
+
 \section{Are the graders right?}
 \label{sec:graders}
 
