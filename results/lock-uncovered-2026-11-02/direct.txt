@@ -1,0 +1,2 @@
+lock-oracle-2026-11-02 {'files': 35, 'left-out packages': 502, 'of them direct': 66, 'files with a direct one': 21}
+ecosystem-unify-2026-11-02 {'files': 32, 'left-out packages': 186, 'of them direct': 23, 'files with a direct one': 14}
