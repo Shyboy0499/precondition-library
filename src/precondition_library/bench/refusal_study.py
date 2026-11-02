@@ -67,7 +67,7 @@ from .refusal_set import REGISTRATION, digest, load, mine_refusal_set
 from .state_classifier import StateClassifier, _states, features
 
 EVALUATION = (
-    "openproject/openproject",
+    "opf/openproject",
     "PrestaShop/PrestaShop",
     "home-assistant/frontend",
     "rust-lang/rust-analyzer",
@@ -80,7 +80,7 @@ EVALUATION = (
     "microsoft/vscode",
     "elastic/kibana",
 )
-"""List E, in the registration's order (§3.1)."""
+"""List E, in the registration's order (§3.1), with Amendment 2's correction of the first."""
 
 TARGET_INEXPRESSIBLE = 100
 TARGET_CLEAN = 60

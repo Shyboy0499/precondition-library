@@ -10,6 +10,13 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ## Unreleased
 
+### Fixed
+
+- **Study 2's first evaluation repository is `opf/openproject` (Amendment 2, ADR-0057, #330).**
+  The registered `openproject/openproject` does not exist, and mining would have stopped at it.
+  The weekly link check found it. The amendment was made before any study-2 data. The original
+  line is kept, and `.lycheeignore` names the dead link with its reason.
+
 ### Added
 
 - **Study 3's result: real lock-file conflicts have an external oracle (#306).** The study ran as

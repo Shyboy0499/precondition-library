@@ -1,0 +1,4 @@
+# Links the link check (.github/workflows) must not follow, each with its reason.
+# Study 2's registration names this repository as originally written; Amendment 2 corrects it
+# to opf/openproject, and the original line is kept so the change can be read (#330).
+^https://github\.com/openproject/openproject/?$
