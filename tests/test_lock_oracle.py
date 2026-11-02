@@ -17,6 +17,7 @@ from __future__ import annotations
 import itertools
 import math
 import os
+import re
 import statistics
 import subprocess
 from pathlib import Path
@@ -263,7 +264,7 @@ def test_the_study_refuses_without_its_registration(
 def test_the_repository_list_is_the_registered_one() -> None:
     text = preregistration.document(lo.REGISTRATION).read_text(encoding="utf-8")
     section = text.split("### 3.1", 1)[1].split("###", 1)[0]
-    listed = [line.split("`")[1] for line in section.splitlines() if line.startswith("| `")]
+    listed = re.findall(r"^\| \d+ \| `([^`]+)`", section, re.MULTILINE)
     assert tuple(listed) == lo.REPOSITORIES
     assert len(lo.REPOSITORIES) >= lo.MIN_REPOSITORIES
 
