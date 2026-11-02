@@ -1,0 +1,946 @@
+{
+  "training_states": 56,
+  "pairs": {
+    "eval": 400,
+    "held-out": 400
+  },
+  "libraries": [
+    {
+      "library": "results/replicates-2026-10-05/run-11/library-two-sided",
+      "admitted_programs": 13,
+      "distinct_preconditions": 60,
+      "tree_depths": {
+        "keep_uncommitted_work_and_sync": 3,
+        "sync_fork_with_upstream": 5,
+        "sync_through_a_conflicting_lockfile": 2,
+        "follow_renamed_upstream_branch": 3,
+        "restore_submodule_state": 3
+      },
+      "blocks": {
+        "eval": {
+          "tree": {
+            "threshold": null,
+            "coverage": {
+              "numerator": 187,
+              "denominator": 400
+            },
+            "mismatch": {
+              "numerator": 0,
+              "denominator": 187
+            },
+            "mismatch_interval": {
+              "low": 0.0,
+              "high": 0.020129783024246284
+            }
+          },
+          "tree_unrestricted": {
+            "threshold": null,
+            "coverage": {
+              "numerator": 200,
+              "denominator": 400
+            },
+            "mismatch": {
+              "numerator": 0,
+              "denominator": 200
+            },
+            "mismatch_interval": {
+              "low": 0.0,
+              "high": 0.018846005918320894
+            }
+          },
+          "arm3": {
+            "threshold": null,
+            "coverage": {
+              "numerator": 187,
+              "denominator": 400
+            },
+            "mismatch": {
+              "numerator": 0,
+              "denominator": 187
+            },
+            "mismatch_interval": {
+              "low": 0.0,
+              "high": 0.020129783024246284
+            }
+          },
+          "agree": 370,
+          "tree_wrong": [],
+          "tree_unrestricted_wrong": []
+        },
+        "held-out": {
+          "tree": {
+            "threshold": null,
+            "coverage": {
+              "numerator": 193,
+              "denominator": 400
+            },
+            "mismatch": {
+              "numerator": 8,
+              "denominator": 193
+            },
+            "mismatch_interval": {
+              "low": 0.021150699451912076,
+              "high": 0.07964913147813524
+            }
+          },
+          "tree_unrestricted": {
+            "threshold": null,
+            "coverage": {
+              "numerator": 200,
+              "denominator": 400
+            },
+            "mismatch": {
+              "numerator": 8,
+              "denominator": 200
+            },
+            "mismatch_interval": {
+              "low": 0.02040538715065641,
+              "high": 0.07693293829419882
+            }
+          },
+          "arm3": {
+            "threshold": null,
+            "coverage": {
+              "numerator": 193,
+              "denominator": 400
+            },
+            "mismatch": {
+              "numerator": 13,
+              "denominator": 193
+            },
+            "mismatch_interval": {
+              "low": 0.0397828557442091,
+              "high": 0.11181924462481856
+            }
+          },
+          "agree": 363,
+          "tree_wrong": [
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3001,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3002,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3006,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3010,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3013,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3021,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3026,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3034,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            }
+          ],
+          "tree_unrestricted_wrong": [
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3001,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3002,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3006,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3010,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3013,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3021,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3026,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3034,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "library": "results/replicates-2026-10-05/run-12/library-two-sided",
+      "admitted_programs": 14,
+      "distinct_preconditions": 60,
+      "tree_depths": {
+        "keep_uncommitted_work_and_sync": 2,
+        "sync_fork_with_upstream": 5,
+        "sync_through_a_conflicting_lockfile": 2,
+        "follow_renamed_upstream_branch": 3,
+        "restore_submodule_state": 3
+      },
+      "blocks": {
+        "eval": {
+          "tree": {
+            "threshold": null,
+            "coverage": {
+              "numerator": 200,
+              "denominator": 400
+            },
+            "mismatch": {
+              "numerator": 0,
+              "denominator": 200
+            },
+            "mismatch_interval": {
+              "low": 0.0,
+              "high": 0.018846005918320894
+            }
+          },
+          "tree_unrestricted": {
+            "threshold": null,
+            "coverage": {
+              "numerator": 200,
+              "denominator": 400
+            },
+            "mismatch": {
+              "numerator": 0,
+              "denominator": 200
+            },
+            "mismatch_interval": {
+              "low": 0.0,
+              "high": 0.018846005918320894
+            }
+          },
+          "arm3": {
+            "threshold": null,
+            "coverage": {
+              "numerator": 187,
+              "denominator": 400
+            },
+            "mismatch": {
+              "numerator": 0,
+              "denominator": 187
+            },
+            "mismatch_interval": {
+              "low": 0.0,
+              "high": 0.020129783024246284
+            }
+          },
+          "agree": 330,
+          "tree_wrong": [],
+          "tree_unrestricted_wrong": []
+        },
+        "held-out": {
+          "tree": {
+            "threshold": null,
+            "coverage": {
+              "numerator": 200,
+              "denominator": 400
+            },
+            "mismatch": {
+              "numerator": 8,
+              "denominator": 200
+            },
+            "mismatch_interval": {
+              "low": 0.02040538715065641,
+              "high": 0.07693293829419882
+            }
+          },
+          "tree_unrestricted": {
+            "threshold": null,
+            "coverage": {
+              "numerator": 200,
+              "denominator": 400
+            },
+            "mismatch": {
+              "numerator": 8,
+              "denominator": 200
+            },
+            "mismatch_interval": {
+              "low": 0.02040538715065641,
+              "high": 0.07693293829419882
+            }
+          },
+          "arm3": {
+            "threshold": null,
+            "coverage": {
+              "numerator": 193,
+              "denominator": 400
+            },
+            "mismatch": {
+              "numerator": 8,
+              "denominator": 193
+            },
+            "mismatch_interval": {
+              "low": 0.021150699451912076,
+              "high": 0.07964913147813524
+            }
+          },
+          "agree": 334,
+          "tree_wrong": [
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3001,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3002,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3006,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3010,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3013,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3021,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3026,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3034,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            }
+          ],
+          "tree_unrestricted_wrong": [
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3001,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3002,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3006,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3010,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3013,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3021,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3026,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3034,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "library": "results/replicates-2026-10-05/run-13/library-two-sided",
+      "admitted_programs": 13,
+      "distinct_preconditions": 57,
+      "tree_depths": {
+        "keep_uncommitted_work_and_sync": 3,
+        "sync_fork_with_upstream": 5,
+        "sync_through_a_conflicting_lockfile": 2,
+        "follow_renamed_upstream_branch": 2,
+        "restore_submodule_state": 3
+      },
+      "blocks": {
+        "eval": {
+          "tree": {
+            "threshold": null,
+            "coverage": {
+              "numerator": 171,
+              "denominator": 400
+            },
+            "mismatch": {
+              "numerator": 0,
+              "denominator": 171
+            },
+            "mismatch_interval": {
+              "low": 0.0,
+              "high": 0.021971887697207072
+            }
+          },
+          "tree_unrestricted": {
+            "threshold": null,
+            "coverage": {
+              "numerator": 200,
+              "denominator": 400
+            },
+            "mismatch": {
+              "numerator": 11,
+              "denominator": 200
+            },
+            "mismatch_interval": {
+              "low": 0.030985020801370097,
+              "high": 0.0957879244659355
+            }
+          },
+          "arm3": {
+            "threshold": null,
+            "coverage": {
+              "numerator": 189,
+              "denominator": 400
+            },
+            "mismatch": {
+              "numerator": 0,
+              "denominator": 189
+            },
+            "mismatch_interval": {
+              "low": 0.0,
+              "high": 0.019921012893483563
+            }
+          },
+          "agree": 353,
+          "tree_wrong": [],
+          "tree_unrestricted_wrong": [
+            {
+              "intent": "follow_renamed_upstream_branch",
+              "environment": "branch_renamed",
+              "seed": 2002,
+              "fired": "rename",
+              "acceptable": [
+                "merge",
+                "retrack"
+              ]
+            },
+            {
+              "intent": "follow_renamed_upstream_branch",
+              "environment": "branch_renamed",
+              "seed": 2011,
+              "fired": "rename",
+              "acceptable": [
+                "merge",
+                "retrack"
+              ]
+            },
+            {
+              "intent": "follow_renamed_upstream_branch",
+              "environment": "branch_renamed",
+              "seed": 2012,
+              "fired": "rename",
+              "acceptable": [
+                "merge",
+                "retrack"
+              ]
+            },
+            {
+              "intent": "follow_renamed_upstream_branch",
+              "environment": "branch_renamed",
+              "seed": 2013,
+              "fired": "rename",
+              "acceptable": [
+                "merge",
+                "retrack"
+              ]
+            },
+            {
+              "intent": "follow_renamed_upstream_branch",
+              "environment": "branch_renamed",
+              "seed": 2020,
+              "fired": "rename",
+              "acceptable": [
+                "merge",
+                "retrack"
+              ]
+            },
+            {
+              "intent": "follow_renamed_upstream_branch",
+              "environment": "branch_renamed",
+              "seed": 2021,
+              "fired": "rename",
+              "acceptable": [
+                "merge",
+                "retrack"
+              ]
+            },
+            {
+              "intent": "follow_renamed_upstream_branch",
+              "environment": "branch_renamed",
+              "seed": 2022,
+              "fired": "rename",
+              "acceptable": [
+                "merge",
+                "retrack"
+              ]
+            },
+            {
+              "intent": "follow_renamed_upstream_branch",
+              "environment": "branch_renamed",
+              "seed": 2023,
+              "fired": "rename",
+              "acceptable": [
+                "merge",
+                "retrack"
+              ]
+            },
+            {
+              "intent": "follow_renamed_upstream_branch",
+              "environment": "branch_renamed",
+              "seed": 2026,
+              "fired": "rename",
+              "acceptable": [
+                "merge",
+                "retrack"
+              ]
+            },
+            {
+              "intent": "follow_renamed_upstream_branch",
+              "environment": "branch_renamed",
+              "seed": 2032,
+              "fired": "rename",
+              "acceptable": [
+                "merge",
+                "retrack"
+              ]
+            },
+            {
+              "intent": "follow_renamed_upstream_branch",
+              "environment": "branch_renamed",
+              "seed": 2034,
+              "fired": "rename",
+              "acceptable": [
+                "merge",
+                "retrack"
+              ]
+            }
+          ]
+        },
+        "held-out": {
+          "tree": {
+            "threshold": null,
+            "coverage": {
+              "numerator": 176,
+              "denominator": 400
+            },
+            "mismatch": {
+              "numerator": 5,
+              "denominator": 176
+            },
+            "mismatch_interval": {
+              "low": 0.012194241714798201,
+              "high": 0.06477126570951297
+            }
+          },
+          "tree_unrestricted": {
+            "threshold": null,
+            "coverage": {
+              "numerator": 200,
+              "denominator": 400
+            },
+            "mismatch": {
+              "numerator": 15,
+              "denominator": 200
+            },
+            "mismatch_interval": {
+              "low": 0.04597450705725241,
+              "high": 0.12004459797332036
+            }
+          },
+          "arm3": {
+            "threshold": null,
+            "coverage": {
+              "numerator": 195,
+              "denominator": 400
+            },
+            "mismatch": {
+              "numerator": 21,
+              "denominator": 195
+            },
+            "mismatch_interval": {
+              "low": 0.07152252693654418,
+              "high": 0.15902077989663363
+            }
+          },
+          "agree": 338,
+          "tree_wrong": [
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3002,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3006,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3010,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3026,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3034,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            }
+          ],
+          "tree_unrestricted_wrong": [
+            {
+              "intent": "follow_renamed_upstream_branch",
+              "environment": "branch_renamed",
+              "seed": 3000,
+              "fired": "rename",
+              "acceptable": [
+                "merge",
+                "retrack"
+              ]
+            },
+            {
+              "intent": "follow_renamed_upstream_branch",
+              "environment": "branch_renamed",
+              "seed": 3001,
+              "fired": "rename",
+              "acceptable": [
+                "merge",
+                "retrack"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3002,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3006,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "follow_renamed_upstream_branch",
+              "environment": "branch_renamed",
+              "seed": 3006,
+              "fired": "rename",
+              "acceptable": [
+                "merge",
+                "retrack"
+              ]
+            },
+            {
+              "intent": "follow_renamed_upstream_branch",
+              "environment": "branch_renamed",
+              "seed": 3008,
+              "fired": "rename",
+              "acceptable": [
+                "merge",
+                "retrack"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3010,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "follow_renamed_upstream_branch",
+              "environment": "branch_renamed",
+              "seed": 3010,
+              "fired": "rename",
+              "acceptable": [
+                "merge",
+                "retrack"
+              ]
+            },
+            {
+              "intent": "follow_renamed_upstream_branch",
+              "environment": "branch_renamed",
+              "seed": 3020,
+              "fired": "rename",
+              "acceptable": [
+                "merge",
+                "retrack"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3026,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "follow_renamed_upstream_branch",
+              "environment": "branch_renamed",
+              "seed": 3031,
+              "fired": "rename",
+              "acceptable": [
+                "merge",
+                "retrack"
+              ]
+            },
+            {
+              "intent": "follow_renamed_upstream_branch",
+              "environment": "branch_renamed",
+              "seed": 3032,
+              "fired": "rename",
+              "acceptable": [
+                "merge",
+                "retrack"
+              ]
+            },
+            {
+              "intent": "sync_through_a_conflicting_lockfile",
+              "environment": "lockfile_conflict",
+              "seed": 3034,
+              "fired": "take_upstream",
+              "acceptable": [
+                "keep_local"
+              ]
+            },
+            {
+              "intent": "follow_renamed_upstream_branch",
+              "environment": "branch_renamed",
+              "seed": 3034,
+              "fired": "rename",
+              "acceptable": [
+                "merge",
+                "retrack"
+              ]
+            },
+            {
+              "intent": "follow_renamed_upstream_branch",
+              "environment": "branch_renamed",
+              "seed": 3037,
+              "fired": "rename",
+              "acceptable": [
+                "merge",
+                "retrack"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
