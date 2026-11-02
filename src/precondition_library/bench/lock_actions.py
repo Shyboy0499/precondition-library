@@ -306,12 +306,26 @@ def _compatible(path: str, version: str) -> tuple[int | str, ...]:
     return release[:2] if release[0] == 0 else release[:1]
 
 
+_FINAL = re.compile(r"v?\d+(\.\d+)*")
+
+
+def _order(version: str) -> tuple[tuple[int, ...], bool, str]:
+    """How versions rank within a compatible range: by release numbers, then a final release
+    above a pre-release with the same numbers (`1.0.0` above `1.0.0-beta.1`), then by text.
+
+    The last two only break ties between versions whose release numbers are equal. Before
+    2026-11-02 such ties were broken by set order, which can differ between processes. On
+    studies 3 and 4 that changed no verdict (`results/ecosystem-unify-2026-11-02/README.md`).
+    """
+    return _release(version), bool(_FINAL.fullmatch(version.split("+", 1)[0])), version
+
+
 def unify(path: str, resolved: set[Package]) -> set[Package]:
-    """Within each package's compatible range, only the highest version."""
+    """Within each package's compatible range, only the highest version (`_order`)."""
     best: dict[tuple[str, tuple[int | str, ...]], str] = {}
     for name, version in resolved:
         key = (name, _compatible(path, version))
-        if key not in best or _release(version) > _release(best[key]):
+        if key not in best or _order(version) > _order(best[key]):
             best[key] = version
     return {(name, version) for (name, _), version in best.items()}
 

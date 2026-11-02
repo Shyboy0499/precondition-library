@@ -83,14 +83,19 @@ whichever the set yields first, which can differ between Python processes.
 
 `verification/ties.py` checks every labelled file:
 
-- **Study 4:** 34 files contain such a tie.
-- **None of those 34 verdicts depends on the tie-break.** Every choice gives the same "reproduces"
-  answer, so no figure above can change. Only some Jaccard values can move, in the third
-  decimal.
-- **Study 3 is checked the same way**, in a separate commit.
+- **Study 4:** 34 files contain such a tie, and none of their verdicts depends on the tie-break.
+  Every choice gives the same "reproduces" answer, so no figure above can change. Only some
+  Jaccard values can move, in the third decimal.
+- **Study 3:** 8 files contain one, and 2 verdicts depend on it. Both are `snipe/snipe-it`
+  `composer.lock` files (cases 144 and 146) whose tied "versions" are git branches with no
+  release numbers (`dev-master`, `dev-upstream_master`, `dev-bump_to_laravel_12`). Both were
+  recorded as not reproduced. Were both reproduced instead, study 3's coverage would move from
+  0.686 [0.601, 0.770] to 0.688 [0.604, 0.772]. H2's statistics would be unchanged to four
+  decimals, and no decision would change.
 
-The defect is fixed for future runs in `bench.lock_actions` with a deterministic tie-break, in a
-separate commit. These results are from the registered code.
+The defect is fixed for future runs in `bench.lock_actions` (`_order`): a final release ranks above
+a pre-release with the same numbers, and then text decides. Study 3's and study 4's committed
+results are from the registered code and are left as they are.
 
 ## Verification
 

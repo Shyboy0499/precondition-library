@@ -123,3 +123,21 @@ Both scripts are in `verification/`, written after the run and kept as the recor
     outside the packages, such as composer's `content-hash`, where any action reproduces.
     Without them, coverage is still about two in three.
   - It needs the run's repository caches, so it is kept as a record rather than re-run by CI.
+
+## Addendum, 2026-11-02: a tie-break in `unify`
+
+While verifying study 4, we found that `lock_actions.unify` broke ties between versions with equal
+release numbers by set order, which can differ between Python processes. That covers a
+pre-release and its release, and git-branch "versions" with no numbers.
+
+`results/ecosystem-unify-2026-11-02/verification/ties.py` checks every file of this study:
+
+- 8 files contain such a tie, and 2 verdicts depend on it. Both are `snipe/snipe-it`
+  `composer.lock` files (cases 144 and 146) whose tied versions are git branches, and both were
+  recorded as not reproduced by `three_way_unified`.
+- Were both reproduced instead, coverage would be 0.688 [0.604, 0.772] rather than 0.686
+  [0.601, 0.770]. H2's statistics would be unchanged to four decimals, and no decision would
+  change.
+
+The results above are left as the registered code produced them. The code now breaks such ties
+deterministically.
