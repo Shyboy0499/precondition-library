@@ -33,7 +33,8 @@ measured result, at pair level; everything before it is design and apparatus. Se
   nearly every composer file the plain merge reproduced. Even maintainers' own `composer.lock`
   files are fully reachable from their `composer.json` in 7 of 233 cases, because of merge
   plugins and path repositories. On npm it gains one file. Recorded in
-  `results/lock-uncovered-2026-11-02/` so a study 5 does not repeat it.
+  `results/lock-uncovered-2026-11-02/` so a study 5 does not repeat it. The report's section 6
+  now says what the oracle cannot label.
 
 - **What maintainers did where no computed action reproduces them (exploratory).** This covers
   the conflicts studies 3 and 4's oracle cannot label (`results/lock-uncovered-2026-11-02/`).
