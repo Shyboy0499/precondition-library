@@ -1,0 +1,64 @@
+{
+  "studies": 2000,
+  "pilot_pooled_coverage": 0.3333,
+  "between_repository_sd": 0.284,
+  "per_repository": 15,
+  "results": {
+    "10 repositories": {
+      "h1_power_bound_0.1": 0.565,
+      "h1_false_bound_0.1": 0.0025,
+      "h1_false_bound_0.1_bootstrap": 0.007,
+      "h1_false_bound_0.1_resampled": 0.016,
+      "h1_false_bound_0.1_resampled_bootstrap": 0.026,
+      "h1_power_bound_0.15": 0.35,
+      "h1_false_bound_0.15": 0.0005,
+      "h1_false_bound_0.15_bootstrap": 0.0105,
+      "h1_false_bound_0.15_resampled": 0.024,
+      "h1_false_bound_0.15_resampled_bootstrap": 0.034,
+      "h2_power": 0.842,
+      "h2_false": 0.0
+    },
+    "15 repositories": {
+      "h1_power_bound_0.1": 0.851,
+      "h1_false_bound_0.1": 0.004,
+      "h1_false_bound_0.1_bootstrap": 0.011,
+      "h1_false_bound_0.1_resampled": 0.01,
+      "h1_false_bound_0.1_resampled_bootstrap": 0.02,
+      "h1_power_bound_0.15": 0.5785,
+      "h1_false_bound_0.15": 0.004,
+      "h1_false_bound_0.15_bootstrap": 0.016,
+      "h1_false_bound_0.15_resampled": 0.004,
+      "h1_false_bound_0.15_resampled_bootstrap": 0.016,
+      "h2_power": 0.982,
+      "h2_false": 0.0
+    },
+    "20 repositories": {
+      "h1_power_bound_0.1": 0.96,
+      "h1_false_bound_0.1": 0.004,
+      "h1_false_bound_0.1_bootstrap": 0.0095,
+      "h1_false_bound_0.1_resampled": 0.012,
+      "h1_false_bound_0.1_resampled_bootstrap": 0.02,
+      "h1_power_bound_0.15": 0.746,
+      "h1_false_bound_0.15": 0.003,
+      "h1_false_bound_0.15_bootstrap": 0.014,
+      "h1_false_bound_0.15_resampled": 0.01,
+      "h1_false_bound_0.15_resampled_bootstrap": 0.016,
+      "h2_power": 1.0,
+      "h2_false": 0.0
+    },
+    "25 repositories": {
+      "h1_power_bound_0.1": 0.992,
+      "h1_false_bound_0.1": 0.0015,
+      "h1_false_bound_0.1_bootstrap": 0.011,
+      "h1_false_bound_0.1_resampled": 0.014,
+      "h1_false_bound_0.1_resampled_bootstrap": 0.018,
+      "h1_power_bound_0.15": 0.875,
+      "h1_false_bound_0.15": 0.0085,
+      "h1_false_bound_0.15_bootstrap": 0.014,
+      "h1_false_bound_0.15_resampled": 0.016,
+      "h1_false_bound_0.15_resampled_bootstrap": 0.026,
+      "h2_power": 1.0,
+      "h2_false": 0.0
+    }
+  }
+}
