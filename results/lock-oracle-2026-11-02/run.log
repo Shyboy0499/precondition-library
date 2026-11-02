@@ -1,0 +1,51 @@
+phpstan/phpstan-src: 15 cases
+huginn/huginn: 15 cases
+diaspora/diaspora: 15 cases
+rust-lang/rustfmt: 7 cases
+pterodactyl/panel: 9 cases
+BookStackApp/BookStack: 15 cases
+getgrav/grav: 15 cases
+Textualize/rich: 6 cases
+Textualize/textual: 14 cases
+invoiceninja/invoiceninja: 15 cases
+bolt/core: 15 cases
+snipe/snipe-it: 15 cases
+rust-lang/crates.io: 15 cases
+openstreetmap/openstreetmap-website: 15 cases
+firefly-iii/firefly-iii: 15 cases
+wallabag/wallabag: 11 cases
+feedbin/feedbin: 10 cases
+contao/contao: 15 cases
+nightscout/cgm-remote-monitor: 15 cases
+MagicMirrorOrg/MagicMirror: 15 cases
+otwcode/otwarchive: 15 cases
+node-red/node-red: 10 cases
+webpack/webpack: 15 cases
+consuldemocracy/consuldemocracy: 15 cases
+laurent22/joplin: 15 cases
+processing/p5.js: 8 cases
+loomio/loomio: 15 cases
+360 cases from 27 repositories; excluded: {'criss-cross': 9, 'merged lock file unread': 10, 'submodule or binary conflict': 2}
+coverage (H1): 0.686 [0.601, 0.770] (pooled over cases: 0.683)
+merge minus local (H2): +0.069 [0.023, 0.115]
+merge minus upstream (H2): +0.113 [0.069, 0.156]
+
+action                share  median Jaccard
+take_local            0.281  0.974
+take_upstream         0.131  0.935
+three_way             0.389  0.996
+three_way_unified     0.319  0.986
+line unions (study 1)  0.072
+
+lock file             files  reproduced
+Cargo.lock               18           9
+Gemfile.lock             85          65
+composer.lock           136         102
+package-lock.json       116          79
+pnpm-lock.yaml            3           2
+poetry.lock              20          11
+yarn.lock                34          20
+
+1 power: powered
+2 H1: supported: coverage 0.686, lower end 0.601 against 0.1
+3 H2: supported: merge minus local +0.069, minus upstream +0.113

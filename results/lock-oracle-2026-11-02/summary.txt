@@ -1,0 +1,24 @@
+360 cases from 27 repositories; excluded: {'criss-cross': 9, 'merged lock file unread': 10, 'submodule or binary conflict': 2}
+coverage (H1): 0.686 [0.601, 0.770] (pooled over cases: 0.683)
+merge minus local (H2): +0.069 [0.023, 0.115]
+merge minus upstream (H2): +0.113 [0.069, 0.156]
+
+action                share  median Jaccard
+take_local            0.281  0.974
+take_upstream         0.131  0.935
+three_way             0.389  0.996
+three_way_unified     0.319  0.986
+line unions (study 1)  0.072
+
+lock file             files  reproduced
+Cargo.lock               18           9
+Gemfile.lock             85          65
+composer.lock           136         102
+package-lock.json       116          79
+pnpm-lock.yaml            3           2
+poetry.lock              20          11
+yarn.lock                34          20
+
+1 power: powered
+2 H1: supported: coverage 0.686, lower end 0.601 against 0.1
+3 H2: supported: merge minus local +0.069, minus upstream +0.113
