@@ -1,0 +1,75 @@
+{
+  "studies": 2000,
+  "results": {
+    "10 repositories": {
+      "h1_power": 0.6845,
+      "h2_power": 0.102,
+      "h3_power": 0.103,
+      "h1_votes_power": 6.9125,
+      "h2_votes_power": 3.692,
+      "h3_votes_power": 3.796,
+      "h1_false": 0.0055,
+      "h2_false": 0.0,
+      "h3_false": 0.001,
+      "h1_votes_false": 5.8465,
+      "h2_votes_false": 3.105,
+      "h3_votes_false": 3.2865
+    },
+    "12 repositories": {
+      "h1_power": 0.8525,
+      "h2_power": 0.233,
+      "h3_power": 0.2295,
+      "h1_votes_power": 8.373,
+      "h2_votes_power": 4.437,
+      "h3_votes_power": 4.664,
+      "h1_false": 0.01,
+      "h2_false": 0.004,
+      "h3_false": 0.0045,
+      "h1_votes_false": 6.971,
+      "h2_votes_false": 3.7705,
+      "h3_votes_false": 3.82
+    },
+    "15 repositories": {
+      "h1_power": 0.938,
+      "h2_power": 0.461,
+      "h3_power": 0.4315,
+      "h1_votes_power": 10.4465,
+      "h2_votes_power": 5.59,
+      "h3_votes_power": 5.755,
+      "h1_false": 0.0085,
+      "h2_false": 0.0025,
+      "h3_false": 0.0035,
+      "h1_votes_false": 8.697,
+      "h2_votes_false": 4.6505,
+      "h3_votes_false": 4.798
+    },
+    "18 repositories": {
+      "h1_power": 0.981,
+      "h2_power": 0.635,
+      "h3_power": 0.618,
+      "h1_votes_power": 12.5035,
+      "h2_votes_power": 6.6195,
+      "h3_votes_power": 7.008,
+      "h1_false": 0.015,
+      "h2_false": 0.006,
+      "h3_false": 0.007,
+      "h1_votes_false": 10.3995,
+      "h2_votes_false": 5.617,
+      "h3_votes_false": 5.737
+    },
+    "20 repositories": {
+      "h1_power": 0.9905,
+      "h2_power": 0.7425,
+      "h3_power": 0.7095,
+      "h1_votes_power": 13.921,
+      "h2_votes_power": 7.3625,
+      "h3_votes_power": 7.7835,
+      "h1_false": 0.01,
+      "h2_false": 0.009,
+      "h3_false": 0.0045,
+      "h1_votes_false": 11.619,
+      "h2_votes_false": 6.2405,
+      "h3_votes_false": 6.4365
+    }
+  }
+}
