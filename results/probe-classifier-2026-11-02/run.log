@@ -1,0 +1,9 @@
+A tree over only the library's precondition verdicts (#295 item 3), beside arm 3 recomputed from the same verdicts; trained on 56 states
+
+library  block     preconditions  tree fires/wrong  unrestricted  arm 3 fires/wrong  agree
+run-11   eval                 60    187/0            200/0         187/0            370/400
+run-11   held-out             60    193/8            200/8         193/13           363/400
+run-12   eval                 60    200/0            200/0         187/0            330/400
+run-12   held-out             60    200/8            200/8         193/8            334/400
+run-13   eval                 57    171/0            200/11        189/0            353/400
+run-13   held-out             57    176/5            200/15        195/21           338/400

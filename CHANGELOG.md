@@ -19,6 +19,17 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **A state reader that sees only what arm 3's probes see (#295 item 3, exploratory).**
+  `bench.probe_classifier` trains a tree per intent on the verdicts of each library's own
+  precondition probes, and recomputes arm 3 from the same verdicts. The recomputation reproduces
+  Figure 1's and the held-out stage's counts exactly.
+  - The tree may fire only resolutions its library holds. It makes no more wrong fires than arm 3
+    in all six library-blocks, and fewer in two.
+  - So arm 3's advantage on these states lies neither in the facts it reads nor in executing them
+    as a conjunction.
+  - The verdicts are recorded, so the analysis can be repeated without probes (`--from`)
+    (`results/probe-classifier-2026-11-02/`).
+
 - **Study 4's result: the resolver predicts which package-level merge maintainers kept.** It
   ran as registered on 266 conflicts from 20 fresh repositories
   (`results/ecosystem-unify-2026-11-02/`). All four hypotheses are supported.
