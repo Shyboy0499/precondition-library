@@ -29,7 +29,10 @@ from precondition_library.tasks.faults import build_sandbox
 def test_the_evaluation_list_is_the_registered_one() -> None:
     text = preregistration.document(rs.REGISTRATION).read_text(encoding="utf-8")
     section = text.split("**Evaluation (E), in order:**", 1)[1].split("\n\nNone of these", 1)[0]
-    assert list(study.EVALUATION) == re.findall(r"^\d+\. \[`([^`]+)`\]", section, re.MULTILINE)
+    registered = re.findall(r"^\d+\. \[`([^`]+)`\]", section, re.MULTILINE)
+    assert registered[0] == "openproject/openproject", "the original line is kept as written"
+    assert "**A4. Evaluation repository 1 is `opf/openproject`.**" in text
+    assert list(study.EVALUATION) == ["opf/openproject", *registered[1:]]
     assert "at least 100 inexpressible conflicts and at least 60 clean cases" in text
     assert "from at least 6\nrepositories with a case" in text
     assert (study.TARGET_INEXPRESSIBLE, study.TARGET_CLEAN, study.MIN_REPOSITORIES) == (100, 60, 6)

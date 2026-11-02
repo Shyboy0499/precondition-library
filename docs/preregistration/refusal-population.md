@@ -242,3 +242,21 @@ lowers the fire rate, and its effect on clean merges is not resolved at this siz
 intervals and rules 1–4 are as registered. The power analysis also confirms §8's statements about
 H1 and H3. Its false-positive rates, 2.8–3.8% against a nominal 2.5%, are reported, and the
 registered rule is not adjusted for them.
+
+### Amendment 2 (2026-11-02, before any data)
+
+**What prompted it: the weekly link check (#330), not data.** No case of the evaluation set had
+been mined, and no build had run, when this amendment was written. The link check found §3.1's
+first evaluation repository unreachable: `openproject/openproject` does not exist on GitHub.
+OpenProject's repository is [`opf/openproject`](https://github.com/opf/openproject); `git
+ls-remote` on it answered with its default branch, `dev`, on 2026-11-02. The registered name was
+a slip in writing the list. The intended repository was OpenProject, and the mining code would
+have stopped at it, unable to pin it.
+
+**A4. Evaluation repository 1 is `opf/openproject`.** It replaces `openproject/openproject` in
+§3.1's list E, at the same position. It was not mined, counted or used by any earlier study or
+stage, and it is not on study 3's list. The original line above is left as it was written, so the
+change can be read against it.
+
+**A5. Nothing else changes.** Amendment 1, the hypotheses, the other repositories, the order,
+targets, builds, statistics and rules are as registered.
