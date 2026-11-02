@@ -53,10 +53,24 @@ cases named in `results/lock-oracle-2026-11-02/README.md`.
 
 ## What it suggests, untested
 
-- **A manifest-aware merge.** It would restrict the three-way merge to what the maintainer's
-  merged manifests still require, and keep the base version where they pin it. That could cover
-  much of the recombination share, without a registry, because the manifests are in the merge.
-  It is a candidate for a registered study 5 on fresh repositories.
+- **A manifest-aware merge, built on the dependency graph.** It would restrict the three-way merge
+  to what the maintainer's merged manifests still require. It needs no registry, because the
+  manifests are in the merge.
+
+  It cannot work from the manifests' names alone. `direct.py` checked the composer and npm-family
+  recombinations:
+
+  | | study 3 | study 4 |
+  | --- | ---: | ---: |
+  | recombined files with a left-out side change | 35 | 32 |
+  | packages left out | 502 | 186 |
+  | of them direct dependencies in the merged manifest | 66 (13%) | 23 (12%) |
+  | files with at least one direct one | 21 | 14 |
+
+  Most of what is left out is transitive. A useful version would keep what is reachable from the
+  merged manifest's dependencies through the requirements each lock file records, and drop the
+  rest. Lock files record those requirements: composer's `require`, npm's `dependencies`. It is
+  a candidate for a registered study 5 on fresh repositories.
 - **A new resolution is the oracle's honest limit.** A computed action cannot be expected to
   match it. For a dispatcher those are cases to refuse, or to hand to the ecosystem's tool, as
   #297 proposes.
