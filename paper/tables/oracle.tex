@@ -1,0 +1,15 @@
+\begin{tabular}{lcccccccc}
+\toprule
+& & & \multicolumn{4}{c}{files each action reproduces} & \multicolumn{2}{c}{reproduced only by} \\
+\cmidrule(lr){4-7}\cmidrule(lr){8-9}
+lock file & conflicted & some action & local & upstream & three-way & unified & three-way & unified \\
+\midrule
+\code{composer.lock} & 136 & 102 & 62 & 14 & 29 & 54 & 0 & 25 \\
+\code{package-lock.json} & 116 & 79 & 54 & 21 & 27 & 4 & 27 & 4 \\
+\code{Gemfile.lock} & 85 & 65 & 7 & 5 & 56 & 60 & 0 & 4 \\
+\code{yarn.lock} & 34 & 20 & 13 & 1 & 15 & 2 & 13 & 0 \\
+\code{poetry.lock} & 20 & 11 & 2 & 2 & 8 & 9 & 1 & 2 \\
+\code{Cargo.lock} & 18 & 9 & 0 & 7 & 5 & 5 & 0 & 0 \\
+\code{pnpm-lock.yaml} & 3 & 2 & 0 & 0 & 2 & 0 & 2 & 0 \\
+\bottomrule
+\end{tabular}
