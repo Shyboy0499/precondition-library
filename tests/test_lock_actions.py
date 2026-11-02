@@ -302,3 +302,14 @@ def test_every_lock_file_the_registration_counts_has_a_reader() -> None:
     from precondition_library.bench.real_merges import LOCK_FILES
 
     assert set(la.READERS) == set(LOCK_FILES)
+
+
+def test_unify_breaks_ties_the_same_way_whatever_the_order() -> None:
+    tied = [("a", "1.0.0-beta.1"), ("a", "1.0.0"), ("a", "1.0.0-alpha")]
+    for order in (tied, tied[::-1], tied[1:] + tied[:1]):
+        # A list is iterated in its own order, which a set's would not show.
+        assert la.unify("package-lock.json", order) == {("a", "1.0.0")}  # type: ignore[arg-type]
+    assert la.unify("composer.lock", {("x/y", "v2.1.0"), ("x/y", "v2.1.0-RC1")}) == {
+        ("x/y", "v2.1.0")
+    }
+    assert la._order("1.0.0+build") > la._order("1.0.0-rc1"), "build metadata is not a pre-release"

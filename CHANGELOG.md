@@ -12,12 +12,27 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Fixed
 
+- **`lock_actions.unify` breaks ties deterministically.** Versions with equal release numbers
+  were ranked by set order, which can differ between processes. That covers a pre-release and
+  its release, and git branches. A final release now ranks above a pre-release with the same
+  numbers, and text decides the rest.
+  - No study-4 verdict depended on it.
+  - Two study-3 verdicts did. Both were snipe-it branch "versions", and at most they would move
+    coverage from 0.686 to 0.688, with no decision changed.
+  - Both READMEs say so, and the committed results are unchanged.
+
 - **Study 2's first evaluation repository is `opf/openproject` (Amendment 2, ADR-0057, #330).**
   The registered `openproject/openproject` does not exist, and mining would have stopped at it.
   The weekly link check found it. The amendment was made before any study-2 data. The original
   line is kept, and `.lycheeignore` names the dead link with its reason.
 
 ### Added
+
+- **The technical report covers study 4 and the probe-verdict reader.**
+  - Section 6 gives study 4's registered result, and says plainly that H2 proved near-definitional.
+  - The section on the project's own states adds the tree over precondition dispatch's own
+    verdicts, with a row in Table 1.
+  - The paper is 21 pages.
 
 - **A state reader that sees only what arm 3's probes see (#295 item 3, exploratory).**
   `bench.probe_classifier` trains a tree per intent on the verdicts of each library's own

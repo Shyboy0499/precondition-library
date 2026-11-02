@@ -58,7 +58,9 @@ guard holds only about half the time when there is no true cost; the registratio
 accordingly. A third registered study, on 360 conflicts from 27 repositories we had never mined,
 reads lock files as package sets. There, an action computed from a merge's three sides reproduces
 the maintainer's exact package set on 0.69 of a repository's conflicts, against 0.07 for the line
-unions. This gives the task an external oracle.
+unions. This gives the task an external oracle. A fourth registered study, on 20 further
+repositories, finds that the ecosystem's resolver predicts which package-level merge maintainers
+kept, and replicates that coverage (0.76).
 We compare the design, table by table, with a deployed executability gate and a skill-retrieval
 risk benchmark.
 \end{abstract}
@@ -104,6 +106,7 @@ lexical similarity & 440/559 & --- & 501/516 \\
 cross-encoder similarity & 409/562 & --- & --- \\
 state reader, intent-scoped & 0/190 & 0/200 & 159/160 \\
 state reader, library-scoped (exploratory) & --- & --- & 163/273 \\
+probe-verdict reader (exploratory) & 0/558 & 21/569 & --- \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -414,6 +417,22 @@ is that a dispatcher that reads the state beats one that reads the request, and 
 preconditions are one such dispatcher. Whether executing checks adds anything over reading the
 state is the question Sections~\ref{sec:real} and~\ref{sec:power} take up.
 
+\paragraph{A reader of precondition dispatch's own evidence.}
+The state reader sees fingerprint fields that no compiled program probes. So, after the fact, we
+gave a decision tree per intent only what precondition dispatch reads: whether each of the
+library's distinct preconditions holds on the state. That is 60, 60 and 57 features. The tree may
+fire only a resolution its library holds a program for.
+\begin{itemize}
+  \item Precondition dispatch, recomputed from the same verdicts, reproduces Table~\ref{tab:synthetic}
+  and the held-out counts exactly.
+  \item The tree's wrong fires are 0, 0 and 0 on our states and 8, 8 and 5 on held-out states,
+  against precondition dispatch's 13, 8 and 21 (Table~\ref{tab:settings}).
+  \item Its fires are 187, 200 and 171 on our states, against 187, 187 and 189.
+\end{itemize}
+Reading the same facts with a learned tree is therefore at least as accurate as executing them as
+a conjunction. On states we built, precondition dispatch's advantage over reading the state lies
+neither in the facts it reads nor in how it combines them.
+
 \paragraph{Held-out states, and a mechanism.}
 On the held-out block four sources carried: one mis-fire in 480 fires. The lock-file source, which
 moves the conflicted file to a nested path, a path with a space, a non-ASCII name or a dotfile,
@@ -655,6 +674,52 @@ the released labels, with no mismatch. A second script re-reads all 412 conflict
 with parsers written independently, and agrees on all 1,236 verdicts of the three actions it
 re-derives. No maintainer set reads as empty: the median holds 228 packages. Only 7 of the 360
 conflicts have identical package sets on both sides, where any action reproduces trivially.
+
+\paragraph{A fourth registered study: the resolver predicts the merge.}
+We registered the exploratory finding above as study 4 and ran it on 20 more repositories that
+nobody here had mined or counted: 266 conflicts. Its unit is a \emph{discordant} file, one where
+exactly one of the two merges reproduces the maintainer. The predicted merge is the unified one
+for one-version lock files and the plain one for npm's family. Each repository votes once, for or
+against the prediction, by which merge won more of its discordant files. Each hypothesis is an
+exact sign test over those votes.
+
+\begin{table}[h]
+\centering
+\caption{Study 4, as registered: discordant files won and lost by the predicted merge, and
+repositories voting for and against.}
+\label{tab:study4}
+\small
+\begin{tabular}{lcccc}
+\toprule
+& files & votes & $p$ & outcome \\
+\midrule
+H1, both families & 91 / 0 & 17 / 0 & $1.5\times10^{-5}$ & supported \\
+H2, one-version family & 24 / 0 & 10 / 0 & 0.002 & supported \\
+H3, npm's family & 67 / 0 & 11 / 0 & 0.001 & supported \\
+H4, coverage (replicates study 3's H1) & \multicolumn{3}{c}{0.760 [0.674, 0.845]} & supported \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All four hypotheses are supported (Table~\ref{tab:study4}). They carry different weight.
+\begin{itemize}
+  \item \textbf{H3 is the test that could have failed.} In npm's family, where a maintainer could
+  either deduplicate or keep compatible duplicates, the plain merge won every discordant file.
+  \item \textbf{H2 tested much less than its sign test suggests.} We found this after seeing the
+  data. A one-version maintainer file holds one version per package, so a plain merge holding two
+  versions of a package cannot match it, and in 74 of the 144 one-version files it did hold two.
+  A plain merge without such duplicates is unchanged by unifying. So a vote against H2 was
+  possible only for the rare lock file that holds two versions of one package, such as poetry
+  under markers. We report H2 as registered, and H1's weight rests on H3.
+\end{itemize}
+Choosing the merge per ecosystem reproduces 0.553 of cases, against 0.466 for the better fixed
+merge. Coverage replicates on new repositories.
+
+While verifying, we found that \code{unify} broke ties between versions with equal release
+numbers by set order, which can differ between processes. No verdict of study 4 depends on it.
+In study 3 two do, both on git-branch ``versions''; were both reproduced, coverage would be 0.688
+rather than 0.686, and no decision would change. The code now breaks such ties
+deterministically.
 
 \section{Are the graders right?}
 \label{sec:graders}
@@ -971,8 +1036,8 @@ The results hold within the following scope, and each item names the work that e
   \item \textbf{Builds.} The libraries come from one LLM at temperature 0. Their spread across
   three builds (Table~\ref{tab:repositories}) is why study 2 measures a population of twenty.
   \item \textbf{Domain and level.} The task family is git maintenance. The real-data tests cover
-  lock-file merges from 11 repositories (study 1) and lock-file conflicts from 27 more
-  (study 3). This report measures dispatch decisions; the
+  lock-file merges from 11 repositories (study 1) and lock-file conflicts from 47 more
+  (studies 3 and 4). This report measures dispatch decisions; the
   episode-level stages, cost per task and online learning, are implemented and not yet run at
   scale.
   \item \textbf{Text scorers.} The comparison covers three local scorers; an LLM judge that reads
@@ -993,14 +1058,15 @@ nothing can resolve. The follow-up study that tests refusal is registered; simul
 its own decision rules confirmed its primary test and led to an amendment of its guard, before
 any of its data exists. A third registered study found what the task's labels should have been:
 read as package sets, two in three real lock-file conflicts have an answer computed from the
-merge's three sides that matches the maintainer's exactly. The broader lesson is about evaluation: an error rate measured
+merge's three sides that matches the maintainer's exactly, and a fourth found which merge to
+compute for each ecosystem. The broader lesson is about evaluation: an error rate measured
 against one's own labels says little until the same dispatcher faces states and labels someone
 else made, and a registered design deserves the same scrutiny before its data as its results
 receive after.
 
 \section*{Data and code availability}
 
-The apparatus, the three libraries, every result file, the three registrations and the
+The apparatus, the three libraries, every result file, the four registrations and the
 verification scripts are at \url{https://github.com/Shyboy0499/precondition-library}. The figures and tables of
 Sections~\ref{sec:synthetic}--\ref{sec:graders} come from committed result files; the power
 analysis and every figure are regenerated by \code{paper/analysis/power.py} and
