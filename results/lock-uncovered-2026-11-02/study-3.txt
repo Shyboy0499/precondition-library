@@ -1,0 +1,24 @@
+lock-oracle-2026-11-02: 124 unreproduced conflicted files
+  recombination                              57  (46%)
+  new resolution: moved                      52  (42%)
+  new resolution: moved+added                 9  (7%)
+  recombination: dropped                      4  (3%)
+  new resolution: added                       2  (2%)
+  Cargo.lock           recombination 8, new resolution 1
+  Gemfile.lock         new resolution 12, recombination 8
+  composer.lock        new resolution 25, recombination 9
+  package-lock.json    recombination 22, new resolution 15
+  pnpm-lock.yaml       recombination 1
+  poetry.lock          new resolution 9
+  yarn.lock            recombination 13, new resolution 1
+  new pairs as a share of the maintainer's set: median 0.062
+lock-oracle-2026-11-02: 61 recombined files
+   21  left out a side's change
+   16  left out a side's change + kept a base version a side changed
+   10  removed what both kept
+    8  kept a base version a side changed
+    2  left out a side's change + removed what both kept
+    2  left out a side's change + kept a pair the other side removed
+    1  left out a side's change + kept a base version a side changed + kept a pair the other side removed
+    1  equals the merge once ties are broken deterministically
+  pairs differing from the merge: median 2, max 306

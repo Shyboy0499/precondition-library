@@ -28,6 +28,14 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **What maintainers did where no computed action reproduces them (exploratory).** This covers
+  the conflicts studies 3 and 4's oracle cannot label (`results/lock-uncovered-2026-11-02/`).
+  - **New resolutions:** about half of study 3's misses and 18% of study 4's hold versions
+    nobody had, so the maintainer ran a resolver.
+  - **Recombinations:** the rest are near-misses of the merge, a median of 1–2 pairs away.
+    Mostly the maintainer did not take some side's change, which suggests a manifest-aware merge
+    for a future registration.
+
 - **The technical report covers study 4 and the probe-verdict reader.**
   - Section 6 gives study 4's registered result, and says plainly that H2 proved near-definitional.
   - The section on the project's own states adds the tree over precondition dispatch's own
