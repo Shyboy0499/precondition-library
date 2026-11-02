@@ -28,6 +28,13 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **A manifest-aware lock-file merge, piloted, does not work in its simple form (exploratory).**
+  Keeping only what the merged manifest reaches through the lock files' own requirements breaks
+  nearly every composer file the plain merge reproduced. Even maintainers' own `composer.lock`
+  files are fully reachable from their `composer.json` in 7 of 233 cases, because of merge
+  plugins and path repositories. On npm it gains one file. Recorded in
+  `results/lock-uncovered-2026-11-02/` so a study 5 does not repeat it.
+
 - **What maintainers did where no computed action reproduces them (exploratory).** This covers
   the conflicts studies 3 and 4's oracle cannot label (`results/lock-uncovered-2026-11-02/`).
   - **New resolutions:** about half of study 3's misses and 18% of study 4's hold versions
