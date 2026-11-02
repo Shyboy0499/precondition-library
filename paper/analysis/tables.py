@@ -22,6 +22,7 @@ REPLICATES = ROOT / "results" / "replicates-2026-10-05"
 HYBRID = ROOT / "results" / "hybrid-2026-10-11"
 CONSEQUENCES = ROOT / "results" / "consequences-2026-10-21"
 STAGE_B = ROOT / "results" / "real-merges-2026-10-26" / "stage-B"
+ORACLE = ROOT / "results" / "lock-oracle-2026-11-02"
 RUNS = ("run-11", "run-12", "run-13")
 SCORE_TOLERANCE = 1e-6
 """The hybrid run recomputed the reranker's scores, which agree with the rescore's to about
@@ -350,6 +351,43 @@ def repositories() -> str:
     )
 
 
+def oracle() -> str:
+    """Study 3 by lock file: conflicted files, those some computed action reproduces, and
+    where version unification decides it (exploratory)."""
+    report = json.loads((ORACLE / "report.json").read_text("utf-8"))
+    counts: dict[str, Counter] = {}
+    for row in _pairs(ORACLE / "labels.jsonl"):
+        for f in row["files"]:
+            name = f["path"].rsplit("/", 1)[-1]
+            done = {r["action"]: r["reproduces"] for r in f["results"]}
+            c = counts.setdefault(name, Counter())
+            c["files"] += 1
+            c["some"] += any(done.values())
+            for action in ("take_local", "take_upstream", "three_way", "three_way_unified"):
+                c[action] += done[action]
+            c["only_plain"] += done["three_way"] and not done["three_way_unified"]
+            c["only_unified"] += done["three_way_unified"] and not done["three_way"]
+    for name, c in counts.items():
+        assert report["by_ecosystem"][name] == {"files": c["files"], "reproduced": c["some"]}, name
+    assert set(counts) == set(report["by_ecosystem"])
+    rows = [
+        f"\\code{{{name}}} & {c['files']} & {c['some']} & {c['take_local']} & "
+        f"{c['take_upstream']} & {c['three_way']} & {c['three_way_unified']} & "
+        f"{c['only_plain']} & {c['only_unified']} \\\\"
+        for name, c in sorted(counts.items(), key=lambda item: -item[1]["files"])
+    ]
+    return (
+        "\\begin{tabular}{lcccccccc}\n\\toprule\n"
+        "& & & \\multicolumn{4}{c}{files each action reproduces} & "
+        "\\multicolumn{2}{c}{reproduced only by} \\\\\n"
+        "\\cmidrule(lr){4-7}\\cmidrule(lr){8-9}\n"
+        "lock file & conflicted & some action & local & upstream & three-way & unified & "
+        "three-way & unified \\\\\n\\midrule\n"
+        + "\n".join(rows)
+        + "\n\\bottomrule\n\\end{tabular}\n"
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, required=True)
@@ -362,6 +400,7 @@ def main() -> None:
         ("consequences", consequences),
         ("probe-cost", probe_cost),
         ("repositories", repositories),
+        ("oracle", oracle),
     ):
         (args.out / f"{name}.tex").write_text(build(), encoding="utf-8")
 

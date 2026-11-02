@@ -55,7 +55,10 @@ the graders behind every figure, analysing each surviving mutant, and run a Mont
 analysis of the registered follow-up study through its own decision code. It confirms the stated
 power of the primary test and shows, before any of its data exists, that the non-inferiority
 guard holds only about half the time when there is no true cost; the registration was amended
-accordingly.
+accordingly. A third registered study, on 360 conflicts from 27 repositories we had never mined,
+reads lock files as package sets. There, an action computed from a merge's three sides reproduces
+the maintainer's exact package set on 0.69 of a repository's conflicts, against 0.07 for the line
+unions. This gives the task an external oracle.
 We compare the design, table by table, with a deployed executability gate and a skill-retrieval
 risk benchmark.
 \end{abstract}
@@ -572,6 +575,87 @@ estimate and rule-2 bound from the released files exactly; with its own seed, it
 intervals fall within 0.01 of the registered ones. A second script re-fetched five repositories
 (55 cases, 20\%) at their pinned tips and re-derived every label from git alone. All 55 agree.
 
+\section{A pre-registered external oracle for lock-file conflicts}
+\label{sec:oracle}
+
+Section~\ref{sec:real} showed that the lock-file intent's two line unions express almost none of
+what maintainers commit. That is a fault of the formulation: a lock file is a set of resolved
+packages, not a sequence of lines. A third study, registered before its data and on repositories
+this project had never mined, asks whether the package-level formulation gives the task an
+external oracle.
+
+\paragraph{Labels.}
+Each conflicted lock file is read into its set of resolved $(\text{package}, \text{version})$
+pairs, for every lock file study 1 counts: npm's two, yarn, pnpm, Cargo, poetry, Pipfile, uv,
+Gemfile and composer. Formatting, order, checksums and the file format's version are ignored.
+From the base's, local side's and upstream's sets $B$, $L$, $U$, four actions are computed with
+no tool and no network:
+\begin{itemize}
+  \item \code{take\_local}: $L$;
+  \item \code{take\_upstream}: $U$;
+  \item \code{three\_way}: $(B\cap L\cap U)\cup(L-B)\cup(U-B)$;
+  \item \code{three\_way\_unified}: the same, keeping within each package's compatible range only
+  the highest version.
+\end{itemize}
+An action \emph{reproduces} a case when it gives exactly the maintainer's set on every conflicted
+lock file. A case is \emph{covered} when some action reproduces it.
+
+\paragraph{Hypotheses and analysis.}
+\begin{itemize}
+  \item \textbf{H1:} mean coverage over repositories is above 0.10.
+  \item \textbf{H2:} the unified three-way merge is closer than each side taken whole, by mean
+  per-case Jaccard similarity to the maintainer's set.
+\end{itemize}
+A repository counts once. Each figure is a mean of per-repository means, with a 95\% t-interval
+over repositories. A simulation from an exploratory pilot (30 conflicts, 6 repositories, already
+seen) sized the study at 15 repositories (H1's power 0.85), and showed the t-interval
+supporting H1 falsely at most 1.6\% of the time when coverage is exactly at the bound.
+Repositories were chosen with study 1's feasibility count, which reads no merge commit's tree:
+of 53 named candidates, all 27 with at least five lock-file conflicts were registered.
+
+\paragraph{Result.}
+The study ran as registered on 360 conflicts from the 27 repositories, at most 15 each. Both
+hypotheses are supported:
+\begin{itemize}
+  \item coverage is 0.686 [0.601, 0.770] (pooled over cases, 0.683);
+  \item the merge is closer than the local side by $+0.069$ [0.023, 0.115], and closer than
+  upstream by $+0.113$ [0.069, 0.156].
+\end{itemize}
+Study 1's line unions reproduce 0.072 of the same cases, so two in three real conflicts have a
+label that no one here wrote. Table~\ref{tab:oracle} breaks the result down by lock file.
+\code{three\_way} alone reproduces the most cases (0.389). Where it misses, it misses by little:
+its median per-case Jaccard is 0.996.
+
+\begin{table}[t]
+\centering
+\caption{Study 3 by lock file: conflicted files, those some computed action reproduces, those each
+action reproduces, and those only one of the two three-way merges reproduces.}
+\label{tab:oracle}
+\small
+\setlength{\tabcolsep}{3pt}
+\resizebox{\linewidth}{!}{\input{tables/oracle.tex}}
+\end{table}
+
+\paragraph{Exploratory: unification depends on the resolver.}
+After seeing the data, we found that unifying versions decides 78 files, and in opposite
+directions by ecosystem (Table~\ref{tab:oracle}, last two columns):
+\begin{itemize}
+  \item composer, bundler and poetry install one version of a package. There, only the unified
+  merge reproduces 31 files, and only the plain merge 1.
+  \item npm, yarn and pnpm keep compatible duplicates in nested \code{node\_modules}. There,
+  maintainers keep both versions: only the plain merge reproduces 42 files, and only the unified
+  merge 4.
+\end{itemize}
+The action set should therefore unify per ecosystem. That rule is a hypothesis for a later
+registration; this study does not test it.
+
+\paragraph{Verification.}
+A script importing nothing from the project recomputes every figure, interval and decision from
+the released labels, with no mismatch. A second script re-reads all 412 conflicted files from git
+with parsers written independently, and agrees on all 1,236 verdicts of the three actions it
+re-derives. No maintainer set reads as empty: the median holds 228 packages. Only 7 of the 360
+conflicts have identical package sets on both sides, where any action reproduces trivially.
+
 \section{Are the graders right?}
 \label{sec:graders}
 
@@ -886,8 +970,9 @@ The results hold within the following scope, and each item names the work that e
   would admit resolutions that differ from the maintainer's yet build and pass.
   \item \textbf{Builds.} The libraries come from one LLM at temperature 0. Their spread across
   three builds (Table~\ref{tab:repositories}) is why study 2 measures a population of twenty.
-  \item \textbf{Domain and level.} The task family is git maintenance, and the real-data test
-  covers lock-file merges from 11 repositories. This report measures dispatch decisions; the
+  \item \textbf{Domain and level.} The task family is git maintenance. The real-data tests cover
+  lock-file merges from 11 repositories (study 1) and lock-file conflicts from 27 more
+  (study 3). This report measures dispatch decisions; the
   episode-level stages, cost per task and online learning, are implemented and not yet run at
   scale.
   \item \textbf{Text scorers.} The comparison covers three local scorers; an LLM judge that reads
@@ -906,15 +991,17 @@ that precondition dispatch rarely mis-fires was falsified. What survived is narr
 \code{merge} on clean merges where text similarity does not, and some libraries refuse conflicts
 nothing can resolve. The follow-up study that tests refusal is registered; simulating it through
 its own decision rules confirmed its primary test and led to an amendment of its guard, before
-any of its data exists. The broader lesson is about evaluation: an error rate measured
+any of its data exists. A third registered study found what the task's labels should have been:
+read as package sets, two in three real lock-file conflicts have an answer computed from the
+merge's three sides that matches the maintainer's exactly. The broader lesson is about evaluation: an error rate measured
 against one's own labels says little until the same dispatcher faces states and labels someone
 else made, and a registered design deserves the same scrutiny before its data as its results
 receive after.
 
 \section*{Data and code availability}
 
-The apparatus, the three libraries, every result file, both registrations and the verification
-scripts are at \url{https://github.com/Shyboy0499/precondition-library}. The figures and tables of
+The apparatus, the three libraries, every result file, the three registrations and the
+verification scripts are at \url{https://github.com/Shyboy0499/precondition-library}. The figures and tables of
 Sections~\ref{sec:synthetic}--\ref{sec:graders} come from committed result files; the power
 analysis and every figure are regenerated by \code{paper/analysis/power.py} and
 \code{paper/analysis/figures.py}. Only commit SHAs and derived labels from mined repositories are
