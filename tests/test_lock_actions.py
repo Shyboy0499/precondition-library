@@ -79,7 +79,7 @@ def test_yarn_reads_scoped_names_and_keys_with_several_ranges() -> None:
 
 def test_a_file_with_conflict_markers_or_of_another_kind_is_unread() -> None:
     assert la.packages("Cargo.lock", "<<<<<<< HEAD\n[[package]]\n") is None
-    assert la.packages("package-lock.json", "{}") is None
+    assert la.packages("package-lock.json", "{}") is None  # neither packages nor dependencies
 
 
 def test_three_way_keeps_both_sides_changes_package_by_package() -> None:
@@ -120,3 +120,185 @@ def test_a_case_is_reproduced_only_if_every_lock_file_is() -> None:
     second = [result(a, a in ("three_way", "take_local")) for a in la.ACTIONS]
     summary = la.summarise([first, second])
     assert summary["three_way"] and not summary["take_local"]
+
+
+NPM_V3 = """{
+  "name": "app", "version": "1.0.0", "lockfileVersion": 3,
+  "packages": {
+    "": {"name": "app", "version": "1.0.0"},
+    "packages/ui": {"name": "@app/ui", "version": "0.1.0"},
+    "node_modules/@app/ui": {"resolved": "packages/ui", "link": true},
+    "node_modules/lodash": {"version": "4.17.21"},
+    "node_modules/@babel/core": {"version": "7.24.0"},
+    "node_modules/@babel/core/node_modules/semver": {"version": "6.3.1"},
+    "node_modules/semver": {"version": "7.6.0"}
+  }
+}"""
+
+NPM_V1 = """{
+  "name": "app", "lockfileVersion": 1,
+  "dependencies": {
+    "lodash": {"version": "4.17.21"},
+    "@babel/core": {"version": "7.24.0", "dependencies": {"semver": {"version": "6.3.1"}}}
+  }
+}"""
+
+PNPM_V5 = """lockfileVersion: 5.4
+
+importers:
+  .:
+    specifiers:
+      react: ^17.0.2
+
+packages:
+
+  /@babel/core/7.24.0:
+    resolution: {integrity: sha512-x}
+
+  /react-dom/17.0.2_react@17.0.2:
+    resolution: {integrity: sha512-y}
+"""
+
+PNPM_V9 = """lockfileVersion: '9.0'
+
+packages:
+
+  '@babel/core@7.24.0':
+    resolution: {integrity: sha512-x}
+
+  react-dom@17.0.2:
+    resolution: {integrity: sha512-y}
+
+snapshots:
+
+  react-dom@17.0.2(react@17.0.2):
+    dependencies:
+      react: 17.0.2
+"""
+
+PIPFILE = """{
+  "_meta": {"hash": {"sha256": "x"}},
+  "default": {"Requests": {"version": "==2.31.0"}, "mylib": {"git": "https://x", "ref": "abc123"}},
+  "develop": {"pytest": {"version": "==8.0.0"}}
+}"""
+
+COMPOSER = """{
+  "packages": [{"name": "symfony/console", "version": "v6.4.1"}],
+  "packages-dev": [{"name": "phpunit/phpunit", "version": "10.5.2"}]
+}"""
+
+GEMFILE = """GIT
+  remote: https://github.com/x/y.git
+  revision: abc
+  specs:
+    y (0.1.0)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    nokogiri (1.15.4-x86_64-linux)
+      racc (~> 1.4)
+    nokogiri (1.15.4-arm64-darwin)
+    racc (1.7.3)
+    rails (7.1.0.beta1)
+
+PLATFORMS
+  x86_64-linux
+
+BUNDLED WITH
+   2.4.10
+"""
+
+UV = """version = 1
+
+[[package]]
+name = "app"
+source = { editable = "." }
+
+[[package]]
+name = "anyio"
+version = "4.3.0"
+"""
+
+YARN_BERRY = """__metadata:
+  version: 6
+  cacheKey: 8
+
+"@babel/core@npm:^7.0.0, @babel/core@npm:^7.1.0":
+  version: 7.24.0
+  resolution: "@babel/core@npm:7.24.0"
+
+"lodash@npm:^4.17.21":
+  version: 4.17.21
+"""
+
+
+def test_npm_reads_every_installed_copy_but_not_the_project_or_its_links() -> None:
+    assert la.packages("package-lock.json", NPM_V3) == {
+        ("lodash", "4.17.21"),
+        ("@babel/core", "7.24.0"),
+        ("semver", "6.3.1"),
+        ("semver", "7.6.0"),
+    }
+    assert la.packages("npm-shrinkwrap.json", NPM_V1) == {
+        ("lodash", "4.17.21"),
+        ("@babel/core", "7.24.0"),
+        ("semver", "6.3.1"),
+    }
+
+
+def test_pnpm_reads_the_packages_block_in_every_key_format() -> None:
+    expected = {("@babel/core", "7.24.0"), ("react-dom", "17.0.2")}
+    assert la.packages("pnpm-lock.yaml", PNPM_V5) == expected
+    assert la.packages("pnpm-lock.yaml", PNPM_V9) == expected
+    assert la._pnpm_key("/@s/a@1.0.0(b@2.0.0)") == ("@s/a", "1.0.0")
+
+
+def test_pipenv_composer_gemfile_and_uv() -> None:
+    assert la.packages("Pipfile.lock", PIPFILE) == {
+        ("requests", "2.31.0"),
+        ("mylib", "abc123"),
+        ("pytest", "8.0.0"),
+    }
+    assert la.packages("composer.lock", COMPOSER) == {
+        ("symfony/console", "v6.4.1"),
+        ("phpunit/phpunit", "10.5.2"),
+    }
+    assert la.packages("Gemfile.lock", GEMFILE) == {
+        ("y", "0.1.0"),
+        ("nokogiri", "1.15.4-x86_64-linux"),
+        ("nokogiri", "1.15.4-arm64-darwin"),
+        ("racc", "1.7.3"),
+        ("rails", "7.1.0.beta1"),
+    }
+    assert la.packages("uv.lock", UV) == {("app", ""), ("anyio", "4.3.0")}
+
+
+def test_yarn_berry_reads_like_yarn_one_without_its_metadata() -> None:
+    assert la.packages("yarn.lock", YARN_BERRY) == {
+        ("@babel/core", "7.24.0"),
+        ("lodash", "4.17.21"),
+    }
+
+
+def test_conflict_markers_leave_any_lock_file_unread() -> None:
+    marked = "<<<<<<< ours\n" + YARN + "=======\n" + YARN + ">>>>>>> theirs\n"
+    assert la.packages("yarn.lock", marked) is None
+    assert la.packages("Gemfile.lock", GEMFILE.replace("GEM\n", "<<<<<<< HEAD\nGEM\n")) is None
+
+
+def test_unify_follows_each_ecosystems_resolver() -> None:
+    assert la.unify("composer.lock", {("a/b", "v1.0.0"), ("a/b", "v2.0.0")}) == {("a/b", "v2.0.0")}
+    assert la.unify("package-lock.json", {("x", "1.0.0"), ("x", "2.0.0")}) == {
+        ("x", "1.0.0"),
+        ("x", "2.0.0"),
+    }
+    platforms = {("nokogiri", "1.15.4-x86_64-linux"), ("nokogiri", "1.15.4-arm64-darwin")}
+    assert la.unify("Gemfile.lock", platforms) == platforms
+    assert la.unify("Gemfile.lock", {("racc", "1.7.3"), ("racc", "1.6.0")}) == {("racc", "1.7.3")}
+
+
+def test_every_lock_file_the_registration_counts_has_a_reader() -> None:
+    from precondition_library.bench.real_merges import LOCK_FILES
+
+    assert set(la.READERS) == set(LOCK_FILES)

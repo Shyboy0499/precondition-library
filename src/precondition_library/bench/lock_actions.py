@@ -35,6 +35,7 @@ operator's proxy; nothing here runs model-authored code.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -66,8 +67,10 @@ Package = tuple[str, str]
 
 
 def _toml_packages(text: str) -> set[Package]:
+    """Cargo.lock, poetry.lock and uv.lock: one `[[package]]` table per resolved package. A uv
+    workspace member with a dynamic version has none, and is read with an empty one."""
     data = tomllib.loads(text)
-    return {(str(p["name"]), str(p["version"])) for p in data.get("package", [])}
+    return {(str(p["name"]), str(p.get("version", ""))) for p in data.get("package", [])}
 
 
 _YARN_KEY = re.compile(r'^("?)(?P<specs>[^\s].*?)\1:\s*$')
@@ -93,28 +96,126 @@ def _yarn_packages(text: str) -> set[Package]:
             names = [_yarn_name(s) for s in key.group("specs").split(",")] if key else []
             continue
         version = _YARN_VERSION.match(line)
-        if version and names:
+        if version and names and names != ["__metadata"]:
             found.update((name, version.group("version")) for name in names)
             names = []
+    return found
+
+
+def _npm_packages(text: str) -> set[Package]:
+    """package-lock.json and npm-shrinkwrap.json. Format 2 and 3 key every installed copy by its
+    path (`node_modules/a/node_modules/b`); format 1 nests `dependencies`. A workspace's own
+    directories and links are the project, not a resolution, and are left out."""
+    data = json.loads(text)
+    found: set[Package] = set()
+    if isinstance(data.get("packages"), dict):
+        for key, entry in data["packages"].items():
+            if "node_modules/" not in key or entry.get("link") or "version" not in entry:
+                continue
+            found.add((key.rsplit("node_modules/", 1)[1], str(entry["version"])))
+        return found
+
+    def walk(dependencies: dict[str, dict]) -> None:
+        for name, entry in dependencies.items():
+            if "version" in entry:
+                found.add((name, str(entry["version"])))
+            walk(entry.get("dependencies", {}))
+
+    walk(data["dependencies"])
+    return found
+
+
+_PNPM_KEY = re.compile(r"""^  (['"]?)(?P<key>[^\s'"].*?)\1:\s*$""")
+
+
+def _pnpm_key(key: str) -> Package:
+    """`/a/1.0.0_b@2` (format 5), `/@s/a@1.0.0(b@2)` (6) and `a@1.0.0` (9) -> `(a, 1.0.0)`."""
+    key = key.lstrip("/").split("(", 1)[0]
+    name, _, last = key.rpartition("/")
+    if name and last[:1].isdigit():
+        return name, last.split("_", 1)[0]
+    at = key.rfind("@")
+    return key[:at], key[at + 1 :]
+
+
+def _pnpm_packages(text: str) -> set[Package]:
+    """pnpm-lock.yaml's `packages:` block, one key per resolved package, read line by line so a
+    snapshot section or an importer never counts."""
+    found: set[Package] = set()
+    inside = False
+    for line in text.splitlines():
+        if line and not line[0].isspace():
+            inside = line.rstrip() == "packages:"
+            continue
+        key = _PNPM_KEY.match(line) if inside else None
+        if key:
+            found.add(_pnpm_key(key.group("key")))
+    if "packages:" not in text.splitlines():
+        raise KeyError("packages")
+    return found
+
+
+def _pipenv_packages(text: str) -> set[Package]:
+    """Pipfile.lock: `default` and `develop`, each a name with a pinned `==version`. A VCS or
+    path requirement pins no version and is read with its reference instead."""
+    data = json.loads(text)
+    found: set[Package] = set()
+    for section in ("default", "develop"):
+        for name, entry in data.get(section, {}).items():
+            pinned = entry.get("version") or entry.get("ref") or entry.get("path") or ""
+            found.add((name.lower(), str(pinned).removeprefix("==")))
+    return found
+
+
+def _composer_packages(text: str) -> set[Package]:
+    data = json.loads(text)
+    return {
+        (str(p["name"]), str(p["version"]))
+        for section in ("packages", "packages-dev")
+        for p in data.get(section) or []
+    }
+
+
+_GEM_SPEC = re.compile(r"^    (?P<name>[^\s(]+) \((?P<version>[^)]+)\)\s*$")
+
+
+def _gem_packages(text: str) -> set[Package]:
+    """Gemfile.lock: every `specs:` entry at four spaces, from GEM, GIT and PATH sections. Six
+    spaces is a gem's own requirement, not a resolution. A platform gem keeps its platform in
+    its version (`1.15.4-x86_64-linux`), so each platform's copy is its own pair."""
+    found = {
+        (m.group("name"), m.group("version")) for m in map(_GEM_SPEC.match, text.splitlines()) if m
+    }
     return found
 
 
 READERS = {
     "Cargo.lock": _toml_packages,
     "poetry.lock": _toml_packages,
+    "uv.lock": _toml_packages,
     "yarn.lock": _yarn_packages,
+    "package-lock.json": _npm_packages,
+    "npm-shrinkwrap.json": _npm_packages,
+    "pnpm-lock.yaml": _pnpm_packages,
+    "Pipfile.lock": _pipenv_packages,
+    "composer.lock": _composer_packages,
+    "Gemfile.lock": _gem_packages,
 }
 """The lock files this module can read, by final path component."""
+
+
+_CONFLICT = re.compile(r"^(<{7}|>{7})( |$)", re.MULTILINE)
+"""A file committed with conflict markers in it resolves nothing; reading part of it would."""
 
 
 def packages(path: str, text: str) -> set[Package] | None:
     """The resolved `(package, version)` pairs in a lock file, or None if it cannot be read."""
     reader = READERS.get(path.rsplit("/", 1)[-1])
-    if reader is None:
+    if reader is None or _CONFLICT.search(text):
         return None
     try:
         return reader(text)
-    except (tomllib.TOMLDecodeError, KeyError, TypeError):
+    except (tomllib.TOMLDecodeError, json.JSONDecodeError, KeyError, TypeError, AttributeError):
         return None
 
 
@@ -186,9 +287,20 @@ def _release(version: str) -> tuple[int, ...]:
     return tuple(int(n) for n in numbers[:4])
 
 
-def _compatible(path: str, version: str) -> tuple[int, ...]:
-    """The range one version of a package must share with another to be unified."""
-    if path.rsplit("/", 1)[-1] == "poetry.lock":
+ONE_VERSION = ("poetry.lock", "uv.lock", "Pipfile.lock", "Gemfile.lock", "composer.lock")
+"""Ecosystems whose resolver installs one version of a package, so unifying keeps one."""
+
+
+def _compatible(path: str, version: str) -> tuple[int | str, ...]:
+    """The range one version of a package must share with another to be unified: a semver
+    caret range for cargo and npm's three lock files, which may hold several incompatible
+    versions of one package; everything, for one-version ecosystems -- save a Ruby platform gem,
+    whose copies for different platforms coexist."""
+    name = path.rsplit("/", 1)[-1]
+    if name == "Gemfile.lock":
+        platform = re.match(r"^[\d.]+(?:\.[a-z]+\d*)?-(?P<platform>.+)$", version)
+        return (platform.group("platform"),) if platform else ()
+    if name in ONE_VERSION:
         return ()
     release = _release(version) + (0, 0)
     return release[:2] if release[0] == 0 else release[:1]
@@ -196,7 +308,7 @@ def _compatible(path: str, version: str) -> tuple[int, ...]:
 
 def unify(path: str, resolved: set[Package]) -> set[Package]:
     """Within each package's compatible range, only the highest version."""
-    best: dict[tuple[str, tuple[int, ...]], str] = {}
+    best: dict[tuple[str, tuple[int | str, ...]], str] = {}
     for name, version in resolved:
         key = (name, _compatible(path, version))
         if key not in best or _release(version) > _release(best[key]):
@@ -231,22 +343,48 @@ def _checkout(repo: Path, commit: str, into: Path) -> None:
     subprocess.run(["tar", "-x", "-C", str(into)], input=archive.stdout, check=True)
 
 
-def actions_on(
-    repo: Path, *, merge: str, first: str, second: str, base: str, path: str, cache: Path
-) -> list[ActionResult]:
-    """Every action on one conflicted lock file, each compared with the maintainer's."""
+COMPUTED = ("take_local", "take_upstream", "three_way", "three_way_unified")
+"""The actions computed from the three sides' files alone, with no tool and no registry."""
+
+
+class _Sides(BaseModel):
+    merged: set[Package] | None
+    texts: dict[str, str | None]
+    read: dict[str, set[Package] | None]
+    base: set[Package]
+    before: set[str]
+
+
+def _sides(repo: Path, *, merge: str, first: str, second: str, base: str, path: str) -> _Sides:
     merged_text = _show(repo, merge, path)
-    merged = packages(path, merged_text) if merged_text is not None else None
+    texts = {"local": _show(repo, first, path), "upstream": _show(repo, second, path)}
+    read = {side: packages(path, t) if t is not None else None for side, t in texts.items()}
+    base_text = _show(repo, base, path)
+    base_set = (packages(path, base_text) if base_text is not None else None) or set()
+    return _Sides(
+        merged=packages(path, merged_text) if merged_text is not None else None,
+        texts=texts,
+        read=read,
+        base=base_set,
+        before={n for n, _ in base_set | (read["local"] or set()) | (read["upstream"] or set())},
+    )
+
+
+def computed_actions(
+    repo: Path, *, merge: str, first: str, second: str, base: str, path: str
+) -> list[ActionResult]:
+    """The `COMPUTED` actions on one conflicted lock file, each compared with the maintainer's."""
+    sides = _sides(repo, merge=merge, first=first, second=second, base=base, path=path)
+    return _computed(path, sides)
+
+
+def _computed(path: str, sides: _Sides) -> list[ActionResult]:
+    merged, read, base_set = sides.merged, sides.read, sides.base
     if merged is None:
         return [
             ActionResult(action=a, reproduces=False, jaccard=None, error="merge's file unread")
-            for a in ACTIONS
+            for a in COMPUTED
         ]
-    sides = {"local": _show(repo, first, path), "upstream": _show(repo, second, path)}
-    read = {side: packages(path, t) if t is not None else None for side, t in sides.items()}
-    base_text = _show(repo, base, path)
-    base_set = (packages(path, base_text) if base_text is not None else None) or set()
-    before = {n for n, _ in base_set | (read["local"] or set()) | (read["upstream"] or set())}
     results: list[ActionResult] = []
     for side in ("local", "upstream"):
         same, jaccard = _compare(read[side], merged)
@@ -274,12 +412,26 @@ def actions_on(
                     action=action, reproduces=False, jaccard=None, error="a side's file unread"
                 )
             )
+    return results
+
+
+def actions_on(
+    repo: Path, *, merge: str, first: str, second: str, base: str, path: str, cache: Path
+) -> list[ActionResult]:
+    """Every action on one conflicted lock file, each compared with the maintainer's."""
+    sides = _sides(repo, merge=merge, first=first, second=second, base=base, path=path)
+    if sides.merged is None:
+        return [
+            ActionResult(action=a, reproduces=False, jaccard=None, error="merge's file unread")
+            for a in ACTIONS
+        ]
+    results = _computed(path, sides)
     for action, start in (
-        ("reconcile_local", sides["local"]),
-        ("reconcile_upstream", sides["upstream"]),
+        ("reconcile_local", sides.texts["local"]),
+        ("reconcile_upstream", sides.texts["upstream"]),
         ("regenerate", None),
     ):
-        results.append(_run(repo, merge, path, start, merged, before, action, cache))
+        results.append(_run(repo, merge, path, start, sides.merged, sides.before, action, cache))
     return results
 
 

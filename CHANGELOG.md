@@ -12,6 +12,17 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **Study 3 is registered: a computed lock-file oracle (#306, ADR-0056).**
+  - `docs/preregistration/lock-oracle.md` asks two questions on repositories nobody here has
+    mined. How often does an action computed from a conflict's base and two sides give exactly
+    the package set the maintainer committed (H1: more than one in ten)? And is the
+    package-level three-way merge closer to it than either side (H2)?
+  - `bench.lock_oracle` mines, labels and reports the study.
+  - `lock-oracle-power.py` is the power analysis from the pilot that sized it.
+  - `bench.lock_actions` now reads every lock file study 1 counts: npm, pnpm, Pipfile,
+    composer, Gemfile and uv, as well as Cargo, poetry and yarn (berry too). Its `unify`
+    follows each ecosystem's resolver. A file committed with conflict markers is read as
+    nothing.
 - **Study 2 can run its builds, and verify its report, before any data exists.**
   - `bench.population` runs the 20 builds as §5 says. Several run at once, each a `bench.live`
     process. An interrupted build is resumed up to twice, and one that never finishes is

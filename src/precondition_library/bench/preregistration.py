@@ -22,6 +22,7 @@ REPOSITORY = Path(__file__).resolve().parents[3]
 REGISTRATIONS: dict[str, str] = {
     "real-merges": "77bc2f861f117bbe7d97b58fb777f1e8e70cc4b92800904f7b1e06efa4e13d30",
     "refusal-population": "3fe46c2297aa3dd8f9224696e477b2202b3cac7c4bcddb5639921ba7b91ee474",
+    "lock-oracle": "3e9afab264823c215f70abf11b1a0e7137dfa513350292c343b4228789375afe",
 }
 """Each registered study's document, by name, and the SHA-256 of its bytes."""
 
