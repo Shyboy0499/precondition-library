@@ -28,6 +28,16 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **A blind labelling kit for #299 step 3.** `bench.human_labels make` writes 60 cards from
+  Figure 1's eval states.
+  - Each card has the request, what the repository shows, and the candidate actions in neutral
+    words and a random order.
+  - The cards carry salted ids, and the answer key goes to a private path. The cards never name
+    the fault, the intent or the rule.
+  - `score` reports each rater's agreement with the rules, Cohen's κ between raters and against
+    the rules, and every disagreement.
+  - `docs/human-labels.md` says how to run it. Finding the raters is the owner's part.
+
 - **A manifest-aware lock-file merge, piloted, does not work in its simple form (exploratory).**
   Keeping only what the merged manifest reaches through the lock files' own requirements breaks
   nearly every composer file the plain merge reproduced. Even maintainers' own `composer.lock`
