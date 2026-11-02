@@ -1,0 +1,76 @@
+{
+  "cases": 266,
+  "repositories_with_a_case": 20,
+  "per_repository": {
+    "Leantime/leantime": 15,
+    "SuiteCRM/SuiteCRM": 15,
+    "akaunting/akaunting": 6,
+    "civicrm/civicrm-core": 15,
+    "cypress-io/cypress": 15,
+    "element-hq/element-desktop": 8,
+    "element-hq/element-web": 15,
+    "espocrm/espocrm": 15,
+    "fatfreecrm/fat_free_crm": 15,
+    "glpi-project/glpi": 15,
+    "humhub/humhub": 15,
+    "joomla/joomla-cms": 15,
+    "matrix-org/matrix-react-sdk": 15,
+    "mautic/mautic": 15,
+    "pixelfed/pixelfed": 7,
+    "rubyforgood/casa": 15,
+    "rubyforgood/human-essentials": 15,
+    "rust-lang/rustlings": 5,
+    "storybookjs/storybook": 15,
+    "strapi/strapi": 15
+  },
+  "exclusions": {
+    "criss-cross": 53,
+    "merged lock file unread": 4,
+    "submodule or binary conflict": 5
+  },
+  "underpowered": false,
+  "tests": {
+    "H1": {
+      "files_won": 91,
+      "files_lost": 0,
+      "votes_for": 17,
+      "votes_against": 0,
+      "ties": 0,
+      "p": 0.0000152587890625,
+      "outcome": "supported"
+    },
+    "H2": {
+      "files_won": 24,
+      "files_lost": 0,
+      "votes_for": 10,
+      "votes_against": 0,
+      "ties": 0,
+      "p": 0.001953125,
+      "outcome": "supported"
+    },
+    "H3": {
+      "files_won": 67,
+      "files_lost": 0,
+      "votes_for": 11,
+      "votes_against": 0,
+      "ties": 0,
+      "p": 0.0009765625,
+      "outcome": "supported"
+    }
+  },
+  "coverage": {
+    "statistic": 0.7595238095238095,
+    "interval": {
+      "low": 0.67396890596246,
+      "high": 0.845078713085159
+    }
+  },
+  "h4": "supported",
+  "ecosystem_share": 0.5526315789473685,
+  "action_share": {
+    "take_local": 0.38721804511278196,
+    "take_upstream": 0.13157894736842105,
+    "three_way": 0.46616541353383456,
+    "three_way_unified": 0.3157894736842105
+  }
+}
