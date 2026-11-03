@@ -28,6 +28,13 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **npm, pinned to the merge's date, recovers a quarter of the computed oracle's npm misses
+  (#336, exploratory).** This used `npm install --package-lock-only --ignore-scripts --before=<merge
+  date>`, starting from each side's lock file. It reproduced the maintainer's exact package set on
+  13 of 52 unreproduced `package-lock.json` files from studies 3 and 4. Most of those were
+  recombinations: 10 of 31, against 3 of 21 new resolutions. All 8 failures are one repository's
+  (`results/lock-tool-dated-2026-11-03/`).
+
 - **A blind labelling kit for #299 step 3.** `bench.human_labels make` writes 60 cards from
   Figure 1's eval states.
   - Each card has the request, what the repository shows, and the candidate actions in neutral
