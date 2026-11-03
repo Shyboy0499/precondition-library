@@ -733,6 +733,12 @@ fully reachable from their \code{composer.json} in only 7 of 233 cases, because 
 path repositories add requirements the manifest does not show. For a dispatcher, both kinds are
 cases to refuse, or to hand to the ecosystem's tool.
 
+That tool can be replayed for npm. npm can resolve against the registry as it stood on the
+merge's date (\code{--before}). Started from either side's lock file, it reproduces the
+maintainer's exact set on 14 of the 52 unreproduced \code{package-lock.json} files: 11 of 31
+recombinations and 3 of 21 new resolutions. This was chosen after seeing the data, so it is not
+a test. The other ecosystems' tools have no such option and would need a registry snapshot.
+
 \section{Are the graders right?}
 \label{sec:graders}
 
