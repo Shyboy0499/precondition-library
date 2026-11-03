@@ -1,0 +1,38 @@
+62 BookStackApp/BookStack package-lock.json 2024-09-27 {'first': 'jaccard 0.914', 'second': 'jaccard 0.961'}
+64 BookStackApp/BookStack package-lock.json 2023-02-17 {'first': 'jaccard 0.683', 'second': 'jaccard 0.493'}
+138 bolt/core package-lock.json 2021-08-10 {'first': 'jaccard 0.891', 'second': 'jaccard 0.965'}
+152 snipe/snipe-it package-lock.json 2024-05-20 {'first': 'jaccard 0.998', 'second': 'jaccard 0.551'}
+153 snipe/snipe-it package-lock.json 2024-05-06 {'first': 'jaccard 0.709', 'second': 'jaccard 0.552'}
+155 snipe/snipe-it package-lock.json 2024-04-02 {'first': 'reproduces', 'second': 'jaccard 0.562'}
+166 rust-lang/crates.io package-lock.json 2020-09-07 {'first': 'jaccard 0.996', 'second': 'jaccard 0.990'}
+188 firefly-iii/firefly-iii package-lock.json 2026-07-07 {'first': 'jaccard 0.968', 'second': 'jaccard 0.934'}
+198 firefly-iii/firefly-iii package-lock.json 2026-04-10 {'first': 'jaccard 0.954', 'second': 'jaccard 0.940'}
+229 contao/contao package-lock.json 2026-07-24 {'first': 'jaccard 0.900', 'second': 'reproduces'}
+235 contao/contao package-lock.json 2026-05-12 {'first': 'reproduces', 'second': 'jaccard 0.705'}
+250 nightscout/cgm-remote-monitor package-lock.json 2026-05-09 {'first': 'jaccard 0.999', 'second': 'jaccard 0.965'}
+251 nightscout/cgm-remote-monitor package-lock.json 2026-05-09 {'first': 'jaccard 0.574', 'second': 'reproduces'}
+253 MagicMirrorOrg/MagicMirror package-lock.json 2023-07-01 {'first': 'jaccard 0.995', 'second': 'jaccard 0.834'}
+256 MagicMirrorOrg/MagicMirror package-lock.json 2021-06-14 {'first': 'jaccard 0.866', 'second': 'jaccard 0.885'}
+259 MagicMirrorOrg/MagicMirror package-lock.json 2021-01-30 {'first': 'reproduces', 'second': 'jaccard 0.984'}
+260 MagicMirrorOrg/MagicMirror package-lock.json 2020-12-08 {'first': 'jaccard 0.977', 'second': 'jaccard 0.991'}
+261 MagicMirrorOrg/MagicMirror package-lock.json 2020-11-08 {'first': 'reproduces', 'second': 'jaccard 0.853'}
+263 MagicMirrorOrg/MagicMirror package-lock.json 2019-12-29 {'first': 'jaccard 0.989', 'second': 'jaccard 0.904'}
+266 MagicMirrorOrg/MagicMirror package-lock.json 2019-06-14 {'first': 'reproduces', 'second': 'jaccard 0.594'}
+282 node-red/node-red package-lock.json 2026-06-04 {'first': 'reproduces', 'second': 'jaccard 0.978'}
+283 node-red/node-red package-lock.json 2026-05-29 {'first': 'jaccard 0.846', 'second': 'reproduces'}
+284 node-red/node-red package-lock.json 2026-05-08 {'first': 'jaccard 0.949', 'second': 'reproduces'}
+286 node-red/node-red package-lock.json 2026-04-29 {'first': 'reproduces', 'second': 'jaccard 0.964'}
+290 node-red/node-red package-lock.json 2026-02-11 {'first': 'jaccard 0.980', 'second': 'jaccard 0.980'}
+338 processing/p5.js package-lock.json 2024-12-15 {'first': 'jaccard 0.935', 'second': 'jaccard 0.935'}
+339 processing/p5.js package-lock.json 2024-09-03 {'first': 'reproduces', 'second': 'jaccard 0.657'}
+340 processing/p5.js package-lock.json 2024-08-26 {'first': 'jaccard 0.991', 'second': 'jaccard 0.991'}
+341 processing/p5.js package-lock.json 2024-05-04 {'first': 'jaccard 0.952', 'second': 'jaccard 0.551'}
+347 loomio/loomio vue/package-lock.json 2026-05-27 {'first': 'jaccard 0.762', 'second': 'jaccard 0.995'}
+348 loomio/loomio vue/package-lock.json 2026-05-25 {'first': 'jaccard 0.854', 'second': 'jaccard 0.997'}
+349 loomio/loomio vue/package-lock.json 2026-05-18 {'first': 'failed', 'second': 'jaccard 0.953'}
+351 loomio/loomio vue/package-lock.json 2026-04-24 {'first': 'jaccard 0.823', 'second': 'jaccard 0.997'}
+353 loomio/loomio vue/package-lock.json 2025-12-17 {'first': 'jaccard 0.792', 'second': 'failed'}
+355 loomio/loomio vue/package-lock.json 2025-06-03 {'first': 'jaccard 0.815', 'second': 'failed'}
+358 loomio/loomio vue/package-lock.json 2025-05-06 {'first': 'jaccard 0.707', 'second': 'failed'}
+359 loomio/loomio vue/package-lock.json 2025-04-03 {'first': 'jaccard 0.639', 'second': 'failed'}
+lock-oracle-2026-11-02 {'files': 37, 'reproduced from some side': 12, 'tool failed on both sides': 0}

@@ -1,0 +1,16 @@
+59 mautic/mautic app/assets/scaffold/files/package-lock.json 2026-09-23 {'first': 'jaccard 0.980', 'second': 'jaccard 0.793'}
+59 mautic/mautic package-lock.json 2026-09-23 {'first': 'jaccard 0.980', 'second': 'jaccard 0.793'}
+69 glpi-project/glpi package-lock.json 2026-10-27 {'first': 'failed', 'second': 'failed'}
+70 glpi-project/glpi package-lock.json 2026-10-19 {'first': 'failed', 'second': 'failed'}
+72 glpi-project/glpi package-lock.json 2026-10-02 {'first': 'failed', 'second': 'failed'}
+73 glpi-project/glpi package-lock.json 2026-09-30 {'first': 'failed', 'second': 'failed'}
+74 glpi-project/glpi package-lock.json 2026-09-30 {'first': 'failed', 'second': 'failed'}
+76 glpi-project/glpi package-lock.json 2026-09-15 {'first': 'failed', 'second': 'failed'}
+77 glpi-project/glpi package-lock.json 2026-09-11 {'first': 'jaccard 0.986', 'second': 'failed'}
+78 glpi-project/glpi package-lock.json 2026-09-03 {'first': 'failed', 'second': 'failed'}
+79 glpi-project/glpi package-lock.json 2026-09-01 {'first': 'failed', 'second': 'failed'}
+81 glpi-project/glpi package-lock.json 2026-08-18 {'first': 'jaccard 0.995', 'second': 'jaccard 0.589'}
+83 joomla/joomla-cms package-lock.json 2026-10-03 {'first': 'jaccard 0.978', 'second': 'jaccard 0.954'}
+94 joomla/joomla-cms package-lock.json 2026-07-02 {'first': 'reproduces', 'second': 'jaccard 0.993'}
+176 Leantime/leantime package-lock.json 2024-02-24 {'first': 'jaccard 0.902', 'second': 'jaccard 0.962'}
+ecosystem-unify-2026-11-02 {'files': 15, 'reproduced from some side': 1, 'tool failed on both sides': 8}
