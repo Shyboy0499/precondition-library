@@ -7,7 +7,9 @@ registry answers as it stood that day, so a resolution a maintainer made then ca
 The result's (package, version) set is compared with the maintainer's.
 
     PYTHONPATH=src python results/lock-tool-dated-2026-11-03/npm_dated.py \\
-        <study> <its real-hosts cache> <scratch> [limit]
+        <study> <its real-hosts cache> <scratch> [limit] [npm options...]
+
+Arguments starting with `--` are passed on to npm, for example `--engine-strict=false`.
 """
 
 import json
@@ -20,8 +22,10 @@ from pathlib import Path
 
 from precondition_library.bench import lock_actions as la
 
-study, hosts, scratch = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
-limit = int(sys.argv[4]) if len(sys.argv) > 4 else 10**9
+options = [a for a in sys.argv[1:] if a.startswith("--")]
+args = [a for a in sys.argv[1:] if not a.startswith("--")]
+study, hosts, scratch = Path(args[0]), Path(args[1]), Path(args[2]).resolve()
+limit = int(args[3]) if len(args) > 3 else 10**9
 m = json.loads((study / "manifest.json").read_text())
 tips = {r["repo"]: r["tip"] for r in m["repositories"]}
 cases = {c["index"]: c for c in m["cases"]}
@@ -71,6 +75,7 @@ for row, c, f in rows[:limit]:
                         "--no-audit",
                         "--no-fund",
                         f"--before={when}",
+                        *options,
                     ],
                     cwd=lock.parent,
                     capture_output=True,
@@ -79,6 +84,9 @@ for row, c, f in rows[:limit]:
                     env={**os.environ, "npm_config_cache": str(scratch / "cache")},
                 )
                 got = la.packages(f["path"], lock.read_text()) if ran.returncode == 0 else None
+                if ran.returncode != 0:
+                    error = [x for x in ran.stderr.splitlines() if x.startswith("npm error code")]
+                    print("  ", side, *error[:1], flush=True)
             except subprocess.TimeoutExpired:
                 got = None
             outcome[side] = (
