@@ -47,9 +47,8 @@ them by the kinds in `results/lock-uncovered-2026-11-02/`.
 - **The rest are near.** Where npm runs but does not reproduce, its result is usually close: for
   example Jaccard 0.98 on mautic and 0.995 on one of glpi's files, from one side. Some maintainers' lock files
   were evidently produced with a different npm version or options, or edited by hand.
-- **All 8 failures are glpi's.** Eight of its nine files fail from both sides. The pilot did not
-  record npm's error output, so the cause is not known. It may be a peer-dependency conflict
-  (`ERESOLVE`), which `--legacy-peer-deps` would bypass, but that is a guess.
+- **All 8 failures are glpi's.** Eight of its ten files fail from both sides. The cause is the
+  container's Node, not the resolver: see the addendum below.
 
 ## What it shows, and what it does not
 
@@ -65,3 +64,37 @@ them by the kinds in `results/lock-uncovered-2026-11-02/`.
 - **The npm version matters.** This ran npm 10.9.4, whatever the maintainer used. The format
   versions differ, but the comparison is of package sets, so formats alone do not cause a
   mismatch.
+
+## Addendum, the same day: the glpi failures were the engine check
+
+The first run did not record npm's error output. Run by hand, every glpi failure is
+`EBADENGINE`. glpi's `package.json` requires Node `>= 24.11`, and its `.npmrc` sets
+`engine-strict=true`. This container has Node 22.22.0, so npm refuses to start.
+
+The engine check guards installation, not resolution, so both studies were run again with
+`--engine-strict=false` (`study-3.engine-strict-false.log`, `study-4.engine-strict-false.log`,
+`kinds.engine-strict-false.txt`). `npm_dated.py` now passes options starting with `--` on to
+npm and prints the code of any npm error.
+
+```bash
+PYTHONPATH=src python results/lock-tool-dated-2026-11-03/npm_dated.py <study> <real-hosts> <scratch> --engine-strict=false
+```
+
+| | study 3 | study 4 | both |
+| --- | ---: | ---: | ---: |
+| **npm reproduces the maintainer's set exactly**, from one side or the other | **12** | **2** | **14 of 52 (27%)** |
+| npm fails from both sides | 0 | 0 | 0 |
+| recombinations reproduced | 9 of 22 | 2 of 9 | 11 of 31 |
+| new resolutions reproduced | 3 of 15 | 0 of 6 | 3 of 21 |
+
+- **Study 3 is unchanged, file for file.** Its logs are identical apart from the error codes now
+  printed.
+- **Study 4 changes only on glpi.** All ten of its files now run. One more reproduces, a
+  recombination (case 74, from the first side), and the other nine are near: Jaccard 0.94 to
+  0.997 from the first side, 0.59 to 0.67 from the second.
+- **The remaining single-side failures are loomio's.** Four are `ERESOLVE`, a peer-dependency
+  conflict, from the second side; one is `E403` from the registry, from the first. Each of those
+  files ran from the other side.
+- **So the recovered share is 14 of 52, not 13**, with nothing failing outright. The conclusions
+  above stand: npm recovers recombinations more often than new resolutions (11 of 31 against 3
+  of 21).
