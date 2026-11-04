@@ -11,6 +11,8 @@
 \usepackage{amsthm}
 \usepackage{graphicx}
 \usepackage{xcolor}
+% Every float stays in its own section: none drifts past the next \section heading.
+\usepackage[section]{placeins}
 \usepackage[hidelinks]{hyperref}
 \usepackage{url}
 
@@ -54,7 +56,14 @@ analysis that amended a registered study before its data existed, and compare th
 deployed executability gate and a skill-retrieval risk benchmark.
 \end{abstract}
 
+\clearpage
+{\setcounter{tocdepth}{1}\tableofcontents}
+
+\clearpage
+\part{The question and the design}
+
 \section{Introduction}
+\label{sec:intro}
 
 LLM agents increasingly reuse their own past work. A task solved once is compiled into a program
 that can be replayed later without a model call
@@ -132,6 +141,22 @@ compares them with this work in detail.
   cascade those systems use, and a taxonomy of where wrong fires come from
   (Section~\ref{sec:discussion}).
 \end{enumerate}
+
+\paragraph{How the report is organised.}
+The report has four parts, and each starts on a new page.
+\begin{itemize}
+  \item \textbf{Part I, the question and the design} (Sections~\ref{sec:intro}--\ref{sec:design}):
+  the question, related work, and how dispatchers are measured and compared.
+  \item \textbf{Part II, results} (Sections~\ref{sec:synthetic}--\ref{sec:oracle}): on the
+  project's own states; on real lock-file merges graded by their maintainers (study 1); and on
+  real lock-file conflicts read as package sets (studies 3 and 4).
+  \item \textbf{Part III, validity and the next study} (Sections~\ref{sec:graders}
+  and~\ref{sec:power}): whether the graders behind those results are right, and the registered
+  follow-up study (study 2) with its power analysis.
+  \item \textbf{Part IV, context and conclusions} (Sections~\ref{sec:comparison}--\ref{sec:conclusion}):
+  a comparison with related systems, a discussion of what the results mean, their scope, and the
+  conclusion.
+\end{itemize}
 
 \section{Related work}
 \label{sec:related}
@@ -379,6 +404,9 @@ informed channel's AUCs, 0.962, 0.945, 1.000, 1.000 and 1.000 across the five in
 real measurement, and show how much state-aware wording would leak. One consequence matters for
 Section~\ref{sec:comparison}: on the uninformed channel, \emph{no} text scorer can tell sibling
 resolutions apart, whatever its quality.
+
+\clearpage
+\part{Results}
 
 \section{Results on the project's own states}
 \label{sec:synthetic}
@@ -917,6 +945,9 @@ Of the 172 conflicted \code{package-lock.json} files in both studies:
 This was chosen after seeing the data, so it is not a test. The other ecosystems' tools have no
 such option and would need a registry snapshot.
 
+\clearpage
+\part{Validity, and the next study}
+
 \section{Are the graders right?}
 \label{sec:graders}
 
@@ -1128,6 +1159,9 @@ cost of 0.14--0.15 is reported in 4--12\% of studies, so at this size a cost wil
 and a study that shows none has not ruled one out.
 This is the use a power analysis is for: it changed what the study will be allowed to conclude
 before it could see a result.
+
+\clearpage
+\part{Context and conclusions}
 
 \section{Comparison with executability gating and retrieval-risk measurement}
 \label{sec:comparison}
@@ -1346,6 +1380,7 @@ The results hold within the following scope, and each item names the work that e
 \end{itemize}
 
 \section{Conclusion}
+\label{sec:conclusion}
 
 On states we built and labelled, executable-precondition dispatch never mis-fired, but neither
 did a classifier that only reads the state, and the request channel was built to carry nothing a
