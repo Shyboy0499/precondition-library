@@ -84,6 +84,31 @@ Submitting is an act of authorship, so it has to be done by you, from your own a
   > existed, and compare the design with a deployed executability gate and a skill-retrieval risk
   > benchmark.
 
+## Zenodo, with or without an endorsement
+
+Zenodo gives the report a permanent DOI at once and needs no endorsement. Publishing is in your
+name and cannot be undone (a record can be versioned, not deleted), so it is done from your own
+account at zenodo.org:
+
+1. **New upload.** Choose *Upload* → *New upload* and add `main.pdf` (built with your
+   `author.tex`). Give it a descriptive name such as `precondition-dispatch-report-v1.pdf`.
+2. **Metadata.**
+   - **Resource type:** Publication → Preprint.
+   - **Title:** as for arXiv, above.
+   - **Creators:** your name and affiliation exactly as in `author.tex`; add an ORCID if you have
+     one.
+   - **Description:** the abstract above.
+   - **Licence:** Creative Commons Attribution 4.0 International, matching arXiv.
+   - **Keywords:** agent skill reuse; executable preconditions; dispatch; pre-registration; lock
+     files; merge conflicts; mutation testing.
+   - **Related works:** *Is supplemented by* →
+     `https://github.com/Shyboy0499/precondition-library` (resource type: Software).
+   - **Version:** `v1`. **Language:** English.
+3. **Preview, then Publish.** Zenodo mints the DOI on publishing. Send it back so the README and
+   "Data and code availability" can cite it.
+4. **Later, arXiv.** Once endorsed, post the same version to arXiv and add the arXiv identifier
+   to the Zenodo record as *Is identical to*.
+
 ## Before you submit, check
 
 - [ ] **Your name and affiliation** in `author.tex`. arXiv lists authors by name, not by username.
