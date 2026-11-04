@@ -28,6 +28,12 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **Report §3.4 derives the smallest detectable difference step by step.** It covers the
+  binomial model and the normal approximation, the two-sided test, the power, the
+  shared-variance simplification, and solving for δ\*. It also explains why the base rate is
+  0.5 and works through the arithmetic to 0.145. Each approximation is stated with the direction
+  it errs. The Wilson interval is written out too.
+
 - **The anatomy of a lock-file conflict, and what a dispatcher would get from the oracle
   (exploratory).** `results/lock-anatomy-2026-11-04/` reads every conflicted file of studies 3
   and 4 and sorts each package by what the two sides did to it.
