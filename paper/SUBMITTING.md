@@ -58,7 +58,7 @@ Submitting is an act of authorship, so it has to be done by you, from your own a
 - **Title:** Executable Preconditions versus Text Similarity for Replaying Compiled Agent Programs:
   A Pre-registered Test on Real Lock-file Merges
 - **Primary category:** cs.SE (Software Engineering). **Cross-list:** cs.AI.
-- **Comments:** 27 pages, 3 figures, 18 tables. Code, data and pre-registrations:
+- **Comments:** 30 pages, 3 figures, 18 tables. Code, data and pre-registrations:
   https://github.com/Shyboy0499/precondition-library
 - **Abstract:** the abstract in `main.tex`, without LaTeX markup, as below. It is 1,837 characters, within arXiv's limit of 1,920.
 
