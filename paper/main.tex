@@ -60,8 +60,12 @@ reads lock files as package sets. There, an action computed from a merge's three
 the maintainer's exact package set on 0.69 of a repository's conflicts, against 0.07 for the line
 unions. This gives the task an external oracle. A fourth registered study, on 20 further
 repositories, finds that the ecosystem's resolver predicts which package-level merge maintainers
-kept, and replicates that coverage (0.76).
-We compare the design, table by table, with a deployed executability gate and a skill-retrieval
+kept, and replicates that coverage (0.76). Exploratory analysis of both studies shows why.
+Half of the conflicts git reports in a lock file have no package that both sides changed
+differently, and on those the merge reproduces 0.66--0.82 of the maintainers' files. A
+single such package defeats it in npm's family. Firing the merge only when no package diverges,
+a precondition computed from the three sides, cuts its mismatch to 0.32 and 0.22, still well
+above 0.10. We compare the design, table by table, with a deployed executability gate and a skill-retrieval
 risk benchmark.
 \end{abstract}
 
@@ -135,9 +139,13 @@ compares them with this work in detail.
   \item \textbf{A power analysis of the registered follow-up study, run through its own decision
   code} (Section~\ref{sec:power}), which confirms its primary test and led to an amendment of
   its non-inferiority guard before any of its data exists.
+  \item \textbf{An external oracle for real lock-file conflicts} (Section~\ref{sec:oracle}): two
+  registered studies on 47 repositories, an anatomy of what conflicts at the level of packages,
+  and the mismatch of rules a dispatcher could deploy.
   \item \textbf{A comparison with executability gating and retrieval-risk measurement}
   (Section~\ref{sec:comparison}), including our own measurement of the retrieve-then-gate
-  cascade those systems use.
+  cascade those systems use, and a taxonomy of where wrong fires come from
+  (Section~\ref{sec:discussion}).
 \end{enumerate}
 
 \section{Related work}
@@ -603,6 +611,8 @@ packages, not a sequence of lines. A third study, registered before its data and
 this project had never mined, asks whether the package-level formulation gives the task an
 external oracle.
 
+\subsection{Study 3: an external oracle}
+
 \paragraph{Labels.}
 Each conflicted lock file is read into its set of resolved $(\text{package}, \text{version})$
 pairs, for every lock file study 1 counts: npm's two, yarn, pnpm, Cargo, poetry, Pipfile, uv,
@@ -675,7 +685,8 @@ with parsers written independently, and agrees on all 1,236 verdicts of the thre
 re-derives. No maintainer set reads as empty: the median holds 228 packages. Only 7 of the 360
 conflicts have identical package sets on both sides, where any action reproduces trivially.
 
-\paragraph{A fourth registered study: the resolver predicts the merge.}
+\subsection{Study 4: the resolver predicts the merge}
+
 We registered the exploratory finding above as study 4 and ran it on 20 more repositories that
 nobody here had mined or counted: 266 conflicts. Its unit is a \emph{discordant} file, one where
 exactly one of the two merges reproduces the maintainer. The predicted merge is the unified one
@@ -721,23 +732,132 @@ In study 3 two do, both on git-branch ``versions''; were both reproduced, covera
 rather than 0.686, and no decision would change. The code now breaks such ties
 deterministically.
 
-\paragraph{What the oracle cannot label (exploratory).}
-Of the conflicted lock files no computed action reproduces, 63 of 124 in study 3 and 12 of 67
-in study 4 hold versions that none of the base, local or upstream files had. A maintainer ran a
-resolver there, and no computed action can match that. The rest use only the sides' versions.
-They differ from the per-ecosystem merge by a median of one or two packages, mostly because the
-maintainer did not take some side's change. A merge restricted to what the merged manifest
-reaches through the lock file's own requirements recovers almost none of these. Worse, it breaks
-the composer files the plain merge reproduced. Maintainers' own \code{composer.lock} files are
-fully reachable from their \code{composer.json} in only 7 of 233 cases, because merge plugins and
-path repositories add requirements the manifest does not show. For a dispatcher, both kinds are
-cases to refuse, or to hand to the ecosystem's tool.
+\subsection{The anatomy of a conflict (exploratory)}
+\label{sec:anatomy}
 
-That tool can be replayed for npm. npm can resolve against the registry as it stood on the
+Studies 3 and 4 say how often a computed merge reproduces the maintainer, not why. After both
+had run, we read every conflicted file of both studies, 412 and 290, at all four commits. Each
+package name falls into one of four kinds, by what the two sides did to its versions:
+\begin{itemize}
+  \item \emph{untouched}: neither side changed them;
+  \item \emph{one-sided}: exactly one side did;
+  \item \emph{convergent}: both changed them to the same versions;
+  \item \emph{divergent}: both changed them to different versions.
+\end{itemize}
+Only a divergent package lacks a single answer that the three-way merge computes: it is a
+conflict at the level of packages. In npm's family a name collects the versions of all of a
+package's nested copies.
+
+\paragraph{Most line conflicts are not package conflicts.}
+One-sided names outnumber divergent ones 18 to 1 in study 3 (40,179 against 2,240) and 28 to 1 in
+study 4 (37,588 against 1,330). In 49\% and 56\% of conflicted files no package diverges at all.
+So half of the conflicts git reports in a lock file are not disagreements between the sides'
+choices of package. They are the line format colliding: two sides that add or bump different
+packages touch neighbouring lines. This is why study 1's line unions, which keep the format,
+reproduce 0.07 of conflicts, while a merge of package sets reproduces most of them.
+
+\begin{table}[t]
+\centering
+\caption{Conflicted lock files by family and by the number of packages both sides changed to
+different versions, with the share the predicted per-ecosystem merge reproduces (exploratory).}
+\label{tab:anatomy}
+\small
+\input{tables/anatomy.tex}
+\end{table}
+
+\paragraph{Divergence decides when the merge works.}
+Table~\ref{tab:anatomy} shows how the predicted merge fares as divergence grows.
+\begin{itemize}
+  \item \textbf{No divergent package:} it reproduces 0.66--0.82 of files, in either family.
+  \item \textbf{npm's family:} one divergent package almost always defeats it (0.00--0.12). The
+  plain merge keeps both sides' versions, and maintainers almost never do.
+  \item \textbf{One-version family:} it degrades gradually, from 0.42--0.65 with one divergent
+  package to 0.14--0.15 with five or more. Unifying keeps the higher version, which is often the
+  one kept.
+\end{itemize}
+
+\paragraph{Where packages diverge, maintainers keep their own side.}
+Of the 340 files with a divergent package, the maintainer kept the first parent's versions on
+every divergent package in 153 files, and the second parent's in 68; the rest mix. The first
+parent is the branch the maintainer was on when they merged. In 176 of the 340 the merge matches
+the maintainer on every other package, so the divergent packages alone stand between the merge
+and the label. Settling each divergent package in favour of the local side reproduces 108 of
+them, against 42 for the upstream side and 88 for the highest version.
+
+\paragraph{Where nothing diverges, the manifest decides.}
+The merge still misses 65 and 37 files in which no package diverges. Most often (52 and 36) the
+maintainer did not take a change one side made; less often (23 and 4) they ran a resolver. A
+maintainer who resolves \code{package.json} or \code{composer.json} by keeping one side's
+constraint drops the other side's bump from the lock file, and nothing in the lock files shows
+it. A merge restricted to what the merged manifest reaches recovers almost none of these, and it
+breaks the composer files the plain merge reproduced. Maintainers' own \code{composer.lock}
+files are fully reachable from their \code{composer.json} in only 7 of 233 cases, because merge
+plugins and path repositories add requirements the manifest does not show.
+
+\paragraph{Repositories differ.}
+Coverage runs from 0.27 to 1.00 in both studies. In study 4, the share of a repository's cases
+with a divergent package tracks that spread (Spearman $\rho=-0.65$, 20 repositories). In study 3
+it does not ($\rho=-0.13$, 27), because low coverage with little divergence there mostly marks
+maintainers who ran a resolver. \code{rust-lang/crates.io} is the clearest case: a divergent
+package in 0.13 of its cases, coverage 0.27.
+
+\subsection{From an oracle to a dispatcher (exploratory)}
+\label{sec:dispatcher}
+
+Coverage is an oracle's figure. A conflict counts as labelled if \emph{any} of four actions
+reproduces it, and choosing among them needs the answer. The question this report began with is
+what a dispatcher that must choose would get. Table~\ref{tab:rules} scores rules that read only
+the three sides, case by case against the maintainer.
+
+\begin{table}[t]
+\centering
+\caption{Rules that read only the three sides, scored case by case against the maintainer:
+wrong fires over fires, and mismatch with its 95\% Wilson interval (exploratory). ``The merge''
+is the predicted per-ecosystem merge.}
+\label{tab:rules}
+\small
+\setlength{\tabcolsep}{3pt}
+\resizebox{\linewidth}{!}{\input{tables/rules.tex}}
+\end{table}
+
+\begin{itemize}
+  \item \textbf{Always firing the merge is wrong on 0.56 and 0.45 of conflicts.} No fixed
+  tie-break or fallback brings either figure below 0.38.
+  \item \textbf{``No package diverges'' is an executable precondition.} It is computed from the
+  three sides alone, the kind of check this project compiles into programs. Firing the merge only
+  when it holds, and refusing otherwise, cuts mismatch to 0.32 [0.26, 0.39] and 0.22 [0.16,
+  0.29]. It still fires on 55\% and 57\% of conflicts.
+  \item \textbf{It is still not rare.} Both intervals lie well above the 0.10 bound study 1
+  registered for ``rarely mis-fires''. What remains is the manifest effect and resolver runs,
+  which no check over the lock files can see.
+\end{itemize}
+
+So the structure of a conflict supplies a precondition worth having, and that precondition also
+shows the limit of any dispatcher that reads only lock files. It was found after seeing both
+studies, so it is a hypothesis. A fifth registration would fix the rule and its bound before
+mining fresh repositories.
+
+\paragraph{What the oracle cannot label, and the ecosystem's tool.}
+Of the conflicted files no computed action reproduces, 63 of 124 in study 3 and 12 of 67 in study
+4 hold versions that none of the base, local or upstream files had. A maintainer ran a resolver
+there, and no computed action can match that. For a dispatcher those are cases to refuse, or to
+hand to the ecosystem's tool.
+
+That tool can be replayed for npm, which can resolve against the registry as it stood on the
 merge's date (\code{--before}). Started from either side's lock file, it reproduces the
 maintainer's exact set on 14 of the 52 unreproduced \code{package-lock.json} files: 11 of 31
-recombinations and 3 of 21 new resolutions. This was chosen after seeing the data, so it is not
-a test. The other ecosystems' tools have no such option and would need a registry snapshot.
+recombinations and 3 of 21 new resolutions. A first run failed outright on one repository's
+files. The cause was npm refusing that project's required Node version (\code{engine-strict}),
+which guards installation, not resolution. So a replay must pin the runtime as well as the tool.
+
+Of the 172 conflicted \code{package-lock.json} files in both studies:
+\begin{itemize}
+  \item a computed action labels 120;
+  \item the dated tool labels 14 more, for 0.78 in all;
+  \item the remaining 38 are labelled by neither.
+\end{itemize}
+This was chosen after seeing the data, so it is not a test. The other ecosystems' tools have no
+such option and would need a registry snapshot.
 
 \section{Are the graders right?}
 \label{sec:graders}
@@ -810,8 +930,9 @@ In the repeated run, every mutant these operators make that can change a verdict
 the three argued equivalent: 138 of 138. Mutation finds clauses no test exercises; other checks
 cover what a mutation operator cannot express. Property-based tests check two graders on 300
 generated states each, with no failure \cite{maciver2019hypothesis}; study 1's labels were
-re-derived from git by an independent script (Section~\ref{sec:real}); and agreement with human
-judges is the next check, for which the labelled cases are released.
+re-derived from git by an independent script (Section~\ref{sec:real}). Agreement with human
+judges is the next check. The blind labelling kit for it is built (Section~\ref{sec:discussion}),
+and the labelled cases are released.
 
 \section{The registered follow-up study, and its power}
 \label{sec:power}
@@ -1043,14 +1164,115 @@ retrievers had HSR@3 of 0.346--0.372 and a resolver that uses the contracts 0.00
   predicates anticipated; study 2 asks whether admission can select for refusal of what was not.
 \end{enumerate}
 
+\section{Discussion}
+\label{sec:discussion}
+
+\paragraph{What executing a check buys.}
+Four comparisons bear on this question, each holding the evidence fixed in a different way.
+\begin{enumerate}
+  \item \textbf{On our states, nothing.} A tree reading the state's fingerprint matched
+  precondition dispatch. A tree reading only the library's own precondition verdicts was at least
+  as accurate as their conjunction (Section~\ref{sec:synthetic}). So the advantage lies neither
+  in the facts the probes read nor in how they are combined.
+  \item \textbf{On held-out states, it cost something.} Absence probes that silently failed to
+  read git's quoted paths let wrong programs fire. That failure belongs to execution: a
+  classifier over a fixed fingerprint has no probe to break.
+  \item \textbf{On real merges, refusal.} The one place executing a check differed from reading
+  the state was the compiled \code{merge} programs. They try the merge and refuse when it
+  conflicts, a fact the reader's 56 training states rarely showed it (Section~\ref{sec:real}).
+  \item \textbf{On real conflicts read as packages, a computed fact.} The best rule found is
+  itself a precondition: fire only if no package diverges (Section~\ref{sec:dispatcher}).
+\end{enumerate}
+Read together, the value of executing a check is not execution. A check can compute, on the live
+state, a fact that no fixed set of features anticipated: a dry-run merge, a package-level diff.
+It fails when that computation breaks silently.
+
+\begin{table}[t]
+\centering
+\caption{Where wrong fires came from in this report, the evidence for each, and what removes or
+contains it.}
+\label{tab:taxonomy}
+\small
+\renewcommand{\arraystretch}{1.25}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{0.2\linewidth}
+>{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{0.25\linewidth}}
+\toprule
+source & evidence & remedy \\
+\midrule
+firing when nothing is needed & 318 of lexical similarity's 440 wrong fires on our states were on
+fault-free states & read the state; refuse by default \\
+the wrong sibling & on faulted states, 51\% (lexical) and 45\% (cross-encoder) of fires chose a
+wrong resolution & read the state \\
+a check that fails open & 41 of 101 lock-file fires on held-out paths; at least 16 such probes
+in 10 of 40 programs & absence checks that fail closed; admission on adversarial paths \\
+an action space that cannot express the answer & 160 of 161 real conflicts inexpressible as
+line unions & the domain's own unit: package sets (0.07 $\to$ 0.69) \\
+a package both sides changed & npm's merge misses 89 of 94 and 66 of 73 files with a divergent package &
+the precondition ``no package diverges''; refuse \\
+a decision outside the files & 52 and 36 files dropped a side's change; 75 files hold versions
+no side had & the ecosystem's tool, pinned to the date; refuse \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Where wrong fires come from.}
+Table~\ref{tab:taxonomy} collects the sources of wrong fires this report found. They fall into
+two groups.
+\begin{itemize}
+  \item \textbf{The first three are failures of the dispatcher.} Reading the state, and checks
+  that fail closed, remove them on states like ours.
+  \item \textbf{The last three are failures of the formulation, and they dominate on real data.}
+  The right answer was missing from the action space, or depended on something the dispatcher
+  could not see.
+\end{itemize}
+Studies 3 and 4 moved the first of those three, by changing the unit from lines to packages.
+That change raised the share of conflicts with a reproducing action from 0.07 to 0.69, more
+than any choice of dispatcher did on these data.
+
+\paragraph{Implications for compiled skills.}
+\begin{itemize}
+  \item \textbf{A check must fail closed.} An absence check has to distinguish ``found nothing''
+  from ``could not read''. Admission should include states built to break the reading: odd
+  paths, encodings, empty outputs.
+  \item \textbf{The action space should use the domain's own unit.} The formulation decided more
+  here than the dispatcher.
+  \item \textbf{Refusal is an outcome to measure.} It has its own rate on cases where every fire
+  is wrong, and it is not merely the absence of a fire.
+  \item \textbf{An error rate needs someone else's labels.} The headline claim on our own
+  labels, that precondition dispatch rarely mis-fires, failed on labels this project did not
+  write.
+\end{itemize}
+
+\paragraph{Threats to validity.}
+\begin{itemize}
+  \item \textbf{Analytic flexibility.} The registered decisions are these: study 1's rule 2 and
+  H1--H3; study 3's H1 and H2; study 4's H1--H4; and study 2's design and power. Everything
+  marked exploratory was chosen after seeing the data it is reported on. That covers the
+  library-scoped and probe-verdict readers, unification, the anatomy, the dispatch rules, the
+  closure pilot and the npm replay. Each is reported as a hypothesis, and only study 4 has yet
+  turned one into a test.
+  \item \textbf{Construct.} A label is the maintainer's commit, one acceptable resolution among
+  possibly several. A fire that differs but would build and pass counts as wrong, so mismatch
+  bounds harm from above. A blind labelling kit is built for measuring how often people accept a
+  different answer: salted card identifiers, a key kept apart from the cards, and Cohen's
+  $\kappa$ between raters. It awaits raters.
+  \item \textbf{External.} The task family is git maintenance. Real repositories were chosen
+  because they had at least five lock-file conflicts, and they are open-source projects, mostly
+  PHP, JavaScript, Ruby, Rust and Python. The libraries come from one model at one temperature.
+  \item \textbf{Statistical.} Cases cluster in repositories. Studies 3 and 4 average over
+  repositories and vote by repository, and study 1 clusters its bootstrap. Study 1 has only three
+  libraries, which is why study 2 treats builds as a population.
+\end{itemize}
+
 \section{Scope}
 
 The results hold within the following scope, and each item names the work that extends it.
 
 \begin{itemize}
   \item \textbf{Labels.} On real merges a fire is right when it reproduces the maintainer's
-  commit. Running the ecosystem's lock-file tools and each project's tests as further oracles
-  would admit resolutions that differ from the maintainer's yet build and pass.
+  commit. The ecosystem's own tool, replayed at the merge's date, has been piloted for npm
+  (Section~\ref{sec:dispatcher}). Running each project's tests as a further oracle would admit
+  resolutions that differ from the maintainer's yet build and pass.
   \item \textbf{Builds.} The libraries come from one LLM at temperature 0. Their spread across
   three builds (Table~\ref{tab:repositories}) is why study 2 measures a population of twenty.
   \item \textbf{Domain and level.} The task family is git maintenance. The real-data tests cover
@@ -1077,7 +1299,10 @@ its own decision rules confirmed its primary test and led to an amendment of its
 any of its data exists. A third registered study found what the task's labels should have been:
 read as package sets, two in three real lock-file conflicts have an answer computed from the
 merge's three sides that matches the maintainer's exactly, and a fourth found which merge to
-compute for each ecosystem. The broader lesson is about evaluation: an error rate measured
+compute for each ecosystem. Why it works is structural: half of those conflicts are the line
+format colliding, not the sides disagreeing about a package. Where they do disagree, a
+precondition that detects it halves the merge's error, but cannot reach ``rarely wrong'',
+because the rest of what maintainers decide lives outside the lock files. The broader lesson is about evaluation: an error rate measured
 against one's own labels says little until the same dispatcher faces states and labels someone
 else made, and a registered design deserves the same scrutiny before its data as its results
 receive after.

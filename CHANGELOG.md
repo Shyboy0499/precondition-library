@@ -28,6 +28,18 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **The anatomy of a lock-file conflict, and what a dispatcher would get from the oracle
+  (exploratory).** `results/lock-anatomy-2026-11-04/` reads every conflicted file of studies 3
+  and 4 and sorts each package by what the two sides did to it.
+  - Half the files (49%, 56%) have no package both sides changed differently. On those, the
+    predicted merge reproduces 0.66–0.82 of files.
+  - In npm's family a single divergent package almost always defeats the merge.
+  - Firing the merge only when no package diverges cuts its case-level mismatch from 0.56 and
+    0.45 to 0.32 and 0.22.
+  - The report gains two generated tables (`anatomy.tex`, `rules.tex`), subsections 6.3–6.4
+    and a Discussion: what executing a check buys, a taxonomy of wrong fires, implications, and
+    threats to validity.
+
 - **npm, pinned to the merge's date, recovers about a quarter of the computed oracle's npm misses
   (#336, exploratory).** This used `npm install --package-lock-only --ignore-scripts --before=<merge
   date>`, starting from each side's lock file. It reproduced the maintainer's exact package set on

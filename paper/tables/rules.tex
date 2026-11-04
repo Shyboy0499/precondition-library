@@ -1,0 +1,13 @@
+\begin{tabular}{lcccc}
+\toprule
+& \multicolumn{2}{c}{study 3, 360 cases} & \multicolumn{2}{c}{study 4, 266 cases} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+rule & wrong/fires & mismatch & wrong/fires & mismatch \\
+\midrule
+the merge, always & 203/360 & 0.56 [0.51, 0.61] & 119/266 & 0.45 [0.39, 0.51] \\
+the merge, with local's versions where a package diverges & 188/360 & 0.52 [0.47, 0.57] & 107/266 & 0.40 [0.35, 0.46] \\
+the merge if no package diverges, else \code{take\_local} & 162/360 & 0.45 [0.40, 0.50] & 102/266 & 0.38 [0.33, 0.44] \\
+the merge if no package diverges, else refuse & 64/197 & 0.32 [0.26, 0.39] & 33/151 & 0.22 [0.16, 0.29] \\
+\code{take\_local}, always & 259/360 & 0.72 [0.67, 0.76] & 163/266 & 0.61 [0.55, 0.67] \\
+\bottomrule
+\end{tabular}

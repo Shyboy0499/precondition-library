@@ -23,6 +23,8 @@ HYBRID = ROOT / "results" / "hybrid-2026-10-11"
 CONSEQUENCES = ROOT / "results" / "consequences-2026-10-21"
 STAGE_B = ROOT / "results" / "real-merges-2026-10-26" / "stage-B"
 ORACLE = ROOT / "results" / "lock-oracle-2026-11-02"
+UNIFY = ROOT / "results" / "ecosystem-unify-2026-11-02"
+ANATOMY = ROOT / "results" / "lock-anatomy-2026-11-04"
 RUNS = ("run-11", "run-12", "run-13")
 SCORE_TOLERANCE = 1e-6
 """The hybrid run recomputed the reranker's scores, which agree with the rescore's to about
@@ -388,6 +390,116 @@ def oracle() -> str:
     )
 
 
+def _anatomy(study: Path, name: str) -> tuple[list[dict], list[dict]]:
+    """A study's per-file anatomy, checked against its registered labels file by file."""
+    files = _pairs(ANATOMY / f"{name}.jsonl")
+    labels = _pairs(study / "labels.jsonl")
+    registered = {(row["index"], f["path"]): f for row in labels for f in row["files"]}
+    assert set(registered) == {(f["index"], f["path"]) for f in files}, name
+    for f in files:
+        done = {
+            r["action"]: r["reproduces"] for r in registered[(f["index"], f["path"])]["results"]
+        }
+        assert f["any_reproduces"] == any(done.values()), (name, f["index"], f["path"])
+    return files, labels
+
+
+def _divergent(f: dict) -> int:
+    return f["kinds"].get("divergent", 0)
+
+
+def anatomy() -> str:
+    """Conflicted lock files by how many packages both sides changed differently, and the share
+    the predicted per-ecosystem merge reproduces (exploratory)."""
+    columns = []
+    for study, name in ((ORACLE, "study-3"), (UNIFY, "study-4")):
+        files, _ = _anatomy(study, name)
+        cells = {}
+        for family in ("npm", "one-version"):
+            for low, high, label in ((0, 0, "0"), (1, 1, "1"), (2, 4, "2--4"), (5, 10**9, "5+")):
+                group = [f for f in files if f["family"] == family and low <= _divergent(f) <= high]
+                hit = sum(f["predicted_reproduces"] for f in group)
+                cells[(family, label)] = f"{len(group)} & {hit / len(group):.2f}"
+        columns.append(cells)
+    rows = []
+    for family, title in (("npm", "npm's family"), ("one-version", "one-version family")):
+        for label in ("0", "1", "2--4", "5+"):
+            head = title if label == "0" else ""
+            rows.append(
+                f"{head} & {label} & {columns[0][(family, label)]} & "
+                f"{columns[1][(family, label)]} \\\\"
+            )
+        if family == "npm":
+            rows.append("\\midrule")
+    return (
+        "\\begin{tabular}{llcccc}\n\\toprule\n"
+        "& divergent & \\multicolumn{2}{c}{study 3} & \\multicolumn{2}{c}{study 4} \\\\\n"
+        "\\cmidrule(lr){3-4}\\cmidrule(lr){5-6}\n"
+        "family & packages & files & reproduced & files & reproduced \\\\\n\\midrule\n"
+        + "\n".join(rows)
+        + "\n\\bottomrule\n\\end{tabular}\n"
+    )
+
+
+def _wilson(k: int, n: int) -> tuple[float, float]:
+    z, p = 1.959963984540054, k / n
+    centre = (p + z * z / (2 * n)) / (1 + z * z / n)
+    half = z * (p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5 / (1 + z * z / n)
+    return centre - half, centre + half
+
+
+RULES = (
+    "the merge, always",
+    "the merge, with local's versions where a package diverges",
+    "the merge if no package diverges, else \\code{take\\_local}",
+    "the merge if no package diverges, else refuse",
+    "\\code{take\\_local}, always",
+)
+
+
+def rules() -> str:
+    """Rules that read only the three sides, scored case by case against the maintainer
+    (exploratory): fires, wrong fires, and mismatch with its Wilson interval."""
+    cells: dict[str, list[str]] = {rule: [] for rule in RULES}
+    for study, name in ((ORACLE, "study-3"), (UNIFY, "study-4")):
+        files, labels = _anatomy(study, name)
+        info = {(f["index"], f["path"]): f for f in files}
+        tally = {rule: Counter() for rule in RULES}
+        for row in labels:
+            mine = [info[(row["index"], f["path"])] for f in row["files"]]
+            local = all(
+                {r["action"]: r["reproduces"] for r in f["results"]}["take_local"]
+                for f in row["files"]
+            )
+            predicted = all(f["predicted_reproduces"] for f in mine)
+            diverges = any(_divergent(f) for f in mine)
+            decided = (
+                (True, predicted),
+                (True, all(f["tie_breaks"]["local"] for f in mine)),
+                (True, local if diverges else predicted),
+                (not diverges, predicted),
+                (True, local),
+            )
+            for rule, (fire, right) in zip(RULES, decided, strict=True):
+                tally[rule]["fires"] += fire
+                tally[rule]["wrong"] += fire and not right
+        for rule in RULES:
+            t = tally[rule]
+            low, high = _wilson(t["wrong"], t["fires"])
+            cells[rule].append(
+                f"{t['wrong']}/{t['fires']} & {t['wrong'] / t['fires']:.2f} [{low:.2f}, {high:.2f}]"
+            )
+    rows = [f"{rule} & {' & '.join(cells[rule])} \\\\" for rule in RULES]
+    return (
+        "\\begin{tabular}{lcccc}\n\\toprule\n"
+        "& \\multicolumn{2}{c}{study 3, 360 cases} & \\multicolumn{2}{c}{study 4, 266 cases} \\\\\n"
+        "\\cmidrule(lr){2-3}\\cmidrule(lr){4-5}\n"
+        "rule & wrong/fires & mismatch & wrong/fires & mismatch \\\\\n\\midrule\n"
+        + "\n".join(rows)
+        + "\n\\bottomrule\n\\end{tabular}\n"
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, required=True)
@@ -401,6 +513,8 @@ def main() -> None:
         ("probe-cost", probe_cost),
         ("repositories", repositories),
         ("oracle", oracle),
+        ("anatomy", anatomy),
+        ("rules", rules),
     ):
         (args.out / f"{name}.tex").write_text(build(), encoding="utf-8")
 

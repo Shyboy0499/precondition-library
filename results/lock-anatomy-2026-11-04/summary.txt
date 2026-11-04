@@ -1,0 +1,117 @@
+== lock-oracle-2026-11-02: 360 cases, 412 conflicted files
+
+1. files by family and divergent packages: files, predicted merge reproduces
+   npm           0    59    39  0.66
+   npm           1    25     1  0.04
+   npm         2-4    25     2  0.08
+   npm          5+    44     2  0.05
+   one-version   0   141    96  0.68
+   one-version   1    45    19  0.42
+   one-version 2-4    32     7  0.22
+   one-version  5+    41     6  0.15
+   no divergent package: 200 of 412 (0.49)
+   package names by kind, all files: {'added in the merge': 73, 'convergent': 4541, 'divergent': 2240, 'one-sided': 40179, 'untouched': 151752, 'untouched, changed in the merge': 399}
+
+2. files with a divergent package: predicted, right outside them, tie-breaks
+   npm         files 94, predicted 5, right outside divergent 39, tie-breaks {'local': 26, 'upstream': 7, 'highest': 17}, any 33
+   one-version files 118, predicted 32, right outside divergent 61, tie-breaks {'local': 33, 'upstream': 16, 'highest': 36}, any 49
+
+3. what the maintainer kept of divergent packages, per file
+   npm         {"all local's": 46, "all upstream's": 17, 'mixed or other': 31}
+   one-version {"all local's": 52, "all upstream's": 22, 'mixed or other': 44}
+
+4. predicted merge misses with nothing divergent: why (overlapping)
+   65 files: a version no side had 23, a one-sided change not taken 52, an untouched package changed 16
+
+5. rules over the three sides, case by case
+   merge, always                                    fires 360/360, wrong 203, mismatch 0.564 [0.512, 0.614], right per case (repository mean) 0.439
+   merge, local's version where a package diverges  fires 360/360, wrong 188, mismatch 0.522 [0.471, 0.573], right per case (repository mean) 0.474
+   merge if nothing diverges, else take_local       fires 360/360, wrong 162, mismatch 0.450 [0.399, 0.502], right per case (repository mean) 0.537
+   merge if nothing diverges, else refuse           fires 197/360, wrong  64, mismatch 0.325 [0.263, 0.393], right per case (repository mean) 0.374
+   take_local, always                               fires 360/360, wrong 259, mismatch 0.719 [0.671, 0.763], right per case (repository mean) 0.263
+
+6. per repository: share of cases with a divergent package, registered coverage
+   27 repositories, Spearman rho -0.132
+   consuldemocracy/consuldemocracy          0.00  0.93
+   diaspora/diaspora                        0.00  1.00
+   pterodactyl/panel                        0.11  1.00
+   laurent22/joplin                         0.13  0.87
+   rust-lang/crates.io                      0.13  0.27
+   Textualize/rich                          0.17  0.67
+   feedbin/feedbin                          0.20  0.60
+   openstreetmap/openstreetmap-website      0.20  0.80
+   otwcode/otwarchive                       0.20  0.47
+   phpstan/phpstan-src                      0.20  0.87
+   processing/p5.js                         0.25  0.50
+   huginn/huginn                            0.27  0.73
+   snipe/snipe-it                           0.27  0.67
+   node-red/node-red                        0.40  0.50
+   Textualize/textual                       0.43  0.50
+   webpack/webpack                          0.47  0.47
+   invoiceninja/invoiceninja                0.53  0.60
+   rust-lang/rustfmt                        0.57  1.00
+   BookStackApp/BookStack                   0.67  0.40
+   MagicMirrorOrg/MagicMirror               0.67  0.53
+   loomio/loomio                            0.67  0.40
+   bolt/core                                0.73  0.93
+   wallabag/wallabag                        0.82  0.55
+   nightscout/cgm-remote-monitor            0.87  0.87
+   firefly-iii/firefly-iii                  0.93  0.80
+   contao/contao                            1.00  0.73
+   getgrav/grav                             1.00  0.87
+
+== ecosystem-unify-2026-11-02: 266 cases, 290 conflicted files
+
+1. files by family and divergent packages: files, predicted merge reproduces
+   npm           0    73    60  0.82
+   npm           1    33     4  0.12
+   npm         2-4    16     0  0.00
+   npm          5+    24     3  0.12
+   one-version   0    89    65  0.73
+   one-version   1    26    17  0.65
+   one-version 2-4    15     6  0.40
+   one-version  5+    14     2  0.14
+   no divergent package: 162 of 290 (0.56)
+   package names by kind, all files: {'added in the merge': 3, 'convergent': 1780, 'divergent': 1330, 'one-sided': 37588, 'untouched': 218189, 'untouched, changed in the merge': 35}
+
+2. files with a divergent package: predicted, right outside them, tie-breaks
+   npm         files 73, predicted 7, right outside divergent 37, tie-breaks {'local': 20, 'upstream': 9, 'highest': 11}, any 30
+   one-version files 55, predicted 25, right outside divergent 39, tie-breaks {'local': 29, 'upstream': 10, 'highest': 24}, any 39
+
+3. what the maintainer kept of divergent packages, per file
+   npm         {"all local's": 26, "all upstream's": 16, 'mixed or other': 31}
+   one-version {"all local's": 29, "all upstream's": 13, 'mixed or other': 13}
+
+4. predicted merge misses with nothing divergent: why (overlapping)
+   37 files: a version no side had 4, a one-sided change not taken 36, an untouched package changed 4
+
+5. rules over the three sides, case by case
+   merge, always                                    fires 266/266, wrong 119, mismatch 0.447 [0.389, 0.507], right per case (repository mean) 0.543
+   merge, local's version where a package diverges  fires 266/266, wrong 107, mismatch 0.402 [0.345, 0.462], right per case (repository mean) 0.605
+   merge if nothing diverges, else take_local       fires 266/266, wrong 102, mismatch 0.383 [0.327, 0.443], right per case (repository mean) 0.620
+   merge if nothing diverges, else refuse           fires 151/266, wrong  33, mismatch 0.219 [0.160, 0.291], right per case (repository mean) 0.429
+   take_local, always                               fires 266/266, wrong 163, mismatch 0.613 [0.553, 0.669], right per case (repository mean) 0.385
+
+6. per repository: share of cases with a divergent package, registered coverage
+   20 repositories, Spearman rho -0.653
+   civicrm/civicrm-core                     0.07  1.00
+   espocrm/espocrm                          0.07  0.93
+   strapi/strapi                            0.07  0.87
+   SuiteCRM/SuiteCRM                        0.20  1.00
+   matrix-org/matrix-react-sdk              0.20  0.87
+   rubyforgood/casa                         0.27  0.73
+   mautic/mautic                            0.33  0.80
+   rubyforgood/human-essentials             0.33  0.73
+   Leantime/leantime                        0.40  0.87
+   rust-lang/rustlings                      0.40  0.80
+   storybookjs/storybook                    0.40  0.60
+   pixelfed/pixelfed                        0.43  0.86
+   fatfreecrm/fat_free_crm                  0.47  0.67
+   cypress-io/cypress                       0.53  0.67
+   joomla/joomla-cms                        0.67  0.73
+   humhub/humhub                            0.73  0.93
+   element-hq/element-desktop               0.75  0.50
+   akaunting/akaunting                      0.83  0.83
+   glpi-project/glpi                        0.87  0.27
+   element-hq/element-web                   1.00  0.53
+
