@@ -32,41 +32,26 @@ Programs: A Pre-registered Test on Real Lock-file Merges}
 \maketitle
 
 \begin{abstract}
-Agents that compile a solved task into a reusable program must decide, on each new task,
-whether to replay one. A wrong replay, a \emph{mis-fire}, runs a program whose resolution is not
-acceptable for the state at hand. We compare two ways of deciding: \emph{executable
-preconditions}, shell probes that must all hold on the live state, and \emph{text similarity}
-between the request and each program's description. The comparison is made at matched coverage,
-since a dispatcher that never fires never mis-fires. On 400 labelled pairs per library, built by
-our own injectors for five git maintenance faults, precondition dispatch mis-fired on 0 of 563
-fires across three independently built libraries, while three local text scorers mis-fired on
-71--90\% of theirs; per-fault analysis shows that most text errors are fires on states that
-needed nothing. We establish what that result does and does not show: a decision tree that reads
-the state and runs no program matched it, and the request channel carries no information about
-the state by construction. We therefore pre-registered a test on states and labels we did not
-make: 274 lock-file merges from 11 public repositories, labelled by what each maintainer
-committed. The registered claim that precondition dispatch rarely mis-fires was
-\emph{falsified}: it was wrong on 62 of 150, 10 of 122 and 132 of 244 fires in the three
-libraries. Its margin over text similarity came almost entirely from merges without a conflict.
-On real conflicts every dispatcher was almost always wrong, because the library's resolutions
-could express only 1 of 161 maintainer resolutions. Exploratory analysis locates the remaining
-difference between executing checks and reading the state in \emph{refusal}. We mutation-test
-the graders behind every figure, analysing each surviving mutant, and run a Monte Carlo power
-analysis of the registered follow-up study through its own decision code. It confirms the stated
-power of the primary test and shows, before any of its data exists, that the non-inferiority
-guard holds only about half the time when there is no true cost; the registration was amended
-accordingly. A third registered study, on 360 conflicts from 27 repositories we had never mined,
-reads lock files as package sets. There, an action computed from a merge's three sides reproduces
-the maintainer's exact package set on 0.69 of a repository's conflicts, against 0.07 for the line
-unions. This gives the task an external oracle. A fourth registered study, on 20 further
-repositories, finds that the ecosystem's resolver predicts which package-level merge maintainers
-kept, and replicates that coverage (0.76). Exploratory analysis of both studies shows why.
-Half of the conflicts git reports in a lock file have no package that both sides changed
-differently, and on those the merge reproduces 0.66--0.82 of the maintainers' files. A
-single such package defeats it in npm's family. Firing the merge only when no package diverges,
-a precondition computed from the three sides, cuts its mismatch to 0.32 and 0.22, still well
-above 0.10. We compare the design, table by table, with a deployed executability gate and a skill-retrieval
-risk benchmark.
+Agents that compile solved tasks into reusable programs must decide when to replay one. We
+compare two ways of deciding at matched coverage: executable preconditions, shell probes that
+must hold on the live state, and text similarity between the request and each program's
+description. On states built by our own injectors for five git maintenance faults, precondition
+dispatch mis-fired on 0 of 563 fires across three independently built libraries, while three
+text scorers mis-fired on 71--90\% of theirs. But a decision tree that only reads the state
+matched it, and the request carried no information about the state by construction.
+A pre-registered test on 274 real lock-file merges from 11 repositories, labelled by what maintainers
+committed, \emph{falsified} the claim that precondition dispatch rarely mis-fires: it was wrong
+on 62 of 150, 10 of 122 and 132 of 244 fires. Its margin came from merges without a conflict; on
+conflicts, the library's line-level resolutions could express 1 of 161 maintainer resolutions.
+Two further registered studies, on 47 repositories never mined before, read lock files as
+package sets. An action computed from a merge's three sides reproduces the maintainer on 0.69
+and 0.76 of a repository's conflicts, against 0.07 for line unions, and the ecosystem's resolver
+predicts which merge maintainers keep (91 of 91 discordant files). Exploratory analysis shows
+why: half of lock-file conflicts involve no package both sides changed differently. Firing the
+merge only when none diverges, itself a precondition, cuts its mismatch to 0.32 and 0.22, still
+well above 0.10. We mutation-test the graders behind every figure, run a Monte Carlo power
+analysis that amended a registered study before its data existed, and compare the design with a
+deployed executability gate and a skill-retrieval risk benchmark.
 \end{abstract}
 
 \section{Introduction}
@@ -1383,10 +1368,12 @@ receive after.
 \section*{Data and code availability}
 
 The apparatus, the three libraries, every result file, the four registrations and the
-verification scripts are at \url{https://github.com/Shyboy0499/precondition-library}. The figures and tables of
-Sections~\ref{sec:synthetic}--\ref{sec:graders} come from committed result files; the power
-analysis and every figure are regenerated by \code{paper/analysis/power.py} and
-\code{paper/analysis/figures.py}. Only commit SHAs and derived labels from mined repositories are
+verification scripts are at \url{https://github.com/Shyboy0499/precondition-library}. This
+report describes commit \code{e63dc070d6cd2b00a192a221529d6c0424ef007f} of that repository.
+The figures and tables of Sections~\ref{sec:synthetic}--\ref{sec:graders} come from committed
+result files. The power analysis, every figure and every generated table are regenerated by
+\code{paper/analysis/power.py}, \code{paper/analysis/figures.py} and
+\code{paper/analysis/tables.py}. Only commit SHAs and derived labels from mined repositories are
 released, never their content.
 
 \section*{Use of generative AI}
