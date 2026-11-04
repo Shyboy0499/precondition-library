@@ -439,6 +439,24 @@ No tool or registry is involved in any of them.
 - **Verification.** Both studies' figures were recomputed by scripts that import nothing from this
   project, and every file was re-read from git with independent parsers.
 
+**Why it works, and what a dispatcher would get (exploratory,
+[lock-anatomy](results/lock-anatomy-2026-11-04/README.md)).**
+
+- **Half of these line conflicts are not package conflicts.** In 49% and 56% of conflicted files,
+  no package was changed by both sides to different versions. Two sides that bump different
+  packages simply touch neighbouring lines.
+- **Where nothing diverges, the merge reproduces 0.66–0.82 of files.** In npm's family a single
+  divergent package almost always defeats it. Where packages do diverge, maintainers keep their
+  own branch's versions about twice as often as the incoming side's.
+- **Coverage is an oracle's figure.** A dispatcher that always fires the merge is wrong on 0.56
+  and 0.45 of conflicts. Firing only when no package diverges, a check computed from the three
+  sides, cuts that to **0.32 and 0.22**. That is still far from the 0.10 that "rarely wrong"
+  would need.
+- **Most of the rest is decided outside the lock files.** The maintainer dropped a side's change
+  when settling the manifest, or ran a resolver. For npm, replaying the tool at the merge's date
+  ([lock-tool-dated](results/lock-tool-dated-2026-11-03/README.md)) labels 14 more of 172
+  conflicted `package-lock.json` files, 0.78 in all.
+
 ## Results graded by this project's own labels
 
 **Graded by:** states built by this project's injectors, and labels from its own rules and
