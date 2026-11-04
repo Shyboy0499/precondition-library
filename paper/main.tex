@@ -272,14 +272,87 @@ arm 2's point nearest $c_3$, distances compared as exact fractions, with a tie g
 what makes arm 3 look better. The coverage gap is reported beside every difference.
 
 \paragraph{Uncertainty.}
-Each rate carries a 95\% Wilson interval \cite{wilson1927}. The design states the smallest
-difference its fire counts can detect, from the two-proportion normal approximation at
-$\alpha=0.05$ two-sided and power $0.8$:
+Each rate carries a 95\% Wilson interval \cite{wilson1927}. For $k$ wrong fires out of $n$, with
+$\hat p=k/n$ and $z=z_{0.975}$, the interval is
 \[
-  \delta^\ast = (z_{0.975}+z_{0.8})\sqrt{\bar m(1-\bar m)\left(\tfrac{1}{n_2}+\tfrac{1}{n_3}\right)},
+  \frac{\hat p+\frac{z^2}{2n}\;\pm\;z\sqrt{\frac{\hat p(1-\hat p)}{n}+\frac{z^2}{4n^2}}}{1+\frac{z^2}{n}}.
 \]
-with $n_2,n_3$ the two arms' fire counts and $\bar m$ the base rate. At $n_2\approx n_3\approx 187$
-and $\bar m=0.5$, $\delta^\ast=0.145$.
+It is the set of rates that a score test at the 5\% level would not reject. Unlike the normal
+interval $\hat p\pm z\sqrt{\hat p(1-\hat p)/n}$, it stays inside $[0,1]$ and does not shrink to a
+point at $\hat p=0$. For precondition dispatch's $0/187$, its upper end is
+$\frac{z^2/n}{1+z^2/n}=0.020$.
+
+\paragraph{The smallest detectable difference.}
+Before comparing two arms, the design states the smallest difference in mismatch that their fire
+counts could reliably detect. We call it $\delta^\ast$ and derive it here, step by step. The code
+computes it in \code{bench.coverage.detectable\_difference}, and a test pins its value at 187
+fires per arm.
+
+\begin{enumerate}
+  \item \textbf{The model.} Arm $a\in\{2,3\}$ fires $n_a$ times. Each fire is wrong
+  independently with probability $m_a$. So its wrong count is $W_a\sim\mathrm{Bin}(n_a,m_a)$,
+  and its estimated mismatch is $\hat m_a=W_a/n_a$, with mean $m_a$ and variance
+  $m_a(1-m_a)/n_a$. The two arms are treated as independent samples. The estimated difference
+  $\hat\delta=\hat m_2-\hat m_3$ then has mean $\delta=m_2-m_3$ and variance
+  \[
+    \sigma^2=\frac{m_2(1-m_2)}{n_2}+\frac{m_3(1-m_3)}{n_3}.
+  \]
+  \item \textbf{The normal approximation.} For fire counts in the hundreds, the central limit
+  theorem gives $\hat\delta\approx\mathcal N(\delta,\sigma^2)$.
+  \item \textbf{The test.} The null hypothesis is $\delta=0$. Under it both arms share one rate
+  $\bar m$, so the variance in step 1 becomes $\sigma_0^2=\bar m(1-\bar m)(1/n_2+1/n_3)$. A
+  two-sided test at level $\alpha$ rejects when $|\hat\delta|>z_{1-\alpha/2}\,\sigma_0$, where
+  $z_q$ is the standard normal's $q$-quantile, $\Phi(z_q)=q$.
+  \item \textbf{The power.} Suppose the true difference is $\delta>0$. The probability of
+  rejecting is
+  \[
+    \Pr\!\left[\hat\delta>z_{1-\alpha/2}\sigma_0\right]+\Pr\!\left[\hat\delta<-z_{1-\alpha/2}\sigma_0\right]
+    =\Phi\!\left(\frac{\delta-z_{1-\alpha/2}\sigma_0}{\sigma}\right)
+    +\Phi\!\left(\frac{-\delta-z_{1-\alpha/2}\sigma_0}{\sigma}\right).
+  \]
+  The second term is rejection in the wrong direction. It is below $\alpha/2$ for any
+  $\delta>0$, and at the answer below it is about $10^{-6}$, so we drop it.
+  \item \textbf{One more approximation.} We evaluate the variance under the alternative at the
+  same base rate, $\sigma\approx\sigma_0$. The power is then
+  $\Phi\!\left(\delta/\sigma_0-z_{1-\alpha/2}\right)$.
+  \item \textbf{Solving for $\delta$.} Requiring power $1-\beta$ gives
+  $\Phi(\delta/\sigma_0-z_{1-\alpha/2})=1-\beta$. Since $\Phi^{-1}(1-\beta)=z_{1-\beta}$, this
+  means $\delta/\sigma_0-z_{1-\alpha/2}=z_{1-\beta}$, and so
+  \[
+    \delta^\ast=\left(z_{1-\alpha/2}+z_{1-\beta}\right)\sigma_0
+    =\left(z_{1-\alpha/2}+z_{1-\beta}\right)\sqrt{\bar m(1-\bar m)\left(\tfrac{1}{n_2}+\tfrac{1}{n_3}\right)}.
+  \]
+  With the conventional $\alpha=0.05$ and power $1-\beta=0.8$, the factor is
+  $z_{0.975}+z_{0.8}$.
+  \item \textbf{The base rate.} $\bar m(1-\bar m)$ is largest at $\bar m=\tfrac12$, where it is
+  $\tfrac14$. Using $\bar m=0.5$ therefore gives the largest $\delta^\ast$ for given fire counts,
+  a statement of sensitivity that a low observed rate cannot flatter. On replicate 1 the
+  observed pooled rate is $148/374=0.396$ (lexical similarity's 148 wrong of 187 fires and
+  precondition dispatch's 0 of 187), which would give $0.142$.
+  \item \textbf{The numbers.} $z_{0.975}=1.95996$ and $z_{0.8}=0.84162$, so the factor is
+  $2.80159$. At $n_2=n_3=187$ and $\bar m=0.5$,
+  $\sigma_0=\sqrt{0.25\times 2/187}=0.05171$, and
+  \[
+    \delta^\ast=2.80159\times0.05171=0.145.
+  \]
+\end{enumerate}
+
+Three of these steps approximate, and we state which way each one errs.
+\begin{itemize}
+  \item \textbf{Independence (step 1).} Each pair is its own sandbox, but both arms are scored on
+  the same 400 pairs, and they fire on overlapping subsets of them. The formula treats the two
+  fire sets as independent samples.
+  \item \textbf{Normality (step 2).} The approximation is weakest near 0 and 1, which is where
+  precondition dispatch sits. This is why every reported difference also carries Wilson or
+  bootstrap intervals, and $\delta^\ast$ is used only as a statement made at the design stage.
+  \item \textbf{The shared variance (step 5).} It overstates $\sigma$ when the rates are far
+  apart. With $m_3=0$ and $m_2=0.145$, the true $\sigma$ is
+  $\sqrt{0.145\times0.855/187}=0.026$, half of $\sigma_0$. So the real power at $\delta^\ast$
+  exceeds 0.8, and $\delta^\ast$ is conservative.
+\end{itemize}
+In Section~\ref{sec:synthetic} the observed gaps are 0.71 to 0.90, which is five to six times
+$\delta^\ast$. Precondition dispatch's mismatch there is 0, so each gap is the text scorer's own
+mismatch: from 133 of 187 to 169 of 187 fires.
 
 \paragraph{Vacuity.}
 Half of each block's 400 pairs are fault-free negatives, where the right decision is not to fire,
