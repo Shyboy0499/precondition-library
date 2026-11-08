@@ -58,9 +58,9 @@ Submitting is an act of authorship, so it has to be done by you, from your own a
 - **Title:** Executable Preconditions versus Text Similarity for Replaying Compiled Agent Programs:
   A Pre-registered Test on Real Lock-file Merges
 - **Primary category:** cs.SE (Software Engineering). **Cross-list:** cs.AI.
-- **Comments:** 30 pages, 3 figures, 18 tables. Code, data and pre-registrations:
+- **Comments:** 31 pages, 3 figures, 19 tables. Code, data and pre-registrations:
   https://github.com/Shyboy0499/precondition-library
-- **Abstract:** the abstract in `main.tex`, without LaTeX markup, as below. It is 1,837 characters, within arXiv's limit of 1,920.
+- **Abstract:** the abstract in `main.tex`, without LaTeX markup, as below. It is 1,895 characters, within arXiv's limit of 1,920.
 
   > Agents that compile solved tasks into reusable programs must decide when to replay one. We
   > compare two ways of deciding at matched coverage: executable preconditions, shell probes that
@@ -73,16 +73,16 @@ Submitting is an act of authorship, so it has to be done by you, from your own a
   > maintainers committed, falsified the claim that precondition dispatch rarely mis-fires: it was
   > wrong on 62 of 150, 10 of 122 and 132 of 244 fires. Its margin came from merges without a
   > conflict; on conflicts, the library's line-level resolutions could express 1 of 161 maintainer
-  > resolutions. Two further registered studies, on 47 repositories never mined before, read lock
-  > files as package sets. An action computed from a merge's three sides reproduces the maintainer
-  > on 0.69 and 0.76 of a repository's conflicts, against 0.07 for line unions, and the
-  > ecosystem's resolver predicts which merge maintainers keep (91 of 91 discordant files).
-  > Exploratory analysis shows why: half of lock-file conflicts involve no package both sides
-  > changed differently. Firing the merge only when none diverges, itself a precondition, cuts its
-  > mismatch to 0.32 and 0.22, still well above 0.10. We mutation-test the graders behind every
-  > figure, run a Monte Carlo power analysis that amended a registered study before its data
-  > existed, and compare the design with a deployed executability gate and a skill-retrieval risk
-  > benchmark.
+  > resolutions. Two further registered studies, on 47 fresh repositories, read lock files as
+  > package sets. An action computed from a merge's three sides reproduces the maintainer on 0.69
+  > and 0.76 of a repository's conflicts, against 0.07 for line unions, and the ecosystem's
+  > resolver predicts which merge maintainers keep (91 of 91 discordant files). Exploratory
+  > analysis shows why: half of lock-file conflicts involve no package both sides changed
+  > differently. Firing the merge only when none diverges, itself a precondition, roughly halves
+  > its mismatch; a fifth registered study, on 20 more repositories, confirms it stays above 0.10
+  > (0.35 [0.18, 0.53]). We mutation-test the graders behind every figure, run a Monte Carlo power
+  > analysis that amended a registered study before its data existed, and compare the design with
+  > a deployed executability gate and a skill-retrieval risk benchmark.
 
 ## Zenodo, with or without an endorsement
 
