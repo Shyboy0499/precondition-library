@@ -354,6 +354,63 @@ places, both checked:
   by a test. Since #189, #190 and #191 (ADR-0027 to ADR-0029) every fault is
   measured, and the set is empty.
 
+## What survived an external test, and what did not
+
+The reconstruction (#294) asked whether the core claim survives labels and states this project
+did not make. This is the answer as of the studies below; each line links to where it is measured.
+
+**Survived, on labels someone else made**
+
+| claim | evidence |
+| --- | --- |
+| On real lock-file merges, precondition dispatch is wrong less often than text similarity | Study 1, H1, in all three libraries ([stage B](results/real-merges-2026-10-26/stage-B/README.md)). The margin comes almost entirely from merges without a conflict. |
+| A merge computed from a conflict's three sides, read as package sets, reproduces the maintainer on most real lock-file conflicts | Coverage 0.686, 0.760 and 0.643 in studies 3, 4 and 5, on 67 repositories nobody here had mined ([3](results/lock-oracle-2026-11-02/README.md), [4](results/ecosystem-unify-2026-11-02/README.md), [5](results/divergence-gate-2026-11-08/README.md)). |
+| The ecosystem's resolver predicts which package-level merge maintainers keep | Study 4: 91 of 91 discordant files, 17 repositories to 0. |
+| A precondition over the conflict's sides ("no package diverges") roughly halves the merge's error, and is not enough | Study 5: mean mismatch 0.352 [0.178, 0.527] with the gate, against an always-firing merge wrong on 0.57 of conflicts. |
+| The graders do what their tests say | 138 of 138 verdict-changing mutants killed, and property-based tests on generated states ([report §7](paper/main.tex)). |
+
+**Did not survive**
+
+| claim | what happened |
+| --- | --- |
+| Precondition dispatch rarely mis-fires (0 of 563 on this project's states) | **Falsified** on real merges: wrong on 62/150 and 132/244 fires in two of three libraries (study 1, rule 2). |
+| Executing checks is what beats text similarity | On this project's states a decision tree reading the state, and one reading only the library's own precondition verdicts, matched it. On real merges the only difference left was refusal. |
+| The lock-file task's line-level resolutions express what maintainers do | They express 1 of 161 real conflicts (study 1); package sets replaced them (studies 3–5). |
+| Compiled probes generalise to unseen states | On held-out paths, absence probes failed open: 41 of 101 lock-file fires wrong. |
+
+**Not yet tested**
+
+| question | blocked on |
+| --- | --- |
+| Does an LLM that reads the state beat or match arm 3? (#295 item 2) | an API key |
+| Is refusal a property of the method or of one build? (#307, study 2, registered before its data) | an API key for 20 builds |
+| Does it hold in another domain, or with another compiling model? (#266) | an API key |
+| Do people agree with the labelling rules? (#299 step 3) | independent raters; the kit is built |
+| Does the ecosystem's own tool, or the project's tests, label what the computed merge cannot? (#297, #336) | piloted for npm (14 of 52); other ecosystems in progress |
+
+**What someone else needs to replicate it**
+
+- **The studies graded outside this project need no model and no key.** Each is one command from
+  a checkout. Each refuses to run unless its registration is committed and unchanged, and writes a
+  fresh directory. Each mines public repositories from GitHub, which takes network access, roughly
+  8 GB of disk for twenty repositories, and from twenty minutes to a few hours.
+
+  ```bash
+  python -m precondition_library.bench.real_merges --stage B           # study 1
+  python -m precondition_library.bench.lock_oracle --out <dir>          # study 3
+  python -m precondition_library.bench.ecosystem_unify --out <dir>      # study 4
+  python -m precondition_library.bench.divergence_gate --out <dir>      # study 5
+  ```
+
+  These commands pin each repository's tip on the day they run (`real_merges.pin`). So a run on a
+  later date mines newer merges: it is a replication, not a re-derivation. To re-derive the
+  published figures exactly, use each result directory's `verification/` scripts:
+  - one recomputes every figure from the released files, without importing the project;
+  - the other re-reads the labels from git, at the SHAs in that directory's `manifest.json`.
+- **The results graded by this project's own labels** rescore from the three committed libraries
+  with no model call. Rebuilding those libraries needs a DeepSeek API key: the model is
+  `deepseek-flash` at temperature 0, and the commands are under [Running it](#running-it).
+
 ## Results graded outside this project
 
 **Graded by:** the merge commit each maintainer made in a public repository, read from git, under
