@@ -28,6 +28,17 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **`.gitattributes` changed 3 of 1,123 cases in studies 1, 3, 4 and 5, and no decision
+  (`results/mining-attributes-2026-11-08/`).** Study 1's mining, shared by every study since,
+  ignores repositories' attributes, while a maintainer's working tree applies them. The audit asked
+  git for each case's lock files' `merge` attribute at the first parent.
+  - **Study 1:** two `nextcloud/server` cases, where `package-lock.json` has `merge=binary`.
+    Without them, rule 2's Wilson lower bounds are 0.330, 0.034 and 0.478, so every library's
+    decision stands.
+  - **Study 5:** `nextcloud/activity`'s one case, which enters none of H1–H3.
+  - **Studies 3 and 4:** none.
+  - **The report:** names this under threats to validity.
+
 - **Study 5's result: the divergence gate helps, and is not enough (`results/divergence-gate-2026-11-08/`).**
   It ran as registered on 223 conflicts from 20 fresh repositories.
   - **H1 (primary) supported:** the gate's mean mismatch is 0.352 [0.178, 0.527], above 0.10.
