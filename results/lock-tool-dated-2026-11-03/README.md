@@ -98,3 +98,13 @@ PYTHONPATH=src python results/lock-tool-dated-2026-11-03/npm_dated.py <study> <r
 - **So the recovered share is 14 of 52, not 13**, with nothing failing outright. The conclusions
   above stand: npm recovers recombinations more often than new resolutions (11 of 31 against 3
   of 21).
+
+## Addendum, 2026-11-08
+
+- **pnpm and Composer were piloted the same way** (`results/lock-tool-dated-2026-11-08/`).
+  pnpm has `minimumReleaseAge`, and Composer a plugin that drops versions younger than an age.
+  Bundler's plugin turned out to be unusable.
+- **The trees here were extracted with `git archive`**, which applies a repository's
+  `export-ignore`. `results/archive-attributes-2026-11-08/` checked every merge this pilot ran
+  npm in. Files were left out of 10 of them, but never a manifest, lock file or `.npmrc`, so no
+  outcome here changes.

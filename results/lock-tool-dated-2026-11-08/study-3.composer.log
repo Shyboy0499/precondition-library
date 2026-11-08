@@ -1,0 +1,35 @@
+10 phpstan/phpstan-src composer.lock 2025-01-18 {'first': 'jaccard 0.883 (nothing to update)', 'second': 'jaccard 0.796'}
+14 phpstan/phpstan-src composer.lock 2024-10-12 {'first': 'reproduces', 'second': 'failed: - Root composer.json requires phpstan/phpdoc-parser ^2.0, found phpstan/phpdoc-parser[2.0.0, ..., 2.4.x-dev] but these were not loaded, likely because it confli'}
+61 BookStackApp/BookStack composer.lock 2025-10-05 {'first': 'jaccard 0.682 (nothing to update)', 'second': 'reproduces'}
+63 BookStackApp/BookStack composer.lock 2024-02-28 {'first': 'jaccard 0.923 (nothing to update)', 'second': 'jaccard 0.974 (nothing to update)'}
+65 BookStackApp/BookStack composer.lock 2022-09-27 {'first': 'jaccard 0.987', 'second': 'jaccard 0.794'}
+66 BookStackApp/BookStack composer.lock 2021-11-04 {'first': 'jaccard 0.893', 'second': 'reproduces'}
+67 BookStackApp/BookStack composer.lock 2021-10-16 {'first': 'jaccard 0.986', 'second': 'jaccard 0.973'}
+68 BookStackApp/BookStack composer.lock 2021-10-06 {'first': 'jaccard 0.967', 'second': 'jaccard 0.347'}
+75 BookStackApp/BookStack composer.lock 2018-02-11 {'first': 'jaccard 0.684', 'second': 'jaccard 0.811'}
+79 getgrav/grav composer.lock 2024-10-14 {'first': 'jaccard 0.246', 'second': 'failed: - Root composer.json requires rockettheme/toolbox v2.x-dev (exact version match), found rockettheme/toolbox[v2.x-dev] but these were not loaded, likely because '}
+80 getgrav/grav composer.lock 2023-05-12 {'first': 'jaccard 0.327 (nothing to update)', 'second': 'failed: - Root composer.json requires rockettheme/toolbox v2.x-dev (exact version match), found rockettheme/toolbox[v2.x-dev] but these were not loaded, likely because '}
+113 invoiceninja/invoiceninja composer.lock 2024-09-16 {'first': 'jaccard 0.982', 'second': 'jaccard 0.951'}
+114 invoiceninja/invoiceninja composer.lock 2024-09-15 {'first': 'jaccard 0.649', 'second': 'jaccard 0.672'}
+115 invoiceninja/invoiceninja composer.lock 2024-08-28 {'first': 'jaccard 0.813', 'second': 'jaccard 0.951'}
+120 invoiceninja/invoiceninja composer.lock 2024-06-22 {'first': 'jaccard 0.961', 'second': 'jaccard 0.951'}
+121 invoiceninja/invoiceninja composer.lock 2024-06-18 {'first': 'jaccard 0.856', 'second': 'jaccard 0.964'}
+124 invoiceninja/invoiceninja composer.lock 2024-05-19 {'first': 'failed: - Root composer.json requires invoiceninja/einvoice dev-main, found invoiceninja/einvoice[dev-main] but these were not loaded, likely because it conflicts with ', 'second': 'jaccard 0.987 (php ignored)'}
+144 snipe/snipe-it composer.lock 2026-04-27 {'first': 'failed: - nunomaduro/collision is locked to version v8.5.0 and an update of this package was not requested.', 'second': 'reproduces'}
+151 snipe/snipe-it composer.lock 2024-06-18 {'first': 'jaccard 0.991', 'second': 'reproduces'}
+155 snipe/snipe-it composer.lock 2024-04-02 {'first': 'jaccard 0.701 (nothing to update)', 'second': 'failed: - nunomaduro/phpinsights is locked to version v2.8.0 and an update of this package was not requested.'}
+197 firefly-iii/firefly-iii composer.lock 2026-04-13 {'first': 'jaccard 0.936', 'second': 'failed: - Root composer.json requires phpunit/phpunit ^13, found phpunit/phpunit[13.0.0, ..., 13.4.6] but these were not loaded, likely because it conflicts with anothe'}
+204 wallabag/wallabag composer.lock 2024-11-11 {'first': 'jaccard 0.696 (nothing to update)', 'second': 'failed: - friendsofsymfony/user-bundle is locked to version v3.2.1 and an update of this package was not requested.'}
+205 wallabag/wallabag composer.lock 2024-01-03 {'first': 'jaccard 0.936 (nothing to update)', 'second': 'jaccard 0.980'}
+209 wallabag/wallabag composer.lock 2022-11-03 {'first': 'failed: - Root composer.json requires composer < 2.3, found composer[2.8.12] but it does not match the constraint.', 'second': 'failed: - Root composer.json requires composer < 2.3, found composer[2.8.12] but it does not match the constraint.'}
+211 wallabag/wallabag composer.lock 2022-06-09 {'first': 'jaccard 0.790 (nothing to update)', 'second': 'reproduces'}
+231 contao/contao vendor-bin/ecs/composer.lock 2026-07-02 {'first': 'jaccard 0.660 (nothing to update)', 'second': 'jaccard 0.660 (nothing to update)'}
+231 contao/contao vendor-bin/isolated-tests/composer.lock 2026-07-02 {'first': 'jaccard 0.364 (nothing to update)', 'second': 'jaccard 0.765 (nothing to update)'}
+231 contao/contao vendor-bin/service-linter/composer.lock 2026-07-02 {'first': 'jaccard 0.364 (nothing to update)', 'second': 'jaccard 0.765 (nothing to update)'}
+231 contao/contao vendor-bin/twig-cs-fixer/composer.lock 2026-07-02 {'first': 'jaccard 0.455 (nothing to update)', 'second': 'jaccard 0.600 (nothing to update)'}
+236 contao/contao vendor-bin/ecs/composer.lock 2026-04-24 {'first': 'jaccard 0.381 (nothing to update)', 'second': 'jaccard 0.660 (nothing to update)'}
+236 contao/contao vendor-bin/isolated-tests/composer.lock 2026-04-24 {'first': 'jaccard 0.154 (nothing to update)', 'second': 'jaccard 0.765 (nothing to update)'}
+236 contao/contao vendor-bin/monorepo-tools/composer.lock 2026-04-24 {'first': 'jaccard 0.231 (nothing to update)', 'second': 'jaccard 0.882 (nothing to update)'}
+236 contao/contao vendor-bin/service-linter/composer.lock 2026-04-24 {'first': 'jaccard 0.154 (nothing to update)', 'second': 'jaccard 0.765 (nothing to update)'}
+236 contao/contao vendor-bin/twig-cs-fixer/composer.lock 2026-04-24 {'first': 'jaccard 0.231 (nothing to update)', 'second': 'jaccard 0.600 (nothing to update)'}
+lock-oracle-2026-11-02 composer  {'files': 34, 'reproduced from some side': 6, 'tool failed on every side': 1}

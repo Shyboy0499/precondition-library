@@ -1,0 +1,35 @@
+10 phpstan/phpstan-src composer.lock 2025-01-18 {'merge': 'reproduces'}
+14 phpstan/phpstan-src composer.lock 2024-10-12 {'merge': 'failed: - phpstan/phpstan-deprecation-rules 2.0.x-dev requires phpstan/phpstan ^2.1.39 -> found phpstan/phpstan[2.1.39, ..., 2.3.x-dev] but these were not loaded, likel'}
+61 BookStackApp/BookStack composer.lock 2025-10-05 {'merge': 'reproduces'}
+63 BookStackApp/BookStack composer.lock 2024-02-28 {'merge': 'reproduces'}
+65 BookStackApp/BookStack composer.lock 2022-09-27 {'merge': 'reproduces'}
+66 BookStackApp/BookStack composer.lock 2021-11-04 {'merge': 'reproduces'}
+67 BookStackApp/BookStack composer.lock 2021-10-16 {'merge': 'reproduces'}
+68 BookStackApp/BookStack composer.lock 2021-10-06 {'merge': 'failed: Overwriting requires seems like a bug (swiftmailer/swiftmailer == 6.2.3.0 ='}
+75 BookStackApp/BookStack composer.lock 2018-02-11 {'merge': 'failed: - Root composer.json requires phenx/php-svg-lib == 0.3.0.0 (exact version match), found phenx/php-svg-lib[v0.3.0] but these were not loaded, likely because it c'}
+79 getgrav/grav composer.lock 2024-10-14 {'merge': 'failed: - rockettheme/toolbox v2.x-dev requires symfony/yaml ^7.0 -> found symfony/yaml[v7.0.0, ..., v7.4.23] but it conflicts with your root composer.json require (~5.'}
+80 getgrav/grav composer.lock 2023-05-12 {'merge': 'failed: - rockettheme/toolbox v2.x-dev requires symfony/yaml ^7.0 -> found symfony/yaml[v7.0.0, ..., v7.4.23] but it conflicts with your root composer.json require (~5.'}
+113 invoiceninja/invoiceninja composer.lock 2024-09-16 {'merge': 'reproduces'}
+114 invoiceninja/invoiceninja composer.lock 2024-09-15 {'merge': 'reproduces'}
+115 invoiceninja/invoiceninja composer.lock 2024-08-28 {'merge': 'reproduces'}
+120 invoiceninja/invoiceninja composer.lock 2024-06-22 {'merge': 'jaccard 0.993'}
+121 invoiceninja/invoiceninja composer.lock 2024-06-18 {'merge': 'failed: - invoiceninja/inspector v3.0 requires doctrine/dbal ^4.0 -> found doctrine/dbal[4.0.0-beta1, ..., 4.6.x-dev] but these were not loaded, likely because it confl'}
+124 invoiceninja/invoiceninja composer.lock 2024-05-19 {'merge': 'failed: - invoiceninja/einvoice dev-main requires symfony/validator ^7 -> found symfony/validator[v7.0.0-BETA1, ..., 7.4.x-dev] but these were not loaded, likely becaus'}
+144 snipe/snipe-it composer.lock 2026-04-27 {'merge': 'reproduces'}
+151 snipe/snipe-it composer.lock 2024-06-18 {'merge': 'failed: Your requirements could not be resolved to an installable set of packages.'}
+155 snipe/snipe-it composer.lock 2024-04-02 {'merge': 'failed: Your requirements could not be resolved to an installable set of packages.'}
+197 firefly-iii/firefly-iii composer.lock 2026-04-13 {'merge': 'reproduces'}
+204 wallabag/wallabag composer.lock 2024-11-11 {'merge': 'reproduces'}
+205 wallabag/wallabag composer.lock 2024-01-03 {'merge': 'failed: - Root composer.json requires tecnickcom/tcpdf == 6.6.5.0 (exact version match), found tecnickcom/tcpdf[dev-main, 6.0.013, ..., v6.x-dev, 7.0.0, ..., 7.0.22] bu'}
+209 wallabag/wallabag composer.lock 2022-11-03 {'merge': 'reproduces'}
+211 wallabag/wallabag composer.lock 2022-06-09 {'merge': 'reproduces'}
+231 contao/contao vendor-bin/ecs/composer.lock 2026-07-02 {'merge': 'reproduces'}
+231 contao/contao vendor-bin/isolated-tests/composer.lock 2026-07-02 {'merge': 'reproduces'}
+231 contao/contao vendor-bin/service-linter/composer.lock 2026-07-02 {'merge': 'reproduces'}
+231 contao/contao vendor-bin/twig-cs-fixer/composer.lock 2026-07-02 {'merge': 'reproduces'}
+236 contao/contao vendor-bin/ecs/composer.lock 2026-04-24 {'merge': 'reproduces'}
+236 contao/contao vendor-bin/isolated-tests/composer.lock 2026-04-24 {'merge': 'reproduces'}
+236 contao/contao vendor-bin/monorepo-tools/composer.lock 2026-04-24 {'merge': 'reproduces'}
+236 contao/contao vendor-bin/service-linter/composer.lock 2026-04-24 {'merge': 'reproduces'}
+236 contao/contao vendor-bin/twig-cs-fixer/composer.lock 2026-04-24 {'merge': 'reproduces'}
+lock-oracle-2026-11-02 composer sanity {'files': 34, 'reproduced from some side': 23, 'tool failed on every side': 10}

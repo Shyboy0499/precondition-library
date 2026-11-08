@@ -350,11 +350,47 @@ def _show(repo: Path, commit: str, path: str) -> str | None:
 
 
 def _checkout(repo: Path, commit: str, into: Path) -> None:
-    """The merge's whole tree, without its history: what the maintainer left on disk."""
-    archive = subprocess.run(
-        ["git", "-C", str(repo), "archive", "--format=tar", commit], capture_output=True, check=True
-    )
-    subprocess.run(["tar", "-x", "-C", str(into)], input=archive.stdout, check=True)
+    """The merge's whole tree, without its history: what the maintainer left on disk.
+
+    Every blob is written as committed. `git archive` is not used: it applies the repository's
+    own `export-ignore` and `export-subst` attributes, which leave out files such as a
+    `composer.json` that a project keeps out of its release archives, or rewrite them.
+    Submodules are left empty, as a fresh clone leaves them."""
+    listing = subprocess.run(
+        ["git", "-C", str(repo), "ls-tree", "-r", "-z", "--full-tree", commit],
+        capture_output=True,
+        check=True,
+    ).stdout
+    entries: list[tuple[bytes, str, str]] = []
+    for record in listing.split(b"\0"):
+        if not record:
+            continue
+        meta, raw_path = record.split(b"\t", 1)
+        mode, kind, sha = meta.split(b" ")
+        if kind == b"blob":
+            entries.append((mode, sha.decode(), os.fsdecode(raw_path)))
+    if not entries:
+        return
+    batch = subprocess.run(
+        ["git", "-C", str(repo), "cat-file", "--batch"],
+        input="".join(f"{blob}\n" for _, blob, _ in entries).encode(),
+        capture_output=True,
+        check=True,
+    ).stdout
+    at = 0
+    for kind_mode, _, path in entries:
+        header_end = batch.index(b"\n", at)
+        size = int(batch[at:header_end].split(b" ")[2])
+        content = batch[header_end + 1 : header_end + 1 + size]
+        at = header_end + 1 + size + 1
+        target = into / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if kind_mode == b"120000":
+            target.symlink_to(os.fsdecode(content))
+        else:
+            target.write_bytes(content)
+            if kind_mode == b"100755":
+                target.chmod(0o755)
 
 
 COMPUTED = ("take_local", "take_upstream", "three_way", "three_way_unified")

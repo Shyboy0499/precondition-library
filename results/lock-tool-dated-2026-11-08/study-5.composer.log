@@ -1,0 +1,39 @@
+16 krayin/laravel-crm composer.lock 2024-12-16 {'first': 'jaccard 0.527 (nothing to update)', 'second': 'jaccard 0.349 (nothing to update)'}
+17 krayin/laravel-crm composer.lock 2024-12-05 {'first': 'jaccard 0.360 (nothing to update)', 'second': 'jaccard 0.448'}
+18 krayin/laravel-crm composer.lock 2024-06-12 {'first': 'jaccard 0.986 (nothing to update)', 'second': 'jaccard 0.559 (nothing to update)'}
+20 PrivateBin/PrivateBin composer.lock 2023-07-05 {'first': 'jaccard 0.561', 'second': 'jaccard 0.939'}
+21 PrivateBin/PrivateBin composer.lock 2022-11-17 {'first': 'jaccard 0.939 (nothing to update)', 'second': 'reproduces'}
+22 PrivateBin/PrivateBin composer.lock 2022-10-29 {'first': 'jaccard 0.308 (php ignored)', 'second': 'jaccard 0.240'}
+23 PrivateBin/PrivateBin composer.lock 2022-02-26 {'first': 'jaccard 0.805 (php ignored)', 'second': 'jaccard 0.609 (php ignored)'}
+24 PrivateBin/PrivateBin composer.lock 2021-10-07 {'first': 'jaccard 0.721 (php ignored)', 'second': 'jaccard 0.321 (php ignored)'}
+26 cachethq/cachet composer.lock 2019-07-11 {'first': 'failed: - jenssegers/date is locked to version v3.5.0 and an update of this package was not requested.', 'second': 'jaccard 0.984 (nothing to update)'}
+44 coollabsio/coolify composer.lock 2026-08-18 {'first': 'jaccard 0.595 (php ignored)', 'second': 'reproduces (php ignored)'}
+51 coollabsio/coolify composer.lock 2025-01-10 {'first': 'jaccard 0.982 (php ignored)', 'second': 'jaccard 0.982 (php ignored)'}
+57 bagisto/bagisto composer.lock 2026-08-20 {'first': 'reproduces (php ignored)', 'second': 'jaccard 0.612 (php ignored)'}
+58 bagisto/bagisto composer.lock 2026-08-14 {'first': 'jaccard 0.604 (php ignored)', 'second': 'jaccard 0.601 (php ignored)'}
+60 bagisto/bagisto composer.lock 2026-07-07 {'first': 'jaccard 0.803 (nothing to update)', 'second': 'jaccard 0.954 (nothing to update)'}
+61 bagisto/bagisto composer.lock 2026-06-23 {'first': 'jaccard 0.892 (nothing to update)', 'second': 'jaccard 0.734 (nothing to update)'}
+63 bagisto/bagisto composer.lock 2026-03-11 {'first': 'jaccard 0.625 (nothing to update)', 'second': 'jaccard 0.950'}
+64 bagisto/bagisto composer.lock 2026-02-13 {'first': 'jaccard 0.904', 'second': 'jaccard 0.908'}
+66 bagisto/bagisto composer.lock 2026-02-05 {'first': 'jaccard 0.653 (nothing to update)', 'second': 'jaccard 0.372'}
+67 bagisto/bagisto composer.lock 2026-01-07 {'first': 'jaccard 0.611 (nothing to update)', 'second': 'jaccard 0.326'}
+68 bagisto/bagisto composer.lock 2025-11-13 {'first': 'jaccard 0.766 (nothing to update)', 'second': 'jaccard 0.360'}
+69 bagisto/bagisto composer.lock 2025-10-15 {'first': 'jaccard 0.749', 'second': 'jaccard 0.379'}
+70 phpbb/phpbb phpBB/composer.lock 2026-02-17 {'first': 'reproduces', 'second': 'jaccard 0.473'}
+75 phpbb/phpbb phpBB/composer.lock 2023-12-16 {'first': 'jaccard 0.512 (nothing to update)', 'second': 'jaccard 0.847'}
+76 phpbb/phpbb phpBB/composer.lock 2023-10-10 {'first': 'reproduces', 'second': 'jaccard 0.571'}
+78 phpbb/phpbb phpBB/composer.lock 2022-10-19 {'first': 'jaccard 0.451 (nothing to update)', 'second': 'failed: - Root composer.json requires symfony/browser-kit ^5.4, found symfony/browser-kit[v5.4.0, ..., v5.4.45] but these were not loaded, likely because it conflicts w'}
+80 phpbb/phpbb phpBB/composer.lock 2022-06-06 {'first': 'jaccard 0.479 (nothing to update)', 'second': 'failed: - Root composer.json requires symfony/browser-kit ^5.4, found symfony/browser-kit[v5.4.0, ..., v5.4.45] but these were not loaded, likely because it conflicts w'}
+84 phpbb/phpbb phpBB/composer.lock 2021-09-05 {'first': 'jaccard 0.419 (nothing to update)', 'second': 'failed: - Root composer.json requires symfony/browser-kit ^5.0, found symfony/browser-kit[v5.0.0, ..., v5.4.45] but these were not loaded, likely because it conflicts w'}
+88 Attendize/Attendize composer.lock 2016-06-14 {'first': 'failed: Cannot update only a partial set of packages without a lock file present. Run `composer update` to generate a lock file.', 'second': 'jaccard 0.598 (nothing to update)'}
+91 pelican-dev/panel composer.lock 2024-04-18 {'first': 'jaccard 0.916 (nothing to update)', 'second': 'jaccard 0.709'}
+92 pelican-dev/panel composer.lock 2024-04-18 {'first': 'jaccard 0.640', 'second': 'jaccard 0.640'}
+105 Part-DB/Part-DB-server composer.lock 2025-07-06 {'first': 'jaccard 0.726 (nothing to update)', 'second': 'failed: - Root composer.json requires jbtronics/settings-bundle dev-master, found jbtronics/settings-bundle[dev-master] but these were not loaded, likely because it con'}
+106 Part-DB/Part-DB-server composer.lock 2025-01-17 {'first': 'failed: - Root composer.json requires phpstan/phpstan ^2.0.4, found phpstan/phpstan[2.0.4, ..., 2.3.5] but these were not loaded, likely because it conflicts with anoth', 'second': 'failed: - Root composer.json requires jbtronics/settings-bundle dev-master, found jbtronics/settings-bundle[dev-master] but these were not loaded, likely because it con'}
+107 Part-DB/Part-DB-server composer.lock 2024-06-24 {'first': 'failed: - Root composer.json requires dompdf/dompdf ^v3.0.0, found dompdf/dompdf[v3.0.0, ..., v3.1.6] but these were not loaded, likely because it conflicts with anothe', 'second': 'failed: - Root composer.json requires jbtronics/settings-bundle dev-master, found jbtronics/settings-bundle[dev-master] but these were not loaded, likely because it con'}
+109 Part-DB/Part-DB-server composer.lock 2023-06-06 {'first': 'jaccard 0.697 (nothing to update)', 'second': 'failed: - Root composer.json requires jbtronics/2fa-webauthn dev-master, found jbtronics/2fa-webauthn[dev-master] but these were not loaded, likely because it conflicts'}
+111 Part-DB/Part-DB-server composer.lock 2022-07-24 {'first': 'jaccard 0.267', 'second': 'jaccard 0.949'}
+112 Part-DB/Part-DB-server composer.lock 2020-01-01 {'first': 'failed: - symfony/flex is locked to version v1.6.0 and an update of this package was not requested.', 'second': 'jaccard 0.952 (php ignored)'}
+113 Part-DB/Part-DB-server composer.lock 2019-12-26 {'first': 'failed: - symfony/flex is locked to version v1.6.0 and an update of this package was not requested.', 'second': 'failed: - symfony/flex is locked to version v1.6.0 and an update of this package was not requested.'}
+156 ProcessMaker/processmaker composer.lock 2026-04-01 {'first': 'jaccard 0.991 (nothing to update)', 'second': 'jaccard 0.903'}
+divergence-gate-2026-11-08 composer  {'files': 38, 'reproduced from some side': 5, 'tool failed on every side': 3}

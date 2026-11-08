@@ -1,0 +1,2 @@
+156 rust-lang/crates.io pnpm-lock.yaml 2025-08-26 {'first': 'failed: pnpm 10.28.0: ERR_PNPM_UNSUPPORTED_ENGINE\u2009 Unsupported environment (bad pnpm and/or Node.js version)', 'second': 'failed: pnpm 10.28.0: ERR_PNPM_UNSUPPORTED_ENGINE\u2009 Unsupported environment (bad pnpm and/or Node.js version)'}
+lock-oracle-2026-11-02 pnpm  {'files': 1, 'reproduced from some side': 0, 'tool failed on every side': 1}
