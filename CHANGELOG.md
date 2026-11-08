@@ -28,6 +28,19 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **Study 5 is registered: the divergence gate (ADR-0059, `docs/preregistration/divergence-gate.md`).**
+  No data of it exists.
+  - **What it tests:** the rule the anatomy of studies 3 and 4 suggested. Fire the per-ecosystem
+    merge only where no package diverges, and refuse otherwise.
+  - **Where:** 20 repositories nobody here had mined or counted, chosen by a feasibility count
+    that also records which family of lock file conflicts.
+  - **H1 (primary):** the gate still does not make the merge rarely wrong.
+  - **H2:** the gate lowers the merge's mismatch, which is largely structural in npm's family.
+  - **H3:** within repositories, divergence still matters in the one-version family.
+  - **Power:** 0.85 for H1 and H2 at 20 repositories, and 0.37 for H3, as stated in advance.
+  - **Code:** `bench.divergence_gate` reproduces the anatomy's divergence on all 290 of study 4's
+    conflicted files.
+
 - **Report §3.4 derives the smallest detectable difference step by step.** It covers the
   binomial model and the normal approximation, the two-sided test, the power, the
   shared-variance simplification, and solving for δ\*. It also explains why the base rate is

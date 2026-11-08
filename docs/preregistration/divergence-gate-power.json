@@ -1,0 +1,67 @@
+{
+  "seed": 20261108,
+  "studies": 1000,
+  "resamples": 500,
+  "observed": {
+    "repositories": 47,
+    "cases": 626,
+    "repositories_where_the_gate_fires": 44,
+    "H1_mean_m_gate": 0.3201542775406412,
+    "H2_mean_gain": 0.1682812137357592,
+    "H3_mantel_haenszel": 0.22420148368628917
+  },
+  "designs": [
+    {
+      "repositories": 12,
+      "power": {
+        "H1": 0.561,
+        "H2": 0.577,
+        "H3": 0.29
+      },
+      "false_support": {
+        "H1": 0.002,
+        "H2": 0.016,
+        "H3": 0.051
+      }
+    },
+    {
+      "repositories": 15,
+      "power": {
+        "H1": 0.682,
+        "H2": 0.692,
+        "H3": 0.308
+      },
+      "false_support": {
+        "H1": 0.002,
+        "H2": 0.011,
+        "H3": 0.045
+      }
+    },
+    {
+      "repositories": 20,
+      "power": {
+        "H1": 0.848,
+        "H2": 0.847,
+        "H3": 0.367
+      },
+      "false_support": {
+        "H1": 0.01,
+        "H2": 0.018,
+        "H3": 0.046
+      }
+    },
+    {
+      "repositories": 25,
+      "power": {
+        "H1": 0.938,
+        "H2": 0.93,
+        "H3": 0.398
+      },
+      "false_support": {
+        "H1": 0.008,
+        "H2": 0.014,
+        "H3": 0.034
+      }
+    }
+  ]
+}
