@@ -1,0 +1,13 @@
+55 mautic/mautic composer.lock 2026-10-21 {'first': 'jaccard 0.902', 'second': 'jaccard 0.982 (nothing to update)'}
+61 mautic/mautic composer.lock 2026-08-04 {'first': 'failed: - Root composer.json requires rector/rector dev-main, found rector/rector[dev-main] but these were not loaded, likely because it conflicts with another require.', 'second': 'jaccard 0.985 (nothing to update)'}
+72 glpi-project/glpi composer.lock 2026-10-02 {'first': 'jaccard 0.991 (nothing to update)', 'second': 'jaccard 0.772'}
+79 glpi-project/glpi composer.lock 2026-09-01 {'first': 'jaccard 0.899', 'second': 'jaccard 0.562'}
+82 glpi-project/glpi composer.lock 2026-07-30 {'first': 'jaccard 0.982 (nothing to update)', 'second': 'jaccard 0.711'}
+86 joomla/joomla-cms composer.lock 2026-09-14 {'first': 'jaccard 0.609', 'second': 'jaccard 0.527'}
+94 joomla/joomla-cms composer.lock 2026-07-02 {'first': 'jaccard 0.986', 'second': 'jaccard 0.603 (nothing to update)'}
+104 humhub/humhub composer.lock 2025-06-10 {'first': 'failed: curl error 56 while downloading https://asset-packagist.org/packages.json:', 'second': 'failed: curl error 56 while downloading https://asset-packagist.org/packages.json:'}
+129 akaunting/akaunting composer.lock 2026-04-30 {'first': 'jaccard 0.811 (nothing to update)', 'second': 'jaccard 0.946'}
+138 espocrm/espocrm composer.lock 2023-02-07 {'first': 'jaccard 0.976 (php ignored)', 'second': 'jaccard 0.976 (php ignored)'}
+151 pixelfed/pixelfed composer.lock 2025-11-13 {'first': 'failed: - Root composer.json requires brick/math ^0.14, found brick/math[0.14.0, ..., 0.14.8] but these were not loaded, likely because it conflicts with another requir', 'second': 'failed: - Root composer.json requires pragmarx/google2fa ^8.0, found pragmarx/google2fa[8.0.0, v8.0.1, v8.0.2, v8.0.3] but the package is fixed to v9.0.0 (lock file ver'}
+184 Leantime/leantime composer.lock 2023-08-22 {'first': 'jaccard 0.908', 'second': 'jaccard 0.776'}
+ecosystem-unify-2026-11-02 composer  {'files': 12, 'reproduced from some side': 0, 'tool failed on every side': 2}

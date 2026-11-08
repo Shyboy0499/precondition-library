@@ -1,0 +1,39 @@
+16 krayin/laravel-crm composer.lock 2024-12-16 {'merge': 'reproduces'}
+17 krayin/laravel-crm composer.lock 2024-12-05 {'merge': 'reproduces'}
+18 krayin/laravel-crm composer.lock 2024-06-12 {'merge': 'jaccard 0.973'}
+20 PrivateBin/PrivateBin composer.lock 2023-07-05 {'merge': 'reproduces'}
+21 PrivateBin/PrivateBin composer.lock 2022-11-17 {'merge': 'reproduces'}
+22 PrivateBin/PrivateBin composer.lock 2022-10-29 {'merge': 'failed: - phpspec/prophecy v1.15.0 requires phpdocumentor/reflection-docblock ^5.2 -> found phpdocumentor/reflection-docblock[5.2.0, ..., 5.6.7] but these were not load'}
+23 PrivateBin/PrivateBin composer.lock 2022-02-26 {'merge': 'jaccard 0.974 (php ignored)'}
+24 PrivateBin/PrivateBin composer.lock 2021-10-07 {'merge': 'jaccard 0.974 (php ignored)'}
+26 cachethq/cachet composer.lock 2019-07-11 {'merge': 'failed: - Root composer.json requires nexmo/client == 1.8.1.0 (exact version match), found nexmo/client[dev-whitesource-remediate/master-guzzlehttp-guzzle-7.x, dev-vona'}
+44 coollabsio/coolify composer.lock 2026-08-18 {'merge': 'reproduces (php ignored)'}
+51 coollabsio/coolify composer.lock 2025-01-10 {'merge': 'failed: - rector/rector 2.0.6 requires phpstan/phpstan ^2.1.1 -> found phpstan/phpstan[2.1.1, ..., 2.3.5] but these were not loaded, likely because it conflicts with an'}
+57 bagisto/bagisto composer.lock 2026-08-20 {'merge': 'reproduces (php ignored)'}
+58 bagisto/bagisto composer.lock 2026-08-14 {'merge': 'reproduces (php ignored)'}
+60 bagisto/bagisto composer.lock 2026-07-07 {'merge': 'reproduces'}
+61 bagisto/bagisto composer.lock 2026-06-23 {'merge': 'reproduces'}
+63 bagisto/bagisto composer.lock 2026-03-11 {'merge': 'reproduces'}
+64 bagisto/bagisto composer.lock 2026-02-13 {'merge': 'failed: - Root composer.json requires nette/schema == 1.3.4.0 (exact version match), found nette/schema[dev-master, v1.0.0, ..., v1.4.x-dev, 2.0.x-dev (alias of dev-mas'}
+66 bagisto/bagisto composer.lock 2026-02-05 {'merge': 'failed: - Root composer.json requires nette/utils == 4.1.2.0 (exact version match), found nette/utils[dev-json-flags, dev-master, v2.2.0, ..., v2.5.x-dev, v3.0.0, ..., '}
+67 bagisto/bagisto composer.lock 2026-01-07 {'merge': 'reproduces'}
+68 bagisto/bagisto composer.lock 2025-11-13 {'merge': 'reproduces'}
+69 bagisto/bagisto composer.lock 2025-10-15 {'merge': 'reproduces'}
+70 phpbb/phpbb phpBB/composer.lock 2026-02-17 {'merge': 'reproduces'}
+75 phpbb/phpbb phpBB/composer.lock 2023-12-16 {'merge': 'reproduces'}
+76 phpbb/phpbb phpBB/composer.lock 2023-10-10 {'merge': 'reproduces'}
+78 phpbb/phpbb phpBB/composer.lock 2022-10-19 {'merge': 'reproduces'}
+80 phpbb/phpbb phpBB/composer.lock 2022-06-06 {'merge': 'reproduces'}
+84 phpbb/phpbb phpBB/composer.lock 2021-09-05 {'merge': 'reproduces'}
+88 Attendize/Attendize composer.lock 2016-06-14 {'merge': 'failed: - Root composer.json requires intervention/image == dev-master, found intervention/image[dev-silarhi-feature/benchmark-suite, dev-main, dev-develop, 1.0.0, ...,'}
+91 pelican-dev/panel composer.lock 2024-04-18 {'merge': 'reproduces'}
+92 pelican-dev/panel composer.lock 2024-04-18 {'merge': 'reproduces'}
+105 Part-DB/Part-DB-server composer.lock 2025-07-06 {'merge': 'failed: - jbtronics/settings-bundle dev-master requires symfony/framework-bundle ^7.4|^8.0 -> found symfony/framework-bundle[v7.4.0, ..., v7.4.23, v8.0.0, ..., v8.1.11]'}
+106 Part-DB/Part-DB-server composer.lock 2025-01-17 {'merge': 'failed: Overwriting requires seems like a bug (symfony/polyfill-php81 == 1.31.0.0 ='}
+107 Part-DB/Part-DB-server composer.lock 2024-06-24 {'merge': 'failed: - jbtronics/settings-bundle dev-master requires symfony/framework-bundle ^7.4|^8.0 -> found symfony/framework-bundle[v7.4.0, ..., v7.4.23, v8.0.0, ..., v8.1.11]'}
+109 Part-DB/Part-DB-server composer.lock 2023-06-06 {'merge': 'failed: - florianv/swap-bundle dev-master requires symfony/framework-bundle ^6.4|^7.0|^8.0 -> found symfony/framework-bundle[v6.4.0, ..., v6.4.49, v7.0.0, ..., v7.4.23,'}
+111 Part-DB/Part-DB-server composer.lock 2022-07-24 {'merge': 'failed: - florianv/swap-bundle dev-master requires symfony/framework-bundle ^6.4|^7.0|^8.0 -> found symfony/framework-bundle[v6.4.0, ..., v6.4.49, v7.0.0, ..., v7.4.23,'}
+112 Part-DB/Part-DB-server composer.lock 2020-01-01 {'merge': 'failed: - gregwar/captcha-bundle dev-master requires twig/twig ^3.0 -> found twig/twig[v3.0.0, ..., v3.30.0] but these were not loaded, likely because it conflicts with'}
+113 Part-DB/Part-DB-server composer.lock 2019-12-26 {'merge': 'failed: - gregwar/captcha-bundle dev-master requires twig/twig ^3.0 -> found twig/twig[v3.0.0, ..., v3.30.0] but these were not loaded, likely because it conflicts with'}
+156 ProcessMaker/processmaker composer.lock 2026-04-01 {'merge': 'reproduces'}
+divergence-gate-2026-11-08 composer sanity {'files': 38, 'reproduced from some side': 22, 'tool failed on every side': 13}

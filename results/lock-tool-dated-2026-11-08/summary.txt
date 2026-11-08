@@ -1,0 +1,54 @@
+## composer, sanity (the merged lock file)
+| study | files | reproduced (some side) | near only | failed on every side |
+| --- | ---: | ---: | ---: | ---: |
+| study-3 | 34 | 23 | 1 | 10 |
+| study-4 | 12 | 9 | 0 | 3 |
+| study-5 | 38 | 22 | 3 | 13 |
+| **all** | **84** | **54** | **4** | **26** |
+near only: median best Jaccard 0.974
+failed runs by cause (one per side):
+  18 x a branch dependency (dev-*): only its current head is served
+  5 x the requirements do not resolve with the date's versions
+  2 x Composer's own error on an old lock file
+  1 x a host the network policy blocks
+
+## composer, from each side
+| study | files | reproduced (some side) | near only | failed on every side |
+| --- | ---: | ---: | ---: | ---: |
+| study-3 | 34 | 6 | 27 | 1 |
+| study-4 | 12 | 0 | 10 | 2 |
+| study-5 | 38 | 5 | 30 | 3 |
+| **all** | **84** | **11** | **67** | **6** |
+near only: median best Jaccard 0.882
+sides whose lock file already fits the merged manifest: 57 (none is the maintainer's set: the files were chosen for that)
+failed runs by cause (one per side):
+  9 x a branch dependency (dev-*): only its current head is served
+  8 x the requirements do not resolve with the date's versions
+  7 x a package outside the update is held to its lock
+  2 x the manifest requires a Composer version
+  2 x a host the network policy blocks
+  1 x Composer's own error on an old lock file
+
+## pnpm, sanity (the merged lock file)
+| study | files | reproduced (some side) | near only | failed on every side |
+| --- | ---: | ---: | ---: | ---: |
+| study-3 | 1 | 0 | 0 | 1 |
+| study-4 | 7 | 6 | 1 | 0 |
+| study-5 | 12 | 12 | 0 | 0 |
+| **all** | **20** | **18** | **1** | **1** |
+near only: median best Jaccard 0.998
+failed runs by cause (one per side):
+  1 x the declared pnpm predates minimumReleaseAge
+
+## pnpm, from each side
+| study | files | reproduced (some side) | near only | failed on every side |
+| --- | ---: | ---: | ---: | ---: |
+| study-3 | 1 | 0 | 0 | 1 |
+| study-4 | 7 | 0 | 2 | 5 |
+| study-5 | 12 | 5 | 4 | 3 |
+| **all** | **20** | **5** | **6** | **9** |
+near only: median best Jaccard 0.996
+failed runs by cause (one per side):
+  17 x a host the network policy blocks
+  2 x the declared pnpm predates minimumReleaseAge
+

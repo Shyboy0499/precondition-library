@@ -1,0 +1,13 @@
+167 penpot/penpot docs/pnpm-lock.yaml 2026-10-29 {'first': 'reproduces (pnpm 12.16.1)', 'second': 'jaccard 0.903 (pnpm 12.16.1)'}
+167 penpot/penpot exporter/pnpm-lock.yaml 2026-10-29 {'first': 'jaccard 0.964 (pnpm 12.16.1)', 'second': 'jaccard 0.947 (pnpm 12.16.1)'}
+167 penpot/penpot frontend/pnpm-lock.yaml 2026-10-29 {'first': 'reproduces (pnpm 12.16.1)', 'second': 'jaccard 0.662 (pnpm 12.16.1)'}
+167 penpot/penpot mcp/pnpm-lock.yaml 2026-10-29 {'first': 'jaccard 0.858 (pnpm 12.16.1)', 'second': 'jaccard 0.929 (pnpm 12.16.1)'}
+167 penpot/penpot plugins/pnpm-lock.yaml 2026-10-29 {'first': 'reproduces (pnpm 12.16.1)', 'second': 'jaccard 0.828 (pnpm 12.16.1)'}
+167 penpot/penpot pnpm-lock.yaml 2026-10-29 {'first': 'reproduces (pnpm 12.16.1)', 'second': 'jaccard 0.790 (pnpm 12.16.1)'}
+168 penpot/penpot media-processor/pnpm-lock.yaml 2026-10-17 {'first': 'reproduces (pnpm 12.14.0)', 'second': 'jaccard 0.921 (pnpm 12.14.0)'}
+169 penpot/penpot frontend/pnpm-lock.yaml 2026-06-18 {'first': 'failed: pnpm 11.7.0: [ERR_PNPM_FETCH_403] GET https://codeload.github.com/penpot/draft-js/tar.gz/4a99b2a6020b2af97f6dc5fa1b4275ec16b559a0: Forbidden - 403', 'second': 'failed: pnpm 11.7.0: [ERR_PNPM_FETCH_403] GET https://codeload.github.com/penpot/svgo/tar.gz/65b3a645df9edbe3c00acf4267dd06c2ca736021: Forbidden - 403'}
+170 penpot/penpot frontend/pnpm-lock.yaml 2026-06-17 {'first': 'failed: pnpm 11.7.0: [ERR_PNPM_FETCH_403] GET https://codeload.github.com/penpot/svgo/tar.gz/65b3a645df9edbe3c00acf4267dd06c2ca736021: Forbidden - 403', 'second': 'failed: pnpm 11.7.0: [ERR_PNPM_FETCH_403] GET https://codeload.github.com/penpot/svgo/tar.gz/65b3a645df9edbe3c00acf4267dd06c2ca736021: Forbidden - 403'}
+171 penpot/penpot frontend/pnpm-lock.yaml 2026-06-15 {'first': 'failed: pnpm 11.5.3: [ERR_PNPM_FETCH_403] GET https://codeload.github.com/penpot/ua-parser/tar.gz/90b970f39f2dc08378b975a0f01045b4ec8e89a4: Forbidden - 403', 'second': 'failed: pnpm 11.5.3: [ERR_PNPM_FETCH_403] GET https://codeload.github.com/penpot/svgo/tar.gz/65b3a645df9edbe3c00acf4267dd06c2ca736021: Forbidden - 403'}
+172 penpot/penpot frontend/pnpm-lock.yaml 2026-05-14 {'first': 'jaccard 0.968 (pnpm 10.31.0)', 'second': 'jaccard 0.991 (pnpm 10.31.0)'}
+173 penpot/penpot frontend/pnpm-lock.yaml 2026-05-11 {'first': 'jaccard 0.823 (pnpm 10.31.0)', 'second': 'jaccard 0.996 (pnpm 10.31.0)'}
+divergence-gate-2026-11-08 pnpm  {'files': 12, 'reproduced from some side': 5, 'tool failed on every side': 3}

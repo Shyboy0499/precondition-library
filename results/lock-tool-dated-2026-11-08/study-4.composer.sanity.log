@@ -1,0 +1,13 @@
+55 mautic/mautic composer.lock 2026-10-21 {'merge': 'failed: - rector/rector dev-main requires phpstan/phpstan ^2.3.5 -> found phpstan/phpstan[2.3.5, 2.3.x-dev] but these were not loaded, likely because it conflicts with '}
+61 mautic/mautic composer.lock 2026-08-04 {'merge': 'failed: - rector/rector dev-main requires phpstan/phpstan ^2.3.5 -> found phpstan/phpstan[2.3.5, 2.3.x-dev] but these were not loaded, likely because it conflicts with '}
+72 glpi-project/glpi composer.lock 2026-10-02 {'merge': 'reproduces'}
+79 glpi-project/glpi composer.lock 2026-09-01 {'merge': 'reproduces'}
+82 glpi-project/glpi composer.lock 2026-07-30 {'merge': 'reproduces'}
+86 joomla/joomla-cms composer.lock 2026-09-14 {'merge': 'reproduces'}
+94 joomla/joomla-cms composer.lock 2026-07-02 {'merge': 'reproduces'}
+104 humhub/humhub composer.lock 2025-06-10 {'merge': 'failed: curl error 56 while downloading https://asset-packagist.org/packages.json:'}
+129 akaunting/akaunting composer.lock 2026-04-30 {'merge': 'reproduces (php ignored)'}
+138 espocrm/espocrm composer.lock 2023-02-07 {'merge': 'reproduces (php ignored)'}
+151 pixelfed/pixelfed composer.lock 2025-11-13 {'merge': 'reproduces'}
+184 Leantime/leantime composer.lock 2023-08-22 {'merge': 'reproduces'}
+ecosystem-unify-2026-11-02 composer sanity {'files': 12, 'reproduced from some side': 9, 'tool failed on every side': 3}

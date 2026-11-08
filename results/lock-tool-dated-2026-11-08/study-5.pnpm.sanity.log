@@ -1,0 +1,13 @@
+167 penpot/penpot docs/pnpm-lock.yaml 2026-10-29 {'merge': 'reproduces (pnpm 12.16.1)'}
+167 penpot/penpot exporter/pnpm-lock.yaml 2026-10-29 {'merge': 'reproduces (pnpm 12.16.1)'}
+167 penpot/penpot frontend/pnpm-lock.yaml 2026-10-29 {'merge': 'reproduces (pnpm 12.16.1)'}
+167 penpot/penpot mcp/pnpm-lock.yaml 2026-10-29 {'merge': 'reproduces (pnpm 12.16.1)'}
+167 penpot/penpot plugins/pnpm-lock.yaml 2026-10-29 {'merge': 'reproduces (pnpm 12.16.1)'}
+167 penpot/penpot pnpm-lock.yaml 2026-10-29 {'merge': 'reproduces (pnpm 12.16.1)'}
+168 penpot/penpot media-processor/pnpm-lock.yaml 2026-10-17 {'merge': 'reproduces (pnpm 12.14.0)'}
+169 penpot/penpot frontend/pnpm-lock.yaml 2026-06-18 {'merge': 'reproduces (pnpm 11.7.0)'}
+170 penpot/penpot frontend/pnpm-lock.yaml 2026-06-17 {'merge': 'reproduces (pnpm 11.7.0)'}
+171 penpot/penpot frontend/pnpm-lock.yaml 2026-06-15 {'merge': 'reproduces (pnpm 11.5.3)'}
+172 penpot/penpot frontend/pnpm-lock.yaml 2026-05-14 {'merge': 'reproduces (pnpm 10.31.0)'}
+173 penpot/penpot frontend/pnpm-lock.yaml 2026-05-11 {'merge': 'reproduces (pnpm 10.31.0)'}
+divergence-gate-2026-11-08 pnpm sanity {'files': 12, 'reproduced from some side': 12, 'tool failed on every side': 0}
