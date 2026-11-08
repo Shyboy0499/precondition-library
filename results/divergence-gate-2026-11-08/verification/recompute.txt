@@ -1,0 +1,23 @@
+ok  cases: 223 | 223
+ok  repositories with a case: 20 | 20
+ok  repositories where the gate fires: 19 | 19
+ok  underpowered: False | False
+ok  h1 mean: 0.35244550770866556 | 0.35244550770866556
+ok  h1 low: 0.178 | 0.178
+ok  h1 high: 0.527 | 0.527
+ok  h1 decision: supported | supported
+ok  h2 mean: 0.2362136401610086 | 0.2362136401610086
+ok  h2 low: 0.089 | 0.089
+ok  h2 high: 0.384 | 0.384
+ok  h2 decision: supported | supported
+ok  h3 statistic: 0.24793228967239553 | 0.24793228967239553
+ok  h3 low: -0.02219479070338814 | -0.02219479070338814
+ok  h3 high: 0.476234137468236 | 0.476234137468236
+ok  h3 decision: not supported | not supported
+ok  always fires/wrong: (223, 127) | (223, 127)
+ok  gate fires/wrong: (108, 32) | (108, 32)
+ok  gate fire share: 0.484304932735426 | 0.484304932735426
+ok  files by family: {'npm': {'none diverges': [28, 23], 'some diverges': [69, 5]}, 'one-version': {'none diverges': [83, 55], 'some diverges': [69, 17]}} | {'npm': {'none diverges': [28, 23], 'some diverges': [69, 5]}, 'one-version': {'none diverges': [83, 55], 'some diverges': [69, 17]}}
+ok  coverage: 0.642965368 | 0.642965368
+ok  coverage low: 0.524 | 0.524
+all figures agree

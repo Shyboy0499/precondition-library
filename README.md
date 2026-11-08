@@ -457,6 +457,18 @@ No tool or registry is involved in any of them.
   ([lock-tool-dated](results/lock-tool-dated-2026-11-03/README.md)) labels 14 more of 172
   conflicted `package-lock.json` files, 0.78 in all.
 
+**Study 5 tested the gate after it was found ([divergence-gate](results/divergence-gate-2026-11-08/README.md)).**
+It was registered before its data (ADR-0059) and run on 20 more fresh repositories, 223 conflicts:
+
+| | estimate [95% interval] | decision |
+| --- | --- | --- |
+| H1 (primary): the gate's mean mismatch, above 0.10 | **0.352** [0.178, 0.527] | supported |
+| H2: its gain over always firing the merge | **0.236** [0.089, 0.384] | supported |
+| H3: one-version cases, within repositories | 0.248 [−0.022, 0.476] | not supported, uninformative by its stated power |
+
+The precondition roughly halves the merge's error (pooled 0.570 → 0.296), and the merge is still
+wrong on about a third of the gate's fires. Both halves of the anatomy's conclusion replicate.
+
 ## Results graded by this project's own labels
 
 **Graded by:** states built by this project's injectors, and labels from its own rules and

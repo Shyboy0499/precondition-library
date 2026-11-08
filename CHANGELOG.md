@@ -28,6 +28,18 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **Study 5's result: the divergence gate helps, and is not enough (`results/divergence-gate-2026-11-08/`).**
+  It ran as registered on 223 conflicts from 20 fresh repositories.
+  - **H1 (primary) supported:** the gate's mean mismatch is 0.352 [0.178, 0.527], above 0.10.
+  - **H2 supported:** its gain over always firing the merge is 0.236 [0.089, 0.384].
+  - **H3 not supported:** 0.248 [−0.022, 0.476]. This is uninformative by its stated power, and
+    close to the exploratory 0.224.
+  - **Pooled:** firing always is wrong on 127/223 conflicts; the gate on 32/108 of its fires.
+  - **Verification:** a script importing nothing from the project recomputes every figure and
+    decision, and the anatomy's classifier re-derives all 249 files' divergence.
+  - **The report:** gains §6.5. The abstract, contributions, discussion, threats, scope and
+    conclusion now cite the result.
+
 - **Study 5 is registered: the divergence gate (ADR-0059, `docs/preregistration/divergence-gate.md`).**
   No data of it exists.
   - **What it tests:** the rule the anatomy of studies 3 and 4 suggested. Fire the per-ecosystem

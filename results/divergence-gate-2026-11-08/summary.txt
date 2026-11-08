@@ -1,0 +1,10 @@
+223 cases from 20 repositories; the gate fires in 19; excluded: {'criss-cross': 11, 'merged lock file unread': 11, 'submodule or binary conflict': 5}
+
+H1 mean m_gate            0.352 [0.178, 0.527]: supported
+H2 mean m_always - m_gate 0.236 [0.089, 0.384]: supported
+H3 one-version MH         0.248 [-0.022, 0.476]: not supported
+
+pooled: always 127/223 (0.570); gate 32/108 (0.296 [0.218, 0.388]); the gate fires on 0.484 of cases
+npm: none diverges 23/28; some diverges 5/69 files reproduced
+one-version: none diverges 55/83; some diverges 17/69 files reproduced
+coverage 0.643 [0.524, 0.762]

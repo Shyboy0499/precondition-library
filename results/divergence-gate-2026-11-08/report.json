@@ -1,0 +1,111 @@
+{
+  "cases": 223,
+  "repositories_with_a_case": 20,
+  "repositories_where_the_gate_fires": 19,
+  "per_repository": {
+    "Attendize/Attendize": 6,
+    "DFE-Digital/apply-for-teacher-training": 8,
+    "Kovah/LinkAce": 11,
+    "Part-DB/Part-DB-server": 12,
+    "PrefectHQ/prefect": 15,
+    "PrivateBin/PrivateBin": 6,
+    "ProcessMaker/processmaker": 15,
+    "TryGhost/Ghost": 14,
+    "bagisto/bagisto": 15,
+    "cachethq/cachet": 15,
+    "coollabsio/coolify": 15,
+    "elabftw/elabftw": 12,
+    "krayin/laravel-crm": 8,
+    "lobsters/lobsters": 11,
+    "nextcloud/activity": 1,
+    "nextcloud/polls": 8,
+    "paperless-ngx/paperless-ngx": 15,
+    "pelican-dev/panel": 11,
+    "penpot/penpot": 10,
+    "phpbb/phpbb": 15
+  },
+  "exclusions": {
+    "criss-cross": 11,
+    "merged lock file unread": 11,
+    "submodule or binary conflict": 5
+  },
+  "underpowered": false,
+  "h1": {
+    "estimate": {
+      "statistic": 0.35244550770866556,
+      "interval": {
+        "low": 0.17835443012248817,
+        "high": 0.5265365852948429
+      }
+    },
+    "outcome": "supported"
+  },
+  "h2": {
+    "estimate": {
+      "statistic": 0.2362136401610086,
+      "interval": {
+        "low": 0.08885182781461382,
+        "high": 0.3835754525074034
+      }
+    },
+    "outcome": "supported"
+  },
+  "h3": {
+    "estimate": {
+      "statistic": 0.24793228967239553,
+      "interval": {
+        "low": -0.02219479070338814,
+        "high": 0.476234137468236
+      }
+    },
+    "outcome": "not supported"
+  },
+  "always": {
+    "fires": 223,
+    "wrong": 127,
+    "mismatch": 0.5695067264573991,
+    "interval": {
+      "low": 0.5038842586293303,
+      "high": 0.6327750635296928
+    }
+  },
+  "gate": {
+    "fires": 108,
+    "wrong": 32,
+    "mismatch": 0.2962962962962963,
+    "interval": {
+      "low": 0.2183780644218922,
+      "high": 0.3882078969563346
+    }
+  },
+  "gate_fire_share": 0.484304932735426,
+  "files_by_family": {
+    "npm": {
+      "none diverges": [
+        28,
+        23
+      ],
+      "some diverges": [
+        69,
+        5
+      ]
+    },
+    "one-version": {
+      "none diverges": [
+        83,
+        55
+      ],
+      "some diverges": [
+        69,
+        17
+      ]
+    }
+  },
+  "coverage": {
+    "statistic": 0.642965367965368,
+    "interval": {
+      "low": 0.5236506075829779,
+      "high": 0.762280128347758
+    }
+  }
+}
