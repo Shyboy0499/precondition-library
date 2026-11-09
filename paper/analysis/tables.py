@@ -25,6 +25,7 @@ STAGE_B = ROOT / "results" / "real-merges-2026-10-26" / "stage-B"
 ORACLE = ROOT / "results" / "lock-oracle-2026-11-02"
 UNIFY = ROOT / "results" / "ecosystem-unify-2026-11-02"
 ANATOMY = ROOT / "results" / "lock-anatomy-2026-11-04"
+TOOL_CHECK = ROOT / "results" / "lock-tool-check-2026-11-08"
 RUNS = ("run-11", "run-12", "run-13")
 SCORE_TOLERANCE = 1e-6
 """The hybrid run recomputed the reranker's scores, which agree with the rescore's to about
@@ -500,6 +501,62 @@ def rules() -> str:
     )
 
 
+def _verdict(check: dict) -> str:
+    verdict = check["verdict"]
+    if verdict == "consistent":
+        return "consistent"
+    return "inconsistent" if verdict.startswith("inconsistent") else "error"
+
+
+def tool_check() -> str:
+    """The ecosystem's own consistency check against the maintainer's-set labels, studies 3--5
+    (exploratory): the control on the maintainer's merged file, and each side's file."""
+    rows = []
+    for study in ("study-3", "study-4", "study-5"):
+        for line in (TOOL_CHECK / f"{study}.jsonl").read_text("utf-8").splitlines():
+            rows.append(json.loads(line))
+    summary = (TOOL_CHECK / "summary.txt").read_text("utf-8")
+    body = []
+    for tool, label in (("npm", "npm"), ("pnpm", "pnpm"), ("composer", "Composer")):
+        mine = [r for r in rows if r["tool"] == tool]
+        if f"## {tool}: {len(mine)} conflicted lock files" not in summary:
+            raise SystemExit(f"{tool}: {len(mine)} files, which summary.txt does not report")
+        control = Counter(_verdict(r["check"]["merge"]) for r in mine)
+        cells: Counter = Counter()
+        for r in mine:
+            for side in ("first", "second"):
+                cells[(r["maintainer_set"][side], _verdict(r["check"][side]))] += 1
+        one = [
+            r
+            for r in mine
+            if sorted(_verdict(r["check"][side]) for side in ("first", "second"))
+            == ["consistent", "inconsistent"]
+        ]
+        picked = sum(
+            r["maintainer_set"]["first"]
+            if _verdict(r["check"]["first"]) == "consistent"
+            else r["maintainer_set"]["second"]
+            for r in one
+        )
+        same = cells[(True, "consistent")] + cells[(True, "inconsistent")]
+        other = cells[(False, "consistent")] + cells[(False, "inconsistent")]
+        body.append(
+            f"{label} & {len(mine)} & {control['consistent']} & {control['inconsistent']} "
+            f"& {control['error']} & {cells[(True, 'consistent')]} of {same} "
+            f"& {cells[(False, 'inconsistent')]} of {other} & {picked} of {len(one)} \\\\"
+        )
+    return (
+        "\\begin{tabular}{lrrrrccc}\n\\toprule\n"
+        "& & \\multicolumn{3}{c}{the maintainer's merged file} "
+        "& \\multicolumn{2}{c}{a side's file} & one side passes \\\\\n"
+        "\\cmidrule(lr){3-5}\\cmidrule(lr){6-7}\n"
+        "tool & files & passes & rejected & no verdict & is the maintainer's: passes "
+        "& is not: rejected & it is the maintainer's \\\\\n\\midrule\n"
+        + "\n".join(body)
+        + "\n\\bottomrule\n\\end{tabular}\n"
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, required=True)
@@ -515,6 +572,7 @@ def main() -> None:
         ("oracle", oracle),
         ("anatomy", anatomy),
         ("rules", rules),
+        ("tool-check", tool_check),
     ):
         (args.out / f"{name}.tex").write_text(build(), encoding="utf-8")
 
