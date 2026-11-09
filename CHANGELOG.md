@@ -41,6 +41,21 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **Study 6's results** (`results/tool-precondition-2026-11-09/`): 395 conflicted lock files from
+  366 merges in 25 repositories. All three hypotheses are supported as registered.
+  - **H1, narrowly:** merges leave lock files inconsistent more often than ordinary commits,
+    0.067 [0.003, 0.130]. The gap is about half the exploratory one, and leaving out any one of
+    seven repositories takes the interval's lower end below 0.
+  - **H2:** rule D is not rarely wrong, 0.320 [0.228, 0.412]. It covers 0.71 of files at
+    mismatch 0.27.
+  - **H3:** the check's tie-break lost to the first parent's file once in 100, Wilson upper
+    bound 0.054. That passes the registered 0.10, not 0.05.
+
+  A recompute script that imports nothing from the project agrees with every figure. The README
+  reports the errors (all of Sylius's Composer checks; pnpm 10 on old lock files) and two
+  things the registration's prose did not say: which pnpm ran, and that some error messages
+  quote part of a tarball's name.
+
 - **Study 6 is registered** (`docs/preregistration/tool-precondition.md`, ADR-0060), before its
   data, on 25 repositories no study has mined or counted. It tests three things:
   - **H1, primary:** merges leave lock files inconsistent more often than ordinary commits;

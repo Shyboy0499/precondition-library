@@ -1,0 +1,27 @@
+ok  files: 395 | 395
+ok  repositories with a file: 25 | 25
+ok  underpowered: False | False
+ok  h1 repositories: 24 | 24
+ok  h1 mean: 0.06661555072109383 | 0.06661555072109383
+ok  h1 low: 0.003 | 0.003
+ok  h1 high: 0.13 | 0.13
+ok  h1 decision: supported | supported
+ok  h2 repositories: 25 | 25
+ok  h2 mean: 0.3202565212565212 | 0.3202565212565212
+ok  h2 low: 0.228 | 0.228
+ok  h2 high: 0.412 | 0.412
+ok  h2 decision: supported | supported
+ok  h3 tie files: 100 | 100
+ok  h3 reverses: 1 | 1
+ok  h3 upper: 0.054486196 | 0.054486196
+ok  h3 decision: supported | supported
+    the 0.05 reading: Wilson upper 0.054 >= 0.05
+ok  rule D fires, wrong: (279, 76) | (279, 76)
+ok  rule B fires, wrong: (179, 53) | (179, 53)
+ok  tie-break better: 9.0 | 9.0
+ok  tie-break worse: 1.0 | 1.0
+ok  composer base rates: {'merged_rejected': 9, 'merged_judged': 117, 'ordinary_rejected': 6, 'ordinary_judged': 342} | {'merged_rejected': 9, 'merged_judged': 117, 'ordinary_rejected': 6, 'ordinary_judged': 342}
+ok  npm base rates: {'merged_rejected': 29, 'merged_judged': 163, 'ordinary_rejected': 33, 'ordinary_judged': 493} | {'merged_rejected': 29, 'merged_judged': 163, 'ordinary_rejected': 33, 'ordinary_judged': 493}
+ok  pnpm base rates: {'merged_rejected': 17, 'merged_judged': 66, 'ordinary_rejected': 47, 'ordinary_judged': 219} | {'merged_rejected': 17, 'merged_judged': 66, 'ordinary_rejected': 47, 'ordinary_judged': 219}
+ok  rejected merged files: {'both parents passed': 27, 'a parent failed': 28} | {'both parents passed': 27, 'a parent failed': 28}
+all figures agree
