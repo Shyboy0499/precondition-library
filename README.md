@@ -389,6 +389,7 @@ did not make. This is the answer as of the studies below; each line links to whe
 | Is refusal a property of the method or of one build? (#307, study 2, registered before its data) | an API key for 20 builds |
 | Does it hold in another domain, or with another compiling model? (#266) | an API key |
 | Do people agree with the labelling rules? (#299 step 3) | independent raters; the kit is built |
+| Do merges leave lock files inconsistent more often than ordinary commits, and is the check a precondition worth executing? (study 6) | registered before its data ([tool-precondition](docs/preregistration/tool-precondition.md)); not yet run |
 | Do the projects' own tests accept a resolution? (#297's third oracle) | the owner's decision: running a project's test suite executes its code. Not run. |
 
 **What someone else needs to replicate it**
