@@ -1,0 +1,11 @@
+\begin{tabular}{lrrrrccc}
+\toprule
+& & \multicolumn{3}{c}{the maintainer's merged file} & \multicolumn{2}{c}{a side's file} & one side passes \\
+\cmidrule(lr){3-5}\cmidrule(lr){6-7}
+tool & files & passes & rejected & no verdict & is the maintainer's: passes & is not: rejected & it is the maintainer's \\
+\midrule
+npm & 204 & 174 & 26 & 4 & 107 of 126 & 186 of 238 & 57 of 86 \\
+pnpm & 47 & 37 & 5 & 5 & 15 of 20 & 65 of 68 & 15 of 18 \\
+Composer & 359 & 305 & 54 & 0 & 166 of 203 & 360 of 514 & 117 of 179 \\
+\bottomrule
+\end{tabular}

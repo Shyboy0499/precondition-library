@@ -942,8 +942,44 @@ Of the 172 conflicted \code{package-lock.json} files in both studies:
   \item the dated tool labels 14 more, for 0.78 in all;
   \item the remaining 38 are labelled by neither.
 \end{itemize}
-This was chosen after seeing the data, so it is not a test. The other ecosystems' tools have no
-such option and would need a registry snapshot.
+This was chosen after seeing the data, so it is not a test.
+
+Two more ecosystems can be held to a date, and were piloted the same way on studies 3--5.
+\begin{itemize}
+  \item \textbf{pnpm} refuses versions younger than \code{minimumReleaseAge}, set to the minutes
+  since the merge, and runs at the version each repository declares. It replays 18 of the 20
+  unreproduced \code{pnpm-lock.yaml} files' own merges. From a side, it reproduces the
+  maintainer on 5, all from one repository. Eight files depend on git tarballs from a host the
+  sandbox's network policy blocks.
+  \item \textbf{Composer}, through a plugin that drops versions younger than an age, follows
+  Composer's documented procedure for a conflicted \code{composer.lock}. It takes one side's file
+  and updates the root requirements the merged \code{composer.json} changed. It replays only 54
+  of the 84 merges. Most failures pin a branch dependency, which the registry serves only at the
+  branch's current head. From a side, it reproduces 9 of those 54. On 57 sides the side's file
+  already satisfied the merged manifest, and the maintainer's file still differed: the
+  maintainer changed more than the manifests required.
+\end{itemize}
+Bundler's dating plugin acts only on a full install and ignores the lock file, so it cannot be
+used. Over the three ecosystems the dated tool recovers 30 of the 156 files the computed merge
+missed, too few to label with, and no study was registered on it.
+
+\paragraph{A second executed check: the tool's.}
+The ecosystem's tool also offers a precondition that needs no date: does a side's lock file pass
+the tool's own consistency check in the merge's tree (Section~\ref{sec:graders})? On the 610
+\code{package-lock.json}, \code{pnpm-lock.yaml} and \code{composer.lock} files of studies 3--5,
+a rule that fires the gate's merge, else the one side the tool accepts, else refuses, covers 0.69
+of files with mismatch 0.32 [0.27, 0.36]. The gate alone covers 0.40 at 0.28, and each study
+shows the same pattern. Against the obvious control the tool's own contribution is small:
+\begin{itemize}
+  \item the side it accepts is usually the first parent's, and maintainers mostly keep their own
+  branch's versions;
+  \item on the 176 divergent files where it fires, its side is right on 111, the first parent's
+  on 91;
+  \item paired, it wins on 20 files and never loses. That is structural: it takes the second side
+  only when the first fails the check, and a failing side is rarely the maintainer's.
+\end{itemize}
+Twelve of those 20 files are one repository's. This is exploratory, on seen data, and still
+wrong on a third of fires.
 
 \subsection{Study 5: the divergence gate, registered}
 \label{sec:gate}
@@ -1077,6 +1113,45 @@ figure was graded by a broken clause, but an agent's wrong fix could have been g
   the \code{detail=} argument, so the syntactic rule could not see that.
   \item \code{submodule\_moved}: \code{if in\_tree and in\_modules} became \code{or}. The
   branches only choose the wording of a failure, and every branch fails.
+\end{itemize}
+
+\paragraph{The real-merge labels, against the ecosystem's own check.}
+Studies 3--5 label a resolution right when it is the maintainer's package set. The ecosystem's
+own tool offers a second judgement, made outside this project: is a lock file consistent with
+the merged manifests? It can only judge real lock files. So for each conflicted
+\code{package-lock.json}, \code{pnpm-lock.yaml} and \code{composer.lock} of the three studies it
+judged three: the maintainer's merged file, as a control, and each side's file. The checks were
+\code{npm ci --dry-run}, pnpm's frozen-lockfile check and Composer's \code{install --dry-run},
+offline for Composer. None installs or runs a package's code.
+Table~\ref{tab:toolcheck} gives the outcome. It is descriptive, on data already seen.
+
+\begin{table}[t]
+\centering
+\caption{The ecosystem's own consistency check on studies 3--5's conflicted lock files
+(exploratory). ``No verdict'': the tool failed for another reason, such as a peer-dependency
+conflict or a registry refusal. The side columns count sides with a verdict; ``one side passes''
+counts files where exactly one side does.}
+\label{tab:toolcheck}
+\resizebox{\linewidth}{!}{\input{tables/tool-check.tex}}
+\end{table}
+
+\begin{itemize}
+  \item \textbf{One maintainer merge in seven is committed in a state the tool rejects:} 85 of
+  601 merged files the tool could judge.
+  \item \textbf{The merges make it.} Checked in their own trees, the lock files of the merges'
+  parents and merge bases fail on 49 of 1{,}805 checks (0.03 [0.02, 0.04]), against 0.14
+  [0.12, 0.17] for the merged files. In 61 of the 85 both parents' files had passed, while a
+  merge repaired a parent's failing file in 6 of 29. By repository, the merged files fail more
+  often than the repository's own base rate in 26 and less often in 2 (sign test $p<10^{-5}$).
+  So resolving a lock-file conflict is where these inconsistencies are made.
+  \item \textbf{Where the tool and the labels disagree, the maintainer's own file is the cause.}
+  The tool rejects 61 sides that are the maintainer's set. For 60 of them it rejects the
+  maintainer's merged file too. So the labels are not contradicted: they record an
+  inconsistent state some maintainers chose.
+  \item \textbf{The check is necessary, not sufficient.} It passes 52 npm and 154 Composer sides
+  that are not the maintainer's set. Where exactly one side passes, that side is the
+  maintainer's in about two files in three. A tool's verdict cannot say which consistent
+  resolution a maintainer chose.
 \end{itemize}
 
 \paragraph{What this establishes.}
@@ -1436,9 +1511,11 @@ The results hold within the following scope, and each item names the work that e
 
 \begin{itemize}
   \item \textbf{Labels.} On real merges a fire is right when it reproduces the maintainer's
-  commit. The ecosystem's own tool, replayed at the merge's date, has been piloted for npm
-  (Section~\ref{sec:dispatcher}). Running each project's tests as a further oracle would admit
-  resolutions that differ from the maintainer's yet build and pass.
+  commit. The ecosystem's own tool, replayed at the merge's date, has been piloted for npm, pnpm
+  and Composer (Section~\ref{sec:dispatcher}). Its consistency check agrees with the labels
+  (Section~\ref{sec:graders}). Running each project's tests as a further oracle would admit
+  resolutions that differ from the maintainer's yet build and pass; it was not run, because it
+  executes the projects' code.
   \item \textbf{Builds.} The libraries come from one LLM at temperature 0. Their spread across
   three builds (Table~\ref{tab:repositories}) is why study 2 measures a population of twenty.
   \item \textbf{Domain and level.} The task family is git maintenance. The real-data tests cover
