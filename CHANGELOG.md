@@ -12,6 +12,14 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Fixed
 
+- **A Composer error is recorded where Composer threw it.** `lock_check` recorded the last line
+  of Composer's output, which after an exception is the command's usage line. So study 6's 90
+  failed Sylius checks did not say why: Composer 2.8 rejects a `require-dev` package name with
+  capital letters. An exception is now recorded as `<file>.php line <n>`, such as
+  `RootPackageLoader.php line 179`, not by its message, which names packages. This matches
+  npm's and pnpm's error codes. Only the text of an error verdict changes. No verdict changes
+  kind, and no committed result is rewritten.
+
 - **Study 6's run can be resumed.** The first run was lost when the worker restarted after 11
   of 25 repositories: the study wrote its results only at the end. Each repository's result is
   now checkpointed with its pinned tip as soon as it is done, and a run with the same arguments

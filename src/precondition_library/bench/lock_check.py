@@ -104,9 +104,26 @@ def composer_verdict(validate_output: str, returncode: int, install_output: str)
     ):
         satisfies = "inconsistent"
     else:
-        lines = [x.strip() for x in install_output.splitlines() if x.strip()]
-        satisfies = f"error: {(lines or [''])[-1][:80]}"
+        satisfies = f"error: {composer_error(install_output)}"
     return {"hash": "inconsistent" if stale else "consistent", "verdict": satisfies}
+
+
+_COMPOSER_THREW = re.compile(r"^In (\S+\.php) line (\d+):$")
+
+
+def composer_error(output: str) -> str:
+    """Where Composer failed, without its message. Composer prints an exception as
+    `In <file>.php line <n>:`, then the message, then the command's usage line. The message often
+    names packages, which no record writes, so an exception is recorded by the place Composer
+    threw it, as npm's and pnpm's errors are by their codes. Output with no exception gives its
+    last line that is not the usage line, cut to 80 characters."""
+    lines = [x.strip() for x in output.splitlines() if x.strip()]
+    for line in lines:
+        threw = _COMPOSER_THREW.match(line)
+        if threw:
+            return f"{threw[1]} line {threw[2]}"
+    told = [x for x in lines if not re.match(r"^[a-z-]+ \[--", x)]
+    return (told or [""])[-1][:80]
 
 
 # --- running each tool -----------------------------------------------------------------------

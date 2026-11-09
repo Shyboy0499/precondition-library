@@ -60,7 +60,28 @@ def test_composer_reads_the_hash_and_the_requirements_separately() -> None:
     missing = '- Required package "x/y" is not present in the lock file.'
     assert lock_check.composer_verdict("", 4, missing)["verdict"] == "inconsistent"
     assert lock_check.composer_verdict("", 1, "In Foo.php line 3:\n  boom")["verdict"] == (
-        "error: boom"
+        "error: Foo.php line 3"
+    )
+
+
+def test_a_composer_error_is_recorded_where_it_was_thrown_not_by_its_message() -> None:
+    """Composer's exception text names packages and is followed by the command's usage line;
+    study 6 recorded the usage line, which hid why every check of one repository failed."""
+    output = (
+        "Plugins have been disabled automatically as you are running as root, this may be the "
+        "cause of the following exception. See also https://getcomposer.org/root\n\n"
+        "In RootPackageLoader.php line 179:\n\n"
+        "  require-dev.acme/SomePackage is invalid, it should not contain uppercase\n"
+        "  characters. Please use acme/somepackage instead.\n\n"
+        "install [--prefer-source] [--prefer-dist] [--dry-run] [--] [<packages>...]\n"
+    )
+    verdict = lock_check.composer_verdict("", 1, output)
+    assert verdict["verdict"] == "error: RootPackageLoader.php line 179"
+    assert lock_check.kind(verdict) == "error"
+    assert "acme" not in verdict["verdict"]
+    usage_only = "To initialize a project, please create a composer.json file.\ninstall [--dry-run]"
+    assert lock_check.composer_verdict("", 1, usage_only)["verdict"] == (
+        "error: To initialize a project, please create a composer.json file."
     )
 
 
