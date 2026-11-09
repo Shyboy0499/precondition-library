@@ -36,24 +36,25 @@ Programs: A Pre-registered Test on Real Lock-file Merges}
 \begin{abstract}
 Agents that compile solved tasks into reusable programs must decide when to replay one. We
 compare two ways of deciding at matched coverage: executable preconditions, shell probes that
-must hold on the live state, and text similarity between the request and each program's
-description. On states built by our own injectors for five git maintenance faults, precondition
+must hold on the live state, and text similarity between the request and a program's
+description. On states our own injectors built for five git maintenance faults, precondition
 dispatch mis-fired on 0 of 563 fires across three independently built libraries, while three
-text scorers mis-fired on 71--90\% of theirs. But a decision tree that only reads the state
-matched it, and the request carried no information about the state by construction.
-A pre-registered test on 274 real lock-file merges from 11 repositories, labelled by what maintainers
-committed, \emph{falsified} the claim that precondition dispatch rarely mis-fires: it was wrong
-on 62 of 150, 10 of 122 and 132 of 244 fires. Its margin came from merges without a conflict; on
-conflicts, the library's line-level resolutions could express 1 of 161 maintainer resolutions.
-Two further registered studies, on 47 fresh repositories, read lock files as
-package sets. An action computed from a merge's three sides reproduces the maintainer on 0.69
-and 0.76 of a repository's conflicts, against 0.07 for line unions, and the ecosystem's resolver
-predicts which merge maintainers keep (91 of 91 discordant files). Exploratory analysis shows
-why: half of lock-file conflicts involve no package both sides changed differently. Firing the
-merge only when none diverges, itself a precondition, roughly halves its mismatch; a fifth
-registered study, on 20 more repositories, confirms it stays above 0.10 (0.35 [0.18, 0.53]). We mutation-test the graders behind every figure, run a Monte Carlo power
-analysis that amended a registered study before its data existed, and compare the design with a
-deployed executability gate and a skill-retrieval risk benchmark.
+text scorers mis-fired on 71--90\% of theirs. But a tree reading only the state matched it, and
+by construction the request said nothing about the state. A pre-registered test on 274 real
+lock-file merges from 11 repositories, labelled by what maintainers committed, \emph{falsified}
+the claim that precondition dispatch rarely mis-fires: it was wrong on 62 of 150, 10 of 122 and
+132 of 244 fires. Its margin came from merges without a conflict; on conflicts, the library's
+line-level resolutions could express 1 of 161 maintainer resolutions. Two more registered
+studies, on 47 fresh repositories, read lock files as package sets. An action computed from a
+merge's three sides reproduces the maintainer on 0.69 and 0.76 of a repository's conflicts,
+against 0.07 for line unions, and the ecosystem's resolver predicts which merge maintainers keep
+(91 of 91 discordant files). Exploratory analysis shows why: half of lock-file conflicts involve
+no package both sides changed differently. Firing the merge only when none diverges, itself a
+precondition, roughly halves its mismatch; a fifth registered study, on 20 more repositories,
+confirms it stays above 0.10 (0.35 [0.18, 0.53]). A sixth, on 25 more, finds merges leave lock
+files inconsistent more often than ordinary commits, narrowly (0.067 [0.003, 0.130]); adding the
+ecosystem's own check where that refuses covers 0.71 of files at mismatch 0.27. We also
+mutation-test the graders and simulate a study's power.
 \end{abstract}
 
 \clearpage
@@ -979,7 +980,8 @@ shows the same pattern. Against the obvious control the tool's own contribution 
   only when the first fails the check, and a failing side is rarely the maintainer's.
 \end{itemize}
 Twelve of those 20 files are one repository's. This is exploratory, on seen data, and still
-wrong on a third of fires.
+wrong on a third of fires. Study 6 registered it and tested it on fresh repositories
+(Section~\ref{sec:study6}).
 
 \subsection{Study 5: the divergence gate, registered}
 \label{sec:gate}
@@ -1143,7 +1145,8 @@ counts files where exactly one side does.}
   [0.12, 0.17] for the merged files. In 61 of the 85 both parents' files had passed, while a
   merge repaired a parent's failing file in 6 of 29. By repository, the merged files fail more
   often than the repository's own base rate in 26 and less often in 2 (sign test $p<10^{-5}$).
-  So resolving a lock-file conflict is where these inconsistencies are made.
+  So resolving a lock-file conflict is where these inconsistencies are made. Study 6 tested
+  this on 25 fresh repositories. It holds, by a smaller margin (Section~\ref{sec:study6}).
   \item \textbf{Where the tool and the labels disagree, the maintainer's own file is the cause.}
   The tool rejects 61 sides that are the maintainer's set. For 60 of them it rejects the
   maintainer's merged file too. So the labels are not contradicted: they record an
@@ -1162,6 +1165,69 @@ generated states each, with no failure \cite{maciver2019hypothesis}; study 1's l
 re-derived from git by an independent script (Section~\ref{sec:real}). Agreement with human
 judges is the next check. The blind labelling kit for it is built (Section~\ref{sec:discussion}),
 and the labelled cases are released.
+
+\section{Study 6: the ecosystem's check, registered}
+\label{sec:study6}
+
+The two exploratory findings about the ecosystem's check were made on data already seen
+(Sections~\ref{sec:dispatcher} and~\ref{sec:graders}). We registered them as study 6 before any
+of its data existed, and ran it on 25 repositories nobody here had mined or counted. The
+repositories were chosen by a feasibility count that reads no merge's tree. The checks are the
+exploratory run's code, made a library; the study's module reproduces every exploratory figure
+before mining. Mining keeps only conflicts that include a checked lock file, and leaves out
+any where a conflicted one carries a \code{merge} attribute at the first parent; none did. The
+unit is a conflicted lock file:
+\begin{itemize}
+  \item \textbf{H1 (primary):} per repository, the share of merged files the check rejects,
+  minus the share of the repository's ordinary lock files it rejects, each checked in its own
+  commit's tree. The mean is above 0.
+  \item \textbf{H2:} rule D, the gate's merge, else the one side the check accepts, else refuse,
+  is still not rarely wrong: its mean mismatch over repositories is above 0.10.
+  \item \textbf{H3:} where a package diverges and the check accepts exactly one side, that side
+  rarely loses to the first parent's file. The share of such files where the first parent's is
+  the maintainer's set and the accepted side's is not has a Wilson upper bound below 0.10.
+\end{itemize}
+
+\begin{table}[t]
+\centering
+\caption{Study 6, as registered: 395 conflicted lock files from 366 merges in 25 repositories.
+H1 and H2 are means over the repositories with the figure, with 95\% t-intervals. Below them,
+descriptive figures pooled over files, with Wilson intervals.}
+\label{tab:study6}
+\resizebox{\linewidth}{!}{\input{tables/tool-precondition.tex}}
+\end{table}
+
+Table~\ref{tab:study6} gives the result. All three hypotheses are supported as registered. Each
+holds less firmly than the exploratory data suggested.
+\begin{itemize}
+  \item \textbf{H1 passes narrowly.}
+  \begin{itemize}
+    \item Pooled, the check rejects about twice as many merged files as ordinary ones, where the
+    exploratory data had five times as many.
+    \item By repository, the gap is positive in 11 and negative in 6, against 26 and 2.
+    \item Leaving out any one of seven repositories takes the interval's lower end below 0.
+    \item Of the 55 rejected merged files, both parents' own files had passed in 27. So about
+    half the inconsistencies are made by the merge, not inherited.
+  \end{itemize}
+  \item \textbf{H2 passes, as expected.} Rule D covers 0.71 of files at mismatch 0.27; the gate
+  alone covers 0.45 at 0.30. The exploratory dispatcher replicates, and it is still wrong on more
+  than a quarter of its fires.
+  \item \textbf{H3 passes at the registered bound, not at 0.05.} The check's side lost to the
+  first parent's file once in 100 tie-break files, a Wilson upper bound of 0.054. It won on 9
+  (exact McNemar $p=0.02$, descriptive). The registration chose 0.10 because zero losses in
+  about 80 files would leave the bound near 0.05.
+\end{itemize}
+The checks failed to give a verdict on 49 of the 395 merged files, and errors are left out of
+every share. The causes were tools, not lock files:
+\begin{itemize}
+  \item Composer 2.8 rejects one repository's manifest outright, so that repository has no H1
+  figure;
+  \item pnpm 10 does not read older lock-file formats;
+  \item npm sometimes cannot resolve peer requirements, or the registry refuses a request.
+\end{itemize}
+pnpm's ``written under other settings'' verdicts all come from three repositories. Counting them
+as errors instead, which was not registered, puts H1's lower end below 0 ($-0.010$). A script
+importing nothing from the project recomputes every figure and decision.
 
 \section{The registered follow-up study, and its power}
 \label{sec:power}
@@ -1415,7 +1481,8 @@ Four comparisons bear on this question, each holding the evidence fixed in a dif
   \item \textbf{On real conflicts read as packages, a computed fact.} The best rule found is
   itself a precondition: fire only if no package diverges (Section~\ref{sec:dispatcher}). A
   registered study confirmed on fresh repositories that it helps and is not enough
-  (Section~\ref{sec:gate}).
+  (Section~\ref{sec:gate}). Adding the ecosystem's own check, an executed one, raised coverage
+  from 0.45 to 0.71 at about the same mismatch on 25 more (Section~\ref{sec:study6}).
 \end{enumerate}
 Read together, the value of executing a check is not execution. A check can compute, on the live
 state, a fact that no fixed set of features anticipated: a dry-run merge, a package-level diff.
@@ -1480,8 +1547,8 @@ than any choice of dispatcher did on these data.
 \paragraph{Threats to validity.}
 \begin{itemize}
   \item \textbf{Analytic flexibility.} The registered decisions are these: study 1's rule 2 and
-  H1--H3; study 3's H1 and H2; study 4's H1--H4; study 5's H1--H3; and study 2's design and
-  power. Everything
+  H1--H3; study 3's H1 and H2; study 4's H1--H4; study 5's H1--H3; study 6's H1--H3; and
+  study 2's design and power. Everything
   marked exploratory was chosen after seeing the data it is reported on. That covers the
   library-scoped and probe-verdict readers, unification, the anatomy, the dispatch rules, the
   closure pilot and the npm replay. Each is reported as a hypothesis. Studies 4 and 5 have since
@@ -1502,7 +1569,7 @@ than any choice of dispatcher did on these data.
   file declared binary conflicts whenever both sides change it. An audit read the \code{merge}
   attribute at each case's first parent, for all 1,123 cases of studies 1, 3, 4 and 5. It found
   the attribute set on three cases, two in study 1 and one in study 5, and none changes a registered
-  decision.
+  decision. Study 6 left out any case with the attribute, and found none.
 \end{itemize}
 
 \section{Scope}
@@ -1513,14 +1580,15 @@ The results hold within the following scope, and each item names the work that e
   \item \textbf{Labels.} On real merges a fire is right when it reproduces the maintainer's
   commit. The ecosystem's own tool, replayed at the merge's date, has been piloted for npm, pnpm
   and Composer (Section~\ref{sec:dispatcher}). Its consistency check agrees with the labels
-  (Section~\ref{sec:graders}). Running each project's tests as a further oracle would admit
+  (Section~\ref{sec:graders}), and a registered study used it as a precondition
+  (Section~\ref{sec:study6}). Running each project's tests as a further oracle would admit
   resolutions that differ from the maintainer's yet build and pass; it was not run, because it
   executes the projects' code.
   \item \textbf{Builds.} The libraries come from one LLM at temperature 0. Their spread across
   three builds (Table~\ref{tab:repositories}) is why study 2 measures a population of twenty.
   \item \textbf{Domain and level.} The task family is git maintenance. The real-data tests cover
-  lock-file merges from 11 repositories (study 1) and lock-file conflicts from 67 more
-  (studies 3--5). This report measures dispatch decisions; the
+  lock-file merges from 11 repositories (study 1) and lock-file conflicts from 92 more
+  (studies 3--6). This report measures dispatch decisions; the
   episode-level stages, cost per task and online learning, are implemented and not yet run at
   scale.
   \item \textbf{Text scorers.} The comparison covers three local scorers; an LLM judge that reads
@@ -1547,14 +1615,17 @@ compute for each ecosystem. Why it works is structural: half of those conflicts 
 format colliding, not the sides disagreeing about a package. Where they do disagree, a
 precondition that detects it halves the merge's error, but cannot reach ``rarely wrong'',
 because the rest of what maintainers decide lives outside the lock files. A fifth registered
-study confirmed both halves of that sentence on repositories nobody here had seen. The broader lesson is about evaluation: an error rate measured
+study confirmed both halves of that sentence on repositories nobody here had seen. A sixth found
+that the merge is also where lock files are left inconsistent, by a smaller margin than first
+seen, and that the ecosystem's own check, run as a second precondition, widens what can be
+resolved without making it rarely wrong. The broader lesson is about evaluation: an error rate measured
 against one's own labels says little until the same dispatcher faces states and labels someone
 else made, and a registered design deserves the same scrutiny before its data as its results
 receive after.
 
 \section*{Data and code availability}
 
-The apparatus, the three libraries, every result file, the five registrations and the
+The apparatus, the three libraries, every result file, the six registrations and the
 verification scripts are at \url{https://github.com/Shyboy0499/precondition-library}. This
 report describes commit \code{93a7d7e287b2b8513059c2e65d317e7952da829d} of that repository.
 The figures and tables of Sections~\ref{sec:synthetic}--\ref{sec:graders} come from committed

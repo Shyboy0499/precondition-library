@@ -1,0 +1,19 @@
+\begin{tabular}{lll}
+\toprule
+& estimate & outcome \\
+\midrule
+H1, mean over repositories of merged minus ordinary rejection rate (24) & 0.067 [0.003, 0.130] & supported \\
+H2, mean over repositories of rule D's mismatch (25) & 0.320 [0.228, 0.412] & supported \\
+H3, tie-break files the check's side loses & 1 of 100, Wilson upper 0.054 & supported \\
+\midrule
+rejected by the check, merged files, pooled & 55/346 = 0.159 & \\
+rejected by the check, ordinary commits' lock files, pooled & 86/1{,}054 = 0.082 & \\
+\midrule
+rule, pooled over files & coverage; mismatch & \\
+\quad A: the merge, always & 1.00; 0.620 [0.571, 0.667] & \\
+\quad B: the gate's merge, else refuse & 0.45; 0.296 [0.234, 0.367] & \\
+\quad C: the side the check alone accepts, else refuse & 0.40; 0.233 [0.174, 0.304] & \\
+\quad D: the gate's merge; else the side the check alone accepts; else refuse & 0.71; 0.272 [0.224, 0.327] & \\
+\quad F, control: the gate's merge; else the first parent's file & 1.00; 0.446 [0.397, 0.495] & \\
+\bottomrule
+\end{tabular}
