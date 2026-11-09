@@ -1,0 +1,976 @@
+{
+  "registration": "tool-precondition",
+  "repositories_with_a_file": 25,
+  "files": 395,
+  "underpowered": false,
+  "h1": {
+    "estimate": {
+      "statistic": 0.06661555072109383,
+      "interval": {
+        "low": 0.0030741588054016833,
+        "high": 0.13015694263678598
+      }
+    },
+    "repositories": 24,
+    "outcome": "supported"
+  },
+  "h2": {
+    "estimate": {
+      "statistic": 0.3202565212565212,
+      "interval": {
+        "low": 0.2283569055643107,
+        "high": 0.4121561369487317
+      }
+    },
+    "repositories": 25,
+    "outcome": "supported"
+  },
+  "h3_tie_files": 100,
+  "h3_reverse": 1,
+  "h3_upper": 0.054486196178705315,
+  "h3_outcome": "supported",
+  "rules": {
+    "A": {
+      "fires": 395,
+      "wrong": 245,
+      "coverage": 1.0,
+      "mismatch": {
+        "statistic": 0.620253164556962,
+        "interval": {
+          "low": 0.5714509772306101,
+          "high": 0.6667389047362714
+        }
+      }
+    },
+    "B": {
+      "fires": 179,
+      "wrong": 53,
+      "coverage": 0.4531645569620253,
+      "mismatch": {
+        "statistic": 0.29608938547486036,
+        "interval": {
+          "low": 0.23406195238878164,
+          "high": 0.36668505285367586
+        }
+      }
+    },
+    "C": {
+      "fires": 159,
+      "wrong": 37,
+      "coverage": 0.40253164556962023,
+      "mismatch": {
+        "statistic": 0.23270440251572327,
+        "interval": {
+          "low": 0.17380367777011496,
+          "high": 0.304216228121332
+        }
+      }
+    },
+    "D": {
+      "fires": 279,
+      "wrong": 76,
+      "coverage": 0.7063291139240506,
+      "mismatch": {
+        "statistic": 0.2724014336917563,
+        "interval": {
+          "low": 0.22351734912070081,
+          "high": 0.32746785464141465
+        }
+      }
+    },
+    "F": {
+      "fires": 395,
+      "wrong": 176,
+      "coverage": 1.0,
+      "mismatch": {
+        "statistic": 0.44556962025316454,
+        "interval": {
+          "low": 0.3973124621316001,
+          "high": 0.4948752755044429
+        }
+      }
+    }
+  },
+  "tie_gain": {
+    "better": 9.0,
+    "worse": 1.0,
+    "mcnemar_p": 0.021484375
+  },
+  "base_rates": {
+    "composer": {
+      "merged_rejected": 9,
+      "merged_judged": 117,
+      "ordinary_rejected": 6,
+      "ordinary_judged": 342
+    },
+    "npm": {
+      "merged_rejected": 29,
+      "merged_judged": 163,
+      "ordinary_rejected": 33,
+      "ordinary_judged": 493
+    },
+    "pnpm": {
+      "merged_rejected": 17,
+      "merged_judged": 66,
+      "ordinary_rejected": 47,
+      "ordinary_judged": 219
+    }
+  },
+  "made_by_merge": {
+    "both parents passed": 27,
+    "a parent failed": 28
+  },
+  "composer_hash_stale": {
+    "merged_stale": 20,
+    "merged": 132,
+    "ordinary_stale": 20,
+    "ordinary": 394
+  },
+  "exclusions": [
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "15ce43b1be5a212cdb6c82ea7cd305c79ae33caf",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "46185315757f523cd1383f70052e3c85edc7f639",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "229ab2842755baec1c6b7f7865c92607f4df76e5",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "26dac3a41006e0e85f65ea7dfddf5cc6448e37c3",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "2550482432516d266ad9e7a60914a13163ebe634",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "3b2eb02f8a4cd1bee23225a6f5d416a524522b79",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "0c7551b0c11aef5959e808c2f083221cc2b021a6",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "a970969c4dfbc21c365cb4ea389b3ffd0daa2f5e",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "da6dff2d17c6c20d9d55534d9e414783aedceaab",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "c3c69cc43b56f6fedd75816b78ab7d74189e81cd",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "738a42de045468f6b298b6385378054f7eb5a3d3",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "557bffb350ede97ddef1cb634338e78cc2d6e5c6",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "a1d74710d1c985207796b6f2e1c8a176ddd01561",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "f7f746a543dce0218b0a7bb9cec6faf7cce118b7",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "2d5904e3d023d319ea311397c6ce9bdfe94994d2",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "d809ab1ff3ee094e1888dc93692a2a53aa128554",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "3932b8bdc1a2669bf73f2b711bbebf893b1d032e",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "b519f5e23a889038b3253676f8605566a0b4756e",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "3b20e53818e0b18fde87b57e197634a8dab9d2a9",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "bfa253297bd0d2976b8b8b52c842a5dd89d5dc50",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "1bf879f16ac66bb86a1ee53d459ca64583018dce",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "927dbc7e11e1c21afec3c7c69bb79228e9a99d6e",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "681e382459ffd14d5d5e54ce8f589bf1b54e62ca",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "daf208fe355dcfd1fce33c8e2085588878edc27f",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "b343158d192e2243501a67c9557c9cb4f9ee4eff",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "a3682b72e1198081694d673be2f83375df2cb80e",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "7cec278d27304621c08065c72581300d3821a289",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "b5a241db8d33083263238a76d1c646a19ab8a563",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "6eae908e5ee8f98298f064cd0f254fb25ba43ba1",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "f0de4c6eacdb276f000afbbec87fc613c98b08b3",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "c53de9fb6b6722f7d18003c89794721c5f3da3fe",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "5ce3de4933a454c549af37dd98792a8e98c35ebd",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "2ffcb9b07ec62e1a1f758f32fe718576deff6bde",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "7fa578c901ef456dd77bc7bc0e4d1b2560db14d8",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "3f1850f4a76b7fdf7af46a36097e147334c0dd92",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "99f1543f1b9b6af47ae6e67ba03ee5f47a75d48e",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "535db05b9b0a2265cd5dd3bd4033a595c305b1b8",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "36fcc6c2934ef830ed2907cfc18f539905c5aaa8",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "2cf8639b684bcab07dd3093251aa70d5855c31dd",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "161bbfb8221061fadb8f93ac84c661f435a51255",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "c4bd6e008e2e53234333024434dc638d40dc4c1b",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "1e3639bf6deacfd39c93beb2e34cb28ca39274e2",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "1762c81b8d81f823aa2099503add646b48334c4d",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "a88f90dd902233b2b57d7ae241c7430ab833f3ab",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "7d60e4272dbd26aa5906c44de5568f029d5e9424",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "906f86fbb88f088af928c56acdbaf1ab771384b9",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "aa3c2faed9af4c38b7f0176610c14cb67cdb8a0c",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "998c2749cbf2e1afa4ebdc34ba94c72cf659edc6",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "7fe14ca10bc9c3b91ae754e5ed4b12aff73f1ca0",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "2157acd63fb761589f6f3eb4bda916b4b93f8582",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "d10c7c77757cf514dfaef4e2e3fb126569762665",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "c01fcb130cfe98e6a0867ad1c64090b4e36c9da7",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "171f30adb171b3553f4de9fcf8d40e0a8ddaab1d",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "3215e8d8df718ef9955a1493db93e1252e3bf55d",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "f41e3b1e8f46eabb951e5443102b9d91fffa7f3a",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "14ea8b219766b0072da7091aef759b903eab9598",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "163cbc5052ae09dad8eafe55e6934a16a7c58ddb",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "f9d2976c1d2c57a81533d4febcd482ddd0e29f1a",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "702bb413dc72689f1f9e59234cfb47a738d43d24",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "5756a7e1170e87f83d76eef92036a72e741a43cf",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "71be26a24d622c3df4e8313d46b21cb6bede34ac",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "a47bfe71bf919ec8329db858ac67be98bf650b05",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "8baa95db1c7b14e3f99a7362c6a885d6f9ae90ff",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "03f85c3b74545e8fecf8d2a1dabd2b1355de6fee",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "25d9c8e50132868f1b76f4eb42ce7eb6cf5a5e89",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "163782d4cd1e1a922c7d2daa6e61af0757d39a2d",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "9c260164ef15a1910dcbfbb3687b92b889b2e3b7",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "ed712fb1960d8e14c153c502456aba740e9b0203",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "cf2fee5b6fe744c64127f34c3ce18c2ddc623e21",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "96b8ac7392f16ecf2bf4fb7c33197593b1615c0c",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "5eae00df2c34b2502808bf007b58fdbf59af481c",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "6b69c03b6c308dbc58a2378b0c69882d4215c31e",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "95dcab624e91343d0db500483c60bd0b145099d8",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "9fbf657329a2ee6ee39df29924ccfcb4d5a2e627",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "e7f7ce0e70614fcbeba1ce8c16c156388f04d1b4",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "ec9d4599c49f6f026043c3c2ca59995566957ee7",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "df1398328c0868ee6a67d7108cb8bb6e53b58058",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "d93d2af194e1776335f79d96144880cb2fdd4f6b",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "dd5bdda00014d99f8a64d62eba1ceb1e51482ff9",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "6373c4f92d87879c38c8a2fb9541be38463b758d",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "66d8b0599cb90b49b247e764d4f3c290edd2ca54",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "8eef572d3edff345c6d994478707b6922f55a2ec",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "01555eb8efcdad6c5fe93ac3b03b098d0ebe57b4",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "c008a9e360d033b475a31f7e728de357e3ff0df4",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "1c0454daa9fea20724f97fdc345f7287c04dee27",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "03ff844291edefc21114dc8255d16bebe44dbf4c",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "e419e4bc1c05c4b982ab2d31ba4f772bd49e37fb",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "3d896af4bb26c3d4404ea3ede47f3e759bb9156b",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "2a07d311e85b13f23b0cebaf8d965548f08110e3",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "71f7de08c70b8c07598de9ca3a6f224d1439885b",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "945e5ea9acd8d0c8f53058582d8fc99ec1b26f55",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "3b4c77029c21bbe8a7740ecbb20862dde2c10058",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "appwrite/appwrite",
+      "merge": "dcc1e46ba56df6046018578bd4058fa1ca39d1af",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "filamentphp/filament",
+      "merge": "a1ae4d9b494bda77151e0153c713bf75798cdc12",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "filamentphp/filament",
+      "merge": "4ade84385383fe316a27b5c04b71e6edd8888fca",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "woocommerce/woocommerce",
+      "merge": "2731b739541352ecbebe1d84aaecbc29379c96a6",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "woocommerce/woocommerce",
+      "merge": "be8ba2380134c73babaf853b8636615de08a2e5f",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "woocommerce/woocommerce",
+      "merge": "cd80e6771705053e6334b84925f4ed108fbb71b9",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "woocommerce/woocommerce",
+      "merge": "403e2919eed1b2bead17baa928ff792066366550",
+      "reason": "merged lock file unread"
+    },
+    {
+      "repo": "woocommerce/woocommerce",
+      "merge": "0efd4805813eb6efd6f79e0c698fa7d87cdbfcb0",
+      "reason": "merged lock file unread"
+    },
+    {
+      "repo": "thorsten/phpMyFAQ",
+      "merge": "27526ae9995c980d57d8fec0c37fdd42749f5c7a",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "activepieces/activepieces",
+      "merge": "37b731592ad8a17e9a4e1a650f39db04a4bdd900",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "activepieces/activepieces",
+      "merge": "0a986e5c9ac848c5657a4a7f7d6308a8083dbbf0",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "activepieces/activepieces",
+      "merge": "1f85f91b73aa5fb79abd18ce7ffb0efcc7c84235",
+      "reason": "merged lock file unread"
+    },
+    {
+      "repo": "activepieces/activepieces",
+      "merge": "34edc682629bdcea48a475044d16e27c92ca9e98",
+      "reason": "merged lock file unread"
+    },
+    {
+      "repo": "activepieces/activepieces",
+      "merge": "41e867aba4d63cbf59dbfd684bdbf0cb9c4408d7",
+      "reason": "merged lock file unread"
+    },
+    {
+      "repo": "akeneo/pim-community-dev",
+      "merge": "bedd6c5eb71a7cb2295b6d791b88f3a628d2ad89",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "akeneo/pim-community-dev",
+      "merge": "1996d138fb92282a3e4877d34fc9e8b3c84b122a",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "akeneo/pim-community-dev",
+      "merge": "a4270a79da68ff44ddc71ae1e08f1e47819b8158",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "akeneo/pim-community-dev",
+      "merge": "405284b820ea788dd687a841b26f8751da09e3b1",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "Infisical/infisical",
+      "merge": "693086e84575d1136eb7c6214121e37b2411b035",
+      "reason": "merged lock file unread"
+    },
+    {
+      "repo": "louislam/uptime-kuma",
+      "merge": "3d1237ed53c5f3e34f67261ce24f111deadfe2d6",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "nocodb/nocodb",
+      "merge": "a3b33e8050fe7474057506687b60aac5eb2b466b",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "nocodb/nocodb",
+      "merge": "ad7a1f652ed37f7d4928efff577260793d3a531f",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "nocodb/nocodb",
+      "merge": "d826bf16f964cb6ca66859802afe1a9688e2a95d",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "nocodb/nocodb",
+      "merge": "c205833a5942d2bd40c97a1652125d849d778dc1",
+      "reason": "merged lock file unread"
+    },
+    {
+      "repo": "nocodb/nocodb",
+      "merge": "6c740e8de46abeed7f7eba534f821db504399e79",
+      "reason": "merged lock file unread"
+    },
+    {
+      "repo": "nocodb/nocodb",
+      "merge": "a2d30268bd093dd4d50381a2cc91a717f9b8ea18",
+      "reason": "merged lock file unread"
+    },
+    {
+      "repo": "nocodb/nocodb",
+      "merge": "5b4556502813ee96198ea55ec736fdf0f22fa5f6",
+      "reason": "merged lock file unread"
+    },
+    {
+      "repo": "nocodb/nocodb",
+      "merge": "0fb5089a7fca5e9daac85fe51ea8edb50ed03581",
+      "reason": "merged lock file unread"
+    },
+    {
+      "repo": "nocodb/nocodb",
+      "merge": "fe008165c735149139df82c8299b59fdcdac2f28",
+      "reason": "merged lock file unread"
+    },
+    {
+      "repo": "nocodb/nocodb",
+      "merge": "a06b4d113326f8466a9cf8612956d2428ee94ce9",
+      "reason": "merged lock file unread"
+    },
+    {
+      "repo": "nocodb/nocodb",
+      "merge": "b6d24e4ba232e99acc475a7a76165850671fcd8e",
+      "reason": "merged lock file unread"
+    },
+    {
+      "repo": "nocodb/nocodb",
+      "merge": "9325ab026a66e324ba2d6f1f93c868204b22b432",
+      "reason": "merged lock file unread"
+    },
+    {
+      "repo": "nocodb/nocodb",
+      "merge": "3ee1747c6ce3aadc66f0857797a9bca8c681ac03",
+      "reason": "merged lock file unread"
+    },
+    {
+      "repo": "nocodb/nocodb",
+      "merge": "2caaad4563b31ad1fa54bda0588e9c4e8d80b9d9",
+      "reason": "merged lock file unread"
+    },
+    {
+      "repo": "nocodb/nocodb",
+      "merge": "9ad2b13c15477f573a8eab0e0cf76d7397115a82",
+      "reason": "merged lock file unread"
+    },
+    {
+      "repo": "nocodb/nocodb",
+      "merge": "f984813acb858db5d13fd6f7721863e96707bddf",
+      "reason": "merged lock file unread"
+    },
+    {
+      "repo": "nocodb/nocodb",
+      "merge": "aa1c711577bb2cc8e386072635b2a5682f312f85",
+      "reason": "merged lock file unread"
+    },
+    {
+      "repo": "TriliumNext/Notes",
+      "merge": "b7f0fd2db38d18d9eaf7554bb482a1e4ae60e909",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "TriliumNext/Notes",
+      "merge": "15a11daf381b399024bf8708f662b94c868c1f3d",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "TriliumNext/Notes",
+      "merge": "79431d8b4b8af8f6875f52cf5400071076b488de",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "ToolJet/ToolJet",
+      "merge": "bef7688e6fdbe8093fcf40ef2404719b32addc49",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "ToolJet/ToolJet",
+      "merge": "2ef5626c041c3ec6e98be6214b834f271e6b2691",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "ToolJet/ToolJet",
+      "merge": "6df7786117bd19c950ca0268368c62189a2be379",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "ToolJet/ToolJet",
+      "merge": "0f97b3325a4b072e85fd727d07d93f8a2120f263",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "ToolJet/ToolJet",
+      "merge": "e7f9f467c859fb4a32e8f5ee23374edba56c08e1",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "ToolJet/ToolJet",
+      "merge": "2aa5e9e33413e3c1526cd292c921341b76cf7142",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "ToolJet/ToolJet",
+      "merge": "6d2ccae71d77c110f0d6571705cec4b4a0eafbe1",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "ToolJet/ToolJet",
+      "merge": "c599d1cbe6f6ac5f4c2ab37e60ec6a5ff85851aa",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "ToolJet/ToolJet",
+      "merge": "157941f56dca6250ca80ae71f258b7101e5064b2",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "ToolJet/ToolJet",
+      "merge": "72cf2c9eb224c70322900b1c6ea1fe93d0f23f7e",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "ToolJet/ToolJet",
+      "merge": "eea8d5b5378d5b13241d61702bd0a9dfd41a7b66",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "ToolJet/ToolJet",
+      "merge": "6c04237f42585127e1c721f556031f6ceaf9436d",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "ToolJet/ToolJet",
+      "merge": "f6b5d9f4aec4f88eff249d2aa47d1d6cdb9c0781",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "ToolJet/ToolJet",
+      "merge": "3388644626d9def2458777264e89cf95aab02be1",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "ToolJet/ToolJet",
+      "merge": "31a7087d78700ca0b9cbde7908621498f15fa5fd",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "ToolJet/ToolJet",
+      "merge": "25d746eb720a40b591ef41fb2d67fb8b4252988f",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "ToolJet/ToolJet",
+      "merge": "2143d4189f969b509a58dd5979bb69b57083177b",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "ToolJet/ToolJet",
+      "merge": "3eb9a5aa3dc6d475d0058ca39bbe5e5892411dc3",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "ToolJet/ToolJet",
+      "merge": "9b03dad42decd75ab886f20a7b45f9dbddecfc8c",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "ToolJet/ToolJet",
+      "merge": "2782e85e53ad9196a67b7ff6b7b8fabce903a084",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "ToolJet/ToolJet",
+      "merge": "e1b682b08076644e54216efdfa8097a985e00ffe",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "Hubs-Foundation/hubs",
+      "merge": "e31ad6cddb0bf3e984fe8186ea39c0a71d0ac351",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "Hubs-Foundation/hubs",
+      "merge": "39fe8c860222892b2b52d9a422026b21c4f5fc2a",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "Hubs-Foundation/hubs",
+      "merge": "d46286c8ddf2e32b130f217c8865aee8c58c7b7b",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "umami-software/umami",
+      "merge": "5ce1b40330a3b1b73df5b42b2f23430a33d6f3d9",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "umami-software/umami",
+      "merge": "a9a9b57f802946ec65ecf62e81d57c0f8b27b5b4",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "umami-software/umami",
+      "merge": "87449ece9e92013521a116f69707d8be10a540ff",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "Sylius/Sylius",
+      "merge": "1d9701716a5ce5c13c9375b007865253f195df12",
+      "reason": "merged lock file unread"
+    },
+    {
+      "repo": "Sylius/Sylius",
+      "merge": "bd2f31db96f4955d5aaba19648e62c1fd4189c08",
+      "reason": "merged lock file unread"
+    },
+    {
+      "repo": "cryptpad/cryptpad",
+      "merge": "493bf1346c85afe9fc90e6236dfee40bc4286a47",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "payloadcms/payload",
+      "merge": "744de9c70689911ca8e90aa2bfdbbc22df09cd6d",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "payloadcms/payload",
+      "merge": "80e61206fda57199bff612cf395e57ebec59dfd9",
+      "reason": "merged lock file unread"
+    },
+    {
+      "repo": "payloadcms/payload",
+      "merge": "5558e0c62ff0daa0c053e992e1eb9905d8e7fef4",
+      "reason": "merged lock file unread"
+    },
+    {
+      "repo": "payloadcms/payload",
+      "merge": "77407f08798c3533852a63b86975f15e122a2340",
+      "reason": "merged lock file unread"
+    },
+    {
+      "repo": "payloadcms/payload",
+      "merge": "92b44902570580396fde3674612783ae1e213d2f",
+      "reason": "merged lock file unread"
+    },
+    {
+      "repo": "ampache/ampache",
+      "merge": "dfdee00d0cbe27a1b34cd9bd0fdfab6acb290d54",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "ampache/ampache",
+      "merge": "675ce53ec4ed972772766b06215ed93a7fb640fc",
+      "reason": "submodule or binary conflict"
+    }
+  ]
+}

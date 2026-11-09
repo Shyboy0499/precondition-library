@@ -1,0 +1,83 @@
+## By repository
+
+| repository | cases | files (composer / npm / pnpm) | merged: rejected / judged | ordinary: rejected / judged | g | rule D: wrong / fires | m_D | tie-break files |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `appwrite/appwrite` | 15 | 15 (15 / 0 / 0) | 1 / 15 | 0 / 45 | +0.067 | 1 / 13 | 0.08 | 4 |
+| `filamentphp/filament` | 15 | 19 (6 / 13 / 0) | 0 / 19 | 3 / 57 | -0.053 | 1 / 18 | 0.06 | 16 |
+| `woocommerce/woocommerce` | 15 | 15 (4 / 7 / 4) | 2 / 12 | 4 / 36 | +0.056 | 1 / 13 | 0.08 | 1 |
+| `thorsten/phpMyFAQ` | 15 | 29 (14 / 0 / 15) | 0 / 29 | 0 / 87 | +0.000 | 0 / 29 | 0.00 | 29 |
+| `activepieces/activepieces` | 15 | 15 (0 / 15 / 0) | 4 / 15 | 1 / 45 | +0.244 | 5 / 12 | 0.42 | 2 |
+| `akeneo/pim-community-dev` | 15 | 15 (15 / 0 / 0) | 1 / 15 | 0 / 45 | +0.067 | 4 / 10 | 0.40 | 3 |
+| `Infisical/infisical` | 15 | 15 (0 / 15 / 0) | 2 / 15 | 0 / 45 | +0.133 | 5 / 14 | 0.36 | 1 |
+| `louislam/uptime-kuma` | 15 | 15 (0 / 15 / 0) | 9 / 15 | 1 / 45 | +0.578 | 3 / 8 | 0.38 | 3 |
+| `nocodb/nocodb` | 15 | 16 (0 / 9 / 7) | 6 / 15 | 20 / 47 | -0.026 | 2 / 12 | 0.17 | 0 |
+| `TriliumNext/Notes` | 15 | 15 (0 / 0 / 15) | 0 / 15 | 1 / 45 | -0.022 | 0 / 13 | 0.00 | 0 |
+| `ToolJet/ToolJet` | 15 | 18 (0 / 18 / 0) | 7 / 18 | 21 / 54 | +0.000 | 4 / 7 | 0.57 | 2 |
+| `Hubs-Foundation/hubs` | 15 | 15 (0 / 15 / 0) | 0 / 14 | 0 / 45 | +0.000 | 2 / 4 | 0.50 | 0 |
+| `hoppscotch/hoppscotch` | 15 | 15 (0 / 0 / 15) | 4 / 4 | 12 / 12 | +0.000 | 1 / 2 | 0.50 | 0 |
+| `umami-software/umami` | 15 | 15 (0 / 0 / 15) | 1 / 12 | 0 / 45 | +0.083 | 4 / 13 | 0.31 | 3 |
+| `Sylius/Sylius` | 15 | 15 (15 / 0 / 0) | 0 / 0 | 0 / 0 | — | 3 / 13 | 0.23 | 0 |
+| `cryptpad/cryptpad` | 15 | 15 (0 / 15 / 0) | 1 / 15 | 2 / 45 | +0.022 | 7 / 12 | 0.58 | 3 |
+| `firefly-iii/data-importer` | 15 | 19 (11 / 8 / 0) | 7 / 19 | 0 / 57 | +0.368 | 11 / 14 | 0.79 | 12 |
+| `statamic/cms` | 15 | 15 (0 / 15 / 0) | 0 / 15 | 1 / 45 | -0.022 | 2 / 5 | 0.40 | 1 |
+| `payloadcms/payload` | 13 | 13 (0 / 2 / 11) | 6 / 9 | 14 / 20 | -0.033 | 3 / 9 | 0.33 | 1 |
+| `SuiteCRM/SuiteCRM-Core` | 15 | 15 (15 / 0 / 0) | 0 / 15 | 5 / 37 | -0.135 | 2 / 14 | 0.14 | 10 |
+| `formbricks/formbricks` | 14 | 14 (0 / 0 / 14) | 0 / 5 | 0 / 33 | +0.000 | 5 / 7 | 0.71 | 0 |
+| `ampache/ampache` | 13 | 15 (13 / 2 / 0) | 2 / 15 | 0 / 45 | +0.133 | 6 / 11 | 0.55 | 4 |
+| `nextcloud/nextcloud-vue` | 15 | 15 (0 / 15 / 0) | 0 / 14 | 0 / 42 | +0.000 | 1 / 6 | 0.17 | 0 |
+| `SolidInvoice/SolidInvoice` | 14 | 14 (14 / 0 / 0) | 0 / 14 | 0 / 42 | +0.000 | 1 / 10 | 0.10 | 3 |
+| `Ctrlpanel-gg/panel` | 12 | 13 (10 / 3 / 0) | 2 / 12 | 1 / 35 | +0.138 | 2 / 10 | 0.20 | 2 |
+
+## How fragile H1's decision is
+
+as registered, over 24 repositories: 0.067 [0.003, 0.130]
+g above 0 in 11, below 0 in 6, exactly 0 in 7
+each repository left out in turn: the lower end stays above 0 in 17 of 24; lowest -0.007, without firefly-iii/data-importer
+    -0.007 without firefly-iii/data-importer
+    -0.005 without activepieces/activepieces
+    -0.003 without Ctrlpanel-gg/panel
+    -0.003 without Infisical/infisical
+    -0.003 without ampache/ampache
+    -0.002 without louislam/uptime-kuma
+    -0.001 without umami-software/umami
+pnpm "settings" verdicts counted as errors: 23 repositories, 0.061 [-0.010, 0.133]
+pooled merged: 55 of 346 judged rejected (0.159); 49 errors
+pooled ordinary: 86 of 1054 judged rejected (0.082); 131 errors
+
+## Verdicts and errors
+
+merged files: {'consistent': 291, 'error': 49, 'inconsistent': 39, 'inconsistent: settings': 16}
+parents' files in the merge's tree: {'consistent': 230, 'error': 142, 'inconsistent': 379, 'inconsistent: settings': 39}
+ordinary checks: {'consistent': 968, 'error': 131, 'inconsistent': 42, 'inconsistent: settings': 44}
+
+errors by tool and message (first 60 characters), all checks:
+    99 pnpm     'error: ERR_PNPM_NO_LOCKFILE'
+    91 composer 'error: install [--prefer-source] [--prefer-dist] [--prefer-i'
+    37 npm      'error: ERESOLVE'
+    21 pnpm     'error: hare/pnpm/.tools/pnpm/8.1.1_tmp_24732/node_modules/pn'
+    17 npm      "error: E403\\n'"
+    12 pnpm     'error: ERR_PNPM_UNSUPPORTED_ENGINE'
+     8 pnpm     'error: ERR_PNPM_BROKEN_LOCKFILE'
+     6 composer 'error: To initialize a project, please create a composer.jso'
+     6 npm      'error: EBADDEVENGINES'
+     4 pnpm     'error: h-0.7.31.tgz error (ERR_INVALID_THIS). Will retry in '
+     4 pnpm     'error: ERR_PNPM_META_FETCH_FAIL'
+     3 pnpm     'error: b-5.12.2.tgz error (ERR_INVALID_THIS). Will retry in '
+     2 composer 'error: no lock file at this commit'
+     2 pnpm     'error: ob-3.3.1.tgz error (ERR_INVALID_THIS). Will retry in '
+     2 pnpm     'error: h-4.23.1.tgz error (ERR_INVALID_THIS). Will retry in '
+     1 npm      'error: no lock file at this commit'
+     1 npm      "error: 128\\n'"
+     1 npm      'error: EJSONPARSE'
+     1 composer 'error: no lock file on this side'
+     1 pnpm     'error: s-0.16.5.tgz error (ERR_INVALID_THIS). Will retry in '
+     1 pnpm     'error: ng-4.0.0.tgz error (ERR_INVALID_THIS). Will retry in '
+     1 pnpm     'error: s-1.78.1.tgz error (ERR_INVALID_THIS). Will retry in '
+     1 pnpm     'error: m-18.2.0.tgz error (ERR_INVALID_THIS). Will retry in '
+every check errored in Sylius/Sylius
+
+## The tie-break
+
+tie-break files by repository: {'thorsten/phpMyFAQ': 29, 'filamentphp/filament': 16, 'firefly-iii/data-importer': 12, 'SuiteCRM/SuiteCRM-Core': 10, 'appwrite/appwrite': 4, 'ampache/ampache': 4, 'akeneo/pim-community-dev': 3, 'louislam/uptime-kuma': 3, 'umami-software/umami': 3, 'cryptpad/cryptpad': 3, 'SolidInvoice/SolidInvoice': 3, 'activepieces/activepieces': 2, 'ToolJet/ToolJet': 2, 'Ctrlpanel-gg/panel': 2, 'woocommerce/woocommerce': 1, 'Infisical/infisical': 1, 'statamic/cms': 1, 'payloadcms/payload': 1}
+reverse: ampache/ampache, case 314, package-lock.json, accepted second
+wins over the first parent's file, by repository: {'filamentphp/filament': 2, 'appwrite/appwrite': 1, 'activepieces/activepieces': 1, 'louislam/uptime-kuma': 1, 'cryptpad/cryptpad': 1, 'ampache/ampache': 1, 'SolidInvoice/SolidInvoice': 1, 'Ctrlpanel-gg/panel': 1}

@@ -369,6 +369,8 @@ did not make. This is the answer as of the studies below; each line links to whe
 | A precondition over the conflict's sides ("no package diverges") roughly halves the merge's error, and is not enough | Study 5: mean mismatch 0.352 [0.178, 0.527] with the gate, against an always-firing merge wrong on 0.57 of conflicts. |
 | The graders do what their tests say | 138 of 138 verdict-changing mutants killed, and property-based tests on generated states ([report §7](paper/main.tex)). |
 | The maintainer's-set labels agree with the ecosystem's own consistency check | npm, pnpm and Composer checked each side's lock file against the merged manifests on 610 conflicted files of studies 3–5 ([lock-tool-check](results/lock-tool-check-2026-11-08/README.md), descriptive). The tool rejects 61 sides that are the maintainer's set; in 60 of them it rejects the maintainer's own merged file too. |
+| Resolving a lock-file conflict leaves the lock file inconsistent more often than an ordinary commit does | Study 6, H1, on 25 repositories nobody here had mined: mean gap 0.067 [0.003, 0.130], narrowly. Pooled, the check rejects 0.16 of merged files and 0.08 of ordinary commits' lock files: twice the rate, not the five times found exploratorily. Leaving out any one of seven repositories puts the interval's lower end below 0 ([study 6](results/tool-precondition-2026-11-09/README.md)). |
+| Where a package diverges and the check accepts exactly one side, that side rarely loses to taking your own branch | Study 6, H3: 1 loss in 100 such files, Wilson upper bound 0.054. That is below the registered 0.10, not below 0.05. It won on 9. |
 
 **Did not survive**
 
@@ -380,6 +382,7 @@ did not make. This is the answer as of the studies below; each line links to whe
 | Compiled probes generalise to unseen states | On held-out paths, absence probes failed open: 41 of 101 lock-file fires wrong. |
 | The ecosystem's tool, held to the merge's date, labels what the computed merge cannot | It recovers 30 of 156 such files: npm 14 of 52, Composer 11 of 84, pnpm 5 of 20 ([npm](results/lock-tool-dated-2026-11-03/README.md), [pnpm and Composer](results/lock-tool-dated-2026-11-08/README.md), exploratory). Composer cannot replay branch dependencies, and maintainers changed more than their manifests required. No study is registered on it. |
 | A lock file the tool accepts is the right one | The tool also accepts 52 npm and 154 Composer sides that are not the maintainer's set. Where exactly one side passes, it is the maintainer's in about two files in three. One merge in seven is committed in a state the tool rejects, five times the rate of ordinary commits, and in 61 of those 85 both parents' files had passed: resolving the conflict made the defect ([lock-tool-check](results/lock-tool-check-2026-11-08/README.md), exploratory). As a tie-breaker after study 5's gate, the check lifts coverage from 0.40 to 0.69 at mismatch 0.32, beating "take your own branch" on 20 files and never losing. |
+| Rule D, the gate's merge then the side the check alone accepts, rarely mis-fires | Study 6, H2 (expected to fail as a claim, and it did): mean mismatch 0.320 [0.228, 0.412]. It covers 0.71 of files at mismatch 0.27, against the gate's 0.45 at 0.30 ([study 6](results/tool-precondition-2026-11-09/README.md)). |
 
 **Not yet tested**
 
@@ -389,7 +392,6 @@ did not make. This is the answer as of the studies below; each line links to whe
 | Is refusal a property of the method or of one build? (#307, study 2, registered before its data) | an API key for 20 builds |
 | Does it hold in another domain, or with another compiling model? (#266) | an API key |
 | Do people agree with the labelling rules? (#299 step 3) | independent raters; the kit is built |
-| Do merges leave lock files inconsistent more often than ordinary commits, and is the check a precondition worth executing? (study 6) | registered before its data ([tool-precondition](docs/preregistration/tool-precondition.md)); not yet run |
 | Do the projects' own tests accept a resolution? (#297's third oracle) | the owner's decision: running a project's test suite executes its code. Not run. |
 
 **What someone else needs to replicate it**

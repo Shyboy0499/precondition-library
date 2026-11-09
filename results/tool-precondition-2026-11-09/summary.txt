@@ -1,0 +1,16 @@
+study 6 (tool-precondition): 395 files from 25 repositories
+H1 merged minus ordinary rejection rate, mean over 24 repositories: 0.067 [0.003, 0.130]: supported
+H2 rule D's mismatch, mean over 25 repositories: 0.320 [0.228, 0.412]: supported
+H3 reverse on 100 tie-break files: 1, Wilson upper 0.054: supported
+rules, pooled over files:
+  A the merge, always: 245/395 wrong, coverage 1.00, mismatch 0.620 [0.571, 0.667]
+  B the gate's merge, else refuse: 53/179 wrong, coverage 0.45, mismatch 0.296 [0.234, 0.367]
+  C the side the check alone accepts, else refuse: 37/159 wrong, coverage 0.40, mismatch 0.233 [0.174, 0.304]
+  D the gate's merge; else the side the check alone accepts; else refuse: 76/279 wrong, coverage 0.71, mismatch 0.272 [0.224, 0.327]
+  F control: the gate's merge; else the first parent's file: 176/395 wrong, coverage 1.00, mismatch 0.446 [0.397, 0.495]
+tie-break against the first parent's file: better 9, worse 1, McNemar p 0.0215
+composer: merged rejected 9/117, ordinary rejected 6/342
+npm: merged rejected 29/163, ordinary rejected 33/493
+pnpm: merged rejected 17/66, ordinary rejected 47/219
+rejected merged files: {'both parents passed': 27, 'a parent failed': 28}
+Composer content-hash: {'merged_stale': 20, 'merged': 132, 'ordinary_stale': 20, 'ordinary': 394}
