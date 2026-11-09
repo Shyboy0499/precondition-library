@@ -368,6 +368,7 @@ did not make. This is the answer as of the studies below; each line links to whe
 | The ecosystem's resolver predicts which package-level merge maintainers keep | Study 4: 91 of 91 discordant files, 17 repositories to 0. |
 | A precondition over the conflict's sides ("no package diverges") roughly halves the merge's error, and is not enough | Study 5: mean mismatch 0.352 [0.178, 0.527] with the gate, against an always-firing merge wrong on 0.57 of conflicts. |
 | The graders do what their tests say | 138 of 138 verdict-changing mutants killed, and property-based tests on generated states ([report §7](paper/main.tex)). |
+| The maintainer's-set labels agree with the ecosystem's own consistency check | npm, pnpm and Composer checked each side's lock file against the merged manifests on 610 conflicted files of studies 3–5 ([lock-tool-check](results/lock-tool-check-2026-11-08/README.md), descriptive). The tool rejects 61 sides that are the maintainer's set; in 60 of them it rejects the maintainer's own merged file too. |
 
 **Did not survive**
 
@@ -377,6 +378,8 @@ did not make. This is the answer as of the studies below; each line links to whe
 | Executing checks is what beats text similarity | On this project's states a decision tree reading the state, and one reading only the library's own precondition verdicts, matched it. On real merges the only difference left was refusal. |
 | The lock-file task's line-level resolutions express what maintainers do | They express 1 of 161 real conflicts (study 1); package sets replaced them (studies 3–5). |
 | Compiled probes generalise to unseen states | On held-out paths, absence probes failed open: 41 of 101 lock-file fires wrong. |
+| The ecosystem's tool, held to the merge's date, labels what the computed merge cannot | It recovers 30 of 156 such files: npm 14 of 52, Composer 11 of 84, pnpm 5 of 20 ([npm](results/lock-tool-dated-2026-11-03/README.md), [pnpm and Composer](results/lock-tool-dated-2026-11-08/README.md), exploratory). Composer cannot replay branch dependencies, and maintainers changed more than their manifests required. No study is registered on it. |
+| A lock file the tool accepts is the right one | The tool also accepts 52 npm and 154 Composer sides that are not the maintainer's set. Where exactly one side passes, it is the maintainer's in about two files in three. One merge in seven is committed in a state the tool rejects, five times the rate of ordinary commits, and in 61 of those 85 both parents' files had passed: resolving the conflict made the defect ([lock-tool-check](results/lock-tool-check-2026-11-08/README.md), exploratory). As a tie-breaker after study 5's gate, the check lifts coverage from 0.40 to 0.69 at mismatch 0.32, beating "take your own branch" on 20 files and never losing. |
 
 **Not yet tested**
 
@@ -386,7 +389,7 @@ did not make. This is the answer as of the studies below; each line links to whe
 | Is refusal a property of the method or of one build? (#307, study 2, registered before its data) | an API key for 20 builds |
 | Does it hold in another domain, or with another compiling model? (#266) | an API key |
 | Do people agree with the labelling rules? (#299 step 3) | independent raters; the kit is built |
-| Does the ecosystem's own tool, or the project's tests, label what the computed merge cannot? (#297, #336) | piloted for npm (14 of 52); other ecosystems in progress |
+| Do the projects' own tests accept a resolution? (#297's third oracle) | the owner's decision: running a project's test suite executes its code. Not run. |
 
 **What someone else needs to replicate it**
 

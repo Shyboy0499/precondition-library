@@ -1,0 +1,91 @@
+## study-3: 255 files, 17 repositories
+| rule | fires | coverage | wrong | mismatch [95% Wilson] |
+| --- | ---: | ---: | ---: | --- |
+| A: the merge, always | 255 | 1.00 | 172 | 0.67 [0.61, 0.73] |
+| B: the merge if no package diverges (the gate), else refuse | 82 | 0.32 | 29 | 0.35 [0.26, 0.46] |
+| C: the one side the tool accepts, else refuse | 95 | 0.37 | 38 | 0.40 [0.31, 0.50] |
+| D: the gate's merge; else the one side the tool accepts; else refuse | 154 | 0.60 | 56 | 0.36 [0.29, 0.44] |
+| E: the one side the tool accepts; else the gate's merge; else refuse | 154 | 0.60 | 57 | 0.37 [0.30, 0.45] |
+| F: control, no tool: the gate's merge; else the first parent's file | 255 | 1.00 | 109 | 0.43 [0.37, 0.49] |
+where the tool accepts one side (95 files): it is the first parent's in 75; right: the tool's side 57, the first parent's 46, the second parent's 18
+  of them, where a package diverges (72 files): right: the tool's side 45, the first parent's 40
+  paired: the tool's side right and the first parent's wrong 5, the reverse 0; exact McNemar p = 0.062; repositories where the tool does better 5, worse 0, the same 8
+
+## study-4: 168 files, 11 repositories
+| rule | fires | coverage | wrong | mismatch [95% Wilson] |
+| --- | ---: | ---: | ---: | --- |
+| A: the merge, always | 168 | 1.00 | 86 | 0.51 [0.44, 0.59] |
+| B: the merge if no package diverges (the gate), else refuse | 83 | 0.49 | 19 | 0.23 [0.15, 0.33] |
+| C: the one side the tool accepts, else refuse | 87 | 0.52 | 24 | 0.28 [0.19, 0.38] |
+| D: the gate's merge; else the one side the tool accepts; else refuse | 126 | 0.75 | 35 | 0.28 [0.21, 0.36] |
+| E: the one side the tool accepts; else the gate's merge; else refuse | 126 | 0.75 | 35 | 0.28 [0.21, 0.36] |
+| F: control, no tool: the gate's merge; else the first parent's file | 168 | 1.00 | 61 | 0.36 [0.29, 0.44] |
+where the tool accepts one side (87 files): it is the first parent's in 76; right: the tool's side 63, the first parent's 61, the second parent's 4
+  of them, where a package diverges (43 files): right: the tool's side 27, the first parent's 27
+  paired: the tool's side right and the first parent's wrong 0, the reverse 0; exact McNemar p = 1.000; repositories where the tool does better 0, worse 0, the same 8
+
+## study-5: 187 files, 17 repositories
+| rule | fires | coverage | wrong | mismatch [95% Wilson] |
+| --- | ---: | ---: | ---: | --- |
+| A: the merge, always | 187 | 1.00 | 111 | 0.59 [0.52, 0.66] |
+| B: the merge if no package diverges (the gate), else refuse | 82 | 0.44 | 21 | 0.26 [0.17, 0.36] |
+| C: the one side the tool accepts, else refuse | 101 | 0.54 | 32 | 0.32 [0.23, 0.41] |
+| D: the gate's merge; else the one side the tool accepts; else refuse | 143 | 0.76 | 43 | 0.30 [0.23, 0.38] |
+| E: the one side the tool accepts; else the gate's merge; else refuse | 143 | 0.76 | 47 | 0.33 [0.26, 0.41] |
+| F: control, no tool: the gate's merge; else the first parent's file | 187 | 1.00 | 99 | 0.53 [0.46, 0.60] |
+where the tool accepts one side (101 files): it is the first parent's in 72; right: the tool's side 69, the first parent's 45, the second parent's 26
+  of them, where a package diverges (61 files): right: the tool's side 39, the first parent's 24
+  paired: the tool's side right and the first parent's wrong 15, the reverse 0; exact McNemar p = 0.000; repositories where the tool does better 4, worse 0, the same 9
+
+## all: 610 files, 45 repositories
+| rule | fires | coverage | wrong | mismatch [95% Wilson] |
+| --- | ---: | ---: | ---: | --- |
+| A: the merge, always | 610 | 1.00 | 369 | 0.60 [0.57, 0.64] |
+| B: the merge if no package diverges (the gate), else refuse | 247 | 0.40 | 69 | 0.28 [0.23, 0.34] |
+| C: the one side the tool accepts, else refuse | 283 | 0.46 | 94 | 0.33 [0.28, 0.39] |
+| D: the gate's merge; else the one side the tool accepts; else refuse | 423 | 0.69 | 134 | 0.32 [0.27, 0.36] |
+| E: the one side the tool accepts; else the gate's merge; else refuse | 423 | 0.69 | 139 | 0.33 [0.29, 0.37] |
+| F: control, no tool: the gate's merge; else the first parent's file | 610 | 1.00 | 269 | 0.44 [0.40, 0.48] |
+where the tool accepts one side (283 files): it is the first parent's in 223; right: the tool's side 189, the first parent's 152, the second parent's 48
+  of them, where a package diverges (176 files): right: the tool's side 111, the first parent's 91
+  paired: the tool's side right and the first parent's wrong 20, the reverse 0; exact McNemar p = 0.000; repositories where the tool does better 9, worse 0, the same 25
+
+## all, npm: 204 files, 28 repositories
+| rule | fires | coverage | wrong | mismatch [95% Wilson] |
+| --- | ---: | ---: | ---: | --- |
+| A: the merge, always | 204 | 1.00 | 138 | 0.68 [0.61, 0.74] |
+| B: the merge if no package diverges (the gate), else refuse | 79 | 0.39 | 20 | 0.25 [0.17, 0.36] |
+| C: the one side the tool accepts, else refuse | 86 | 0.42 | 29 | 0.34 [0.25, 0.44] |
+| D: the gate's merge; else the one side the tool accepts; else refuse | 134 | 0.66 | 42 | 0.31 [0.24, 0.40] |
+| E: the one side the tool accepts; else the gate's merge; else refuse | 134 | 0.66 | 41 | 0.31 [0.23, 0.39] |
+| F: control, no tool: the gate's merge; else the first parent's file | 204 | 1.00 | 88 | 0.43 [0.37, 0.50] |
+where the tool accepts one side (86 files): it is the first parent's in 68; right: the tool's side 57, the first parent's 48, the second parent's 14
+  of them, where a package diverges (55 files): right: the tool's side 33, the first parent's 29
+  paired: the tool's side right and the first parent's wrong 4, the reverse 0; exact McNemar p = 0.125; repositories where the tool does better 4, worse 0, the same 9
+
+## all, pnpm: 47 files, 4 repositories
+| rule | fires | coverage | wrong | mismatch [95% Wilson] |
+| --- | ---: | ---: | ---: | --- |
+| A: the merge, always | 47 | 1.00 | 43 | 0.91 [0.80, 0.97] |
+| B: the merge if no package diverges (the gate), else refuse | 3 | 0.06 | 0 | 0.00 [0.00, 0.56] |
+| C: the one side the tool accepts, else refuse | 18 | 0.38 | 3 | 0.17 [0.06, 0.39] |
+| D: the gate's merge; else the one side the tool accepts; else refuse | 21 | 0.45 | 3 | 0.14 [0.05, 0.35] |
+| E: the one side the tool accepts; else the gate's merge; else refuse | 21 | 0.45 | 3 | 0.14 [0.05, 0.35] |
+| F: control, no tool: the gate's merge; else the first parent's file | 47 | 1.00 | 36 | 0.77 [0.63, 0.86] |
+where the tool accepts one side (18 files): it is the first parent's in 5; right: the tool's side 15, the first parent's 3, the second parent's 12
+  of them, where a package diverges (18 files): right: the tool's side 15, the first parent's 3
+  paired: the tool's side right and the first parent's wrong 12, the reverse 0; exact McNemar p = 0.000; repositories where the tool does better 1, worse 0, the same 1
+
+## all, composer: 359 files, 32 repositories
+| rule | fires | coverage | wrong | mismatch [95% Wilson] |
+| --- | ---: | ---: | ---: | --- |
+| A: the merge, always | 359 | 1.00 | 188 | 0.52 [0.47, 0.57] |
+| B: the merge if no package diverges (the gate), else refuse | 165 | 0.46 | 49 | 0.30 [0.23, 0.37] |
+| C: the one side the tool accepts, else refuse | 179 | 0.50 | 62 | 0.35 [0.28, 0.42] |
+| D: the gate's merge; else the one side the tool accepts; else refuse | 268 | 0.75 | 89 | 0.33 [0.28, 0.39] |
+| E: the one side the tool accepts; else the gate's merge; else refuse | 268 | 0.75 | 95 | 0.35 [0.30, 0.41] |
+| F: control, no tool: the gate's merge; else the first parent's file | 359 | 1.00 | 145 | 0.40 [0.35, 0.46] |
+where the tool accepts one side (179 files): it is the first parent's in 150; right: the tool's side 117, the first parent's 101, the second parent's 22
+  of them, where a package diverges (103 files): right: the tool's side 63, the first parent's 59
+  paired: the tool's side right and the first parent's wrong 4, the reverse 0; exact McNemar p = 0.125; repositories where the tool does better 4, worse 0, the same 21
+

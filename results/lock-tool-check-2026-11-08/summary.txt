@@ -1,0 +1,46 @@
+## npm: 204 conflicted lock files
+control, the maintainer's merged file: {'consistent': 174, 'error': 4, 'inconsistent': 26}
+  4 x error: ERESOLVE
+sides (2 per file): maintainer's set x tool's verdict
+| | tool: consistent | tool: inconsistent |
+| --- | ---: | ---: |
+| is the maintainer's set | 107 | 19 |
+| is not | 52 | 186 |
+  the tool rejects 19 sides that are the maintainer's set; for 19 of them it rejects the maintainer's own merged file too
+files where exactly one side passes: 86; that side is the maintainer's set in 57 (and some side is, in 62)
+sides where the tool failed: 44
+  27 x error: ERESOLVE
+  14 x error: E403
+  3 x error: no lock file on this side
+
+## pnpm: 47 conflicted lock files
+control, the maintainer's merged file: {'consistent': 37, 'error': 5, 'inconsistent': 5}
+  3 x error: ERR_PNPM_UNSUPPORTED_ENGINE
+  2 x error: ERR_PNPM_BROKEN_LOCKFILE
+sides (2 per file): maintainer's set x tool's verdict
+| | tool: consistent | tool: inconsistent |
+| --- | ---: | ---: |
+| is the maintainer's set | 15 | 5 |
+| is not | 3 | 65 |
+  of the inconsistent sides, 25 for settings, not manifests
+  the tool rejects 5 sides that are the maintainer's set; for 4 of them it rejects the maintainer's own merged file too
+files where exactly one side passes: 18; that side is the maintainer's set in 15 (and some side is, in 15)
+sides where the tool failed: 6
+  6 x error: ERR_PNPM_UNSUPPORTED_ENGINE
+
+## composer: 359 conflicted lock files
+control, the maintainer's merged file: {'consistent': 305, 'inconsistent': 54}
+  its content-hash: {'consistent': 255, 'inconsistent': 104}
+sides (2 per file): maintainer's set x tool's verdict
+| | tool: consistent | tool: inconsistent |
+| --- | ---: | ---: |
+| is the maintainer's set | 166 | 37 |
+| is not | 154 | 360 |
+  the tool rejects 37 sides that are the maintainer's set; for 37 of them it rejects the maintainer's own merged file too
+files where exactly one side passes: 179; that side is the maintainer's set in 117 (and some side is, in 123)
+sides where the tool failed: 1
+  1 x error: no lock file on this side
+sides: content-hash, by whether the side is the maintainer's set
+  is the maintainer's set: hash consistent 113, inconsistent 90
+  is not: hash consistent 79, inconsistent 435
+
