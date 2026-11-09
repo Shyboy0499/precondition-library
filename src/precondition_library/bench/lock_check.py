@@ -170,6 +170,16 @@ def pnpm_binary(version: str, scratch: Path) -> Path:
     return native if native.exists() else modules / ".bin" / "pnpm"
 
 
+def pnpm_ran(pnpm: Path, folder: Path, env: dict[str, str]) -> str:
+    """The pnpm that actually judged the folder. pnpm 9.7 and later switch to the version a
+    `packageManager` field names (`manage-package-manager-versions`, on by default), so the
+    pnpm invoked is not always the one that ran. `pnpm --version` in the same folder switches
+    the same way and prints it. "unknown" if it prints no version."""
+    ran = _run([str(pnpm), "--version"], folder, env)
+    found = re.fullmatch(r"\d+\.\d+\.\d+\S*", ran.stdout.strip())
+    return found.group(0) if ran.returncode == 0 and found else "unknown"
+
+
 def check(tree: Path, path: str, scratch: Path) -> Verdict:
     """The ecosystem's check of the lock file at `path` in `tree`, as it stands there."""
     tool = tool_for(path)
@@ -184,12 +194,18 @@ def check(tree: Path, path: str, scratch: Path) -> Verdict:
         return npm_verdict(ran.returncode, ran.stderr)
     if tool == "pnpm":
         version = pnpm_version(tree, folder)
+        pnpm = pnpm_binary(version, scratch)
+        env = {"CI": "1", "npm_config_store_dir": str(scratch / "pnpm-store")}
         ran = _run(
-            [str(pnpm_binary(version, scratch)), "install", "--frozen-lockfile", "--lockfile-only",
-             "--ignore-scripts", "--reporter=append-only"],
-            folder, {"CI": "1", "npm_config_store_dir": str(scratch / "pnpm-store")},
+            [str(pnpm), "install", "--frozen-lockfile", "--lockfile-only", "--ignore-scripts",
+             "--reporter=append-only"],
+            folder, env,
         )  # fmt: skip
-        return {**pnpm_verdict(ran.returncode, ran.stdout + ran.stderr), "pnpm": version}
+        return {
+            **pnpm_verdict(ran.returncode, ran.stdout + ran.stderr),
+            "pnpm": version,
+            "pnpm_ran": pnpm_ran(pnpm, folder, env),
+        }
     if tool == "composer":
         env = {
             "COMPOSER_HOME": str(scratch / "composer-home"),
