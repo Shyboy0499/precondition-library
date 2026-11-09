@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import shutil
 import statistics
 import subprocess
 import tempfile
@@ -504,50 +505,111 @@ class Manifest(BaseModel):
     attribute_exclusions: list[AttributeExclusion]
 
 
-def run(out: Path, scratch: Path, repositories: Sequence[str] = REPOSITORIES) -> Report:
-    """Mine, label, check and report every registered repository, into a fresh `out`."""
+class RepositoryResult(BaseModel):
+    """One repository's mining, labels and checks, with case indices local to it. Written to the
+    checkpoint as soon as the repository is done, so a run that stops resumes from the next."""
+
+    repo: str
+    summary: Repository
+    cases: list[Case]
+    labels: list[CaseLabel]
+    rows: list[ToolFile]
+    exclusions: list[OracleExclusion]
+    attributed: list[AttributeExclusion]
+
+
+def repository_result(repo: str, scratch: Path) -> tuple[RepositoryResult, Path]:
+    """Mine, label and check one repository (§3, §4); also returns its cache."""
+    branch, tip = pin(repo)
+    cache = fetch_real_host(host(repo, tip))
+    summary, mined, excluded = mine(repo, cache, branch, tip)
+    kept, attributed = [], []
+    for case in mined:
+        if case.kind != "positive" or not checkable(case):
+            continue
+        attribute = merge_attribute(cache, case)
+        if attribute:
+            attributed.append(
+                AttributeExclusion(repo=case.repo, merge=case.merge, attribute=attribute)
+            )
+        else:
+            kept.append(case)
+    labelled, unread = label_repository(kept, cache)
+    exclusions = [OracleExclusion(repo=e.repo, merge=e.merge, reason=e.reason) for e in excluded]
+    cases, labels, rows = [], [], []
+    for index, (case, label) in enumerate(labelled):
+        case = case.model_copy(update={"index": index})
+        label = label.model_copy(update={"index": index})
+        cases.append(case)
+        labels.append(label)
+        rows += tool_files(case, label, cache, scratch)
+    result = RepositoryResult(
+        repo=repo,
+        summary=summary,
+        cases=cases,
+        labels=labels,
+        rows=rows,
+        exclusions=exclusions + list(unread),
+        attributed=attributed,
+    )
+    return result, cache
+
+
+def _checkpoint(scratch: Path, position: int, repo: str) -> Path:
+    return scratch / "checkpoint" / f"{position:02d}-{repo.replace('/', '__')}.json"
+
+
+def run(
+    out: Path,
+    scratch: Path,
+    repositories: Sequence[str] = REPOSITORIES,
+    *,
+    prune: bool = False,
+    compute=repository_result,
+) -> Report:
+    """Mine, label, check and report every registered repository, into a fresh `out`.
+
+    Each repository's result is checkpointed under `<scratch>/checkpoint/` when it is done, and a
+    run that finds a checkpoint uses it instead of mining the repository again, so a run that
+    stops can be resumed with the same arguments. A checkpoint holds the repository's pinned tip,
+    so a resumed run reads the same history. With `prune`, a repository's cache and the npm
+    cache are deleted once its checkpoint is written; neither changes any figure."""
     require(REGISTRATION)
     if out.exists():
         raise ValueError(f"{out} already exists; the study writes a fresh directory")
     scratch.mkdir(parents=True, exist_ok=True)
-    summaries: list[Repository] = []
+    results: list[RepositoryResult] = []
+    for position, repo in enumerate(repositories):
+        saved = _checkpoint(scratch, position, repo)
+        if saved.is_file():
+            result = RepositoryResult.model_validate_json(saved.read_text("utf-8"))
+            print(f"{repo}: {len(result.cases)} cases (from the checkpoint)", flush=True)
+        else:
+            result, cache = compute(repo, scratch)
+            saved.parent.mkdir(parents=True, exist_ok=True)
+            partial = saved.with_suffix(".partial")
+            partial.write_text(result.model_dump_json(), "utf-8")
+            partial.replace(saved)
+            if prune:
+                shutil.rmtree(cache, ignore_errors=True)
+                shutil.rmtree(scratch / "npm-cache", ignore_errors=True)
+            print(f"{repo}: {len(result.cases)} cases", flush=True)
+        results.append(result)
     cases: list[Case] = []
     labels: list[CaseLabel] = []
     rows: list[ToolFile] = []
     exclusions: list[OracleExclusion] = []
     attributed: list[AttributeExclusion] = []
-    for repo in repositories:
-        branch, tip = pin(repo)
-        cache = fetch_real_host(host(repo, tip))
-        summary, mined, excluded = mine(repo, cache, branch, tip)
-        kept = []
-        for case in mined:
-            if case.kind != "positive" or not checkable(case):
-                continue
-            attribute = merge_attribute(cache, case)
-            if attribute:
-                attributed.append(
-                    AttributeExclusion(repo=case.repo, merge=case.merge, attribute=attribute)
-                )
-            else:
-                kept.append(case)
-        labelled, unread = label_repository(kept, cache)
-        summaries.append(summary)
-        exclusions += [
-            OracleExclusion(repo=e.repo, merge=e.merge, reason=e.reason) for e in excluded
-        ]
-        exclusions += unread
-        for case, label in labelled:
-            index = len(cases)
-            case = case.model_copy(update={"index": index})
-            label = label.model_copy(update={"index": index})
-            cases.append(case)
-            labels.append(label)
-            rows += tool_files(case, label, cache, scratch)
-        print(f"{repo}: {len(labelled)} cases", flush=True)
+    for result in results:
+        offset = len(cases)
+        cases += [c.model_copy(update={"index": c.index + offset}) for c in result.cases]
+        labels += [x.model_copy(update={"index": x.index + offset}) for x in result.labels]
+        rows += [r.model_copy(update={"index": r.index + offset}) for r in result.rows]
+        exclusions += result.exclusions
+        attributed += result.attributed
     manifest = Manifest(
         registration=REGISTRATION,
-        repositories=summaries,
+        repositories=[r.summary for r in results],
         cases=cases,
         exclusions=exclusions,
         attribute_exclusions=attributed,
@@ -568,8 +630,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m precondition_library.bench.tool_precondition")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--scratch", type=Path, required=True)
+    parser.add_argument(
+        "--prune",
+        action="store_true",
+        help="delete each repository's cache and the npm cache once it is checkpointed",
+    )
     args = parser.parse_args(argv)
-    print(text(run(args.out, args.scratch)), end="")
+    print(text(run(args.out, args.scratch, prune=args.prune)), end="")
     return 0
 
 
