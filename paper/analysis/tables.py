@@ -26,6 +26,7 @@ ORACLE = ROOT / "results" / "lock-oracle-2026-11-02"
 UNIFY = ROOT / "results" / "ecosystem-unify-2026-11-02"
 ANATOMY = ROOT / "results" / "lock-anatomy-2026-11-04"
 TOOL_CHECK = ROOT / "results" / "lock-tool-check-2026-11-08"
+STUDY_6 = ROOT / "results" / "tool-precondition-2026-11-09"
 RUNS = ("run-11", "run-12", "run-13")
 SCORE_TOLERANCE = 1e-6
 """The hybrid run recomputed the reranker's scores, which agree with the rescore's to about
@@ -557,6 +558,73 @@ def tool_check() -> str:
     )
 
 
+_RULE_NAMES = {
+    "A": "A: the merge, always",
+    "B": "B: the gate's merge, else refuse",
+    "C": "C: the side the check alone accepts, else refuse",
+    "D": "D: the gate's merge; else the side the check alone accepts; else refuse",
+    "F": "F, control: the gate's merge; else the first parent's file",
+}
+
+
+def tool_precondition() -> str:
+    """Study 6 as registered: H1--H3, then the rules and the pooled rejection rates (§7), from
+    `report.json`, each line checked against the run's own `summary.txt`."""
+    report = json.loads((STUDY_6 / "report.json").read_text("utf-8"))
+    summary = (STUDY_6 / "summary.txt").read_text("utf-8")
+
+    def interval(estimate: dict) -> str:
+        low, high = estimate["interval"]["low"], estimate["interval"]["high"]
+        return f"{estimate['statistic']:.3f} [{low:.3f}, {high:.3f}]".replace("-", "$-$")
+
+    lines = []
+    for name, text in (
+        ("h1", "H1, mean over repositories of merged minus ordinary rejection rate"),
+        ("h2", "H2, mean over repositories of rule D's mismatch"),
+    ):
+        found = report[name]
+        expected = f"{interval(found['estimate'])}: {found['outcome']}".replace("$-$", "-")
+        if expected not in summary:
+            raise SystemExit(f"{name}: {expected!r} is not in summary.txt")
+        lines.append(
+            f"{text} ({found['repositories']}) & {interval(found['estimate'])} "
+            f"& {found['outcome']} \\\\"
+        )
+    ties, reverse, upper = report["h3_tie_files"], report["h3_reverse"], report["h3_upper"]
+    expected = f"H3 reverse on {ties} tie-break files: {reverse}, Wilson upper {upper:.3f}"
+    if expected not in summary:
+        raise SystemExit(f"h3: {expected!r} is not in summary.txt")
+    lines.append(
+        f"H3, tie-break files the check's side loses & {reverse} of {ties}, "
+        f"Wilson upper {upper:.3f} & {report['h3_outcome']} \\\\"
+    )
+    lines.append("\\midrule")
+    rates = report["base_rates"].values()
+    for label, kind in (("merged files", "merged"), ("ordinary commits' lock files", "ordinary")):
+        rejected = sum(r[f"{kind}_rejected"] for r in rates)
+        judged = sum(r[f"{kind}_judged"] for r in rates)
+        count = f"{judged:,}".replace(",", "{,}")
+        lines.append(
+            f"rejected by the check, {label}, pooled & {rejected}/{count} "
+            f"= {rejected / judged:.3f} & \\\\"
+        )
+    lines.append("\\midrule")
+    lines.append("rule, pooled over files & coverage; mismatch & \\\\")
+    for rule, name in _RULE_NAMES.items():
+        found = report["rules"][rule]
+        mismatch = found["mismatch"]
+        prefix = "F control" if rule == "F" else f"{rule} "
+        expected = f"{found['wrong']}/{found['fires']} wrong, coverage {found['coverage']:.2f}"
+        if not any(x.strip().startswith(prefix) and expected in x for x in summary.splitlines()):
+            raise SystemExit(f"rule {rule}: {expected!r} is not in summary.txt")
+        lines.append(f"\\quad {name} & {found['coverage']:.2f}; {interval(mismatch)} & \\\\")
+    return (
+        "\\begin{tabular}{lll}\n\\toprule\n& estimate & outcome \\\\\n\\midrule\n"
+        + "\n".join(lines)
+        + "\n\\bottomrule\n\\end{tabular}\n"
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, required=True)
@@ -573,6 +641,7 @@ def main() -> None:
         ("anatomy", anatomy),
         ("rules", rules),
         ("tool-check", tool_check),
+        ("tool-precondition", tool_precondition),
     ):
         (args.out / f"{name}.tex").write_text(build(), encoding="utf-8")
 
