@@ -49,6 +49,16 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **`lock_check` records which pnpm judged a file** (`pnpm_ran`), beside the pnpm it invoked
+  (`pnpm`).
+  - pnpm 9.7 and later switch to the version a project's `packageManager` names. So study 6
+    invoked pnpm 10.28.0 everywhere, and its records cannot say which pnpm gave each verdict
+    (its README, "What the registration did not say").
+  - `pnpm --version`, asked in the same folder with the same environment, switches the same
+    way and prints the version that ran. In a folder declaring `pnpm@9.15.0`, pnpm 10.28.0
+    reports 9.15.0.
+  - No verdict changes, and no committed result is rewritten.
+
 - **Study 6's results** (`results/tool-precondition-2026-11-09/`): 395 conflicted lock files from
   366 merges in 25 repositories. All three hypotheses are supported as registered.
   - **H1, narrowly:** merges leave lock files inconsistent more often than ordinary commits,

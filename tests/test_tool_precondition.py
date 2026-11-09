@@ -108,6 +108,34 @@ def test_the_declared_pnpm_is_used_from_10_16(
     assert lock_check.pnpm_version(tmp_path, tmp_path) == expected
 
 
+def test_the_pnpm_that_ran_is_what_pnpm_reports_in_the_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """pnpm 10 switches to the version `packageManager` names, so the version is asked of pnpm
+    in the folder it judged, with the same environment."""
+    seen: list[tuple[list[str], Path, dict[str, str]]] = []
+
+    def run(
+        argv: list[str], cwd: Path, env: dict[str, str]
+    ) -> lock_check.subprocess.CompletedProcess[str]:
+        seen.append((argv, cwd, env))
+        return lock_check.subprocess.CompletedProcess(argv, 0, "9.15.0\n", "")
+
+    monkeypatch.setattr(lock_check, "_run", run)
+    env = {"CI": "1"}
+    assert lock_check.pnpm_ran(Path("pnpm"), tmp_path, env) == "9.15.0"
+    assert seen == [(["pnpm", "--version"], tmp_path, env)]
+    for code, out in ((1, "9.15.0"), (0, "ERR_PNPM_BAD_PM_VERSION something"), (0, "")):
+        monkeypatch.setattr(
+            lock_check,
+            "_run",
+            lambda argv, cwd, env, c=code, o=out: lock_check.subprocess.CompletedProcess(
+                argv, c, o, ""
+            ),
+        )
+        assert lock_check.pnpm_ran(Path("pnpm"), tmp_path, env) == "unknown"
+
+
 def test_only_the_three_checked_lock_files_have_a_tool() -> None:
     assert lock_check.tool_for("app/composer.lock") == "composer"
     assert lock_check.tool_for("package-lock.json") == "npm"
