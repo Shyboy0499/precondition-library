@@ -1,0 +1,43 @@
+{
+  "units": 45,
+  "simulations": 2000,
+  "seed": 20261109,
+  "rows": [
+    {
+      "repositories": 12,
+      "h1_power": 0.64,
+      "h1_null": 0.006,
+      "h2_power": 0.892,
+      "h2_null": 0.01,
+      "h3_power": 0.781,
+      "h3_null": 0.011
+    },
+    {
+      "repositories": 15,
+      "h1_power": 0.762,
+      "h1_null": 0.006,
+      "h2_power": 0.967,
+      "h2_null": 0.006,
+      "h3_power": 0.942,
+      "h3_null": 0.017
+    },
+    {
+      "repositories": 20,
+      "h1_power": 0.888,
+      "h1_null": 0.009,
+      "h2_power": 0.999,
+      "h2_null": 0.007,
+      "h3_power": 0.995,
+      "h3_null": 0.019
+    },
+    {
+      "repositories": 25,
+      "h1_power": 0.954,
+      "h1_null": 0.01,
+      "h2_power": 1.0,
+      "h2_null": 0.008,
+      "h3_power": 1.0,
+      "h3_null": 0.015
+    }
+  ]
+}

@@ -25,6 +25,7 @@ REGISTRATIONS: dict[str, str] = {
     "lock-oracle": "3e9afab264823c215f70abf11b1a0e7137dfa513350292c343b4228789375afe",
     "ecosystem-unify": "23f87bb165d52d27d21a11ca7046f3917234adda37ac64d1ab1157be1fc5efdd",
     "divergence-gate": "8de35aa3d216b9c09e7771cc7df9c057680163225517632804f50603e445261c",
+    "tool-precondition": "bfcf7e25e691e93a774ab55255b984e291ed9cffecd4a5275115a6989529f15c",
 }
 """Each registered study's document, by name, and the SHA-256 of its bytes."""
 

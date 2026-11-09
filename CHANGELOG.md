@@ -35,6 +35,17 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **Study 6 is registered** (`docs/preregistration/tool-precondition.md`, ADR-0060), before its
+  data, on 25 repositories no study has mined or counted. It tests three things:
+  - **H1, primary:** merges leave lock files inconsistent more often than ordinary commits;
+  - **H2:** rule D, the divergence gate then the side the check alone accepts, is still not
+    rarely wrong;
+  - **H3:** the check's tie-break rarely loses to taking the first parent's file.
+
+  The checks are now a library (`bench.lock_check`). `bench.tool_precondition` reproduces every
+  exploratory figure from the committed records, and a test holds it to them. Mining leaves out
+  conflicts with no checked lock file, and those with a `merge` attribute at the first parent.
+
 - **The ecosystem's own consistency check, beside the maintainer's merge**
   (`results/lock-tool-check-2026-11-08/`, #297, exploratory). npm, pnpm and Composer checked the
   merged lock file and each side's on 610 conflicted files of studies 3–5.
