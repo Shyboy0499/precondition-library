@@ -12,6 +12,13 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Fixed
 
+- **`lock_actions._checkout` writes the merge's tree as committed** (#336). It used `git archive`,
+  which applies a repository's `export-ignore` and `export-subst`, so a file such as PrivateBin's
+  `composer.json` was missing where a tool ran.
+  - **An audit** (`results/archive-attributes-2026-11-08/`) found files left out in 23 of the
+    81 merges earlier results ran a tool in. None was a manifest, lock file or tool
+    configuration, so no earlier result changes.
+
 - **`lock_actions.unify` breaks ties deterministically.** Versions with equal release numbers
   were ranked by set order, which can differ between processes. That covers a pre-release and
   its release, and git branches. A final release now ranks above a pre-release with the same
@@ -27,6 +34,28 @@ measured result, at pair level; everything before it is design and apparatus. Se
   line is kept, and `.lycheeignore` names the dead link with its reason.
 
 ### Added
+
+- **The ecosystem's own consistency check, beside the maintainer's merge**
+  (`results/lock-tool-check-2026-11-08/`, #297, exploratory). npm, pnpm and Composer checked the
+  merged lock file and each side's on 610 conflicted files of studies 3–5.
+  - **The check rejects one maintainer merge in seven.**
+  - **It agrees with the maintainer's-set labels:** of the 61 sides it rejects that are the
+    maintainer's set, 60 are cases where it rejects the maintainer's own file too.
+  - **It is a necessary condition, not an answer:** it also passes many sides the maintainer
+    did not keep.
+  - **Merges make the inconsistency.** Checked in their own trees, the parents' and merge
+    bases' lock files fail on 3% of checks, against 14% of merged files. In 61 of the 85 failing
+    merges both parents had passed.
+  - **As a precondition after study 5's gate,** it lifts coverage from 0.40 to 0.69 at mismatch
+    0.32. Against "take the first parent's file" it wins on 20 files and never loses.
+
+- **pnpm and Composer, held to the merge's date** (`results/lock-tool-dated-2026-11-08/`, #336,
+  exploratory). The tools refuse versions released after the merge: pnpm by `minimumReleaseAge`,
+  Composer by the `cotonet/soak-time` plugin.
+  - **They reproduce the maintainer's set** on 9 of the 54 Composer files and 5 of the 18 pnpm
+    files whose own merge they can replay.
+  - **Bundler's dating plugin is unusable.**
+  - **No study is registered on the dated tool.**
 
 - **`.gitattributes` changed 3 of 1,123 cases in studies 1, 3, 4 and 5, and no decision
   (`results/mining-attributes-2026-11-08/`).** Study 1's mining, shared by every study since,
