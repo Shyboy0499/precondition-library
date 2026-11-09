@@ -393,3 +393,82 @@ def test_on_the_exploratory_data_the_module_gives_its_figures() -> None:
     assert found.h1.estimate is not None
     assert found.h1.estimate.statistic == pytest.approx(0.125, abs=5e-4)
     assert [found.h1.outcome, found.h2.outcome, found.h3_outcome] == ["supported"] * 3
+
+
+# --- running and resuming --------------------------------------------------------------------
+
+
+def _result(repo: str, n: int) -> tp.RepositoryResult:
+    cases = [
+        _case(["composer.lock"]).model_copy(update={"repo": repo, "index": i}) for i in range(n)
+    ]
+    labels = [
+        tp.CaseLabel(
+            index=i,
+            repo=repo,
+            merge=f"m{i}",
+            only_locks_conflicted=True,
+            files=[],
+            reproduces={},
+            jaccard={},
+            covered=False,
+        )  # fmt: skip
+        for i in range(n)
+    ]
+    rows = [row(repo).model_copy(update={"index": i}) for i in range(n)]
+    summary = tp.Repository(
+        repo=repo, url="u", default_branch="main", tip="t", licence="MIT",
+        two_parent_merges=n, positives=n, negatives=0, exclusions=0,
+    )  # fmt: skip
+    return tp.RepositoryResult(
+        repo=repo, summary=summary, cases=cases, labels=labels, rows=rows, exclusions=[],
+        attributed=[],
+    )  # fmt: skip
+
+
+def test_a_stopped_run_resumes_from_its_checkpoints(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(tp, "require", lambda name: tmp_path)
+    computed: list[str] = []
+    cache = tmp_path / "cache"
+
+    def failing(repo: str, scratch: Path):
+        computed.append(repo)
+        if repo == "o/b":
+            raise RuntimeError("the worker stopped")
+        cache.mkdir(exist_ok=True)
+        return _result(repo, 2), cache
+
+    with pytest.raises(RuntimeError):
+        tp.run(tmp_path / "out", tmp_path / "s", ("o/a", "o/b"), prune=True, compute=failing)
+    assert computed == ["o/a", "o/b"]
+    assert not (tmp_path / "out").exists()
+    assert not cache.exists(), "pruned once o/a was checkpointed"
+
+    computed.clear()
+
+    def working(repo: str, scratch: Path):
+        computed.append(repo)
+        return _result(repo, 3), tmp_path / "cache"
+
+    found = tp.run(tmp_path / "out", tmp_path / "s", ("o/a", "o/b"), compute=working)
+    assert computed == ["o/b"], "o/a came from its checkpoint"
+    assert found.files == 5
+    manifest = json.loads((tmp_path / "out" / "manifest.json").read_text())
+    assert [c["index"] for c in manifest["cases"]] == [0, 1, 2, 3, 4]
+    files = [json.loads(x) for x in (tmp_path / "out" / "files.jsonl").read_text().splitlines()]
+    assert [(f["repo"], f["index"]) for f in files] == [
+        ("o/a", 0), ("o/a", 1), ("o/b", 2), ("o/b", 3), ("o/b", 4),
+    ]  # fmt: skip
+
+
+def test_the_study_refuses_without_its_registration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from precondition_library.bench import preregistration
+
+    monkeypatch.setitem(preregistration.REGISTRATIONS, tp.REGISTRATION, "0" * 64)
+    with pytest.raises(preregistration.UnregisteredError):
+        tp.run(tmp_path / "out", tmp_path / "s", repositories=())
+    assert not (tmp_path / "out").exists()

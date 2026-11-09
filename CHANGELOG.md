@@ -12,6 +12,12 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Fixed
 
+- **Study 6's run can be resumed.** The first run was lost when the worker restarted after 11
+  of 25 repositories: the study wrote its results only at the end. Each repository's result is
+  now checkpointed with its pinned tip as soon as it is done, and a run with the same arguments
+  resumes from the next. `--prune` deletes each finished repository's cache and the npm cache,
+  which had filled the disk. Neither changes any registered figure.
+
 - **`lock_actions._checkout` writes the merge's tree as committed** (#336). It used `git archive`,
   which applies a repository's `export-ignore` and `export-subst`, so a file such as PrivateBin's
   `composer.json` was missing where a tool ran.
