@@ -58,15 +58,15 @@ Submitting is an act of authorship, so it has to be done by you, from your own a
 - **Title:** Executable Preconditions versus Text Similarity for Replaying Compiled Agent Programs:
   A Pre-registered Test on Real Lock-file Merges
 - **Primary category:** cs.SE (Software Engineering). **Cross-list:** cs.AI.
-- **Comments:** 36 pages, 3 figures, 21 tables. Code, data and pre-registrations:
+- **Comments:** 37 pages, 3 figures, 21 tables. Code, data and pre-registrations:
   https://github.com/Shyboy0499/precondition-library
-- **Abstract:** the abstract in `main.tex`, without LaTeX markup, as below. It is 1,914 characters, within arXiv's limit of 1,920.
+- **Abstract:** the abstract in `main.tex`, without LaTeX markup, as below. It is 1,917 characters, within arXiv's limit of 1,920.
 
   > Agents that compile solved tasks into reusable programs must decide when to replay one. We
   > compare two ways of deciding at matched coverage: executable preconditions, shell probes
   > that must hold on the live state, and text similarity between the request and a program's
   > description. On states our own injectors built for five git maintenance faults, precondition
-  > dispatch mis-fired on 0 of 563 fires across three independently built libraries, while three
+  > dispatch mis-fired on 0 of 563 fires across three separately built libraries, while three
   > text scorers mis-fired on 71-90% of theirs. But a tree reading only the state matched it,
   > and by construction the request said nothing about the state. A pre-registered test on 274
   > real lock-file merges from 11 repositories, labelled by what maintainers committed,
@@ -81,9 +81,9 @@ Submitting is an act of authorship, so it has to be done by you, from your own a
   > differently. Firing the merge only when none diverges, itself a precondition, roughly halves
   > its mismatch; a fifth registered study, on 20 more repositories, confirms it stays above
   > 0.10 (0.35 [0.18, 0.53]). A sixth, on 25 more, finds merges leave lock files inconsistent
-  > more often than ordinary commits, narrowly (0.067 [0.003, 0.130]); adding the ecosystem's
-  > own check where that refuses covers 0.71 of files at mismatch 0.27. We also mutation-test
-  > the graders and simulate a study's power.
+  > more often than ordinary commits, narrowly (0.067 [0.003, 0.130]); run before manifests are
+  > resolved, adding the ecosystem's own check where that refuses covers 0.58 of files at
+  > mismatch 0.30. We also mutation-test the graders.
 
 ## Zenodo, with or without an endorsement
 

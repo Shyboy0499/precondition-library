@@ -38,9 +38,9 @@ Agents that compile solved tasks into reusable programs must decide when to repl
 compare two ways of deciding at matched coverage: executable preconditions, shell probes that
 must hold on the live state, and text similarity between the request and a program's
 description. On states our own injectors built for five git maintenance faults, precondition
-dispatch mis-fired on 0 of 563 fires across three independently built libraries, while three
-text scorers mis-fired on 71--90\% of theirs. But a tree reading only the state matched it, and
-by construction the request said nothing about the state. A pre-registered test on 274 real
+dispatch mis-fired on 0 of 563 fires across three separately built libraries, while three text
+scorers mis-fired on 71--90\% of theirs. But a tree reading only the state matched it, and by
+construction the request said nothing about the state. A pre-registered test on 274 real
 lock-file merges from 11 repositories, labelled by what maintainers committed, \emph{falsified}
 the claim that precondition dispatch rarely mis-fires: it was wrong on 62 of 150, 10 of 122 and
 132 of 244 fires. Its margin came from merges without a conflict; on conflicts, the library's
@@ -52,9 +52,9 @@ against 0.07 for line unions, and the ecosystem's resolver predicts which merge 
 no package both sides changed differently. Firing the merge only when none diverges, itself a
 precondition, roughly halves its mismatch; a fifth registered study, on 20 more repositories,
 confirms it stays above 0.10 (0.35 [0.18, 0.53]). A sixth, on 25 more, finds merges leave lock
-files inconsistent more often than ordinary commits, narrowly (0.067 [0.003, 0.130]); adding the
-ecosystem's own check where that refuses covers 0.71 of files at mismatch 0.27. We also
-mutation-test the graders and simulate a study's power.
+files inconsistent more often than ordinary commits, narrowly (0.067 [0.003, 0.130]); run before
+manifests are resolved, adding the ecosystem's own check where that refuses covers 0.58 of files
+at mismatch 0.30. We also mutation-test the graders.
 \end{abstract}
 
 \clearpage
@@ -981,7 +981,9 @@ shows the same pattern. Against the obvious control the tool's own contribution 
 \end{itemize}
 Twelve of those 20 files are one repository's. This is exploratory, on seen data, and still
 wrong on a third of fires. Study 6 registered it and tested it on fresh repositories
-(Section~\ref{sec:study6}).
+(Section~\ref{sec:study6}). An audit there found the check reading the maintainer's resolved
+manifests on 230 of these 610 files. Without them, the gain over the first parent's file falls
+from 20 files to 4.
 
 \subsection{Study 5: the divergence gate, registered}
 \label{sec:gate}
@@ -1211,7 +1213,8 @@ holds less firmly than the exploratory data suggested.
   \end{itemize}
   \item \textbf{H2 passes, as expected.} Rule D covers 0.71 of files at mismatch 0.27; the gate
   alone covers 0.45 at 0.30. The exploratory dispatcher replicates, and it is still wrong on more
-  than a quarter of its fires.
+  than a quarter of its fires. Part of that coverage depends on the maintainer's manifests (see
+  below).
   \item \textbf{H3 passes at the registered bound, not at 0.05.} The check's side lost to the
   first parent's file once in 100 tie-break files, a Wilson upper bound of 0.054. It won on 9
   (exact McNemar $p=0.02$, descriptive). The registration chose 0.10 because zero losses in
@@ -1228,6 +1231,50 @@ every share. The causes were tools, not lock files:
 pnpm's ``written under other settings'' verdicts all come from three repositories. Counting them
 as errors instead, which was not registered, puts H1's lower end below 0 ($-0.010$). A script
 importing nothing from the project recomputes every figure and decision.
+
+\paragraph{Did the check see the maintainer's answer?}
+As registered, the check judged each side in the merge's tree, as committed, and that tree
+holds the maintainer's resolution of every conflicted manifest. A tool resolving the lock file
+at merge time has git's own merge of the manifests instead, or nothing where they conflict. An
+audit made after the study, and exploratory, rebuilt git's merge of every case and compared the
+files each check reads.
+\begin{itemize}
+  \item \textbf{How often the tree differed.} Those files were git's merge in 240 of the 395
+  files. In 150, git reported a conflict in one of them; in 5, the maintainer committed
+  something else.
+  \item \textbf{Accuracy differed with it.} The side the check accepts was wrong on 9 of 70
+  files where a manifest had conflicted, and on 27 of 88 where it had not. Studies 3--5 show the
+  same pattern: 0.18 against 0.42.
+  \item \textbf{Rule D at merge time.} Using the check only where it reads git's merge, rule D
+  covers 0.58 of files at mismatch 0.30 [0.24, 0.36]; the gate alone covers 0.45 at 0.30. Its
+  per-repository mean is 0.327, so H2's reading holds.
+  \item \textbf{The tie-break.} Its wins over the first parent's file fall from 9 to 3, against
+  1 loss. On those 52 files H3's Wilson bound is 0.101, just above the registered 0.10. The
+  side it accepts there is the first parent's in 46 of 52.
+\end{itemize}
+So, run before anything is resolved, the check adds coverage at about the gate's own error,
+mostly by taking the first parent's file where that file passes and the other does not. The
+recorded figures describe a different workflow, which Composer documents for a conflicted
+\code{composer.lock}: resolve the manifest first, then choose the lock file.
+
+\paragraph{Merging the manifests first.}
+Manifests are package maps too, so a resolver could merge them key by key before running the
+check. On the 380 lock files of studies 3--6 whose manifests git could not merge, that merge
+gives the maintainer's manifests on 165. There the recorded verdict is legitimate. npm's and
+pnpm's checks ignore the project's own \code{version}, which was tested, so that field is set
+aside.
+\begin{itemize}
+  \item \textbf{The accuracy gap is a difference between conflicts, not the leak.} On these
+  files the check is wrong on 3 of 14 in study 6 and 8 of 48 in studies 3--5. That is as low as
+  on the other conflicted files, and far below the files with no manifest conflict. When both
+  sides changed dependencies, one side's lock file usually fails the merged manifest and the
+  other's does not.
+  \item \textbf{It recovers little coverage.} Rule D so extended covers 0.60 of study 6's files
+  at mismatch 0.30.
+  \item \textbf{The rest needs the maintainer's own decision.} Of the 42 files rule D fires on
+  and this resolver cannot, 27 have the same entry of a dependency map edited on both sides.
+  That is the taxonomy's ``decision outside the files'', located in the manifest.
+\end{itemize}
 
 \section{The registered follow-up study, and its power}
 \label{sec:power}
@@ -1482,7 +1529,9 @@ Four comparisons bear on this question, each holding the evidence fixed in a dif
   itself a precondition: fire only if no package diverges (Section~\ref{sec:dispatcher}). A
   registered study confirmed on fresh repositories that it helps and is not enough
   (Section~\ref{sec:gate}). Adding the ecosystem's own check, an executed one, raised coverage
-  from 0.45 to 0.71 at about the same mismatch on 25 more (Section~\ref{sec:study6}).
+  from 0.45 to 0.71 at about the same mismatch on 25 more. But it reached 0.71 partly by reading
+  the maintainer's resolved manifests. Run before they exist, it reaches 0.58
+  (Section~\ref{sec:study6}).
 \end{enumerate}
 Read together, the value of executing a check is not execution. A check can compute, on the live
 state, a fact that no fixed set of features anticipated: a dry-run merge, a package-level diff.
@@ -1570,6 +1619,11 @@ than any choice of dispatcher did on these data.
   attribute at each case's first parent, for all 1,123 cases of studies 1, 3, 4 and 5. It found
   the attribute set on three cases, two in study 1 and one in study 5, and none changes a registered
   decision. Study 6 left out any case with the attribute, and found none.
+  \item \textbf{What a check may see.} An executed check is only as clean as the tree it runs
+  in. Study 6's check, as registered, ran in the maintainer's committed tree. That tree holds
+  the maintainer's resolution of the manifests, which a resolver at merge time does not have.
+  An audit put the check's own gain in coverage at about half once that is removed. Any
+  precondition evaluated in a post-resolution tree needs the same audit.
 \end{itemize}
 
 \section{Scope}
@@ -1618,7 +1672,8 @@ because the rest of what maintainers decide lives outside the lock files. A fift
 study confirmed both halves of that sentence on repositories nobody here had seen. A sixth found
 that the merge is also where lock files are left inconsistent, by a smaller margin than first
 seen, and that the ecosystem's own check, run as a second precondition, widens what can be
-resolved without making it rarely wrong. The broader lesson is about evaluation: an error rate measured
+resolved without making it rarely wrong. It widens it less once the check cannot see the
+maintainer's resolved manifests. The broader lesson is about evaluation: an error rate measured
 against one's own labels says little until the same dispatcher faces states and labels someone
 else made, and a registered design deserves the same scrutiny before its data as its results
 receive after.
