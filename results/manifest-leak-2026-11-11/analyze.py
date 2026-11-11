@@ -106,6 +106,8 @@ def files() -> list[dict]:
             {
                 "study": "study-6",
                 "repo": r["repo"],
+                "index": r["index"],
+                "path": r["path"],
                 "tool": r["tool"],
                 "diverges": r["divergent"] > 0,
                 "merge_right": r["predicted_reproduces"],
@@ -138,6 +140,8 @@ def files() -> list[dict]:
                 {
                     "study": study,
                     "repo": r["repo"],
+                    "index": r["index"],
+                    "path": r["path"],
                     "tool": r["tool"],
                     "diverges": diverges,
                     "merge_right": merge_right,
