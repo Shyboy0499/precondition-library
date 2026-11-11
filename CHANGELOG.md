@@ -49,6 +49,22 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **Did the ecosystem's check see the maintainer's answer?** (`results/manifest-leak-2026-11-11/`,
+  exploratory.) The check judged each side's lock file in the merge's tree, against the
+  maintainer's committed manifests. An audit rebuilt git's own merge of every case and compared
+  the files each check reads.
+  - **What the check saw.** They are git's merge in 240 of study 6's 395 files. In 150 git
+    reported a conflict, so a resolver at merge time has no manifest to check against. In 5 the
+    maintainer committed something else.
+  - **Accuracy depends on it.** The check's accepted side is wrong on 0.13 of the conflicted
+    files and 0.31 of the others (0.18 and 0.42 in studies 3–5).
+  - **Rule D at merge time.** Using the check only where it reads git's merge, rule D covers
+    0.58 of files at mismatch 0.30, against 0.71 at 0.27 as recorded. The gate alone gives 0.45
+    at 0.30.
+  - **The tie-break's wins.** Its wins over the first parent's file fall from 9 to 3. H3, read
+    on those files only, has a Wilson upper bound of 0.101.
+  - **What does not change.** No registered decision, and H1 and H2 not at all.
+
 - **`lock_check` records which pnpm judged a file** (`pnpm_ran`), beside the pnpm it invoked
   (`pnpm`).
   - pnpm 9.7 and later switch to the version a project's `packageManager` names. So study 6
