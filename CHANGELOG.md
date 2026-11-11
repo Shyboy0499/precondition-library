@@ -49,6 +49,18 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **Can a resolver merge the manifests itself?** (`results/manifest-merge-2026-11-11/`,
+  exploratory.) On the 380 lock files whose manifests git could not merge, `package.json` and
+  `composer.json` were merged key by key.
+  - **How often it works.** It gives the maintainer's manifests on 165, which makes the
+    recorded verdicts there legitimate. npm's and pnpm's checks ignore the root `version`
+    (tested), so that field is set aside.
+  - **The check is accurate on those files** (wrong on 3 of 14 and 8 of 48). So it does well
+    where both sides changed dependencies; that is not the leak.
+  - **It adds little coverage.** Rule D, so extended, covers 0.60 of study 6's files at 0.30.
+  - **What remains needs the maintainer's own dependency decision**, mostly an entry both sides
+    edited.
+
 - **Did the ecosystem's check see the maintainer's answer?** (`results/manifest-leak-2026-11-11/`,
   exploratory.) The check judged each side's lock file in the merge's tree, against the
   maintainer's committed manifests. An audit rebuilt git's own merge of every case and compared

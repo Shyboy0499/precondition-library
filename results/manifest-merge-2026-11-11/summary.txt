@@ -1,0 +1,29 @@
+## study-6: 395 files, 25 repositories
+
+classes: {'conflicted': 98, 'edited': 5, 'recovered': 52, 'same': 240}
+where the check accepts one side, wrong: conflicted 6/56, edited 1/1, recovered 3/14, same 27/88
+
+| rule | fires | coverage | wrong | mismatch [95% Wilson] |
+| --- | ---: | ---: | ---: | --- |
+| B: the gate's merge, else refuse (no check) | 179 | 0.45 | 53 | 0.296 [0.234, 0.367] |
+| D: the gate's merge; else the side the check accepts (as recorded) | 279 | 0.71 | 76 | 0.272 [0.224, 0.327] |
+| D': ... the check only where it reads git's merge | 231 | 0.58 | 69 | 0.299 [0.243, 0.361] |
+| D'': ... and where the key-level merge gives the maintainer's manifests | 237 | 0.60 | 72 | 0.304 [0.249, 0.365] |
+tie-break files (all): 100; the check's side right where the first parent's is wrong 9, the reverse 1
+tie-break files (usable to D''): 58; the check's side right where the first parent's is wrong 3, the reverse 1
+
+## studies 3-5 (exploratory): 610 files, 45 repositories
+
+classes: {'conflicted': 117, 'edited': 3, 'recovered': 113, 'same': 377}
+where the check accepts one side, wrong: conflicted 11/56, recovered 8/48, same 75/179
+
+| rule | fires | coverage | wrong | mismatch [95% Wilson] |
+| --- | ---: | ---: | ---: | --- |
+| B: the gate's merge, else refuse (no check) | 247 | 0.40 | 69 | 0.279 [0.227, 0.338] |
+| D: the gate's merge; else the side the check accepts (as recorded) | 423 | 0.69 | 134 | 0.317 [0.274, 0.363] |
+| D': ... the check only where it reads git's merge | 353 | 0.58 | 121 | 0.343 [0.295, 0.394] |
+| D'': ... and where the key-level merge gives the maintainer's manifests | 372 | 0.61 | 125 | 0.336 [0.290, 0.385] |
+tie-break files (all): 176; the check's side right where the first parent's is wrong 20, the reverse 0
+tie-break files (usable to D''): 125; the check's side right where the first parent's is wrong 4, the reverse 0
+
+study 6, D'''s mismatch, mean over repositories (H2's statistic): 0.330 [0.240, 0.421] over 25 repositories
