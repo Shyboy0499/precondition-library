@@ -49,6 +49,18 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **Can a project's own tests judge a lock-file resolution?** (`results/project-tests-pilot-2026-11-14/`,
+  a pilot of #297's third oracle, approved by the owner.)
+  - **What ran.** Three npm repositories, one merge each, with install scripts off and tests
+    offline (loopback only). nextcloud-vue did not install.
+  - **Where the suites run** (uptime-kuma, node-red), they repeat exactly, and the maintainer's
+    own merge already fails some tests.
+  - **The tests added nothing here.** The parent's lock file that matches the maintainer's set
+    gives the same counts as the maintainer's file. The other parent's file is refused by
+    `npm ci` before any test runs.
+  - **Where tests could add something** is the files where both parents pass the check.
+  - **Composer repositories did not run:** this session cannot reach `codeload.github.com`.
+
 - **Can a resolver merge the manifests itself?** (`results/manifest-merge-2026-11-11/`,
   exploratory.) On the 380 lock files whose manifests git could not merge, `package.json` and
   `composer.json` were merged key by key.
