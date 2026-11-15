@@ -10,6 +10,17 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ## Unreleased
 
+### Fixed
+
+- **A predicate pattern `re` cannot read no longer crashes a build (spec revision 159).**
+  - **The bug:** study 2's build R-8 compiled a postcondition whose `expect_pattern` held a bare
+    `\u`. `re.search` raised, and the exception ended the build in admission.
+  - **The fix:** `evaluate_predicate` compiles the pattern first, and an unreadable one makes the
+    predicate not hold, with the reason, as an unbound name does. Admission now refuses such a
+    program and tells its revision why.
+  - **What it affected:** study 2 ran on its registered commit without the fix; R-8 was resumed
+    and completed, and the study reports it.
+
 ### Added
 
 - **Two six-family replicates, one with a second model (#266 steps 2–3, ADR-0061, spec

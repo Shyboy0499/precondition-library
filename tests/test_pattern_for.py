@@ -81,3 +81,20 @@ def test_an_unbound_name_in_a_pattern_does_not_hold(make_sandbox) -> None:
     needs_submodule = _predicate("git status", "{submodule_path}")
     result = evaluate_predicate(needs_submodule, box, bindings(box))
     assert not result.ok and result.observed.startswith("not applicable")
+
+
+def test_a_pattern_re_cannot_read_does_not_hold(make_sandbox) -> None:
+    """Study 2's build R-8 crashed in admission on a model-written `\\u` (`re.error`).
+
+    The pattern `re` cannot compile now makes the predicate not hold, with the reason, so
+    admission refuses the program and its revision is told why, as for an unbound name.
+    """
+    with pytest.raises(re.error):
+        re.compile(r"^\upstream/main$")
+    box = make_sandbox(0, [])
+    unreadable = _predicate("git rev-parse --abbrev-ref HEAD", r"^\upstream/main$")
+    result = evaluate_predicate(unreadable, box, bindings(box))
+    assert not result.ok
+    assert result.observed.startswith("not applicable: expect_pattern")
+    assert "not a Python regular expression" in result.observed
+    assert not result.refused, "an unreadable pattern is not a safety refusal"
