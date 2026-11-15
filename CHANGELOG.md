@@ -49,6 +49,14 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **ADR-0061: two six-family replicates, one with a second model** (#266 steps 2–3).
+  - **The builds:** one with `deepseek-flash` on the six-family plan, and one with
+    `deepseek-v4-pro`.
+  - **How they are reported:** descriptively beside runs 11–13, with the config family's rows
+    apart, in `results/replicates-2026-11-15/`.
+  - **Budget:** USD 100.
+  - **No hypothesis:** one build per model cannot beat the build-to-build spread.
+
 - **The LLM state judge (#295 item 2) gets a registered budget and repeatability subsample before
   its first scored call** (spec revision 156, ADR-0034).
   - **Budget:** `JudgeSimilarity(token_budget=...)` and `rescore --judge-token-budget` stop a run
