@@ -333,6 +333,21 @@ def evaluate_predicate(
         )
     except UnboundParameterError as exc:
         return PredicateResult(name=predicate.name, ok=False, observed=f"not applicable: {exc}")
+    # A model-written pattern that `re` cannot read (study 2's build R-8 wrote one with `\u`)
+    # does not hold, with the reason, as an unbindable parameter does. Raising here crashed
+    # the build in admission instead of refusing the program and telling the revision why.
+    if pattern is not None:
+        try:
+            re.compile(pattern)
+        except re.error as exc:
+            return PredicateResult(
+                name=predicate.name,
+                ok=False,
+                observed=(
+                    f"not applicable: expect_pattern {predicate.expect_pattern!r} is not a "
+                    f"Python regular expression: {exc}"
+                ),
+            )
 
     # `env_root` matches `replay.py`'s body screening, so a probe and a body are judged
     # against the same boundary and neither can be the looser path to a shell.
