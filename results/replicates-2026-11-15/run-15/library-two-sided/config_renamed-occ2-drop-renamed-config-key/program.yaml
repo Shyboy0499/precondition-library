@@ -1,0 +1,132 @@
+id: config_renamed-occ2-drop-renamed-config-key
+intent: delete the old config key's line when its new name is already set
+parameters: []
+preconditions:
+- name: config_rename_map_exists
+  description: config/renames.conf and config/settings.conf are tracked and the rename
+    map has old = new entries
+  probe: |
+    git ls-files --error-unmatch config/renames.conf config/settings.conf >/dev/null 2>&1 && \
+      grep -qE '^[[:space:]]*[^#[:space:]][^=]*=[^=]*$' config/renames.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: old_and_new_set_together
+  description: at least one rename mapping has both old and new keys in config/settings.conf
+  probe: |
+    while IFS= read -r line; do
+      old=$(printf '%s\n' "$line" | awk -F= '{gsub(/^[ \t]+|[ \t]+$/, "", $1); print $1}')
+      new=$(printf '%s\n' "$line" | awk -F= '{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2}')
+      [ -n "$old" ] && [ -n "$new" ] || continue
+      if awk -F= -v k="$old" '{
+            key=$1; sub(/^[ \t]+/,"",key); sub(/[ \t]+$/,"",key)
+            if (key == k) found=1
+          } END { exit !found }' config/settings.conf &&
+         awk -F= -v k="$new" '{
+            key=$1; sub(/^[ \t]+/,"",key); sub(/[ \t]+$/,"",key)
+            if (key == k) found=1
+          } END { exit !found }' config/settings.conf; then
+        exit 0
+      fi
+    done < <(grep -E '^[[:space:]]*[^#[:space:]][^=]*=[^=]*$' config/renames.conf)
+    exit 1
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the working tree has no staged or unstaged changes
+  probe: |
+    ! git status --porcelain | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+  settings=config/settings.conf
+  renames=config/renames.conf
+  tmpdir=$(mktemp -d)
+  trap 'rm -rf "$tmpdir"' EXIT
+  grep -E '^[[:space:]]*[^#[:space:]][^=]*=[^=]*$' "$renames" > "$tmpdir/mappings"
+  cp "$settings" "$tmpdir/settings"
+  while IFS= read -r line; do
+    old=$(printf '%s\n' "$line" | awk -F= '{gsub(/^[ \t]+|[ \t]+$/, "", $1); print $1}')
+    new=$(printf '%s\n' "$line" | awk -F= '{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2}')
+    [ -n "$old" ] && [ -n "$new" ] || continue
+    if ! awk -F= -v k="$new" '{
+          key=$1; sub(/^[ \t]+/,"",key); sub(/[ \t]+$/,"",key)
+          if (key == k) found=1
+        } END { exit !found }' "$settings"; then
+      continue
+    fi
+    awk -F= -v k="$old" '{
+          key=$1; sub(/^[ \t]+/,"",key); sub(/[ \t]+$/,"",key)
+          if (key != k) print
+        }' "$tmpdir/settings" > "$tmpdir/settings.new"
+    mv "$tmpdir/settings.new" "$tmpdir/settings"
+  done < "$tmpdir/mappings"
+  if cmp -s "$settings" "$tmpdir/settings"; then
+    echo "No stale renamed config key to remove" >&2
+    exit 1
+  fi
+  cat "$tmpdir/settings" > "$settings"
+  git add -- "$settings"
+  git commit -m "Remove stale renamed config keys"
+steps: null
+postconditions:
+- name: old_key_deleted
+  description: no rename mapping has both old and new keys in config/settings.conf
+  probe: |
+    while IFS= read -r line; do
+      old=$(printf '%s\n' "$line" | awk -F= '{gsub(/^[ \t]+|[ \t]+$/, "", $1); print $1}')
+      new=$(printf '%s\n' "$line" | awk -F= '{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2}')
+      [ -n "$old" ] && [ -n "$new" ] || continue
+      if awk -F= -v k="$old" '{
+            key=$1; sub(/^[ \t]+/,"",key); sub(/[ \t]+$/,"",key)
+            if (key == k) found=1
+          } END { exit !found }' config/settings.conf &&
+         awk -F= -v k="$new" '{
+            key=$1; sub(/^[ \t]+/,"",key); sub(/[ \t]+$/,"",key)
+            if (key == k) found=1
+          } END { exit !found }' config/settings.conf; then
+        exit 1
+      fi
+    done < <(grep -E '^[[:space:]]*[^#[:space:]][^=]*=[^=]*$' config/renames.conf)
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: new_key_kept
+  description: for at least one rename mapping the new key is still set and the old
+    key is not
+  probe: |
+    while IFS= read -r line; do
+      old=$(printf '%s\n' "$line" | awk -F= '{gsub(/^[ \t]+|[ \t]+$/, "", $1); print $1}')
+      new=$(printf '%s\n' "$line" | awk -F= '{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2}')
+      [ -n "$old" ] && [ -n "$new" ] || continue
+      if awk -F= -v k="$new" '{
+            key=$1; sub(/^[ \t]+/,"",key); sub(/[ \t]+$/,"",key)
+            if (key == k) found=1
+          } END { exit !found }' config/settings.conf &&
+         ! awk -F= -v k="$old" '{
+            key=$1; sub(/^[ \t]+/,"",key); sub(/[ \t]+$/,"",key)
+            if (key == k) found=1
+          } END { exit !found }' config/settings.conf; then
+        exit 0
+      fi
+    done < <(grep -E '^[[:space:]]*[^#[:space:]][^=]*=[^=]*$' config/renames.conf)
+    exit 1
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after
+  description: the working tree is clean after committing the removal
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+variant: drop_old
+provenance:
+  compiled_from_task: Some setting in my config has been renamed upstream. Sort the
+    config out. The new name is already set too, so delete the old key's line and
+    keep the new one.
+  model: deepseek-v4-pro
+  compiler_version: 0.0.1
+  episode_id: Some setting in my config has been renamed upstream. Sort the config
+    out. The new name is already set too, so delete the old key's line and keep the
+    new one./seed-31-config_renamed-10027
+  fault: config_renamed
+status: admitted

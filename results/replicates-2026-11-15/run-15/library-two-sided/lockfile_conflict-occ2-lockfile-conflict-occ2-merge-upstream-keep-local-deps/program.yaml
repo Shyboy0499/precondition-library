@@ -1,0 +1,176 @@
+id: lockfile_conflict-occ2-lockfile-conflict-occ2-merge-upstream-keep-local-deps
+intent: Update the branch from upstream, keeping local dependency removals and adding
+  upstream dependencies in deps.lock.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: clean_worktree
+  description: the working tree has no uncommitted changes
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: diverged_from_upstream
+  description: HEAD and the upstream branch have each committed since their merge
+    base
+  probe: |-
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt "0" &&
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt "0"
+  expect_exit: 0
+  expect_pattern: null
+- name: deps_lock_changed_both_sides
+  description: deps.lock changed both locally and upstream since the merge base
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+    ! git diff --quiet "$base" HEAD -- deps.lock &&
+    ! git diff --quiet "$base" {upstream_remote}/{upstream_branch} -- deps.lock
+  expect_exit: 0
+  expect_pattern: null
+- name: only_deps_lock_touched
+  description: deps.lock is the only file changed on both sides
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+    test "$(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort -u)" = "deps.lock" &&
+    test "$(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort -u)" = "deps.lock"
+  expect_exit: 0
+  expect_pattern: null
+- name: deps_lock_has_package_list
+  description: local, upstream, and merge-base deps.lock contain a package list section
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+    git show HEAD:deps.lock | grep -q '^[[:space:]]*packages[[:space:]]*=[[:space:]]*\[' &&
+    git show {upstream_remote}/{upstream_branch}:deps.lock | grep -q '^[[:space:]]*packages[[:space:]]*=[[:space:]]*\[' &&
+    git show "$base:deps.lock" | grep -q '^[[:space:]]*packages[[:space:]]*=[[:space:]]*\['
+  expect_exit: 0
+  expect_pattern: null
+- name: local_side_dropped_package_upstream_keeps
+  description: HEAD removed a package from deps.lock that upstream still has since
+    the merge base
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+    pkgs() {
+      git show "$1:deps.lock" |
+        awk '/^[[:space:]]*packages[[:space:]]*=[[:space:]]*\[/ { in_pkgs=1; next }
+             in_pkgs && /^[[:space:]]*][[:space:]]*$/ { in_pkgs=0; next }
+             in_pkgs { print }' |
+        sort -u
+    }
+    comm -12 <(pkgs "$base") <(pkgs "{upstream_remote}/{upstream_branch}") |
+      comm -23 - <(pkgs HEAD) |
+      grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+
+  git fetch {upstream_remote}
+
+  if git merge {upstream_remote}/{upstream_branch} --no-edit; then
+    exit 0
+  fi
+
+  if ! git ls-files -u -- deps.lock | grep -q .; then
+    echo "deps.lock did not conflict; refusing to guess" >&2
+    exit 1
+  fi
+
+  tmpdir=$(mktemp -d)
+  trap 'rm -rf "$tmpdir"' EXIT
+
+  git show :1:deps.lock > "$tmpdir/base"
+  git show :2:deps.lock > "$tmpdir/ours"
+  git show :3:deps.lock > "$tmpdir/theirs"
+
+  extract_packages() {
+    awk '
+      /^[[:space:]]*packages[[:space:]]*=[[:space:]]*\[/ { in_packages=1; next }
+      in_packages && /^[[:space:]]*\][[:space:]]*$/ { in_packages=0; next }
+      in_packages { print }
+    ' "$1"
+  }
+
+  extract_packages "$tmpdir/base" > "$tmpdir/base_pkgs"
+  extract_packages "$tmpdir/ours" > "$tmpdir/ours_pkgs"
+  extract_packages "$tmpdir/theirs" > "$tmpdir/theirs_pkgs"
+
+  : > "$tmpdir/local_only"
+  while IFS= read -r line; do
+    if ! grep -Fqx -- "$line" "$tmpdir/base_pkgs"; then
+      if ! grep -Fqx -- "$line" "$tmpdir/local_only"; then
+        printf '%s\n' "$line" >> "$tmpdir/local_only"
+      fi
+    fi
+  done < "$tmpdir/ours_pkgs"
+
+  : > "$tmpdir/upstream_only"
+  while IFS= read -r line; do
+    if ! grep -Fqx -- "$line" "$tmpdir/base_pkgs"; then
+      if ! grep -Fqx -- "$line" "$tmpdir/upstream_only"; then
+        printf '%s\n' "$line" >> "$tmpdir/upstream_only"
+      fi
+    fi
+  done < "$tmpdir/theirs_pkgs"
+
+  : > "$tmpdir/base_common"
+  while IFS= read -r line; do
+    if grep -Fqx -- "$line" "$tmpdir/ours_pkgs" && grep -Fqx -- "$line" "$tmpdir/theirs_pkgs"; then
+      printf '%s\n' "$line" >> "$tmpdir/base_common"
+    fi
+  done < "$tmpdir/base_pkgs"
+
+  awk '!seen[$0]++' "$tmpdir/local_only" "$tmpdir/upstream_only" "$tmpdir/base_common" > "$tmpdir/resolved_pkgs"
+
+  awk -v pkgfile="$tmpdir/resolved_pkgs" '
+    /^[[:space:]]*packages[[:space:]]*=[[:space:]]*\[/ {
+      print
+      while ((getline line < pkgfile) > 0) print line
+      close(pkgfile)
+      in_packages=1
+      next
+    }
+    in_packages && /^[[:space:]]*\][[:space:]]*$/ {
+      print
+      in_packages=0
+      next
+    }
+    in_packages { next }
+    { print }
+  ' "$tmpdir/theirs" > "$tmpdir/resolved"
+
+  cat "$tmpdir/resolved" > deps.lock
+  git add deps.lock
+  git commit --no-edit
+steps: null
+postconditions:
+- name: upstream_merged
+  description: HEAD descends from the upstream branch
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree_after
+  description: the working tree is clean after the merge
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: no files remain unmerged
+  probe: '! git diff --name-only --diff-filter=U | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers_in_deps_lock
+  description: deps.lock contains no unresolved conflict markers
+  probe: '! git show HEAD:deps.lock | grep -q ''^<<<<<<<'''
+  expect_exit: 0
+  expect_pattern: null
+variant: keep_local
+provenance:
+  compiled_from_task: Update this branch from upstream and make sure the dependency
+    list still makes sense. Keep my dependency file, with what I removed still removed,
+    and add what upstream added.
+  model: deepseek-v4-pro
+  compiler_version: 0.0.1
+  episode_id: Update this branch from upstream and make sure the dependency list still
+    makes sense. Keep my dependency file, with what I removed still removed, and add
+    what upstream added./seed-2-lockfile_conflict-10027
+  fault: lockfile_conflict
+status: admitted

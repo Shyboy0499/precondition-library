@@ -5,6 +5,8 @@
 - **Supersedes:** nothing. It carries out issue #266's steps 2 and 3, which ADR-0041 left for
   when a provider key was available.
 - **Deciders:** repository owner (issue #266; the key and the spend approved on 2026-11-15).
+- **Run:** 2026-11-15, in [`results/replicates-2026-11-15/`](../../results/replicates-2026-11-15/README.md)
+  (spec revision 158). Neither reversing outcome of decision 3 happened.
 
 ## Context
 

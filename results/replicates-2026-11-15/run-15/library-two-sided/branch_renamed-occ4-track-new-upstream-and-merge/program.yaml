@@ -1,0 +1,87 @@
+id: branch_renamed-occ4-track-new-upstream-and-merge
+intent: Track upstream's new default branch and merge it into the current local branch
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: clean_worktree
+  description: no tracked or untracked changes are present to interfere with the merge
+  probe: git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others
+    --exclude-standard)" ]
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_branch_exists
+  description: the new upstream remote-tracking branch exists
+  probe: git show-ref --verify --quiet "refs/remotes/{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_head_points_to_new_branch
+  description: the upstream remote HEAD points at the new branch
+  probe: '[ "$(git symbolic-ref --quiet "refs/remotes/{upstream_remote}/HEAD" 2>/dev/null)"
+    = "refs/remotes/{upstream_remote}/{upstream_branch}" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: tracks_old_upstream_branch
+  description: the current branch tracks the upstream remote but not the new branch
+    yet
+  probe: |-
+    current=$(git symbolic-ref --short HEAD) || exit 1
+    [ -n "$current" ] || exit 1
+    [ "$(git config --get "branch.$current.remote")" = "{upstream_remote}" ] && [ "$(git config --get "branch.$current.merge")" != "refs/heads/{upstream_branch}" ]
+  expect_exit: 0
+  expect_pattern: null
+- name: local_branch_diverged
+  description: the current branch has local commits not in the new upstream branch
+    and is behind it
+  probe: |-
+    current=$(git symbolic-ref --short HEAD) || exit 1
+    [ -n "$current" ] || exit 1
+    [ "$current" != "{upstream_branch}" ] || exit 1
+    ahead=$(git rev-list --count "{upstream_remote}/{upstream_branch}..$current") || exit 1
+    behind=$(git rev-list --count "$current..{upstream_remote}/{upstream_branch}") || exit 1
+    [ "$ahead" -ge 1 ] && [ "$behind" -ge 1 ]
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  current_branch=$(git symbolic-ref --short HEAD) || exit 1
+  git branch --set-upstream-to="{upstream_remote}/{upstream_branch}" "$current_branch"
+  git merge --no-edit "{upstream_remote}/{upstream_branch}"
+steps: null
+postconditions:
+- name: tracks_new_upstream_branch
+  description: the current branch tracks the new upstream branch
+  probe: |-
+    current=$(git symbolic-ref --short HEAD) || exit 1
+    [ -n "$current" ] || exit 1
+    [ "$(git config --get "branch.$current.remote")" = "{upstream_remote}" ] && [ "$(git config --get "branch.$current.merge")" = "refs/heads/{upstream_branch}" ]
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_branch_is_ancestor
+  description: the new upstream branch has been merged into HEAD
+  probe: git merge-base --is-ancestor "{upstream_remote}/{upstream_branch}" HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_work_preserved
+  description: HEAD still contains local commits beyond upstream
+  probe: |-
+    current=$(git symbolic-ref --short HEAD) || exit 1
+    [ -n "$current" ] || exit 1
+    [ "$(git rev-list --count "{upstream_remote}/{upstream_branch}..$current")" -ge 1 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_after_merge
+  description: the working tree is clean after the merge
+  probe: git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others
+    --exclude-standard)" ]
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: Upstream changed something about its branches and my checkout
+    is lost. Sort it out. Track upstream's new branch and merge it into my own commits.
+  model: deepseek-v4-pro
+  compiler_version: 0.0.1
+  episode_id: Upstream changed something about its branches and my checkout is lost.
+    Sort it out. Track upstream's new branch and merge it into my own commits./seed-2-branch_renamed-10027
+  fault: branch_renamed
+status: admitted

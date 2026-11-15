@@ -64,9 +64,11 @@ Read [Results graded outside this project](#results-graded-outside-this-project)
 > against text scorers' 71–81% and arm 3's 0%, on the two libraries where it is a usable baseline
 > ([LLM judge](results/judge-2026-11-15/README.md)).
 >
-> **Now running, on the owner's DeepSeek key:**
-> - study 2's 20 library builds (#307);
-> - two six-family replicates, one with a second model (#266, ADR-0061).
+> **With a sixth family outside git history and a second compiling model** (#266), precondition
+> dispatch still mis-fired on none of its fires (0/215 and 0/238), one build each
+> ([six-family replicates](results/replicates-2026-11-15/README.md)).
+>
+> **Now running, on the owner's DeepSeek key:** study 2's 20 library builds (#307).
 >
 > **Graded by this project's own labels.** On states its own injectors build, judged by its own
 > rules, precondition dispatch mis-fired on **0 of 563** fires, against text similarity's
@@ -416,7 +418,7 @@ did not make. This is the answer as of the studies below; each line links to whe
 | question | blocked on |
 | --- | --- |
 | Is refusal a property of the method or of one build? (#307, study 2, registered before its data) | running: the 20 builds started on 2026-11-15 |
-| Does it hold in another domain, or with another compiling model? (#266) | running: the two builds of ADR-0061 started on 2026-11-15 |
+| Does it hold outside this provider, or across several builds per compiling model? (#266) | One build each of two DeepSeek models agreed with runs 11–13 ([six-family replicates](results/replicates-2026-11-15/README.md)). A second provider needs its key; several builds per model need study 2's spread first (ADR-0061) |
 | Does a stronger judge, or one shown the probes, match arm 3? | ADR-0034 ran one model without the probe strings ([LLM judge](results/judge-2026-11-15/README.md)); either is a new registration |
 | Do people agree with the labelling rules? (#299 step 3) | independent raters; the kit is built |
 | Do the projects' own tests accept a resolution? (#297's third oracle) | Piloted, sandboxed ([project-tests pilot](results/project-tests-pilot-2026-11-14/README.md)). Where a suite ran (2 repositories), the wrong side's lock file was refused by `npm ci` before any test ran, so the tests added nothing beyond the check. The next cases are those where both sides pass the check. Composer projects need a host this session cannot reach. |
@@ -661,6 +663,14 @@ An LLM judge that reads the state, not the probes (ADR-0034), narrows it much fu
 +0.05 to +0.17 where its floor is usable. Arm 3 still mis-fires less, in both of two runs, and
 the two runs differ by less than either's gap from arm 3. On replicate 1 they differ by as much
 as the gap, so nothing is worded there ([LLM judge](results/judge-2026-11-15/README.md)).
+
+**Two more builds agree (#266, ADR-0061).** A six-family build with the same model, adding
+`config_renamed`, a family whose state is config files rather than git history, and one with a
+second compiling model (`deepseek-v4-pro`) mis-fire on 0 of 215 and 0 of 238 fires, against the
+lexical arm 2's 192 of 220 and 190 of 234 at matched coverage (+0.87 and +0.81). The config
+family's programs were admitted and fired on 26 and 40 of its 40 positive pairs, none wrongly.
+Each rests on one build, so the two models are not compared
+([six-family replicates](results/replicates-2026-11-15/README.md)).
 
 **What reading the state alone does (ADR-0047).** Each pair's correct resolution is a rule over
 the observed state, so the comparison above does not separate executing compiled checks from

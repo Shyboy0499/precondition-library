@@ -1,0 +1,91 @@
+id: diverged-occ4-diverged-occ4-merge-diverged-upstream
+intent: Merge upstream changes into a diverged local branch, preserving both histories
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: clean_worktree
+  description: The working tree has no uncommitted changes.
+  probe: '[ -z "$(git status --porcelain)" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: on_a_branch
+  description: HEAD is attached to a branch so the merge has a landing branch.
+  probe: git symbolic-ref -q HEAD >/dev/null 2>&1
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_remote_configured
+  description: The upstream remote is configured.
+  probe: git remote get-url "{upstream_remote}" >/dev/null 2>&1
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_exists
+  description: The remote-tracking ref for the upstream branch is present.
+  probe: git rev-parse --verify "{upstream_remote}/{upstream_branch}" >/dev/null 2>&1
+  expect_exit: 0
+  expect_pattern: null
+- name: local_and_upstream_diverged
+  description: The current branch is ahead of and behind upstream.
+  probe: |-
+    ahead=$(git rev-list --count "{upstream_remote}/{upstream_branch}..HEAD") || exit 1
+    behind=$(git rev-list --count "HEAD..{upstream_remote}/{upstream_branch}") || exit 1
+    [ "$ahead" -gt 0 ] && [ "$behind" -gt 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_is_clean
+  description: A trial merge of upstream into HEAD contains no conflicts.
+  probe: |-
+    base=$(git merge-base HEAD "{upstream_remote}/{upstream_branch}") || exit 1
+    git merge-tree --trivial-merge "$base^{tree}" "HEAD^{tree}" "{upstream_remote}/{upstream_branch}^{tree}" >/dev/null 2>&1
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_remote_head_matches
+  description: Any remote-tracking HEAD for upstream points at the branch being merged,
+    not a different default branch.
+  probe: |-
+    if git symbolic-ref -q "refs/remotes/{upstream_remote}/HEAD" >/dev/null 2>&1; then
+      target=$(git symbolic-ref "refs/remotes/{upstream_remote}/HEAD") || exit 1
+      case "$target" in
+        "refs/remotes/{upstream_remote}/{upstream_branch}"|"refs/heads/{upstream_branch}")
+          exit 0
+          ;;
+        *)
+          exit 1
+          ;;
+      esac
+    else
+      exit 0
+    fi
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git merge --no-edit --no-ff "{upstream_remote}/{upstream_branch}"
+steps: null
+postconditions:
+- name: clean_worktree_after_merge
+  description: The working tree is clean after the merge.
+  probe: '[ -z "$(git status --porcelain)" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: head_is_merge_commit
+  description: HEAD is a merge commit with two parents.
+  probe: '[ "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 3 ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_second_parent
+  description: The merge's second parent is the fetched upstream branch.
+  probe: '[ "$(git rev-parse HEAD^2)" = "$(git rev-parse "{upstream_remote}/{upstream_branch}")"
+    ]'
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: This branch and upstream have both changed. Bring it back into
+    line. Merge upstream into my branch and keep both histories.
+  model: deepseek-v4-pro
+  compiler_version: 0.0.1
+  episode_id: This branch and upstream have both changed. Bring it back into line.
+    Merge upstream into my branch and keep both histories./seed-0-diverged-10027
+  fault: diverged
+status: candidate

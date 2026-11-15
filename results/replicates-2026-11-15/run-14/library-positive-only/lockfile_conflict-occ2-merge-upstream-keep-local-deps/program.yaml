@@ -1,0 +1,117 @@
+id: lockfile_conflict-occ2-merge-upstream-keep-local-deps
+intent: Merge the upstream branch into the current branch so the branch is up to date,
+  and settle the dependency-file conflict in favor of the local side so what was removed
+  locally stays removed.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_tracking_ref_exists
+  description: the upstream remote-tracking branch is present locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: local_ahead_of_upstream
+  description: the current branch has at least one commit upstream does not have
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: local_behind_upstream
+  description: upstream has at least one commit the current branch does not have
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: tracked_worktree_clean
+  description: no staged or unstaged changes to tracked files
+  probe: '! git status --porcelain --untracked-files=no | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: the repository is not already in the middle of a merge
+  probe: '! git rev-parse -q --verify MERGE_HEAD >/dev/null'
+  expect_exit: 0
+  expect_pattern: null
+- name: both_sides_changed_same_path
+  description: local and upstream both modified at least one common path since their
+    merge base, i.e. the update has an overlapping file to reconcile
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+    comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git merge --no-edit -X ours {upstream_remote}/{upstream_branch} || true
+  if git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      if git cat-file -e ":2:$f" 2>/dev/null; then
+        git checkout --ours -- "$f"
+        git add -- "$f"
+      else
+        git rm -q -f -- "$f"
+      fi
+    done < <(git ls-files -u -z | tr '\0' '\n' | cut -f2- | sort -u)
+    git commit --no-edit
+  fi
+steps: null
+postconditions:
+- name: no_unmerged_entries
+  description: the index has no unmerged paths left
+  probe: '! git ls-files -u | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_merged_into_head
+  description: the upstream branch is now an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: head_is_a_merge_commit
+  description: HEAD has a second parent, i.e. it is the merge commit
+  probe: git rev-parse --verify --quiet HEAD^2
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_worktree_clean
+  description: no staged or unstaged changes to tracked files remain
+  probe: '! git status --porcelain --untracked-files=no | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: no conflict markers remain anywhere in the merged tree
+  probe: '! git grep -q -e ''^<<<<<<< '' HEAD'
+  expect_exit: 0
+  expect_pattern: null
+- name: locally_removed_lines_stay_removed
+  description: for every path the local branch changed since the merge base, the lines
+    it removed are absent from the merged tree
+  probe: |-
+    git rev-parse -q --verify HEAD^2 >/dev/null || exit 1
+    base=$(git merge-base HEAD^1 HEAD^2)
+    while IFS= read -r p; do
+      [ -n "$p" ] || continue
+      git diff --quiet "$base" HEAD^1 -- "$p" && continue
+      git cat-file -e "HEAD:$p" 2>/dev/null || continue
+      while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        if git show "HEAD:$p" | grep -qxF -- "$line"; then
+          echo "locally removed line is back in $p: $line"
+          exit 1
+        fi
+      done < <(git diff --unified=0 "$base" HEAD^1 -- "$p" | grep '^-' | grep -v '^---' | sed 's/^-//')
+    done < <(git diff --name-only -z "$base" HEAD^1 | tr '\0' '\n')
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+variant: keep_local
+provenance:
+  compiled_from_task: Update this branch from upstream and make sure the dependency
+    list still makes sense. Keep my dependency file, with what I removed still removed,
+    and add what upstream added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Update this branch from upstream and make sure the dependency list still
+    makes sense. Keep my dependency file, with what I removed still removed, and add
+    what upstream added./seed-2-lockfile_conflict-10026
+  fault: lockfile_conflict
+status: admitted

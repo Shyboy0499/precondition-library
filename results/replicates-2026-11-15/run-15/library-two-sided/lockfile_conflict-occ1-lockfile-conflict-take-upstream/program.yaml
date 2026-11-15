@@ -1,0 +1,255 @@
+id: lockfile_conflict-occ1-lockfile-conflict-take-upstream
+intent: merge an upstream dependency lockfile change by taking upstream's file as
+  the base and restoring only local package additions, without resurrecting upstream
+  removals, when the local side has not itself removed a package entry
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_exists
+  description: the configured upstream remote is present
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_branch_exists
+  description: the remote-tracking ref for the upstream branch exists
+  probe: git rev-parse --verify -q {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: the worktree has no uncommitted or untracked changes before merging
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: diverged_from_upstream
+  description: HEAD and upstream have both unique commits, so a merge is required
+  probe: |-
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0 &&
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: only_lockfiles_changed
+  description: local and upstream changes since the merge base touch only .lock files
+  probe: |-
+    merge_base="$(git merge-base HEAD {upstream_remote}/{upstream_branch})" &&
+    test -z "$({ git diff --name-only -z "$merge_base" HEAD -- | tr '\0' '\n'; git diff --name-only -z "$merge_base" {upstream_remote}/{upstream_branch} -- | tr '\0' '\n'; } | grep -vE '(^|/)[^/]*\.lock$')"
+  expect_exit: 0
+  expect_pattern: null
+- name: shared_lockfile_modified_both_sides
+  description: at least one tracked .lock file was modified by both sides since merge
+    base
+  probe: |-
+    merge_base="$(git merge-base HEAD {upstream_remote}/{upstream_branch})" &&
+    comm -12 \
+      <(git diff --name-only -z "$merge_base" HEAD -- | tr '\0' '\n' | grep -E '(^|/)[^/]*\.lock$' | sort) \
+      <(git diff --name-only -z "$merge_base" {upstream_remote}/{upstream_branch} -- | tr '\0' '\n' | grep -E '(^|/)[^/]*\.lock$' | sort) \
+      | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: local_added_package_line
+  description: the local side added at least one quoted package entry to the shared
+    lockfile
+  probe: |-
+    merge_base="$(git merge-base HEAD {upstream_remote}/{upstream_branch})" &&
+    path="$(comm -12 \
+      <(git diff --name-only -z "$merge_base" HEAD -- | tr '\0' '\n' | grep -E '(^|/)[^/]*\.lock$' | sort) \
+      <(git diff --name-only -z "$merge_base" {upstream_remote}/{upstream_branch} -- | tr '\0' '\n' | grep -E '(^|/)[^/]*\.lock$' | sort) \
+      | head -n 1)" &&
+    test -n "$path" &&
+    git diff --unified=0 "$merge_base" HEAD -- "$path" \
+      | awk '/^@@/ { pure=0; if (match($0, /^@@ -[0-9]+,0 \+/)) pure=1; next }
+             pure && /^\+[^+]/ { print substr($0,2) }' \
+      | grep -E '^[[:space:]]*\".*\",?[[:space:]]*$' >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+- name: local_side_removed_no_package_entry
+  description: the local side has not removed a quoted package entry from the shared
+    lockfile, so taking upstream's version will not resurrect a local removal
+  probe: |-
+    merge_base="$(git merge-base HEAD {upstream_remote}/{upstream_branch})" &&
+    path="$(comm -12 \
+      <(git diff --name-only -z "$merge_base" HEAD -- | tr '\0' '\n' | grep -E '(^|/)[^/]*\.lock$' | sort) \
+      <(git diff --name-only -z "$merge_base" {upstream_remote}/{upstream_branch} -- | tr '\0' '\n' | grep -E '(^|/)[^/]*\.lock$' | sort) \
+      | head -n 1)" &&
+    test -n "$path" &&
+    if git diff --unified=0 "$merge_base" HEAD -- "$path" \
+       | awk '/^@@/ { pure_del=0; if (match($0, /^@@ -[0-9]+(,[0-9]+)? \+[0-9]+,0 @@/)) pure_del=1; next }
+              pure_del && /^-[^-]/ { print substr($0,2) }' \
+       | grep -q -E '^[[:space:]]*\".*\",?[[:space:]]*$'; then
+      exit 1
+    fi
+  expect_exit: 0
+  expect_pattern: null
+- name: lockfile_has_package_list
+  description: the upstream version of the shared lockfile has a packages list
+  probe: |-
+    merge_base="$(git merge-base HEAD {upstream_remote}/{upstream_branch})" &&
+    path="$(comm -12 \
+      <(git diff --name-only -z "$merge_base" HEAD -- | tr '\0' '\n' | grep -E '(^|/)[^/]*\.lock$' | sort) \
+      <(git diff --name-only -z "$merge_base" {upstream_remote}/{upstream_branch} -- | tr '\0' '\n' | grep -E '(^|/)[^/]*\.lock$' | sort) \
+      | head -n 1)" &&
+    test -n "$path" &&
+    git show "{upstream_remote}/{upstream_branch}:$path" | grep -q '^packages = \['
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -eu
+
+  fetch_remote="{upstream_remote}"
+  upstream_ref="{upstream_remote}/{upstream_branch}"
+
+  git fetch "$fetch_remote"
+
+  merge_base="$(git merge-base HEAD "$upstream_ref")"
+
+  shared_lockfiles="$(comm -12 \
+    <(git diff --name-only -z "$merge_base" HEAD -- | tr '\0' '\n' | grep -E '(^|/)[^/]*\.lock$' | sort) \
+    <(git diff --name-only -z "$merge_base" "$upstream_ref" -- | tr '\0' '\n' | grep -E '(^|/)[^/]*\.lock$' | sort))"
+
+  if [ -z "$shared_lockfiles" ]; then
+    echo "no shared lockfile found" >&2
+    exit 1
+  fi
+
+  resolve_lockfile() {
+    path="$1"
+    merge_base="$2"
+
+    base_file="$(mktemp)"
+    local_file="$(mktemp)"
+    upstream_file="$(mktemp)"
+    added_file="$(mktemp)"
+    trap 'rm -f "$base_file" "$local_file" "$upstream_file" "$added_file"' RETURN
+
+    git show ":1:$path" > "$base_file" 2>/dev/null || git show "$merge_base:$path" > "$base_file"
+    git show ":2:$path" > "$local_file" 2>/dev/null || git show "HEAD:$path" > "$local_file"
+    git show ":3:$path" > "$upstream_file" 2>/dev/null || git show "$upstream_ref:$path" > "$upstream_file"
+
+    git diff --no-index --unified=0 "$base_file" "$local_file" \
+      | awk '/^@@/ { pure=0; if (match($0, /^@@ -[0-9]+,0 \+/)) pure=1; next }
+             pure && /^\+[^+]/ { print substr($0,2) }' \
+      | grep -E '^[[:space:]]*\".*\",?[[:space:]]*$' > "$added_file" || true
+
+    insert_ln="$(awk -v base_file="$base_file" '
+      BEGIN { while ((getline line < base_file) > 0) base[line]=1 }
+      /^packages = \[/ { in_pkgs=1; next }
+      in_pkgs && /^\]/ { exit }
+      in_pkgs && base[$0] { print NR; exit }
+    ' "$upstream_file")"
+
+    if [ -z "$insert_ln" ]; then
+      insert_ln="$(awk '
+        /^packages = \[/ { in_pkgs=1; next }
+        in_pkgs && /^\]/ { print NR; exit }
+      ' "$upstream_file")"
+    fi
+
+    if [ -z "$insert_ln" ]; then
+      echo "could not find packages block in $path" >&2
+      exit 1
+    fi
+
+    awk -v insert_ln="$insert_ln" -v added_file="$added_file" -v upstream_file="$upstream_file" '
+      BEGIN {
+        while ((getline line < upstream_file) > 0) seen[line]=1
+        while ((getline line < added_file) > 0) { n++; add[n]=line }
+      }
+      NR == insert_ln {
+        for (i=1; i<=n; i++) {
+          line=add[i]
+          if (line != "" && !(line in seen)) {
+            print line
+            seen[line]=1
+          }
+        }
+      }
+      { print; seen[$0]=1 }
+    ' "$upstream_file" > "$path"
+
+    git add -- "$path"
+
+    rm -f "$base_file" "$local_file" "$upstream_file" "$added_file"
+    trap - RETURN
+  }
+
+  if ! git merge "$upstream_ref" --no-edit; then
+    while IFS= read -r -d '' path; do
+      case "$path" in
+        *.lock) : ;;
+        *) echo "unexpected conflict: $path" >&2; exit 1 ;;
+      esac
+
+      resolve_lockfile "$path" "$merge_base"
+    done < <(git diff --name-only --diff-filter=U -z)
+
+    if git diff --name-only --diff-filter=U -z | grep -q .; then
+      echo "unresolved conflicts remain" >&2
+      exit 1
+    fi
+
+    git add --all
+    git commit --no-edit
+  fi
+steps: null
+postconditions:
+- name: upstream_is_ancestor
+  description: HEAD contains the upstream branch
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: no files are left in a conflicted or uncommitted state
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_lockfile_additions_present
+  description: every package entry locally added to the lockfile since the merge base
+    is still present
+  probe: |-
+    orig_head="$(git rev-parse HEAD^1)" &&
+    merge_base="$(git merge-base "$orig_head" {upstream_remote}/{upstream_branch})" &&
+    paths="$(comm -12 \
+      <(git diff --name-only -z "$merge_base" "$orig_head" -- | tr '\0' '\n' | grep -E '(^|/)[^/]*\.lock$' | sort) \
+      <(git diff --name-only -z "$merge_base" {upstream_remote}/{upstream_branch} -- | tr '\0' '\n' | grep -E '(^|/)[^/]*\.lock$' | sort))" &&
+    while IFS= read -r path; do
+      test -n "$path" || continue
+      while IFS= read -r addline; do
+        grep -Fxq -- "$addline" "$path" || exit 1
+      done < <(git diff --unified=0 "$merge_base" "$orig_head" -- "$path" \
+        | awk '/^@@/ { pure=0; if (match($0, /^@@ -[0-9]+,0 \+/)) pure=1; next }
+               pure && /^\+[^+]/ { print substr($0,2) }' \
+        | grep -E '^[[:space:]]*\".*\",?[[:space:]]*$' || true)
+    done <<< "$paths"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_removed_lockfile_entries_absent
+  description: entries removed by upstream from the lockfile are not resurrected
+  probe: |-
+    orig_head="$(git rev-parse HEAD^1)" &&
+    merge_base="$(git merge-base "$orig_head" {upstream_remote}/{upstream_branch})" &&
+    paths="$(comm -12 \
+      <(git diff --name-only -z "$merge_base" "$orig_head" -- | tr '\0' '\n' | grep -E '(^|/)[^/]*\.lock$' | sort) \
+      <(git diff --name-only -z "$merge_base" {upstream_remote}/{upstream_branch} -- | tr '\0' '\n' | grep -E '(^|/)[^/]*\.lock$' | sort))" &&
+    while IFS= read -r path; do
+      test -n "$path" || continue
+      while IFS= read -r removed; do
+        if grep -Fxq -- "$removed" "$path"; then exit 1; fi
+      done < <(git diff --unified=0 "$merge_base" {upstream_remote}/{upstream_branch} -- "$path" \
+        | awk '/^@@/ { pure_del=0; if (match($0, /^@@ -[0-9]+(,[0-9]+)? \+[0-9]+,0 @@/)) pure_del=1; next }
+               pure_del && /^-[^-]/ { print substr($0,2) }' \
+        | grep -E '^[[:space:]]*\".*\",?[[:space:]]*$' || true)
+    done <<< "$paths"
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: Catch up with upstream without losing what either side added,
+    or reviving what either side removed. Start from upstream's dependency file and
+    add back what I added.
+  model: deepseek-v4-pro
+  compiler_version: 0.0.1
+  episode_id: Catch up with upstream without losing what either side added, or reviving
+    what either side removed. Start from upstream's dependency file and add back what
+    I added./seed-5-lockfile_conflict-10027
+  fault: lockfile_conflict
+status: admitted

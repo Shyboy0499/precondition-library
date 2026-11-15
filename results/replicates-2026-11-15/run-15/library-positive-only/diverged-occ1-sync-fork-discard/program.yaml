@@ -1,0 +1,61 @@
+id: diverged-occ1-sync-fork-discard
+intent: make the current branch match upstream exactly by discarding local commits
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: clean_worktree
+  description: the working tree and index have no changes or untracked files
+  probe: |
+    set -eu
+    git diff --quiet
+    git diff --cached --quiet
+    test -z "$(git ls-files --others --exclude-standard)"
+  expect_exit: 0
+  expect_pattern: null
+- name: on_a_branch
+  description: HEAD is attached to a branch, not detached
+  probe: |
+    set -eu
+    git symbolic-ref --quiet HEAD >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+- name: local_ahead_of_upstream
+  description: the current branch has commits that upstream does not have
+  probe: |
+    set -eu
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -eu
+  git fetch {upstream_remote}
+  git reset --hard {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is the same commit as the upstream remote-tracking branch
+  probe: |
+    set -eu
+    test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: reset leaves no tracked or untracked changes
+  probe: |-
+    set -eu
+    git diff --quiet
+    git diff --cached --quiet
+    test -z "$(git ls-files --others --exclude-standard)"
+  expect_exit: 0
+  expect_pattern: null
+variant: discard
+provenance:
+  compiled_from_task: 'Get this fork back in sync with upstream without losing my
+    commits. My local commits can go: make my branch match upstream exactly.'
+  model: deepseek-v4-pro
+  compiler_version: 0.0.1
+  episode_id: 'Get this fork back in sync with upstream without losing my commits.
+    My local commits can go: make my branch match upstream exactly./seed-1-diverged-10027'
+  fault: diverged
+status: admitted

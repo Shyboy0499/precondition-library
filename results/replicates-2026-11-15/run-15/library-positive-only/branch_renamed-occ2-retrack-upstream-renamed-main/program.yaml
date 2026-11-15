@@ -1,0 +1,61 @@
+id: branch_renamed-occ2-retrack-upstream-renamed-main
+intent: retarget the current branch to upstream's new default branch and fast-forward
+  it
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_clean_branch
+  description: HEAD points to a branch and the worktree has no local changes
+  probe: |-
+    git symbolic-ref -q HEAD >/dev/null
+    test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: target_remote_branch_exists
+  description: the upstream remote is configured and its target branch ref is present
+  probe: |-
+    git remote get-url {upstream_remote} >/dev/null
+    git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}^{commit} >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+- name: wrong_or_missing_tracking
+  description: current branch is not already tracking upstream's new branch
+  probe: |-
+    upstream=$(git rev-parse --abbrev-ref @{upstream} 2>/dev/null) || exit 0
+    test "$upstream" != "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: can_fast_forward_to_target
+  description: current HEAD is an ancestor of upstream's new branch
+  probe: git merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+  git branch --set-upstream-to={upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: tracks_upstreams_new_branch
+  description: current branch tracks upstream's new branch
+  probe: test "$(git rev-parse --abbrev-ref @{upstream} 2>/dev/null)" = "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: caught_up_to_target
+  description: HEAD matches upstream's new branch commit
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch}^{commit})"
+  expect_exit: 0
+  expect_pattern: null
+variant: retrack
+provenance:
+  compiled_from_task: Make this branch follow upstream's current main line again,
+    and catch it up. Keep my branch's name, point its tracking at upstream's new branch
+    and catch up.
+  model: deepseek-v4-pro
+  compiler_version: 0.0.1
+  episode_id: Make this branch follow upstream's current main line again, and catch
+    it up. Keep my branch's name, point its tracking at upstream's new branch and
+    catch up./seed-6-branch_renamed-10027
+  fault: branch_renamed
+status: admitted

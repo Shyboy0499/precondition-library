@@ -1,0 +1,103 @@
+id: diverged-occ2-diverged-rebase-onto-upstream
+intent: Replay local commits on top of the upstream branch by rebasing so history
+  stays linear
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: clean_worktree
+  description: the working tree and index have no uncommitted changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: remote_tracking_ref_exists
+  description: the upstream remote-tracking branch is present locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_tracks_upstream_branch
+  description: the current branch is configured to track exactly the branch it would
+    be rebased onto
+  probe: test "$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)"
+    = "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_default_branch_matches
+  description: the remote's recorded default branch, when there is one, is the branch
+    being rebased onto
+  probe: |-
+    if git symbolic-ref --quiet refs/remotes/{upstream_remote}/HEAD >/dev/null 2>&1; then
+      test "$(git rev-parse --abbrev-ref refs/remotes/{upstream_remote}/HEAD)" = "{upstream_remote}/{upstream_branch}"
+    fi
+  expect_exit: 0
+  expect_pattern: null
+- name: local_branch_has_commits
+  description: HEAD has commits that are not in the upstream branch
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_has_commits
+  description: the upstream branch has commits that are not in HEAD
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: attached_to_branch
+  description: HEAD is attached to a branch rather than detached
+  probe: git symbolic-ref --quiet HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: no_rebase_or_merge_in_progress
+  description: no rebase or merge operation is already in progress
+  probe: test ! -d "$(git rev-parse --git-path rebase-merge)" && test ! -d "$(git
+    rev-parse --git-path rebase-apply)" && test ! -e "$(git rev-parse --git-path MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_overlapping_changed_files
+  description: no file is modified by both the local commits and the upstream commits,
+    so the replay applies without conflicts
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    ! comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git rebase {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: upstream_is_ancestor
+  description: the upstream branch is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_commits
+  description: no merge commits remain between upstream and HEAD
+  probe: '! git rev-list --merges {upstream_remote}/{upstream_branch}..HEAD | grep
+    -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_still_ahead
+  description: HEAD still has the local commits on top of upstream
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree_after
+  description: the working tree and index are clean after the rebase
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: rebase
+provenance:
+  compiled_from_task: Upstream moved ahead of me. Get me back in line with it. Replay
+    my local commits on top of upstream so the history stays linear.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Upstream moved ahead of me. Get me back in line with it. Replay my local
+    commits on top of upstream so the history stays linear./seed-2-diverged-10026
+  fault: diverged
+status: admitted

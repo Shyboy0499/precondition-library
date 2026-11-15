@@ -1,0 +1,56 @@
+id: dirty_tree-occ2-commit-then-sync-upstream
+intent: Commit uncommitted working-tree changes first, then bring the branch up to
+  date with upstream
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_tracking_ref_exists
+  description: the upstream remote-tracking branch is present
+  probe: git rev-parse --verify refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: dirty_working_tree
+  description: the working tree contains uncommitted changes
+  probe: test -n "$(git status --porcelain=v1)"
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_behind_upstream
+  description: the current branch is behind the upstream remote-tracking branch
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: '[1-9][0-9]*'
+body: |
+  git fetch {upstream_remote}
+  git add -A
+  git commit -m "Commit local changes before syncing with {upstream_remote}/{upstream_branch}"
+  git merge --no-edit {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: clean_working_tree
+  description: the working tree contains no uncommitted changes
+  probe: test -z "$(git status --porcelain=v1)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ancestor_of_head
+  description: upstream is fully merged into HEAD, so the branch is not behind
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_work_committed
+  description: the commit created from the working tree is in HEAD's history
+  probe: git log --format=%s {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: Commit local changes before syncing with
+variant: commit
+provenance:
+  compiled_from_task: My working tree has changes and the branch is behind upstream.
+    Fix that and keep my changes. Commit my uncommitted work first, then bring the
+    branch up to date.
+  model: deepseek-v4-pro
+  compiler_version: 0.0.1
+  episode_id: My working tree has changes and the branch is behind upstream. Fix that
+    and keep my changes. Commit my uncommitted work first, then bring the branch up
+    to date./seed-0-dirty_tree-10027
+  fault: dirty_tree
+status: admitted

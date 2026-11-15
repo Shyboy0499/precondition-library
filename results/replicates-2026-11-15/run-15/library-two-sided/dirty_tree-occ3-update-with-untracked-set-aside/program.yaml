@@ -1,0 +1,86 @@
+id: dirty_tree-occ3-update-with-untracked-set-aside
+intent: bring the current branch up to date with upstream while preserving untracked
+  files that collide with upstream as .local sidecars
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_fast_forwardable
+  description: the current branch is strictly behind its upstream remote-tracking
+    ref and has no local-only commits
+  probe: |
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0 &&
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -eq 0
+  expect_exit: 0
+  expect_pattern: null
+- name: untracked_file_collides_with_upstream
+  description: at least one untracked file occupies a path that exists in the upstream
+    branch
+  probe: |
+    comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git ls-tree -r --name-only -z {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) \
+      | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_changes_do_not_overlap_upstream
+  description: locally modified tracked files are disjoint from files changed by upstream,
+    so a fast-forward merge will not overwrite them
+  probe: |
+    ! comm -12 \
+      <(git diff --name-only -z HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) \
+      | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+
+  git fetch {upstream_remote}
+
+  while IFS= read -r -d '' path; do
+    if git cat-file -e "{upstream_remote}/{upstream_branch}:$path" 2>/dev/null; then
+      if [ ! -e "$path.local" ]; then
+        cp -- "$path" "$path.local"
+      fi
+      GIT_LITERAL_PATHSPECS=1 git clean -f -- "$path"
+    fi
+  done < <(git ls-files --others --exclude-standard -z)
+
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: branch_matches_upstream
+  description: HEAD now points at the same commit as the upstream remote-tracking
+    branch
+  probe: |
+    test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_colliding_untracked_paths_remain
+  description: apart from .local sidecars, no untracked file occupies a path tracked
+    by upstream
+  probe: |
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | grep -v '\.local$' | sort) \
+      <(git ls-tree -r --name-only -z {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) \
+      | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: local_sidecars_exist
+  description: at least one .local sidecar was left to preserve unsaved work
+  probe: git ls-files --others --exclude-standard -z | tr '\0' '\n' | grep -q '\.local$'
+  expect_exit: 0
+  expect_pattern: null
+variant: aside
+provenance:
+  compiled_from_task: Bring this branch up to date with upstream, but my work in progress
+    must survive. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update.
+  model: deepseek-v4-pro
+  compiler_version: 0.0.1
+  episode_id: Bring this branch up to date with upstream, but my work in progress
+    must survive. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update./seed-2-dirty_tree-10027
+  fault: dirty_tree
+status: admitted

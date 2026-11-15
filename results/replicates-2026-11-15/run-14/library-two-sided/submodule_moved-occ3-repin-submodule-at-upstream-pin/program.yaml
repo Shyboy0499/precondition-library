@@ -1,0 +1,88 @@
+id: submodule_moved-occ3-repin-submodule-at-upstream-pin
+intent: Reconcile this clone with upstream and check the nested repository out at
+  the commit upstream now pins.
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: upstream_ref_present
+  description: the upstream-tracking branch exists locally
+  probe: git rev-parse --verify --quiet "{upstream_remote}/{upstream_branch}^{commit}"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_gitlink_in_index
+  description: the path is recorded as a gitlink in the index
+  probe: git ls-files --stage -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: '^160000 '
+- name: submodule_initialised
+  description: the submodule working tree is initialized
+  probe: git submodule status -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: ^[ +]
+- name: upstream_pins_submodule
+  description: upstream still records a gitlink at the submodule path
+  probe: git ls-tree "{upstream_remote}/{upstream_branch}" -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: '^160000 '
+- name: local_not_ahead_of_upstream
+  description: HEAD is an ancestor of upstream so a fast-forward is possible
+  probe: git merge-base --is-ancestor HEAD "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_pin_differs_from_upstream
+  description: the index gitlink is not the commit upstream records
+  probe: |-
+    local_sha=$(git ls-files --stage -- "{submodule_path}" | awk 'NR==1{print $2}')
+    upstream_sha=$(git rev-parse "{upstream_remote}/{upstream_branch}:{submodule_path}")
+    test "$local_sha" != "$upstream_sha"
+  expect_exit: 0
+  expect_pattern: null
+- name: superproject_clean
+  description: the superproject has no staged, unstaged, or untracked changes
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch "{upstream_remote}"
+  git merge --ff-only "{upstream_remote}/{upstream_branch}"
+  git submodule update --init -- "{submodule_path}"
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: the superproject HEAD is upstream's tip
+  probe: |-
+    head_sha=$(git rev-parse HEAD)
+    upstream_sha=$(git rev-parse "{upstream_remote}/{upstream_branch}")
+    test "$head_sha" = "$upstream_sha"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_at_upstream_pin
+  description: the submodule checkout is the commit upstream records
+  probe: |-
+    submodule_sha=$(git -C "{submodule_path}" rev-parse HEAD)
+    pin_sha=$(git rev-parse "{upstream_remote}/{upstream_branch}:{submodule_path}")
+    test "$submodule_sha" = "$pin_sha"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_status_in_sync
+  description: git submodule status reports no mismatch for the path
+  probe: git submodule status -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: '^ '
+- name: worktree_clean
+  description: the superproject reports no changes after reconciliation
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+variant: repin
+provenance:
+  compiled_from_task: Upstream and this clone disagree about a nested repository.
+    Reconcile them. Check the nested repository out at the commit upstream now pins.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Upstream and this clone disagree about a nested repository. Reconcile
+    them. Check the nested repository out at the commit upstream now pins./seed-1-submodule_moved-10026
+  fault: submodule_moved
+status: admitted

@@ -1,0 +1,90 @@
+id: branch_renamed-occ3-retrack-and-merge-upstream-default
+intent: track upstream's new default branch and merge it into the current branch
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_exists
+  description: the configured {upstream_remote} remote exists
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_new_branch_ref_exists
+  description: a remote-tracking ref for {upstream_remote}/{upstream_branch} is present
+  probe: git show-ref --verify --quiet refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the worktree has no uncommitted changes
+  probe: |-
+    set -e
+    test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: current_branch_tracks_other_upstream
+  description: the current branch tracks an upstream branch under {upstream_remote}
+    that is not {upstream_remote}/{upstream_branch}
+  probe: |-
+    set -e
+    current_remote="$(git config --get "branch.$(git symbolic-ref --short HEAD).remote")"
+    current_upstream="$(git rev-parse --abbrev-ref '@{upstream}')"
+    test "$current_remote" = "{upstream_remote}"
+    test "$current_upstream" != "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_branch_is_ahead_of_current_upstream
+  description: the current branch has commits of its own
+  probe: |-
+    set -e
+    test "$(git rev-list --count '@{upstream}..HEAD')" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: new_upstream_has_new_commits
+  description: '{upstream_remote}/{upstream_branch} has commits not in the current
+    branch'
+  probe: |-
+    set -e
+    test "$(git rev-list --count 'HEAD..{upstream_remote}/{upstream_branch}')" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git branch --set-upstream-to={upstream_remote}/{upstream_branch}
+  git merge --no-edit {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: branch_tracks_upstream_default
+  description: the current branch now tracks {upstream_remote}/{upstream_branch}
+  probe: |-
+    set -e
+    test "$(git rev-parse --abbrev-ref '@{upstream}')" = "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: new_upstream_merged
+  description: '{upstream_remote}/{upstream_branch} is an ancestor of HEAD'
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_preserved
+  description: HEAD still has commits not in {upstream_remote}/{upstream_branch}
+  probe: |-
+    set -e
+    test "$(git rev-list --count '{upstream_remote}/{upstream_branch}..HEAD')" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_merge
+  description: the worktree is clean after the merge
+  probe: |-
+    set -e
+    test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: retrack
+provenance:
+  compiled_from_task: Make this branch follow upstream's current main line again,
+    and catch it up. Track upstream's new branch and merge it into my own commits.
+  model: deepseek-v4-pro
+  compiler_version: 0.0.1
+  episode_id: Make this branch follow upstream's current main line again, and catch
+    it up. Track upstream's new branch and merge it into my own commits./seed-1-branch_renamed-10027
+  fault: branch_renamed
+status: admitted

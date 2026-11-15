@@ -1,0 +1,51 @@
+id: submodule_moved-occ2-init-nested-repository
+intent: Initialise the nested repository declared in the superproject and check it
+  out at its recorded commit.
+parameters:
+- submodule_path
+preconditions:
+- name: submodule_declared
+  description: .gitmodules declares a submodule at the given path
+  probe: git config -f .gitmodules --get submodule.{submodule_path}.path
+  expect_exit: 0
+  expect_pattern: ^{submodule_path}$
+- name: gitlink_recorded
+  description: HEAD records a gitlink for the submodule path
+  probe: git ls-tree HEAD -- {submodule_path}
+  expect_exit: 0
+  expect_pattern: ^160000 commit [0-9a-f]{40}
+- name: submodule_not_initialised
+  description: the submodule working tree is not initialised yet
+  probe: git submodule status -- {submodule_path} | grep -q '^-'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git -c protocol.file.allow=always submodule update --init --recursive -- {submodule_path}
+steps: null
+postconditions:
+- name: submodule_initialised_at_pin
+  description: the submodule is checked out at the commit recorded by the superproject
+  probe: git submodule status -- {submodule_path}
+  expect_exit: 0
+  expect_pattern: ^ [0-9a-f]{40}
+- name: submodule_head_matches_gitlink
+  description: the submodule HEAD equals the gitlink commit in the superproject
+  probe: test "$(git rev-parse HEAD:{submodule_path})" = "$(git -C {submodule_path}
+    rev-parse HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_submodule_status_changes
+  description: the superproject reports no pending changes for the submodule
+  probe: test -z "$(git status --porcelain -- {submodule_path})"
+  expect_exit: 0
+  expect_pattern: null
+variant: init
+provenance:
+  compiled_from_task: A nested repository in this project needs bringing into line.
+    Initialise the nested repository and check it out.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: A nested repository in this project needs bringing into line. Initialise
+    the nested repository and check it out./seed-4-submodule_moved-10026
+  fault: submodule_moved
+status: admitted

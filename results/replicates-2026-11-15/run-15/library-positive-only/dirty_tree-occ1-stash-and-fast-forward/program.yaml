@@ -1,0 +1,75 @@
+id: dirty_tree-occ1-stash-and-fast-forward
+intent: get latest from upstream while preserving uncommitted changes
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: has_upstream_remote
+  description: the upstream remote is configured
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_exists
+  description: the upstream remote-tracking branch exists
+  probe: git rev-parse --verify refs/remotes/{upstream_remote}/{upstream_branch}^{commit}
+  expect_exit: 0
+  expect_pattern: null
+- name: on_a_branch
+  description: HEAD is attached to a branch
+  probe: git symbolic-ref -q HEAD >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+- name: working_tree_is_dirty
+  description: there are uncommitted changes to preserve
+  probe: test -n "$(git status --porcelain --untracked-files=all)"
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_behind_upstream
+  description: upstream has commits that the local branch does not
+  probe: test "$(git rev-list --count HEAD..refs/remotes/{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_not_ahead_of_upstream
+  description: the local branch has no commits that upstream lacks
+  probe: test "$(git rev-list --count refs/remotes/{upstream_remote}/{upstream_branch}..HEAD)"
+    -eq 0
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: the worktree is not in the middle of a merge conflict
+  probe: test -z "$(git diff --name-only --diff-filter=U)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git stash push -u -m "auto-stash before upstream update"
+  git pull --ff-only {upstream_remote} {upstream_branch}
+  git stash pop
+steps: null
+postconditions:
+- name: branch_matches_upstream
+  description: HEAD now points at the upstream branch commit
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse refs/remotes/{upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: uncommitted_changes_restored
+  description: the worktree is dirty again with the restored changes
+  probe: test -n "$(git status --porcelain --untracked-files=all)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_auto_stash_remaining
+  description: the temporary auto-stash was popped and not left behind
+  probe: '! git stash list | grep -q ''auto-stash before upstream update'''
+  expect_exit: 0
+  expect_pattern: null
+variant: stash
+provenance:
+  compiled_from_task: Get the latest from upstream here, and keep every change I have
+    not saved yet. Stash my uncommitted work, update the branch, then put my work
+    back.
+  model: deepseek-v4-pro
+  compiler_version: 0.0.1
+  episode_id: Get the latest from upstream here, and keep every change I have not
+    saved yet. Stash my uncommitted work, update the branch, then put my work back./seed-5-dirty_tree-10027
+  fault: dirty_tree
+status: admitted

@@ -1,0 +1,67 @@
+id: submodule_moved-occ3-reconcile-submodule-repin
+intent: Reconcile a nested repository with upstream by fast-forwarding the clone and
+  checking out the upstream-pinned submodule commit
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: clean_worktree
+  description: the superproject working tree has no tracked or untracked changes
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_strictly_ahead
+  description: HEAD is an ancestor of the upstream remote-tracking branch and upstream
+    is not an ancestor of HEAD
+  probe: git merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch} &&
+    ! git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_referenced_by_both
+  description: both HEAD and the upstream remote-tracking branch contain a gitlink
+    at {submodule_path}
+  probe: git ls-tree HEAD -- "{submodule_path}" | grep -q '^160000 commit ' && git
+    ls-tree {upstream_remote}/{upstream_branch} -- "{submodule_path}" | grep -q '^160000
+    commit '
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_initialised
+  description: the nested repository has been initialized and is a git worktree
+  probe: git -C "{submodule_path}" rev-parse --git-dir >/dev/null 2>&1
+  expect_exit: 0
+  expect_pattern: null
+- name: only_submodule_gitlink_differs
+  description: upstream differs from HEAD only in the nested repository gitlink
+  probe: '! git diff --quiet HEAD {upstream_remote}/{upstream_branch} -- "{submodule_path}"
+    && ! git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr ''\0''
+    ''\n'' | grep -vxF -- "{submodule_path}" | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+  git submodule update --checkout -- "{submodule_path}"
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is now the upstream remote-tracking branch commit
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_checked_out_at_pinned_commit
+  description: the nested repository working tree HEAD matches the gitlink recorded
+    in the superproject HEAD
+  probe: test "$(git -C "{submodule_path}" rev-parse HEAD)" = "$(git rev-parse "HEAD:{submodule_path}")"
+  expect_exit: 0
+  expect_pattern: null
+variant: repin
+provenance:
+  compiled_from_task: Upstream and this clone disagree about a nested repository.
+    Reconcile them. Check the nested repository out at the commit upstream now pins.
+  model: deepseek-v4-pro
+  compiler_version: 0.0.1
+  episode_id: Upstream and this clone disagree about a nested repository. Reconcile
+    them. Check the nested repository out at the commit upstream now pins./seed-1-submodule_moved-10027
+  fault: submodule_moved
+status: admitted

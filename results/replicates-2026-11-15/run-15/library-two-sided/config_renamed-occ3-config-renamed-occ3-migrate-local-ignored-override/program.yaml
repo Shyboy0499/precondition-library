@@ -1,0 +1,133 @@
+id: config_renamed-occ3-config-renamed-occ3-migrate-local-ignored-override
+intent: Migrate the stale key in the user's ignored config override file to the upstream
+  name and keep that file untracked
+parameters: []
+preconditions:
+- name: tracked_rename_mapping
+  description: config/renames.conf is tracked and contains at least one old=new mapping
+  probe: |-
+    test -f config/renames.conf &&
+    git ls-files --error-unmatch -- config/renames.conf >/dev/null &&
+    cat config/renames.conf | awk -F= '
+      /^[[:space:]]*#/ { next }
+      NF >= 2 {
+        o=$1; n=$2;
+        sub(/^[[:space:]]+/,"",o); sub(/[[:space:]]+$/,"",o);
+        sub(/[[:space:]]*#.*$/,"",n);
+        sub(/^[[:space:]]+/,"",n); sub(/[[:space:]]+$/,"",n);
+        if (o != "" && n != "") found=1
+      }
+      END { exit !found }'
+  expect_exit: 0
+  expect_pattern: null
+- name: override_ignored_untracked
+  description: config/local.conf exists, is not tracked, and is ignored
+  probe: |-
+    test -f config/local.conf &&
+    ! git ls-files --error-unmatch -- config/local.conf >/dev/null 2>&1 &&
+    git check-ignore -q -- config/local.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: override_has_stale_old_key
+  description: config/local.conf contains a key listed as old in config/renames.conf
+  probe: |-
+    while IFS=$'\t' read -r old new; do
+      if awk -v key="$old" -F= '
+        {
+          k=$1; sub(/^[[:space:]]+/,"",k); sub(/[[:space:]]+$/,"",k);
+          if (k == key) found=1
+        }
+        END { exit !found }' config/local.conf; then
+        exit 0
+      fi
+    done < <(cat config/renames.conf | awk -F= '
+      /^[[:space:]]*#/ { next }
+      NF >= 2 {
+        o=$1; n=$2;
+        sub(/^[[:space:]]+/,"",o); sub(/[[:space:]]+$/,"",o);
+        sub(/[[:space:]]*#.*$/,"",n);
+        sub(/^[[:space:]]+/,"",n); sub(/[[:space:]]+$/,"",n);
+        if (o != "" && n != "") print o "\t" n
+      }')
+    exit 1
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+  while IFS=$'\t' read -r old new; do
+    if awk -v key="$old" -F= '
+      {
+        k=$1; sub(/^[[:space:]]+/,"",k); sub(/[[:space:]]+$/,"",k);
+        if (k == key) found=1
+      }
+      END { exit !found }' config/local.conf; then
+      old_re=$(printf '%s' "$old" | sed 's/[^A-Za-z0-9_]/\\&/g')
+      new_repl=$(printf '%s' "$new" | sed 's/[&\\]/\\&/g')
+      sed -i -E "s/^([[:space:]]*)${old_re}([[:space:]]*=)/\1${new_repl}\2/" config/local.conf
+    fi
+  done < <(cat config/renames.conf | awk -F= '
+    /^[[:space:]]*#/ { next }
+    NF >= 2 {
+      o=$1; n=$2;
+      sub(/^[[:space:]]+/,"",o); sub(/[[:space:]]+$/,"",o);
+      sub(/[[:space:]]*#.*$/,"",n);
+      sub(/^[[:space:]]+/,"",n); sub(/[[:space:]]+$/,"",n);
+      if (o != "" && n != "") print o "\t" n
+    }')
+steps: null
+postconditions:
+- name: override_remains_ignored_untracked
+  description: config/local.conf exists and is still ignored and untracked
+  probe: |-
+    test -f config/local.conf &&
+    ! git ls-files --error-unmatch -- config/local.conf >/dev/null 2>&1 &&
+    git check-ignore -q -- config/local.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: override_renamed_keys_consistent
+  description: config/local.conf has at least one new key from the rename map and
+    no old key from it
+  probe: |-
+    old_keys=$(cat config/renames.conf | awk -F= '
+      /^[[:space:]]*#/ { next }
+      NF >= 2 {
+        o=$1; n=$2;
+        sub(/^[[:space:]]+/,"",o); sub(/[[:space:]]+$/,"",o);
+        sub(/[[:space:]]*#.*$/,"",n);
+        sub(/^[[:space:]]+/,"",n); sub(/[[:space:]]+$/,"",n);
+        if (o != "" && n != "") print o
+      }' | sort -u)
+    new_keys=$(cat config/renames.conf | awk -F= '
+      /^[[:space:]]*#/ { next }
+      NF >= 2 {
+        o=$1; n=$2;
+        sub(/^[[:space:]]+/,"",o); sub(/[[:space:]]+$/,"",o);
+        sub(/[[:space:]]*#.*$/,"",n);
+        sub(/^[[:space:]]+/,"",n); sub(/[[:space:]]+$/,"",n);
+        if (o != "" && n != "") print n
+      }' | sort -u)
+    local_keys=$(awk -F= '
+      /^[[:space:]]*#/ { next }
+      NF >= 1 {
+        k=$1; sub(/^[[:space:]]+/,"",k); sub(/[[:space:]]+$/,"",k);
+        if (k != "") print k
+      }' config/local.conf | sort -u)
+    if ! grep -qFxf <(printf '%s\n' "$new_keys") <(printf '%s\n' "$local_keys"); then
+      exit 1
+    fi
+    if grep -qFxf <(printf '%s\n' "$old_keys") <(printf '%s\n' "$local_keys"); then
+      exit 1
+    fi
+  expect_exit: 0
+  expect_pattern: null
+variant: migrate_local
+provenance:
+  compiled_from_task: Some setting in my config has been renamed upstream. Sort the
+    config out. Rename the old key in my own override file, and keep that file out
+    of git.
+  model: deepseek-v4-pro
+  compiler_version: 0.0.1
+  episode_id: Some setting in my config has been renamed upstream. Sort the config
+    out. Rename the old key in my own override file, and keep that file out of git./seed-12-config_renamed-10027
+  fault: config_renamed
+status: admitted
