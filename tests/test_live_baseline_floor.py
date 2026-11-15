@@ -84,3 +84,27 @@ def test_below_the_floor_the_summary_withholds_the_claim_wording() -> None:
     assert above.usable is True
     assert live._floor_lines(above) == [f"arm 2 baseline floor (spec §7 item 11): {above.reason}"]
     assert live._floor_lines(None) == []
+
+
+def test_the_floor_measures_only_the_plans_families(tmp_path) -> None:
+    """A run planned before `config_renamed` existed holds none of its programs. Judged on every
+    registered intent, its floor read "not measurable" for want of that family; judged on its
+    plan's faults, it is measured."""
+    library = _library(tmp_path / "lib", keep=lambda p: p.provenance.fault != "config_renamed")
+    five = [i.fault for i in ambiguous_intents() if i.fault != "config_renamed"]
+
+    every = live.baseline_floor(library)
+    assert (
+        every.reason.startswith("not measurable") and "update_renamed_config_keys" in every.reason
+    )
+
+    planned = live.baseline_floor(library, five)
+    assert planned.decidable > 0 and planned.lower_bound is not None
+    candidates = {
+        i.name: program_text_candidates(gold_programs(i.name))
+        for i in ambiguous_intents()
+        if i.fault in five
+    }
+    intents = [i for i in ambiguous_intents() if i.fault in five]
+    row = tune_baseline(candidates, lexical_similarity, intents)
+    assert planned == arm2_baseline_floor(row.decided, row.decidable)

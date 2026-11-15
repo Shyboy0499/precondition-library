@@ -221,7 +221,7 @@ NOT_A_WIN_OVER_TEXT = (
 )
 
 
-def baseline_floor(library: Library) -> BaselineFloor:
+def baseline_floor(library: Library, faults: Sequence[str] | None = None) -> BaselineFloor:
     """Spec §7 item 11 against `library`'s admitted programs, exactly as registered.
 
     Each ambiguous intent's candidates are its fault's admitted programs, one text per
@@ -234,13 +234,18 @@ def baseline_floor(library: Library) -> BaselineFloor:
     choice for arm 2 to make, so the floor is **not measurable**, which is not usable
     (#184): the third live run's library held only `rebase` for `diverged`, and
     `tune_baseline` refuses that rather than score a one-candidate decision.
+
+    `faults` are the run's plan's faults; only their intents are measured. Without it every
+    registered intent is, and a run whose plan predates a family (runs 11-13 predate
+    `config_renamed`, ADR-0041) was judged not measurable for lacking that family's programs.
     """
+    intents = [intent for intent in ambiguous_intents() if faults is None or intent.fault in faults]
     admitted = [p for p in library.load_all() if p.status is ProgramStatus.ADMITTED]
     candidates = {
         intent.name: program_text_candidates(
             [p for p in admitted if p.provenance.fault == intent.fault]
         )
-        for intent in ambiguous_intents()
+        for intent in intents
     }
     short = {name: sorted(found) for name, found in candidates.items() if len(found) < 2}
     if short:
@@ -257,7 +262,7 @@ def baseline_floor(library: Library) -> BaselineFloor:
                 f"programs give {named}"
             ),
         )
-    row = tune_baseline(candidates, library.similarity)
+    row = tune_baseline(candidates, library.similarity, intents)
     return arm2_baseline_floor(row.decided, row.decidable)
 
 
@@ -433,7 +438,7 @@ def _pair_level(result: LiveSummary, plan: LivePlan, library: Library, out: Path
     result.soft_threshold = learn_soft_threshold(
         soft_vote_outcomes(library, faults, plan.tune_seeds)
     )
-    result.arm2_floor = baseline_floor(library)
+    result.arm2_floor = baseline_floor(library, faults)
     outcomes = library_pair_outcomes(library, faults, plan.pair_seeds)
     figure = primary_report(outcomes.arm2, outcomes.arm3, baselines=outcomes.baselines())
     write_primary_report(figure, out / "primary")

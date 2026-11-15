@@ -282,6 +282,7 @@ def compare_scorers(
     *,
     seeds: Sequence[int] = PROBE_SEEDS,
     regimes: Sequence[Regime] = REGIMES,
+    intents: Sequence[IntentSpec] | None = None,
 ) -> list[ScorerDiscrimination]:
     """Run every scorer over the same pairs of each regime: one row per (regime, scorer).
 
@@ -303,7 +304,7 @@ def compare_scorers(
             pairs_seen = 0
             decided = 0
             decidable = 0
-            for intent in ambiguous_intents():
+            for intent in ambiguous_intents() if intents is None else intents:
                 if intent.name not in candidates_by_intent:
                     raise ValueError(
                         f"no candidate texts for intent {intent.name!r}; comparing scorers across "
@@ -340,7 +341,9 @@ def compare_scorers(
 
 
 def tune_baseline(
-    candidates_by_intent: Mapping[str, Mapping[str, str]], scorer: Similarity
+    candidates_by_intent: Mapping[str, Mapping[str, str]],
+    scorer: Similarity,
+    intents: Sequence[IntentSpec] | None = None,
 ) -> ScorerDiscrimination:
     """Arm 2's informed-regime discrimination on the **tune** seeds: what the floor judges.
 
@@ -355,11 +358,15 @@ def tune_baseline(
     it is the pre-registered measurement of the comparison's own baseline. `PROBE_SEEDS` and
     hand-written gold stay informational.
 
+    `intents` are the ambiguous intents measured, all of them by default; a run passes the ones
+    its plan's faults define, so a run built before a family existed is not judged on it.
+
     Raises when an intent has fewer than two candidate texts. An empty library would otherwise
     score 0 of every decidable pair and read as a baseline that failed the floor, when there
     was no baseline to measure.
     """
-    for intent in ambiguous_intents():
+    measured = ambiguous_intents() if intents is None else list(intents)
+    for intent in measured:
         found = candidates_by_intent.get(intent.name, {})
         if len(found) < 2:
             raise ValueError(
@@ -368,6 +375,10 @@ def tune_baseline(
                 f"measures an empty library rather than arm 2"
             )
     (row,) = compare_scorers(
-        {"arm2": scorer}, candidates_by_intent, seeds=TUNE_SEEDS, regimes=("informed",)
+        {"arm2": scorer},
+        candidates_by_intent,
+        seeds=TUNE_SEEDS,
+        regimes=("informed",),
+        intents=measured,
     )
     return row

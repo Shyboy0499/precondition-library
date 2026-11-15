@@ -12,6 +12,15 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Fixed
 
+- **Arm 2's floor measures only the run's own families.** Since `config_renamed` was added
+  (ADR-0041), `live.baseline_floor` scored every registered intent. A run planned before then
+  holds none of that family's programs, so a rescore of runs 12 and 13 read "not measurable"
+  where their committed floor is 111/240.
+  - **The fix:** the floor now measures the intents of the plan's faults, as Figure 1 already
+    did; `tune_baseline` and `compare_scorers` take the intents to measure.
+  - **What it affected:** no committed figure. The judge's first rescores (#295) are the only
+    run that read the wrong verdict, and they are rerun with the fix.
+
 - **The README caught up with studies 3–6.**
   - **The plain-language summary and the status box** stopped at study 1. They now say what the
     package-set studies found, and what is running on the DeepSeek key.
