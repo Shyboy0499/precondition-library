@@ -1,0 +1,161 @@
+id: config_renamed-occ1-migrate-settings-key-rename
+intent: migrate project settings keys from old names to current names
+parameters: []
+preconditions:
+- name: has_safely_renamable_stale_setting_key
+  description: config/renames.conf maps at least one old settings key to a new key,
+    the tracked worktree is clean, and every stale old key in settings can be renamed
+    without colliding with an existing key
+  probe: |-
+    set -e
+    settings=config/settings.conf
+    renames=config/renames.conf
+    git ls-files --error-unmatch "$settings" "$renames" >/dev/null
+    git diff --quiet
+    git diff --cached --quiet
+    awk '
+      NR==FNR {
+        line=$0
+        sub(/[[:space:]]*#.*$/, "", line)
+        eq=index(line,"=")
+        if (eq == 0) next
+        old=substr(line,1,eq-1)
+        new=substr(line,eq+1)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+        if (old == "" || new == "" || old == new) next
+        if (old_name[old] && map[old] != new) duplicate_old=1
+        if (new_name[new]) duplicate_new=1
+        old_name[old]=1
+        new_name[new]=1
+        map[old]=new
+        next
+      }
+      {
+        key=$0
+        sub(/[[:space:]]*=.*/, "", key)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+        initial_keys[key]=1
+        if (key in map) old_present[key]=1
+      }
+      END {
+        if (duplicate_old || duplicate_new) exit 1
+        for (new in new_name) if (old_name[new]) exit 1
+        planned=0
+        for (old in map) if (old_present[old]) planned++
+        if (planned == 0) exit 1
+        for (old in map) {
+          if (old_present[old]) {
+            new=map[old]
+            if (new in initial_keys) exit 1
+          }
+        }
+        exit 0
+      }
+    ' "$renames" "$settings"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  settings=config/settings.conf
+  renames=config/renames.conf
+  tmp=$(mktemp "$settings.tmp.XXXXXX")
+  trap 'rm -f "$tmp"' EXIT
+  awk '
+    NR==FNR {
+      line=$0
+      sub(/[[:space:]]*#.*$/, "", line)
+      eq=index(line,"=")
+      if (eq == 0) next
+      old=substr(line,1,eq-1)
+      new=substr(line,eq+1)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+      if (old != "" && new != "" && old != new) map[old]=new
+      next
+    }
+    {
+      line=$0
+      match(line, /^[[:space:]]*/)
+      leading=substr(line, 1, RLENGTH)
+      rest=substr(line, RLENGTH+1)
+      match(rest, /[^=[:space:]]+/)
+      if (RSTART != 0) {
+        key=substr(rest, RSTART, RLENGTH)
+        after=substr(rest, RSTART+RLENGTH)
+        if (key in map) {
+          print leading map[key] after
+          next
+        }
+      }
+      print line
+    }
+  ' "$renames" "$settings" > "$tmp"
+  if cmp -s "$tmp" "$settings"; then
+    exit 0
+  fi
+  cat "$tmp" > "$settings"
+  rm -f "$tmp"
+  git add -- "$settings"
+  git commit -m "Rename stale settings keys"
+steps: null
+postconditions:
+- name: no_stale_setting_keys_remain
+  description: config/settings.conf no longer uses any old key from config/renames.conf,
+    and at least one current key is present
+  probe: |-
+    set -e
+    settings=config/settings.conf
+    renames=config/renames.conf
+    awk '
+      NR==FNR {
+        line=$0
+        sub(/[[:space:]]*#.*$/, "", line)
+        eq=index(line,"=")
+        if (eq == 0) next
+        old=substr(line,1,eq-1)
+        new=substr(line,eq+1)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+        if (old != "" && new != "" && old != new) map[old]=new
+        next
+      }
+      {
+        key=$0
+        sub(/[[:space:]]*=.*/, "", key)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+        if (key in map) exit 1
+        current_keys[key]=1
+      }
+      END {
+        found=0
+        for (old in map) {
+          if (map[old] in current_keys) {
+            found=1
+            break
+          }
+        }
+        if (!found) exit 1
+        exit 0
+      }
+    ' "$renames" "$settings"
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_tracked_worktree
+  description: no staged or unstaged tracked changes remain after the migration commit
+  probe: |-
+    set -e
+    git diff --quiet
+    git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: Migrate my settings to the current key names. Rename the old
+    key in the project's settings and keep its value.
+  model: deepseek-v4-pro
+  compiler_version: 0.0.1
+  episode_id: Migrate my settings to the current key names. Rename the old key in
+    the project's settings and keep its value./seed-0-config_renamed-10027
+  fault: config_renamed
+status: admitted

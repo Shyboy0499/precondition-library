@@ -1,0 +1,87 @@
+id: submodule_moved-occ1-remove-upstream-dropped-submodule
+intent: Remove a nested submodule checkout that upstream has dropped
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: local_has_submodule_gitlink
+  description: local tree tracks the nested dependency as a submodule gitlink
+  probe: git ls-files -s -- '{submodule_path}'
+  expect_exit: 0
+  expect_pattern: '^160000 '
+- name: upstream_branch_exists
+  description: upstream remote-tracking branch is available
+  probe: git rev-parse --verify --quiet '{upstream_remote}/{upstream_branch}'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_path_absent
+  description: upstream branch no longer contains the nested dependency path
+  probe: '! git ls-tree ''{upstream_remote}/{upstream_branch}'' -- ''{submodule_path}''
+    | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: no tracked or untracked worktree changes are present
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+
+  git fetch '{upstream_remote}'
+
+  if git ls-tree '{upstream_remote}/{upstream_branch}' -- '{submodule_path}' | grep -q .; then
+    echo "upstream still contains the nested dependency path; refusing to remove" >&2
+    exit 1
+  fi
+
+  section="submodule.{submodule_path}"
+  if ! git config --file .gitmodules --remove-section "$section" 2>/dev/null; then
+    entry=$(git config --file .gitmodules --get-regexp '^submodule\..*\.path$' 2>/dev/null | grep -F -- " {submodule_path}" | head -n 1 || true)
+    if [ -n "$entry" ]; then
+      key=${entry%% *}
+      section=${key%.path}
+      git config --file .gitmodules --remove-section "$section"
+    fi
+  fi
+
+  if [ -f .gitmodules ]; then
+    git add .gitmodules
+  fi
+
+  if [ -e '{submodule_path}' ]; then
+    git rm -f -- '{submodule_path}'
+  else
+    git rm -f --cached -- '{submodule_path}'
+  fi
+
+  git commit -m "Drop nested submodule checkout"
+steps: null
+postconditions:
+- name: submodule_gitlink_removed
+  description: nested dependency is no longer tracked locally
+  probe: test -z "$(git ls-files -- '{submodule_path}')"
+  expect_exit: 0
+  expect_pattern: null
+- name: gitmodules_does_not_reference_submodule
+  description: .gitmodules no longer maps the nested dependency path
+  probe: '! git config --file .gitmodules --get-regexp ''^submodule\..*\.path$'' 2>/dev/null
+    | grep -F -- " {submodule_path}" | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_removal
+  description: removal and commit leave the worktree clean
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: remove
+provenance:
+  compiled_from_task: Get this repo's nested dependency consistent with upstream.
+    Remove the nested checkout, the way upstream did.
+  model: deepseek-v4-pro
+  compiler_version: 0.0.1
+  episode_id: Get this repo's nested dependency consistent with upstream. Remove the
+    nested checkout, the way upstream did./seed-0-submodule_moved-10027
+  fault: submodule_moved
+status: admitted

@@ -1,0 +1,91 @@
+id: submodule_moved-occ1-remove-nested-submodule-checkout
+intent: Remove the nested submodule checkout that upstream has dropped and make the
+  repository match upstream.
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: on_branch
+  description: HEAD is attached to a local branch
+  probe: git symbolic-ref --quiet HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: the worktree has no tracked or untracked modifications
+  probe: test -z "$(git status --porcelain -uall)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_exists
+  description: the upstream branch is already recorded as a remote-tracking ref
+  probe: git rev-parse --verify --quiet "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ahead
+  description: upstream has at least one commit not in HEAD
+  probe: test "$(git rev-list --count "HEAD..{upstream_remote}/{upstream_branch}")"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: no_local_only_commits
+  description: HEAD has no commits absent from upstream, so the update can be a fast-forward
+  probe: test "$(git rev-list --count "{upstream_remote}/{upstream_branch}..HEAD")"
+    -eq 0
+  expect_exit: 0
+  expect_pattern: null
+- name: local_head_contains_submodule
+  description: the submodule path is a gitlink in HEAD
+  probe: git ls-files -s -z -- "{submodule_path}" | tr '\0' '\n' | grep -q '^160000
+    '
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_dropped_submodule
+  description: the upstream branch exists and no longer has an entry at the submodule
+    path
+  probe: git rev-parse --verify --quiet "{upstream_remote}/{upstream_branch}" >/dev/null
+    && ! git ls-tree "{upstream_remote}/{upstream_branch}" -- "{submodule_path}" |
+    grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch "{upstream_remote}"
+  git merge --ff-only "{upstream_remote}/{upstream_branch}"
+  git clean -ffdx -- "{submodule_path}"
+  git config --remove-section "submodule.{submodule_path}" || true
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is the upstream commit
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse "{upstream_remote}/{upstream_branch}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_gitlink_gone
+  description: the submodule path is absent from HEAD's tree
+  probe: '! git ls-tree HEAD -- "{submodule_path}" | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: nested_checkout_gone
+  description: the nested checkout directory is gone from the worktree
+  probe: test ! -e "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_config_removed
+  description: no local config section remains for the removed submodule
+  probe: '! git config --get-regexp ''^submodule\.'' | grep -F ''submodule.{submodule_path}.'''
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree_after
+  description: the final worktree has no tracked or untracked modifications
+  probe: test -z "$(git status --porcelain -uall)"
+  expect_exit: 0
+  expect_pattern: null
+variant: remove
+provenance:
+  compiled_from_task: Get this repo's nested dependency consistent with upstream.
+    Remove the nested checkout, the way upstream did.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this repo's nested dependency consistent with upstream. Remove the
+    nested checkout, the way upstream did./seed-0-submodule_moved-10026
+  fault: submodule_moved
+status: admitted

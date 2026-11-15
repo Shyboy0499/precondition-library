@@ -1,0 +1,41 @@
+id: submodule_moved-occ2-init-nested-submodule
+intent: Initialise the nested repository and check it out.
+parameters:
+- submodule_path
+preconditions:
+- name: submodule_path_is_gitlink
+  description: the nested repository is recorded as a gitlink at the submodule path
+  probe: git ls-files -s -- "{submodule_path}" | grep -q '^160000 '
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_is_declared
+  description: .gitmodules declares the submodule path
+  probe: git config --file .gitmodules --get-regexp '^submodule\..*\.path$' | grep
+    -Fq " {submodule_path}\$"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_is_uninitialized
+  description: git submodule status reports the submodule as uninitialized
+  probe: git submodule status -- "{submodule_path}" | grep -q '^-'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git submodule update --init --checkout -- "{submodule_path}"
+steps: null
+postconditions:
+- name: submodule_is_checked_out
+  description: git submodule status reports the submodule checked out at the recorded
+    commit
+  probe: git submodule status -- "{submodule_path}" | grep -q '^ '
+  expect_exit: 0
+  expect_pattern: null
+variant: init
+provenance:
+  compiled_from_task: A nested repository in this project needs bringing into line.
+    Initialise the nested repository and check it out.
+  model: deepseek-v4-pro
+  compiler_version: 0.0.1
+  episode_id: A nested repository in this project needs bringing into line. Initialise
+    the nested repository and check it out./seed-4-submodule_moved-10027
+  fault: submodule_moved
+status: candidate

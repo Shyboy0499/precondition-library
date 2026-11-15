@@ -12,6 +12,19 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **Two six-family replicates, one with a second model (#266 steps 2–3, ADR-0061, spec
+  revision 158).**
+  - **What ran:** `run-14` with `deepseek-flash` and `run-15` with `deepseek-v4-pro`, each over
+    the five git families plus `config_renamed`, whose state is config files.
+  - **What it found:** arm 3 mis-fires on 0 of 215 and 0 of 238 fires, against the lexical
+    arm 2's 192 of 220 and 190 of 234. The config family's programs were admitted and fired
+    on 26 and 40 of its 40 positives, none wrongly.
+  - **What it does not show:** a model comparison. Each model has one build.
+  - **Where:** [`results/replicates-2026-11-15/`](results/replicates-2026-11-15/README.md), with
+    a script that recomputes the per-family rows with no key.
+
+### Added
+
 - **The LLM state judge ran as registered (#295 item 2, ADR-0034, spec revision 157).**
   - **What ran:** `deepseek-flash` at temperature 0 as arm 2's scorer, reading the request, the
     state and each candidate, not the probes. Each frozen library was rescored twice (runs A and

@@ -1,0 +1,60 @@
+id: dirty_tree-occ2-commit-local-then-rebase
+intent: Commit the user's uncommitted working-tree changes, then bring the current
+  branch up to date with upstream by rebasing onto it, preserving both sets of changes.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: worktree_dirty
+  description: the working tree has uncommitted changes that must be preserved
+  probe: git status --porcelain -z | tr '\0' '\n' | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_present
+  description: the upstream-tracking ref exists locally so it can be rebased onto
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}^{commit}
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_behind_upstream
+  description: the upstream-tracking branch has commits that HEAD does not contain
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch {upstream_remote}
+  git add -A
+  git commit -m "wip: commit local changes before syncing with upstream"
+  git rebase {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: worktree_clean
+  description: no uncommitted changes remain after the commit and rebase
+  probe: '! git status --porcelain -z | tr ''\0'' ''\n'' | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: the upstream-tracking commit is contained in HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_work_preserved
+  description: at least one local commit sits on top of upstream, holding the saved
+    work
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+variant: commit
+provenance:
+  compiled_from_task: My working tree has changes and the branch is behind upstream.
+    Fix that and keep my changes. Commit my uncommitted work first, then bring the
+    branch up to date.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: My working tree has changes and the branch is behind upstream. Fix that
+    and keep my changes. Commit my uncommitted work first, then bring the branch up
+    to date./seed-0-dirty_tree-10026
+  fault: dirty_tree
+status: admitted

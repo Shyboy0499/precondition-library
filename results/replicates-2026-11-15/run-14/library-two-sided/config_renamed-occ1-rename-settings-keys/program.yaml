@@ -1,0 +1,189 @@
+id: config_renamed-occ1-rename-settings-keys
+intent: Migrate project settings to the current key names by renaming each old key
+  listed in config/renames.conf and preserving its value.
+parameters: []
+preconditions:
+- name: settings_file_tracked
+  description: config/settings.conf exists and is tracked
+  probe: test -f config/settings.conf && git ls-files --error-unmatch config/settings.conf
+    >/dev/null 2>&1
+  expect_exit: 0
+  expect_pattern: null
+- name: rename_table_tracked
+  description: config/renames.conf exists and is tracked
+  probe: test -f config/renames.conf && git ls-files --error-unmatch config/renames.conf
+    >/dev/null 2>&1
+  expect_exit: 0
+  expect_pattern: null
+- name: has_key_that_needs_renaming
+  description: settings contains an old key whose mapped new key is not already set
+  probe: |-
+    awk '
+      function trim(s) { gsub(/^[[:space:]]+|[[:space:]]+$/, "", s); return s }
+      NR==FNR {
+        line=$0
+        sub(/\r$/, "", line)
+        if (line ~ /^[[:space:]]*#/ || line ~ /^[[:space:]]*$/) next
+        sub(/[[:space:]]+#.*/, "", line)
+        pos=index(line,"=")
+        if (pos > 0) {
+          old=trim(substr(line,1,pos-1))
+          new=trim(substr(line,pos+1))
+          if (old != "" && new != "" && old != new) map[old]=new
+        }
+        next
+      }
+      {
+        line=$0
+        pos=index(line,"=")
+        if (pos > 0) {
+          key=trim(substr(line,1,pos-1))
+          keys[key]=1
+        }
+      }
+      END {
+        for (old in map) {
+          if (old in keys) {
+            found=1
+            if (map[old] in keys) conflict=1
+          }
+        }
+        exit((found && !conflict) ? 0 : 1)
+      }
+    ' config/renames.conf config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: settings_file_clean
+  description: config/settings.conf has no staged or unstaged changes
+  probe: git diff --quiet -- config/settings.conf && git diff --cached --quiet --
+    config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  settings=config/settings.conf
+  renames=config/renames.conf
+  tmp="${settings}.tmp.$$"
+  trap 'rm -f "$tmp"' EXIT
+  awk '
+    function trim(s) { gsub(/^[[:space:]]+|[[:space:]]+$/, "", s); return s }
+    NR==FNR {
+      line=$0
+      sub(/\r$/, "", line)
+      if (line ~ /^[[:space:]]*#/ || line ~ /^[[:space:]]*$/) next
+      sub(/[[:space:]]+#.*/, "", line)
+      pos=index(line,"=")
+      if (pos > 0) {
+        old=trim(substr(line,1,pos-1))
+        new=trim(substr(line,pos+1))
+        if (old != "" && new != "") map[old]=new
+      }
+      next
+    }
+    {
+      line=$0
+      pos=index(line,"=")
+      if (pos > 0) {
+        key=substr(line,1,pos-1)
+        rest=substr(line,pos)
+        t=trim(key)
+        if (t in map) {
+          lead=key; sub(/[^[:space:]].*$/, "", lead)
+          trail=key; sub(/^.*[^[:space:]]/, "", trail)
+          print lead map[t] trail rest
+          next
+        }
+      }
+      print line
+    }
+  ' "$renames" "$settings" > "$tmp"
+  mv "$tmp" "$settings"
+  git add -- "$settings"
+  git commit -m "config: migrate renamed settings keys" -- "$settings"
+steps: null
+postconditions:
+- name: settings_committed_without_local_changes
+  description: config/settings.conf has no staged or unstaged changes after the migration
+    commit
+  probe: git diff --quiet -- config/settings.conf && git diff --cached --quiet --
+    config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: rename_preserved_values
+  description: the current settings file equals the pre-migration file with only mapped
+    keys renamed
+  probe: |-
+    awk '
+      function trim(s) { gsub(/^[[:space:]]+|[[:space:]]+$/, "", s); return s }
+      NR==FNR {
+        line=$0
+        sub(/\r$/, "", line)
+        if (line ~ /^[[:space:]]*#/ || line ~ /^[[:space:]]*$/) next
+        sub(/[[:space:]]+#.*/, "", line)
+        pos=index(line,"=")
+        if (pos > 0) {
+          old=trim(substr(line,1,pos-1))
+          new=trim(substr(line,pos+1))
+          if (old != "" && new != "") map[old]=new
+        }
+        next
+      }
+      {
+        line=$0
+        pos=index(line,"=")
+        if (pos > 0) {
+          key=substr(line,1,pos-1)
+          rest=substr(line,pos)
+          t=trim(key)
+          if (t in map) {
+            lead=key; sub(/[^[:space:]].*$/, "", lead)
+            trail=key; sub(/^.*[^[:space:]]/, "", trail)
+            print lead map[t] trail rest
+            next
+          }
+        }
+        print line
+      }
+    ' config/renames.conf <(git show HEAD^:config/settings.conf) | cmp -s - config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: no_old_keys_remain
+  description: no old key that maps to a different current key remains in settings
+  probe: |-
+    awk '
+      function trim(s) { gsub(/^[[:space:]]+|[[:space:]]+$/, "", s); return s }
+      NR==FNR {
+        line=$0
+        sub(/\r$/, "", line)
+        if (line ~ /^[[:space:]]*#/ || line ~ /^[[:space:]]*$/) next
+        sub(/[[:space:]]+#.*/, "", line)
+        pos=index(line,"=")
+        if (pos > 0) {
+          old=trim(substr(line,1,pos-1))
+          new=trim(substr(line,pos+1))
+          if (old != "" && new != "" && old != new) map[old]=1
+        }
+        next
+      }
+      {
+        line=$0
+        pos=index(line,"=")
+        if (pos > 0) {
+          key=trim(substr(line,1,pos-1))
+          if (key in map) found=1
+        }
+      }
+      END { exit(found ? 1 : 0) }
+    ' config/renames.conf config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: Migrate my settings to the current key names. Rename the old
+    key in the project's settings and keep its value.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Migrate my settings to the current key names. Rename the old key in
+    the project's settings and keep its value./seed-0-config_renamed-10026
+  fault: config_renamed
+status: admitted

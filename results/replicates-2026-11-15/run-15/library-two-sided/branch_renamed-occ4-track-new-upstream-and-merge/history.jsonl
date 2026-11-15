@@ -1,0 +1,2 @@
+{"episode_id": "Upstream changed something about its branches and my checkout is lost. Sort it out. Track upstream's new branch and merge it into my own commits./seed-2-branch_renamed-10027", "from": null, "program_id": "branch_renamed-occ4-track-new-upstream-and-merge", "to": "candidate"}
+{"episode_id": "branch_renamed/seed-2/occurrence-4", "from": "candidate", "program_id": "branch_renamed-occ4-track-new-upstream-and-merge", "to": "admitted"}

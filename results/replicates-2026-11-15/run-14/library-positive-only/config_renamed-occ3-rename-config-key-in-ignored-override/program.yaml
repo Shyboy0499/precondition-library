@@ -1,0 +1,120 @@
+id: config_renamed-occ3-rename-config-key-in-ignored-override
+intent: Rename a stale config key in the user's ignored local override file according
+  to the repository's rename map, leaving the file untracked.
+parameters:
+- upstream_remote
+preconditions:
+- name: has_upstream_remote
+  description: the repository has the upstream remote the rename came from
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: rename_map_present
+  description: a tracked file records the old-to-new key mappings
+  probe: 'git grep -q -F ''# keys the app has renamed: old = new'''
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_key_in_ignored_override
+  description: an ignored, untracked override file still uses an old key from the
+    map
+  probe: |-
+    set -eu
+    renames_file=$(git grep -l -F '# keys the app has renamed: old = new' -- . | head -n1)
+    [ -n "$renames_file" ]
+    while IFS= read -r -d '' path; do
+      [ -f "$path" ] || continue
+      while IFS= read -r line; do
+        case "$line" in
+          ''|'#'*) continue ;;
+        esac
+        old=${line%%=*}
+        old=$(printf '%s' "$old" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        [ -n "$old" ] || continue
+        if grep -qE "^[[:space:]]*${old}[[:space:]]*=" "$path"; then
+          exit 0
+        fi
+      done < "$renames_file"
+    done < <(git ls-files --others --ignored --exclude-standard -z)
+    exit 1
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -eu
+  git remote get-url {upstream_remote} >/dev/null
+  renames_file=$(git grep -l -F '# keys the app has renamed: old = new' -- . | head -n1)
+  [ -n "$renames_file" ]
+  while IFS= read -r -d '' path; do
+    [ -f "$path" ] || continue
+    while IFS= read -r line; do
+      case "$line" in
+        ''|'#'*) continue ;;
+      esac
+      old=${line%%=*}
+      new=${line#*=}
+      old=$(printf '%s' "$old" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+      new=$(printf '%s' "$new" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+      [ -n "$old" ] && [ -n "$new" ] || continue
+      if grep -qE "^[[:space:]]*${old}[[:space:]]*=" "$path"; then
+        sed -i -E "s/^([[:space:]]*)${old}([[:space:]]*=)/\1${new}\2/" "$path"
+      fi
+    done < "$renames_file"
+  done < <(git ls-files --others --ignored --exclude-standard -z)
+steps: null
+postconditions:
+- name: old_key_gone_from_ignored_overrides
+  description: no ignored override file still uses an old key from the map
+  probe: |-
+    set -eu
+    renames_file=$(git grep -l -F '# keys the app has renamed: old = new' -- . | head -n1)
+    [ -n "$renames_file" ]
+    while IFS= read -r -d '' path; do
+      [ -f "$path" ] || continue
+      while IFS= read -r line; do
+        case "$line" in
+          ''|'#'*) continue ;;
+        esac
+        old=${line%%=*}
+        old=$(printf '%s' "$old" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        [ -n "$old" ] || continue
+        if grep -qE "^[[:space:]]*${old}[[:space:]]*=" "$path"; then
+          exit 1
+        fi
+      done < "$renames_file"
+    done < <(git ls-files --others --ignored --exclude-standard -z)
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: new_key_present_in_ignored_override
+  description: an ignored, untracked override file now carries a renamed key
+  probe: |-
+    set -eu
+    renames_file=$(git grep -l -F '# keys the app has renamed: old = new' -- . | head -n1)
+    [ -n "$renames_file" ]
+    while IFS= read -r -d '' path; do
+      [ -f "$path" ] || continue
+      while IFS= read -r line; do
+        case "$line" in
+          ''|'#'*) continue ;;
+        esac
+        new=${line#*=}
+        new=$(printf '%s' "$new" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        [ -n "$new" ] || continue
+        if grep -qE "^[[:space:]]*${new}[[:space:]]*=" "$path"; then
+          exit 0
+        fi
+      done < "$renames_file"
+    done < <(git ls-files --others --ignored --exclude-standard -z)
+    exit 1
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: Some setting in my config has been renamed upstream. Sort the
+    config out. Rename the old key in my own override file, and keep that file out
+    of git.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Some setting in my config has been renamed upstream. Sort the config
+    out. Rename the old key in my own override file, and keep that file out of git./seed-12-config_renamed-10026
+  fault: config_renamed
+status: admitted

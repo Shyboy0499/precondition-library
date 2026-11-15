@@ -1,0 +1,125 @@
+id: dirty_tree-occ3-sync-upstream-keep-wip-aside
+intent: Bring the current branch up to date with upstream while preserving uncommitted
+  work, saving each dirty or untracked file beside upstream's version as `<name>.local`
+  and leaving the work in progress safely stashed.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_declared
+  description: the repository has a remote with the given name
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_present
+  description: the remote-tracking ref for the given upstream branch exists locally
+  probe: git rev-parse --verify --quiet 'refs/remotes/{upstream_remote}/{upstream_branch}'
+  expect_exit: 0
+  expect_pattern: null
+- name: on_a_local_branch
+  description: HEAD is attached to a local branch, not detached
+  probe: git symbolic-ref -q HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ahead
+  description: the upstream ref has at least one commit the local branch lacks
+  probe: git rev-list --count HEAD..'refs/remotes/{upstream_remote}/{upstream_branch}'
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: fast_forwardable
+  description: HEAD is an ancestor of the upstream ref so it can be fast-forwarded
+  probe: git merge-base --is-ancestor HEAD 'refs/remotes/{upstream_remote}/{upstream_branch}'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_has_uncommitted_work
+  description: the working tree carries uncommitted changes or untracked files
+  probe: git status --porcelain -z -uall | tr '\0' '\n' | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_entries
+  description: the index has no unresolved merge conflicts that would block stashing
+  probe: '! git ls-files -u | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: untracked_path_collides_with_upstream
+  description: an untracked work-in-progress file sits on a path the upstream ref
+    now tracks
+  probe: |-
+    comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git ls-tree -r -z --name-only 'refs/remotes/{upstream_remote}/{upstream_branch}' | tr '\0' '\n' | sort) \
+      | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch --quiet {upstream_remote} 2>/dev/null || true
+  git stash push --include-untracked -m "wip-backup-before-upstream-update"
+  git merge --ff-only "refs/remotes/{upstream_remote}/{upstream_branch}"
+  git diff --name-only -z 'stash@{0}^1' 'stash@{0}' | tr '\0' '\n' | while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    if git cat-file -e "stash@{0}:$p" 2>/dev/null; then
+      mkdir -p -- "$(dirname -- "$p")"
+      git show "stash@{0}:$p" > "$p.local"
+    fi
+  done
+  if git rev-parse --verify --quiet 'stash@{0}^3' >/dev/null; then
+    git diff --name-only -z 'stash@{0}^1' 'stash@{0}^3' | tr '\0' '\n' | while IFS= read -r p; do
+      [ -n "$p" ] || continue
+      if git cat-file -e "stash@{0}^3:$p" 2>/dev/null; then
+        mkdir -p -- "$(dirname -- "$p")"
+        git show "stash@{0}^3:$p" > "$p.local"
+      fi
+    done
+  fi
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is now the commit the upstream ref points at
+  probe: '[ "$(git rev-parse HEAD)" = "$(git rev-parse ''refs/remotes/{upstream_remote}/{upstream_branch}'')"
+    ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_changes_cleared
+  description: no tracked modifications remain in the working tree
+  probe: '[ -z "$(git status --porcelain -uno)" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: modified_files_saved_as_local
+  description: every tracked file modified by the stashed work has a `.local` sibling
+  probe: |-
+    git diff --name-only -z 'stash@{0}^1' 'stash@{0}' | tr '\0' '\n' | while IFS= read -r p; do
+      [ -n "$p" ] || continue
+      git cat-file -e "stash@{0}:$p" 2>/dev/null || continue
+      [ -f "$p.local" ] || exit 1
+    done
+  expect_exit: 0
+  expect_pattern: null
+- name: untracked_files_saved_as_local
+  description: every untracked file captured by the stash has a `.local` sibling
+  probe: |-
+    if git rev-parse --verify --quiet 'stash@{0}^3' >/dev/null; then
+      git diff --name-only -z 'stash@{0}^1' 'stash@{0}^3' | tr '\0' '\n' | while IFS= read -r p; do
+        [ -n "$p" ] || continue
+        [ -f "$p.local" ] || exit 1
+      done || exit 1
+    fi
+  expect_exit: 0
+  expect_pattern: null
+- name: wip_stash_kept
+  description: the safety-net stash of the work in progress is still the newest entry
+  probe: git log -1 --format=%s 'stash@{0}'
+  expect_exit: 0
+  expect_pattern: wip-backup-before-upstream-update
+variant: stash
+provenance:
+  compiled_from_task: Bring this branch up to date with upstream, but my work in progress
+    must survive. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Bring this branch up to date with upstream, but my work in progress
+    must survive. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update./seed-2-dirty_tree-10026
+  fault: dirty_tree
+status: candidate

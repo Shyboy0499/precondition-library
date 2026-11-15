@@ -1,0 +1,53 @@
+id: diverged-occ3-rebase-local-onto-upstream
+intent: replay local commits on top of upstream so the history stays linear
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: clean_worktree
+  description: the working tree is clean so rebase can start cleanly
+  probe: '[ -z "$(git status --porcelain)" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: local_and_upstream_diverged
+  description: the local branch has commits and upstream has commits not in the local
+    branch
+  probe: |-
+    git rev-parse --verify -q {upstream_remote}/{upstream_branch} >/dev/null &&
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0 &&
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git rebase {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: upstream_is_ancestor
+  description: all upstream commits are now below HEAD
+  probe: |-
+    git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD &&
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -eq 0
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_preserved
+  description: HEAD still has commits beyond upstream
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_after_rebase
+  description: the working tree remains clean after rebasing
+  probe: '[ -z "$(git status --porcelain)" ]'
+  expect_exit: 0
+  expect_pattern: null
+variant: rebase
+provenance:
+  compiled_from_task: I have local work and upstream has new commits. Untangle it.
+    Replay my local commits on top of upstream so the history stays linear.
+  model: deepseek-v4-pro
+  compiler_version: 0.0.1
+  episode_id: I have local work and upstream has new commits. Untangle it. Replay
+    my local commits on top of upstream so the history stays linear./seed-5-diverged-10027
+  fault: diverged
+status: admitted
