@@ -1,0 +1,13 @@
+dispatcher,threshold,fires,pairs,coverage,wrong,mismatch,wilson_low,wilson_high,coverage_point
+arm 2 (semantic),1.0,190,400,0.475,10,0.052632,0.028836,0.094159,False
+arm 2 (semantic),0.95,191,400,0.4775,10,0.052356,0.028684,0.09368,False
+arm 2 (semantic),0.9,194,400,0.485,10,0.051546,0.028236,0.092272,False
+arm 2 (semantic),0.85,201,400,0.5025,10,0.049751,0.027245,0.089145,False
+arm 2 (semantic),0.75,202,400,0.505,10,0.049505,0.027109,0.088716,False
+arm 2 (semantic),0.6,203,400,0.5075,10,0.049261,0.026974,0.088291,False
+arm 2 (semantic),0.55,205,400,0.5125,10,0.04878,0.026709,0.087452,False
+arm 2 (semantic),0.0,400,400,1.0,205,0.5125,0.46363,0.561132,False
+arm 3 (precondition),,189,400,0.4725,0,0.0,0.0,0.019921,True
+arm 2b (soft vote),1.0,189,400,0.4725,0,0.0,0.0,0.019921,False
+arm 2b (soft vote),0.875,400,400,1.0,211,0.5275,0.478545,0.575932,False
+arm 2c (intent key),,0,400,0.0,0,,,,False

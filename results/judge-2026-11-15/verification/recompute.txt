@@ -1,0 +1,7 @@
+run-11 A: provider calls 0; summary identical True
+run-11 B: provider calls 0; summary identical True
+run-12 A: provider calls 0; summary identical True
+run-12 B: provider calls 0; summary identical True
+run-13 A: provider calls 0; summary identical True
+run-13 B: provider calls 0; summary identical True
+all recomputed from the caches

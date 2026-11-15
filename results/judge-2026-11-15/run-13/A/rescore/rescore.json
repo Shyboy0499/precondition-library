@@ -1,0 +1,28 @@
+{
+  "scorer": "judge",
+  "prompt_version": "judge-v1",
+  "run": "results/replicates-2026-10-05/run-13",
+  "library_hash": "b3612185dad48f7c412350d5503b144bd768994abca9f884956574f628b1652a",
+  "usage": {
+    "tokens": 126558,
+    "calls": 43
+  },
+  "judge": {
+    "model": "deepseek-flash",
+    "temperature": 0.0,
+    "prompt_version": "judge-v1",
+    "prompt_hash": "c01790be38b1e6df880d96e9600138baca216f5fea7e66f9cde649c8632daacb",
+    "calls": 43,
+    "reused": 164,
+    "memoised": 1605,
+    "abstained": 0,
+    "unparseable": 0,
+    "errors": 0,
+    "stale_records": 0,
+    "tokens_in": 20084,
+    "tokens_out": 106474,
+    "uncached_tokens_in": 12023,
+    "cached_tokens_in": 8061,
+    "cache": "results/judge-2026-11-15/run-13/A/cache.jsonl"
+  }
+}

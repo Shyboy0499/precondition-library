@@ -6,6 +6,8 @@
   narrows nothing already decided.
 - **Deciders:** repository owner, in issue #264. This record states the resolution chosen for that
   issue so a later reader can tell whether the code complies with it.
+- **Run:** 2026-11-15, as registered, in [`results/judge-2026-11-15/`](../../results/judge-2026-11-15/README.md)
+  (spec revisions 156 and 157). The README sentence decision 10's obligation names is corrected.
 
 ## Context
 

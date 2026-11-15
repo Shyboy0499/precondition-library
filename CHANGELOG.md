@@ -10,6 +10,22 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ## Unreleased
 
+### Added
+
+- **The LLM state judge ran as registered (#295 item 2, ADR-0034, spec revision 157).**
+  - **What ran:** `deepseek-flash` at temperature 0 as arm 2's scorer, reading the request, the
+    state and each candidate, not the probes. Each frozen library was rescored twice (runs A and
+    B), 1,162 calls and 9.44 million tokens, under the registered cap.
+  - **What it found:** on libraries 12 and 13, where it clears the floor, it mis-fires on 5–17% of
+    its fires at matched coverage, against arm 3's 0% and the reranker's 71%, in both runs.
+    Library 11's floor is not measurable, so nothing is worded there.
+  - **Repeatability:** 51.6% of repeated calls returned identical scores, 91.9% the same top
+    candidate.
+  - **Where:** [`results/judge-2026-11-15/`](results/judge-2026-11-15/README.md), with the score
+    caches and two scripts that recompute every figure with no key.
+  - **The README** sentences that said a judge had not been run are corrected, as ADR-0034
+    requires.
+
 ### Fixed
 
 - **Arm 2's floor measures only the run's own families.** Since `config_renamed` was added
