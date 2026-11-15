@@ -23,6 +23,17 @@ were wrong on 8–54% of their attempts, depending on the library. That is still
 often than text similarity when both acted equally often, but mostly because the
 checks chose a plain merge where there was no conflict; on the real conflicts,
 every method was almost always wrong. This does not yet measure complete task runs.
+
+Read as sets of packages rather than lines, those conflicts look different. In four more studies,
+each registered before its data and run on 92 repositories this project had never mined:
+- **A merge computed from the conflict's three sides** reproduces the maintainer's lock file on
+  about two conflicts in three.
+- **A check that fires that merge only when no package changed differently on both sides**
+  roughly halves its error, but it is still wrong about a third of the time.
+- **Adding the ecosystem's own consistency check widens what can be resolved,** at about the same
+  error. Much of that gain disappears once the check cannot see the maintainer's resolved
+  manifests.
+
 Read [Results graded outside this project](#results-graded-outside-this-project),
 [Primary result](#primary-result), [Held-out states](#held-out-states),
 [Running it](#running-it), and the [issue tracker](https://github.com/Shyboy0499/precondition-library/issues).
@@ -40,6 +51,19 @@ Read [Results graded outside this project](#results-graded-outside-this-project)
 > 1 of 177 fires there. Maintainers regenerate or hand-edit lock files, which none of this
 > project's resolutions does: they express 1 of 161 conflicts. See
 > [Results graded outside this project](#results-graded-outside-this-project).
+>
+> Studies 3–6 then read lock-file conflicts as package sets, on 92 more repositories, each
+> registered before its data.
+> - **A computed merge reproduces the maintainer on 0.64–0.76 of conflicts.**
+> - **Gating it on "no package diverges" roughly halves its error, to about 0.30.**
+> - **The ecosystem's own check widens coverage without making it rarely wrong.**
+>
+> Each figure is in [What survived an external test](#what-survived-an-external-test-and-what-did-not).
+>
+> **Now running, on the owner's DeepSeek key:**
+> - the LLM state judge (#295 item 2);
+> - study 2's 20 library builds (#307);
+> - then two six-family replicates, one with a second model (#266, ADR-0061).
 >
 > **Graded by this project's own labels.** On states its own injectors build, judged by its own
 > rules, precondition dispatch mis-fired on **0 of 563** fires, against text similarity's
@@ -388,24 +412,27 @@ did not make. This is the answer as of the studies below; each line links to whe
 
 | question | blocked on |
 | --- | --- |
-| Does an LLM that reads the state beat or match arm 3? (#295 item 2) | an API key |
-| Is refusal a property of the method or of one build? (#307, study 2, registered before its data) | an API key for 20 builds |
-| Does it hold in another domain, or with another compiling model? (#266) | an API key |
+| Does an LLM that reads the state beat or match arm 3? (#295 item 2) | running: its budget and repeatability subsample were registered first (spec revision 156) |
+| Is refusal a property of the method or of one build? (#307, study 2, registered before its data) | running: the 20 builds started on 2026-11-15 |
+| Does it hold in another domain, or with another compiling model? (#266) | decided in ADR-0061; the two builds follow the judge |
 | Do people agree with the labelling rules? (#299 step 3) | independent raters; the kit is built |
-| Do the projects' own tests accept a resolution? (#297's third oracle) | the owner's decision: running a project's test suite executes its code. Not run. |
+| Do the projects' own tests accept a resolution? (#297's third oracle) | Piloted, sandboxed ([project-tests pilot](results/project-tests-pilot-2026-11-14/README.md)). Where a suite ran (2 repositories), the wrong side's lock file was refused by `npm ci` before any test ran, so the tests added nothing beyond the check. The next cases are those where both sides pass the check. Composer projects need a host this session cannot reach. |
 
 **What someone else needs to replicate it**
 
 - **The studies graded outside this project need no model and no key.** Each is one command from
   a checkout. Each refuses to run unless its registration is committed and unchanged, and writes a
   fresh directory. Each mines public repositories from GitHub, which takes network access, roughly
-  8 GB of disk for twenty repositories, and from twenty minutes to a few hours.
+  8 GB of disk for twenty repositories, and from twenty minutes to a few hours. Study 6 also runs
+  npm, pnpm and Composer (no install scripts), which needs a package registry and took about nine
+  hours.
 
   ```bash
   python -m precondition_library.bench.real_merges --stage B           # study 1
   python -m precondition_library.bench.lock_oracle --out <dir>          # study 3
   python -m precondition_library.bench.ecosystem_unify --out <dir>      # study 4
   python -m precondition_library.bench.divergence_gate --out <dir>      # study 5
+  python -m precondition_library.bench.tool_precondition --out <dir> --scratch <dir>  # study 6
   ```
 
   These commands pin each repository's tip on the day they run (`real_merges.pin`). So a run on a
@@ -531,6 +558,41 @@ It was registered before its data (ADR-0059) and run on 20 more fresh repositori
 
 The precondition roughly halves the merge's error (pooled 0.570 → 0.296), and the merge is still
 wrong on about a third of the gate's fires. Both halves of the anatomy's conclusion replicate.
+
+### The ecosystem's own check, as a second precondition (study 6)
+
+npm, pnpm and Composer each check whether a lock file is consistent with its manifests, without
+installing anything. Run on studies 3–5's conflicts after they were seen
+([lock-tool-check](results/lock-tool-check-2026-11-08/README.md)), the check suggested two
+things:
+- **Merges break lock files.** The merged files fail it five times as often as ordinary commits'
+  lock files.
+- **It makes a precondition.** Where the gate refuses, take the one side the check accepts (rule
+  D).
+
+Study 6 tested both on 25 more fresh repositories, 395 conflicted lock files, registered before
+its data (ADR-0060, [tool-precondition](results/tool-precondition-2026-11-09/README.md)):
+
+| | estimate [95% interval] | decision |
+| --- | --- | --- |
+| H1 (primary): merged files fail the check more often than ordinary commits' (mean gap) | **0.067** [0.003, 0.130] | supported, narrowly |
+| H2: rule D's mean mismatch, above 0.10 | **0.320** [0.228, 0.412] | supported: rule D is not rarely wrong |
+| H3: the check's side loses to the first parent's file (Wilson upper bound, below 0.10) | **1 of 100**, 0.054 | supported at 0.10, not at 0.05 |
+
+- **Merges do break lock files, by less than first seen.** Twice the ordinary rate, not five
+  times, and leaving out any one of seven repositories puts H1's lower end below 0.
+- **The check read the maintainer's answer.** It judged each side against the maintainer's
+  committed manifests, which hold the maintainer's resolution of any manifest conflict. An
+  audit made after the study ([manifest-leak](results/manifest-leak-2026-11-11/README.md))
+  restricted it to files whose manifests are git's own merge, as a resolver at merge time would
+  have them. On those, rule D covers 0.58 of files at mismatch 0.30, against 0.71 at 0.27 as
+  recorded. The gate alone covers 0.45 at 0.30.
+- **Merging the manifests first recovers little**
+  ([manifest-merge](results/manifest-merge-2026-11-11/README.md)). A key-level merge gives the
+  maintainer's manifests on 165 of 380 conflicted files. The check is accurate there, so its
+  accuracy on conflicted manifests reflects the kind of conflict, not the leak. But coverage only
+  rises to 0.60. What remains needs the maintainer's own decision on a dependency both sides
+  edited.
 
 ## Results graded by this project's own labels
 
