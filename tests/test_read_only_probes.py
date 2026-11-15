@@ -164,3 +164,37 @@ def test_a_file_changed_within_the_racy_window_is_not_kept(make_sandbox) -> None
     fresh.write_text("now\n", encoding="utf-8")
     probes.sandbox_state(box)
     assert str(fresh) not in probes._DIGESTS
+
+
+def test_one_snapshot_per_probe_and_the_same_verdicts(
+    make_sandbox, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`evaluate_predicates` passes each probe's after-snapshot on as the next one's before.
+
+    Nothing runs between two probes, so the second snapshot was the first one again: n probes
+    now take n + 1 snapshots, not 2n, and every verdict is what probing one at a time gives,
+    a mutating probe's refusal included.
+    """
+    predicates = [
+        _probe("git rev-parse --abbrev-ref HEAD"),
+        _probe("test -f app.py"),
+        _probe("echo written > probe-wrote-this.txt"),
+        _probe("test -f probe-wrote-this.txt"),
+        _probe("git status --porcelain"),
+    ]
+    box = make_sandbox(0, [])
+    calls = []
+    real = probes.sandbox_state
+    monkeypatch.setattr(probes, "sandbox_state", lambda env: calls.append(1) or real(env))
+    together = evaluate_predicates(predicates, box, kind="precondition")
+    monkeypatch.undo()
+    assert len(calls) == len(predicates) + 1
+
+    fresh = make_sandbox(1, [])
+    assert not (fresh.work / "probe-wrote-this.txt").exists()
+    one_by_one = [evaluate_predicate(p, fresh, bindings(fresh)) for p in predicates]
+    assert [(r.name, r.ok, r.refused) for r in together.predicates] == [
+        (r.name, r.ok, r.refused) for r in one_by_one
+    ]
+    assert [r.ok for r in together.predicates] == [True, True, False, True, True]
+    assert together.predicates[2].refused

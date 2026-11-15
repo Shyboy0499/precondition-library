@@ -209,6 +209,8 @@ DECLARED_SKIPS: dict[str, str] = {
     # RLIMIT_FSIZE exists only on POSIX. Windows' equivalent, job objects, is not
     # implemented; the process-group kill that shares the module does run there.
     "test_process_confinement.py::test_a_write_past_the_file_size_limit_fails": "#10",
+    # `refusal_study evaluate --jobs` forks its workers; on Windows it runs one process (#307).
+    "test_refusal_study.py::test_deciding_on_several_processes_writes_the_same_files": "#307",
 }
 
 

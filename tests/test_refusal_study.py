@@ -481,3 +481,16 @@ def test_the_recomputation_agrees_with_every_rule(
     done = _recompute(tmp_path / "out")
     assert done.returncode == 0, done.stdout + done.stderr
     assert "ok       §9's decisions" in done.stdout
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="--jobs forks its worker processes, which Windows cannot do (#307)",
+)
+def test_deciding_on_several_processes_writes_the_same_files(run: dict[str, object]) -> None:
+    """`--jobs` only spreads the cases over processes: every file is byte for byte the same."""
+    out, refusal_dir, zero, refusal = run["args"]  # type: ignore[misc]
+    again = out.parent / "out-jobs"
+    study.evaluate(again, refusal_dir, zero, refusal, jobs=3)
+    for name in ("manifest.json", "labels.jsonl", "decisions.jsonl", "report.json", "summary.txt"):
+        assert (again / name).read_bytes() == (out / name).read_bytes(), name

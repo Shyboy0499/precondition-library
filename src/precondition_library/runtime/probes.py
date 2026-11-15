@@ -43,6 +43,7 @@ import hashlib
 import os
 import re
 import shutil
+import stat
 import string
 import time
 from pathlib import Path
@@ -294,6 +295,9 @@ def evaluate_predicate(
 ) -> PredicateResult:
     """Run one probe in `env` and report whether it held.
 
+    The work is `_evaluate_predicate`'s, which `evaluate_predicates` calls directly so that one
+    probe's after-snapshot serves as the next probe's before-snapshot.
+
     `observed` always carries the exit code; when `expect_pattern` is set it also
     says whether the pattern matched and shows what stdout the match saw, and on
     a bare failure it carries a short stdout/stderr excerpt. It stays short
@@ -324,6 +328,24 @@ def evaluate_predicate(
     reads, global config writes, force-push, writes outside the sandbox) are refused
     here. Refusing in-repo writes needs a detector the guard does not have.
     """
+    return _evaluate_predicate(predicate, env, parameters, timeout_s=timeout_s, before=None)[0]
+
+
+def _evaluate_predicate(
+    predicate: Predicate,
+    env: Sandbox,
+    parameters: dict[str, str],
+    *,
+    timeout_s: float,
+    before: dict[str, str] | None,
+) -> tuple[PredicateResult, dict[str, str] | None]:
+    """`evaluate_predicate`, given the sandbox's state if a caller already holds it.
+
+    Returns the result and the sandbox's state as this call leaves it, or `None` when that is
+    not known (a probe that timed out). `before`, when given, must be `sandbox_state(env)` as it
+    is now: nothing may have run in the sandbox since it was taken. A predicate whose probe did
+    not run returns the `before` it was given, since nothing ran.
+    """
     try:
         probe = substitute(predicate.probe, parameters)
         pattern = (
@@ -332,7 +354,10 @@ def evaluate_predicate(
             else pattern_for(predicate.expect_pattern, parameters)
         )
     except UnboundParameterError as exc:
-        return PredicateResult(name=predicate.name, ok=False, observed=f"not applicable: {exc}")
+        return (
+            PredicateResult(name=predicate.name, ok=False, observed=f"not applicable: {exc}"),
+            before,
+        )
     # A model-written pattern that `re` cannot read (study 2's build R-8 wrote one with `\u`)
     # does not hold, with the reason, as an unbindable parameter does. Raising here crashed
     # the build in admission instead of refusing the program and telling the revision why.
@@ -340,52 +365,66 @@ def evaluate_predicate(
         try:
             re.compile(pattern)
         except re.error as exc:
-            return PredicateResult(
-                name=predicate.name,
-                ok=False,
-                observed=(
-                    f"not applicable: expect_pattern {predicate.expect_pattern!r} is not a "
-                    f"Python regular expression: {exc}"
+            return (
+                PredicateResult(
+                    name=predicate.name,
+                    ok=False,
+                    observed=(
+                        f"not applicable: expect_pattern {predicate.expect_pattern!r} is not a "
+                        f"Python regular expression: {exc}"
+                    ),
                 ),
+                before,
             )
 
     # `env_root` matches `replay.py`'s body screening, so a probe and a body are judged
     # against the same boundary and neither can be the looser path to a shell.
     decision = screen(probe, env_root=str(env.work))
     if decision.verdict is Verdict.REFUSE:
-        return PredicateResult(
-            name=predicate.name, ok=False, observed=decision.reason, refused=True
+        return (
+            PredicateResult(name=predicate.name, ok=False, observed=decision.reason, refused=True),
+            before,
         )
 
     # A probe must be read-only (issue #10): the guard permits writes inside the sandbox
     # because bodies need them, so a probe such as `git reset --hard` would otherwise run
     # and corrupt the state every later probe, and the episode, observe. The sandbox is
     # snapshotted around the probe, and a probe that changed it is refused.
-    before = sandbox_state(env)
+    if before is None:
+        before = sandbox_state(env)
     # Its own process group, killed whole on timeout, under the POSIX limits
     # (`runtime.confine`, issue #10). Output is decoded as UTF-8 with replacement there,
     # because the machine locale could otherwise turn `stdout` into `None`.
     completed = run_confined([*SHELL, probe], cwd=env.work, env=run_env(env), timeout_s=timeout_s)
     if completed.timed_out:
         changed = _changed_parts(before, sandbox_state(env))
-        return PredicateResult(
-            name=predicate.name,
-            ok=False,
-            observed=f"timed out after {timeout_s:g}s"
-            + (f"; and it changed the sandbox ({', '.join(changed)})" if changed else ""),
-            refused=bool(changed),
+        # A killed probe's group may still be settling, so its state is not passed on.
+        return (
+            PredicateResult(
+                name=predicate.name,
+                ok=False,
+                observed=f"timed out after {timeout_s:g}s"
+                + (f"; and it changed the sandbox ({', '.join(changed)})" if changed else ""),
+                refused=bool(changed),
+            ),
+            None,
         )
 
-    changed = _changed_parts(before, sandbox_state(env))
+    after = sandbox_state(env)
+    changed = _changed_parts(before, after)
     if changed:
-        return PredicateResult(
-            name=predicate.name,
-            ok=False,
-            observed=(
-                f"refused: the probe changed the sandbox ({', '.join(changed)}); a precondition "
-                f"or postcondition must only read, or it corrupts every later observation"
+        return (
+            PredicateResult(
+                name=predicate.name,
+                ok=False,
+                observed=(
+                    f"refused: the probe changed the sandbox ({', '.join(changed)}); a "
+                    f"precondition or postcondition must only read, or it corrupts every later "
+                    f"observation"
+                ),
+                refused=True,
             ),
-            refused=True,
+            after,
         )
 
     ok = completed.returncode == predicate.expect_exit
@@ -397,7 +436,7 @@ def evaluate_predicate(
         observed += f"; pattern {verdict} in stdout={_excerpt(completed.stdout)!r}"
     elif not ok:
         observed += f"; stdout={_excerpt(completed.stdout)!r} stderr={_excerpt(completed.stderr)!r}"
-    return PredicateResult(name=predicate.name, ok=ok, observed=observed)
+    return PredicateResult(name=predicate.name, ok=ok, observed=observed), after
 
 
 def sandbox_state(env: Sandbox) -> dict[str, str]:
@@ -424,11 +463,17 @@ def sandbox_state(env: Sandbox) -> dict[str, str]:
             path = os.path.join(directory, name)
             relative = f"{below}/{name}" if below else name
             tree.update(relative.encode("utf-8") + b"\0")
-            if os.path.islink(path):
+            # One `lstat` answers both "is it a link" and, for anything else, what `os.stat`
+            # would: the two differ only on a symlink.
+            try:
+                st = os.lstat(path)
+            except OSError:
+                st = None
+            if st is not None and stat.S_ISLNK(st.st_mode):
                 tree.update(b"link:" + os.readlink(path).encode("utf-8") + b"\0")
                 continue
             tree.update(b"x" if os.access(path, os.X_OK) else b"-")
-            tree.update(_content_digest(path, now))
+            tree.update(_content_digest(path, now, st))
 
     def git(args: tuple[str, ...], cwd: Path) -> str:
         return run_git(args, cwd=cwd, check=False).stdout
@@ -476,11 +521,16 @@ def _file_sha256(path: str) -> bytes:
         return hashlib.sha256(handle.read()).digest()
 
 
-def _content_digest(path: str, now: int) -> bytes:
-    """The file's SHA-256, from `_DIGESTS` when its stat says it is unchanged."""
+def _content_digest(path: str, now: int, st: os.stat_result | None = None) -> bytes:
+    """The file's SHA-256, from `_DIGESTS` when its stat says it is unchanged.
+
+    `st` is the file's `os.stat`, when the caller has it already (`sandbox_state`'s `lstat` of
+    a file that is not a link is the same result).
+    """
     if os.name == "nt":
         return _file_sha256(path)
-    st = os.stat(path)
+    if st is None:
+        st = os.stat(path)
     key = (st.st_dev, st.st_ino, st.st_size, st.st_mode, st.st_mtime_ns, st.st_ctime_ns)
     kept = _DIGESTS.get(path)
     if kept is not None and kept[0] == key:
@@ -639,10 +689,16 @@ def evaluate_predicates(
     depend on the order the predicates happen to be stored in.
     """
     parameters = bindings(env)
-    results = [
-        evaluate_predicate(predicate, env, parameters, timeout_s=timeout_s)
-        for predicate in predicates
-    ]
+    # Nothing runs in the sandbox between one probe and the next, so the state a probe leaves
+    # is the state the next one starts from: one snapshot per probe instead of two, which on
+    # a real repository was most of a precondition's cost (study 2's evaluation).
+    results = []
+    state: dict[str, str] | None = None
+    for predicate in predicates:
+        result, state = _evaluate_predicate(
+            predicate, env, parameters, timeout_s=timeout_s, before=state
+        )
+        results.append(result)
     failed = [result for result in results if not result.ok]
     detail = (
         "; ".join(f"{result.name}: {result.observed}" for result in failed)

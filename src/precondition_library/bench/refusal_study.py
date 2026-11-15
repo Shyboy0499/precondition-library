@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import gzip
 import json
+import multiprocessing
 import shutil
 import subprocess
 from collections.abc import Sequence
@@ -192,6 +193,64 @@ def _arm3(library: Library, box: Sandbox) -> str | None:
     return accepted[0].variant if accepted else None
 
 
+class _Deciding(BaseModel):
+    """What deciding one case needs, shared with the worker processes (`_decide_case`)."""
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    zero: list[Library]
+    refusal: list[Library]
+    control_zero: StateClassifier
+    control_refusal: StateClassifier
+    cache: Path
+    branch: str
+
+
+_DECIDING: _Deciding | None = None
+"""Set before the worker processes fork, so they inherit the libraries rather than reload them."""
+
+
+_Decided = tuple[Case, StudyDecisions, Label, StateFingerprint] | Exclusion
+
+
+def _decide_case(case: Case) -> _Decided:
+    """Build one case's state and decide it with every library and both controls (§6).
+
+    Each case is built in its own sandbox (`build_state` names it by merge and process), and
+    nothing here writes anything another case reads, so cases can be decided in any process.
+    """
+    ctx = _DECIDING
+    assert ctx is not None, "_DECIDING is set before any case is decided"
+    try:
+        box = build_state(case, ctx.cache, ctx.branch)
+    except subprocess.CalledProcessError:
+        return Exclusion(repo=case.repo, merge=case.merge, reason="state not built")
+    try:
+        state = StateFingerprint.observe(box)
+        decisions = StudyDecisions(
+            index=case.index,
+            zero=[_arm3(library, box) for library in ctx.zero],
+            refusal=[_arm3(library, box) for library in ctx.refusal],
+            control_zero=ctx.control_zero.decide_library(state),
+            control_refusal=ctx.control_refusal.decide_library(state),
+        )
+    finally:
+        box.destroy()
+    return case, decisions, label(case, ctx.cache, amendment=1), state
+
+
+def _decide_all(kept: Sequence[Case], jobs: int) -> list[_Decided]:
+    """`_decide_case` on every case, in the cases' order, on `jobs` processes.
+
+    The order of the results, and so of every file written from them, is the cases' order
+    whatever `jobs` is: a case's decision depends only on its own state.
+    """
+    if jobs <= 1 or len(kept) <= 1:
+        return [_decide_case(case) for case in kept]
+    with multiprocessing.get_context("fork").Pool(min(jobs, len(kept))) as pool:
+        return list(pool.imap(_decide_case, kept))
+
+
 def _decide_repository(
     repo: str,
     first_index: int,
@@ -199,7 +258,9 @@ def _decide_repository(
     refusal: Sequence[Library],
     control_zero: StateClassifier,
     control_refusal: StateClassifier,
+    jobs: int = 1,
 ) -> _RepositoryPart:
+    global _DECIDING
     branch, tip = pin(repo)
     cache = fetch_real_host(host(repo, tip))
     try:
@@ -210,29 +271,26 @@ def _decide_repository(
         labels: list[Label] = []
         decided: list[StudyDecisions] = []
         states: list[StateFingerprint] = []
-        for case in kept:
-            try:
-                box = build_state(case, cache, branch)
-            except subprocess.CalledProcessError:
-                excluded.append(
-                    Exclusion(repo=case.repo, merge=case.merge, reason="state not built")
-                )
+        _DECIDING = _Deciding(
+            zero=list(zero),
+            refusal=list(refusal),
+            control_zero=control_zero,
+            control_refusal=control_refusal,
+            cache=cache,
+            branch=branch,
+        )
+        try:
+            results = _decide_all(kept, jobs)
+        finally:
+            _DECIDING = None
+        for result in results:
+            if isinstance(result, Exclusion):
+                excluded.append(result)
                 continue
-            try:
-                state = StateFingerprint.observe(box)
-                decided.append(
-                    StudyDecisions(
-                        index=case.index,
-                        zero=[_arm3(library, box) for library in zero],
-                        refusal=[_arm3(library, box) for library in refusal],
-                        control_zero=control_zero.decide_library(state),
-                        control_refusal=control_refusal.decide_library(state),
-                    )
-                )
-            finally:
-                box.destroy()
+            case, decisions, lab, state = result
+            decided.append(decisions)
             cases.append(case)
-            labels.append(label(case, cache, amendment=1))
+            labels.append(lab)
             states.append(state)
     finally:
         shutil.rmtree(cache, ignore_errors=True)
@@ -412,6 +470,7 @@ def evaluate(
     refusal_dir: Path,
     zero_paths: Sequence[Path],
     refusal_paths: Sequence[Path],
+    jobs: int = 1,
 ) -> StudyReport:
     """§4 steps 5–7: fit the controls, mine and decide list E, estimate and decide."""
     require(REGISTRATION)
@@ -440,7 +499,7 @@ def evaluate(
             part = _RepositoryPart.model_validate_json(written.read_text("utf-8"))
         else:
             part = _decide_repository(
-                repo, len(so_far), zero, refusal, control_zero, control_refusal
+                repo, len(so_far), zero, refusal, control_zero, control_refusal, jobs
             )
             written.write_text(part.model_dump_json() + "\n", "utf-8")
         parts.append(part)
@@ -560,13 +619,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     evaluation.add_argument(
         "--out", type=Path, default=None, help="default: results/refusal-population-<today>"
     )
+    evaluation.add_argument(
+        "--jobs",
+        type=int,
+        default=1,
+        help="cases decided at once, one process each (default 1); the results do not depend on it",
+    )
     args = parser.parse_args(argv)
     if args.command == "mine-refusals":
         refusals = mine_refusal_set(args.out)
         print(f"{len(refusals.cases)} inexpressible conflicts frozen in {args.out}")
         return 0
     out = args.out or REPOSITORY / f"results/refusal-population-{date.today().isoformat()}"
-    print(text(evaluate(out, args.refusal_set, args.zero, args.refusal)), end="")
+    print(text(evaluate(out, args.refusal_set, args.zero, args.refusal, args.jobs)), end="")
     return 0
 
 
