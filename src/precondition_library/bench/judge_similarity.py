@@ -110,6 +110,14 @@ def cache_key(query: str, candidates: Sequence[str], *, model: str, temperature:
     return _sha256("\x00".join(parts))
 
 
+class JudgeBudgetExceededError(RuntimeError):
+    """The registered token budget is spent, so the run stops (ADR-0034 decision 9).
+
+    Like `ProviderAuthError` it is never recorded as a data point: an abstention here would put
+    every later pair in the denominator as a non-fire the judge never made.
+    """
+
+
 class JudgeRecord(BaseModel):
     """One cached reply: the key, what produced it, and the scores or why there are none."""
 
@@ -236,8 +244,10 @@ class JudgeSimilarity:
         model: str = DEFAULT_MODEL,
         temperature: float = DEFAULT_TEMPERATURE,
         cache_path: Path | None = None,
+        token_budget: int | None = None,
     ) -> None:
         self._provider = provider
+        self._token_budget = token_budget
         self._model = model
         self._temperature = temperature
         self._cache_path = cache_path
@@ -327,6 +337,12 @@ class JudgeSimilarity:
         if key in self._scores:
             self._memoised += 1
             return list(self._scores[key])
+        spent = self._tokens_in + self._tokens_out
+        if self._token_budget is not None and spent >= self._token_budget:
+            raise JudgeBudgetExceededError(
+                f"the judge has spent {spent} of its {self._token_budget}-token budget; "
+                "the run stops here rather than call the provider again"
+            )
         prompt = JUDGE_PROMPT.format(
             query=query,
             candidates="\n".join(

@@ -71,6 +71,7 @@ def scorer(
     judge_cache: Path | None = None,
     model: str = DEFAULT_MODEL,
     temperature: float = DEFAULT_TEMPERATURE,
+    judge_token_budget: int | None = None,
 ) -> tuple[Similarity, dict[str, str]]:
     """The named arm 2 scorer and what identifies it, for `rescore.json`.
 
@@ -108,7 +109,13 @@ def scorer(
                 "and a figure that cannot be recomputed from them is not a result (ADR-0034)"
             )
         return (
-            JudgeSimilarity(provider, model=model, temperature=temperature, cache_path=judge_cache),
+            JudgeSimilarity(
+                provider,
+                model=model,
+                temperature=temperature,
+                cache_path=judge_cache,
+                token_budget=judge_token_budget,
+            ),
             {"scorer": "judge", "prompt_version": PROMPT_VERSION},
         )
     raise ValueError(f"unknown scorer {name!r}; choose one of {', '.join(SCORERS)}")
@@ -201,6 +208,12 @@ def _parser() -> argparse.ArgumentParser:
         type=Path,
         help="where the judge writes its per-pair scores; required by --scorer judge",
     )
+    parser.add_argument(
+        "--judge-token-budget",
+        type=int,
+        help="stop the judge once it has spent this many provider tokens, in and out "
+        "(ADR-0034 decision 9: the budget is declared before the run)",
+    )
     parser.add_argument("--model", default=DEFAULT_MODEL, help="the judge's pinned model")
     parser.add_argument(
         "--temperature",
@@ -232,6 +245,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         judge_cache=args.judge_cache,
         model=args.model,
         temperature=args.temperature,
+        judge_token_budget=args.judge_token_budget,
     )
     result = rescore(args.run, args.out, similarity, identity)
     print(_text(result), end="")
