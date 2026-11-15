@@ -20,6 +20,7 @@ from precondition_library.bench import rescore as rescore_module
 from precondition_library.bench.judge_similarity import (
     JUDGE_PROMPT,
     PROMPT_VERSION,
+    JudgeBudgetExceededError,
     JudgeRecord,
     JudgeSimilarity,
     cache_key,
@@ -145,6 +146,26 @@ def test_an_auth_error_stops_the_run_instead_of_becoming_a_data_point() -> None:
     assert report.abstained == 0 and report.errors == 0, (
         "a failed account is not a judge abstention"
     )
+
+
+def test_a_spent_budget_stops_the_run_before_the_next_call() -> None:
+    """The budget is checked before each call: a call starts while anything is left, and none
+    starts once the spend has reached it."""
+    provider = FakeProvider(_completion(_scores(0.5)), _completion(_scores(0.5)))
+    judge = JudgeSimilarity(provider, token_budget=150)
+    assert judge.score_many("q1", ["a"]) == [0.5], "0 of 150 spent: it calls"
+    assert judge.score_many("q2", ["a"]) == [0.5], "120 of 150 spent: it still calls"
+    with pytest.raises(JudgeBudgetExceededError):
+        judge.score_many("q3", ["a"])
+    assert judge.usage().calls == 2, "240 of 150 spent: no third call"
+    assert judge.report().abstained == 0, "a spent budget is not an abstention"
+
+
+def test_without_a_budget_the_judge_never_stops_itself() -> None:
+    judge, provider = _judge(*(_completion(_scores(0.5)) for _ in range(3)))
+    for query in ("q1", "q2", "q3"):
+        judge.score_many(query, ["a"])
+    assert judge.usage().calls == 3
 
 
 def test_the_scores_are_the_evidence_and_recomputing_them_costs_nothing(tmp_path: Path) -> None:

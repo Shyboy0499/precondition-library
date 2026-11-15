@@ -49,6 +49,15 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **The LLM state judge (#295 item 2) gets a registered budget and repeatability subsample before
+  its first scored call** (spec revision 156, ADR-0034).
+  - **Budget:** `JudgeSimilarity(token_budget=...)` and `rescore --judge-token-budget` stop a run
+    before any call that would start past the budget, and record nothing for it. Each rescore is
+    capped at 3.5 million tokens.
+  - **Size, from a free dry run:** 164 calls per library.
+  - **Cost, from a 30-call trial:** about 9,600 tokens per call, and CNY 0.71 for the 30.
+  - **Repeatability:** every pair is asked twice, as runs A and B with separate caches.
+
 - **Can a project's own tests judge a lock-file resolution?** (`results/project-tests-pilot-2026-11-14/`,
   a pilot of #297's third oracle, approved by the owner.)
   - **What ran.** Three npm repositories, one merge each, with install scripts off and tests
