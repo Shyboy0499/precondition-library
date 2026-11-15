@@ -60,10 +60,13 @@ Read [Results graded outside this project](#results-graded-outside-this-project)
 >
 > Each figure is in [What survived an external test](#what-survived-an-external-test-and-what-did-not).
 >
+> **An LLM reading the state** (#295 item 2) mis-fires on 5–17% of its fires at matched coverage,
+> against text scorers' 71–81% and arm 3's 0%, on the two libraries where it is a usable baseline
+> ([LLM judge](results/judge-2026-11-15/README.md)).
+>
 > **Now running, on the owner's DeepSeek key:**
-> - the LLM state judge (#295 item 2);
 > - study 2's 20 library builds (#307);
-> - then two six-family replicates, one with a second model (#266, ADR-0061).
+> - two six-family replicates, one with a second model (#266, ADR-0061).
 >
 > **Graded by this project's own labels.** On states its own injectors build, judged by its own
 > rules, precondition dispatch mis-fired on **0 of 563** fires, against text similarity's
@@ -99,7 +102,7 @@ Stated first, because the prior art is real and the honest framing depends on it
 | That these token counts are a **cost** | They are tokens. Pricing input needs a rate table, and the provider's rates differ by peak and off-peak hours, so no currency figure is reported — input is metered as uncached, cache-read and cache-write so one can be computed once rates exist. |
 | That precondition dispatch rarely mis-fires | On this project's own states it did not mis-fire (0 of 563). On real lock-file merges, graded by maintainers, it mis-fired on 8–54% of its fires depending on the library, and the registered claim is falsified there ([Results graded outside this project](#results-graded-outside-this-project), ADR-0052). |
 | That an episode-level comparison has been made | Only the pair-level primary metric has been measured ([Primary result](#primary-result)). The frozen benchmark, the admission factorial and the online arms have not been run at scale; the one smoke pass that ran them ([First demonstration](#first-demonstration)) demonstrates the mechanism and measures nothing. |
-| That no text scorer could close the gap | Three were measured on the same three libraries: the shipped lexical arm (ADR-0003), the pinned embedding arm (#104) and a pinned local reranker, the strongest of thirteen models screened on arm 2's floor (lower bounds 0.571 and 0.508 against chance 0.333, where the other two only just clear it). The reranker narrows the gap to +0.71 to +0.76, from lexical +0.76 to +0.81, and no further. That is a screen of local models, not a search; a scorer reading the state through an LLM call is implemented and registered (ADR-0034) and has not been run, so it closes no gap here. |
+| That no text scorer could close the gap | Three were measured on the same three libraries: the shipped lexical arm (ADR-0003), the pinned embedding arm (#104) and a pinned local reranker, the strongest of thirteen models screened on arm 2's floor (lower bounds 0.571 and 0.508 against chance 0.333, where the other two only just clear it). The reranker narrows the gap to +0.71 to +0.76, from lexical +0.76 to +0.81, and no further. That is a screen of local models, not a search. A scorer reading the state through an LLM call (ADR-0034) narrows it to +0.05 to +0.17 on the two libraries where it clears the floor, and arm 3 still mis-fires less, in both of two repeats ([LLM judge](results/judge-2026-11-15/README.md)). That is one model and one prompt, not every judge. |
 
 Amortization is still what makes the project *useful* — it is an engineering
 assumption here, not a finding. It is reported as a cost model, never as a
@@ -412,9 +415,9 @@ did not make. This is the answer as of the studies below; each line links to whe
 
 | question | blocked on |
 | --- | --- |
-| Does an LLM that reads the state beat or match arm 3? (#295 item 2) | running: its budget and repeatability subsample were registered first (spec revision 156) |
 | Is refusal a property of the method or of one build? (#307, study 2, registered before its data) | running: the 20 builds started on 2026-11-15 |
-| Does it hold in another domain, or with another compiling model? (#266) | decided in ADR-0061; the two builds follow the judge |
+| Does it hold in another domain, or with another compiling model? (#266) | running: the two builds of ADR-0061 started on 2026-11-15 |
+| Does a stronger judge, or one shown the probes, match arm 3? | ADR-0034 ran one model without the probe strings ([LLM judge](results/judge-2026-11-15/README.md)); either is a new registration |
 | Do people agree with the labelling rules? (#299 step 3) | independent raters; the kit is built |
 | Do the projects' own tests accept a resolution? (#297's third oracle) | Piloted, sandboxed ([project-tests pilot](results/project-tests-pilot-2026-11-14/README.md)). Where a suite ran (2 repositories), the wrong side's lock file was refused by `npm ci` before any test ran, so the tests added nothing beyond the check. The next cases are those where both sides pass the check. Composer projects need a host this session cannot reach. |
 
@@ -488,7 +491,7 @@ text similarity does not, and two of three libraries mostly decline the conflict
 resolve.
 
 **What it does not show.** It covers only lock-file merges in 11 repositories, and it says nothing
-about episodes. An LLM state judge (#295) has not been run, and the external oracles of #297 (the
+about episodes. An LLM state judge (#295) has run only on this project's own states, not on these, and the external oracles of #297 (the
 ecosystem's lock-file tools, the project's own tests) are not built. Every figure here was
 recomputed by a script that does not use this project's code. For 55 of the cases, the labels were
 re-derived from git and all agree. Afterwards, and exploratory because the data had been seen, a
@@ -629,6 +632,9 @@ resolutions, arm 2 swept to arm 3's coverage. Three whole-run replicates (spec �
 | reranker arm 2: floor | not measurable | **usable** (152/240, 0.571) | **usable** (137/240, 0.508) |
 | reranker arm 2 at matched coverage: mis-fires | 142/186 | 133/187 | 134/189 |
 | difference (reranker arm 2 − arm 3) | +0.76 | **+0.71** | **+0.71** |
+| LLM judge arm 2 (ADR-0034): floor, runs A / B | not measurable | **usable** (129/240, 0.474 / 136/240, 0.503) | **usable** (121/240, 0.441 / 97/240, 0.344) |
+| LLM judge at matched coverage: mis-fires, A / B | 5/188 / 0/183 | 38/230 / 23/213 | 13/196 / 10/190 |
+| difference (judge − arm 3), A / B | +0.03 / +0.00 | **+0.17 / +0.11** | **+0.07 / +0.05** |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/figures/primary-dark.svg">
@@ -651,6 +657,10 @@ replicate 1, and arm 3 is unchanged ([Embedding arm 2](results/replicates-2026-1
 A pinned local reranker, which clears the floor clearly where those two only just do,
 narrows it to +0.71 to +0.76 and no further: still about five times the smallest
 detectable difference.
+An LLM judge that reads the state, not the probes (ADR-0034), narrows it much further, to
++0.05 to +0.17 where its floor is usable. Arm 3 still mis-fires less, in both of two runs, and
+the two runs differ by less than either's gap from arm 3. On replicate 1 they differ by as much
+as the gap, so nothing is worded there ([LLM judge](results/judge-2026-11-15/README.md)).
 
 **What reading the state alone does (ADR-0047).** Each pair's correct resolution is a rule over
 the observed state, so the comparison above does not separate executing compiled checks from
@@ -680,9 +690,11 @@ either ([Results graded outside this project](#results-graded-outside-this-proje
   the floor -- clears it clearly (0.571 and 0.508), and narrows the gap by 0.03 to 0.09
   and no more: it still mis-fires on 71–76% of its fires
   ([Reranker arm 2](results/replicates-2026-10-05/README.md#reranker-arm-2)). A scorer
-  reading the state through a model call (an LLM judge) is implemented and registered
-  (ADR-0034, spec §7 item 14) and **has not been run**: it needs a provider key, and until
-  it runs, no sentence may say it won or lost.
+  reading the state through a model call (an LLM judge, ADR-0034, spec §7 item 14) ran on
+  2026-11-15. On libraries 12 and 13, where it clears the floor, it mis-fires on 5–17% of its
+  fires at matched coverage, against arm 3's 0%, in both of two repeats; library 11's floor
+  is not measurable, so nothing is worded there ([LLM judge](results/judge-2026-11-15/README.md)). It is one model and one prompt,
+  without the probe strings.
 - **States outside the generators, except in part.** Every pair here comes from the
   injectors admission tests each program against. Five held-out sources are measured below,
   one per git fault. On one of them, file names with a space or a non-ASCII character, arm 3

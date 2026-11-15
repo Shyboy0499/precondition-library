@@ -1,0 +1,16 @@
+run-11: 164 shared calls (A 164, B 164); identical scores 88; same top 157; a tie at the top in either run 48; mean |A-B| per score 0.0147
+  A: arm 3 (pre-registered coverage point): coverage 187/400, mismatch 0/187; at matched coverage arm 2 (threshold 1.0) has mismatch 5/188; coverage gap +0.002; mismatch difference (arm 2 - arm 3) +0.0266
+     arm 2 baseline floor (spec §7 item 11): not measurable, so not usable: an intent needs two or more candidate resolutions for arm 2 to choose between, and the library's admitted programs give sync_through_a_conflicting_lockfile has ['take_upstream']
+  B: arm 3 (pre-registered coverage point): coverage 187/400, mismatch 0/187; at matched coverage arm 2 (threshold 0.85) has mismatch 0/183; coverage gap -0.010; mismatch difference (arm 2 - arm 3) +0.0000
+     arm 2 baseline floor (spec §7 item 11): not measurable, so not usable: an intent needs two or more candidate resolutions for arm 2 to choose between, and the library's admitted programs give sync_through_a_conflicting_lockfile has ['take_upstream']
+run-12: 210 shared calls (A 210, B 210); identical scores 96; same top 187; a tie at the top in either run 38; mean |A-B| per score 0.0270
+  A: arm 3 (pre-registered coverage point): coverage 187/400, mismatch 0/187; at matched coverage arm 2 (threshold 1.0) has mismatch 38/230; coverage gap +0.107; mismatch difference (arm 2 - arm 3) +0.1652
+     arm 2 baseline floor (spec §7 item 11): strict top-1 129/240: the 95% Wilson lower bound 0.474 exceeds chance 0.333, so arm 2 is a usable baseline
+  B: arm 3 (pre-registered coverage point): coverage 187/400, mismatch 0/187; at matched coverage arm 2 (threshold 1.0) has mismatch 23/213; coverage gap +0.065; mismatch difference (arm 2 - arm 3) +0.1080
+     arm 2 baseline floor (spec §7 item 11): strict top-1 136/240: the 95% Wilson lower bound 0.503 exceeds chance 0.333, so arm 2 is a usable baseline
+run-13: 207 shared calls (A 207, B 207); identical scores 116; same top 190; a tie at the top in either run 43; mean |A-B| per score 0.0221
+  A: arm 3 (pre-registered coverage point): coverage 189/400, mismatch 0/189; at matched coverage arm 2 (threshold 1.0) has mismatch 13/196; coverage gap +0.018; mismatch difference (arm 2 - arm 3) +0.0663
+     arm 2 baseline floor (spec §7 item 11): strict top-1 121/240: the 95% Wilson lower bound 0.441 exceeds chance 0.333, so arm 2 is a usable baseline
+  B: arm 3 (pre-registered coverage point): coverage 189/400, mismatch 0/189; at matched coverage arm 2 (threshold 1.0) has mismatch 10/190; coverage gap +0.003; mismatch difference (arm 2 - arm 3) +0.0526
+     arm 2 baseline floor (spec §7 item 11): strict top-1 97/240: the 95% Wilson lower bound 0.344 exceeds chance 0.333, so arm 2 is a usable baseline
+pooled: 581 calls; identical 300 (0.516); same top 534 (0.919); mean |A-B| per score 0.0214
