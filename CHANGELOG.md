@@ -12,6 +12,15 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Fixed
 
+- **The README caught up with studies 3–6.**
+  - **The plain-language summary and the status box** stopped at study 1. They now say what the
+    package-set studies found, and what is running on the DeepSeek key.
+  - **"Results graded outside this project"** gains a study 6 section, with the manifest audits
+    that qualify it.
+  - **The "Not yet tested" table** no longer says the key-dependent work is blocked, and its
+    project-tests row reports the pilot.
+  - **The replication commands** include study 6.
+
 - **A Composer error is recorded where Composer threw it.** `lock_check` recorded the last line
   of Composer's output, which after an exception is the command's usage line. So study 6's 90
   failed Sylius checks did not say why: Composer 2.8 rejects a `require-dev` package name with
