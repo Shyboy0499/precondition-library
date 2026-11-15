@@ -10,6 +10,18 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ## Unreleased
 
+### Changed
+
+- **Precondition probing is faster on real repositories, with every verdict unchanged (spec
+  revision 160).**
+  - **Why:** study 2's evaluation took about 28 minutes per real merge, 89% of it the read-only
+    snapshot taken around every probe.
+  - **What:** one snapshot per probe instead of two inside `evaluate_predicates`, one `lstat` per
+    file in the snapshot, and `refusal_study evaluate --jobs N` to decide cases on N processes.
+  - **Checked:** on a real case, all 1,943 predicate verdicts of the 20 study 2 libraries are
+    identical before and after; tests pin the snapshot count and byte-identical output under
+    `--jobs`.
+
 ### Fixed
 
 - **A predicate pattern `re` cannot read no longer crashes a build (spec revision 159).**
