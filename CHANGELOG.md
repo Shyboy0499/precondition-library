@@ -18,6 +18,11 @@ measured result, at pair level; everything before it is design and apparatus. Se
   (spec revision 163, exploratory).** 20 of 403 fires wrong, against 41 of 101 in October. None
   misreads a quoted path; all 20 are one library whose check knows lock files only by name
   ([`results/heldout-2026-11-16/`](results/heldout-2026-11-16/README.md)).
+- **Which checks know lock files only by name, and what a build-time test at unseen paths would
+  refuse (spec revision 164, exploratory).** Across 25 libraries, four programs fire on another
+  family's lock-file conflict once the file moves: 0-4's at every path, R-7's when the name does
+  not end in `.lock` (new), and October's two known `diverged` defects. No other program does
+  ([`results/lock-path-perturbation-2026-11-16/`](results/lock-path-perturbation-2026-11-16/README.md)).
 
 ### Changed
 

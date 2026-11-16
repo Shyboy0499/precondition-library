@@ -1,0 +1,2087 @@
+{
+ "paths": [
+  "lib/Zuordnung.lock",
+  "lib/Übersicht.lock",
+  "deps/.packages.lock",
+  "tools/build cache/state.lock",
+  "deps-lock.txt",
+  "packages.lockfile"
+ ],
+ "seeds": [
+  0,
+  2,
+  5
+ ],
+ "libraries": [
+  "results/refusal-population-2026-11-15/builds/0-0/library-two-sided",
+  "results/refusal-population-2026-11-15/builds/0-1/library-two-sided",
+  "results/refusal-population-2026-11-15/builds/0-2/library-two-sided",
+  "results/refusal-population-2026-11-15/builds/0-3/library-two-sided",
+  "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+  "results/refusal-population-2026-11-15/builds/0-5/library-two-sided",
+  "results/refusal-population-2026-11-15/builds/0-6/library-two-sided",
+  "results/refusal-population-2026-11-15/builds/0-7/library-two-sided",
+  "results/refusal-population-2026-11-15/builds/0-8/library-two-sided",
+  "results/refusal-population-2026-11-15/builds/0-9/library-two-sided",
+  "results/refusal-population-2026-11-15/builds/R-0/library-two-sided",
+  "results/refusal-population-2026-11-15/builds/R-1/library-two-sided",
+  "results/refusal-population-2026-11-15/builds/R-2/library-two-sided",
+  "results/refusal-population-2026-11-15/builds/R-3/library-two-sided",
+  "results/refusal-population-2026-11-15/builds/R-4/library-two-sided",
+  "results/refusal-population-2026-11-15/builds/R-5/library-two-sided",
+  "results/refusal-population-2026-11-15/builds/R-6/library-two-sided",
+  "results/refusal-population-2026-11-15/builds/R-7/library-two-sided",
+  "results/refusal-population-2026-11-15/builds/R-8/library-two-sided",
+  "results/refusal-population-2026-11-15/builds/R-9/library-two-sided",
+  "results/replicates-2026-11-15/run-14/library-two-sided",
+  "results/replicates-2026-11-15/run-15/library-two-sided",
+  "results/replicates-2026-10-05/run-11/library-two-sided",
+  "results/replicates-2026-10-05/run-12/library-two-sided",
+  "results/replicates-2026-10-05/run-13/library-two-sided"
+ ],
+ "fires": [
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "diverged-occ1-diverged-fork-sync-merge",
+   "family": "diverged",
+   "variant": "merge"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "lockfile_conflict-occ1-resolve-dependency-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/0-5/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/R-0/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-occ3-sync-lockfile-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/R-4/library-two-sided",
+   "program": "lockfile_conflict-occ1-resolve-lockfile-sync-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/R-6/library-two-sided",
+   "program": "lockfile_conflict-occ2-merge-upstream-lockfile-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/replicates-2026-11-15/run-15/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/replicates-2026-10-05/run-11/library-two-sided",
+   "program": "lockfile_conflict-occ2-sync-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/replicates-2026-10-05/run-12/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-0/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-upstream-keep-removals",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-3/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-keep-local-merge",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "diverged-occ1-diverged-fork-sync-merge",
+   "family": "diverged",
+   "variant": "merge"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-5/library-two-sided",
+   "program": "lockfile_conflict-occ2-lockfile-conflict-keep-local-merge",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-6/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-keep-local-removals",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-7/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-keep-local-removals",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-8/library-two-sided",
+   "program": "lockfile_conflict-occ2-lockfile-conflict-keep-local-upstream-additions",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-1/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-keep-local-removals",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-3/library-two-sided",
+   "program": "lockfile_conflict-occ2-merge-upstream-keep-local-lockfile",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-6/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-keep-local-deps",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-9/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-keep-local-add-upstream",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/replicates-2026-11-15/run-14/library-two-sided",
+   "program": "lockfile_conflict-occ2-merge-upstream-keep-local-deps",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/replicates-2026-10-05/run-13/library-two-sided",
+   "program": "lockfile_conflict-occ3-merge-upstream-keep-local-depfile",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-0/library-two-sided",
+   "program": "lockfile_conflict-occ2-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-1/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-merge-upstream-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "diverged-occ1-diverged-fork-sync-merge",
+   "family": "diverged",
+   "variant": "merge"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "lockfile_conflict-occ1-resolve-dependency-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-5/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-6/library-two-sided",
+   "program": "lockfile_conflict-occ2-lockfile-conflict-merge-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-8/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-0/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-occ3-sync-lockfile-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-4/library-two-sided",
+   "program": "lockfile_conflict-occ1-resolve-lockfile-sync-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-6/library-two-sided",
+   "program": "lockfile_conflict-occ2-merge-upstream-lockfile-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-11-15/run-14/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-11-15/run-15/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-10-05/run-11/library-two-sided",
+   "program": "lockfile_conflict-occ2-sync-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-10-05/run-12/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Zuordnung.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-10-05/run-13/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "diverged-occ1-diverged-fork-sync-merge",
+   "family": "diverged",
+   "variant": "merge"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "lockfile_conflict-occ1-resolve-dependency-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/0-5/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/R-0/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-occ3-sync-lockfile-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/R-4/library-two-sided",
+   "program": "lockfile_conflict-occ1-resolve-lockfile-sync-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/R-6/library-two-sided",
+   "program": "lockfile_conflict-occ2-merge-upstream-lockfile-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/replicates-2026-11-15/run-15/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/replicates-2026-10-05/run-11/library-two-sided",
+   "program": "diverged-occ1-diverged-local-only-additions-discard",
+   "family": "diverged",
+   "variant": "discard"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/replicates-2026-10-05/run-11/library-two-sided",
+   "program": "lockfile_conflict-occ2-sync-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/replicates-2026-10-05/run-12/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/replicates-2026-10-05/run-13/library-two-sided",
+   "program": "diverged-occ1-sync-fork-discard",
+   "family": "diverged",
+   "variant": "discard"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-0/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-upstream-keep-removals",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-3/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-keep-local-merge",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "diverged-occ1-diverged-fork-sync-merge",
+   "family": "diverged",
+   "variant": "merge"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-5/library-two-sided",
+   "program": "lockfile_conflict-occ2-lockfile-conflict-keep-local-merge",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-6/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-keep-local-removals",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-7/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-keep-local-removals",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-8/library-two-sided",
+   "program": "lockfile_conflict-occ2-lockfile-conflict-keep-local-upstream-additions",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-1/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-keep-local-removals",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-3/library-two-sided",
+   "program": "lockfile_conflict-occ2-merge-upstream-keep-local-lockfile",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-6/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-keep-local-deps",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-9/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-keep-local-add-upstream",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/replicates-2026-11-15/run-14/library-two-sided",
+   "program": "lockfile_conflict-occ2-merge-upstream-keep-local-deps",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/replicates-2026-10-05/run-11/library-two-sided",
+   "program": "diverged-occ1-diverged-local-only-additions-discard",
+   "family": "diverged",
+   "variant": "discard"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/replicates-2026-10-05/run-11/library-two-sided",
+   "program": "lockfile_conflict-occ2-sync-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/replicates-2026-10-05/run-12/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/replicates-2026-10-05/run-13/library-two-sided",
+   "program": "diverged-occ1-sync-fork-discard",
+   "family": "diverged",
+   "variant": "discard"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-0/library-two-sided",
+   "program": "lockfile_conflict-occ2-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-1/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-merge-upstream-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "diverged-occ1-diverged-fork-sync-merge",
+   "family": "diverged",
+   "variant": "merge"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "lockfile_conflict-occ1-resolve-dependency-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-5/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-6/library-two-sided",
+   "program": "lockfile_conflict-occ2-lockfile-conflict-merge-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-8/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-0/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-occ3-sync-lockfile-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-4/library-two-sided",
+   "program": "lockfile_conflict-occ1-resolve-lockfile-sync-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-6/library-two-sided",
+   "program": "lockfile_conflict-occ2-merge-upstream-lockfile-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-11-15/run-14/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-11-15/run-15/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-10-05/run-11/library-two-sided",
+   "program": "diverged-occ1-diverged-local-only-additions-discard",
+   "family": "diverged",
+   "variant": "discard"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-10-05/run-11/library-two-sided",
+   "program": "lockfile_conflict-occ2-sync-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-10-05/run-12/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "lib/Übersicht.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-10-05/run-13/library-two-sided",
+   "program": "diverged-occ1-sync-fork-discard",
+   "family": "diverged",
+   "variant": "discard"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "diverged-occ1-diverged-fork-sync-merge",
+   "family": "diverged",
+   "variant": "merge"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "lockfile_conflict-occ1-resolve-dependency-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/0-5/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/R-0/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-occ3-sync-lockfile-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/R-4/library-two-sided",
+   "program": "lockfile_conflict-occ1-resolve-lockfile-sync-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/R-6/library-two-sided",
+   "program": "lockfile_conflict-occ2-merge-upstream-lockfile-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/replicates-2026-11-15/run-15/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/replicates-2026-10-05/run-11/library-two-sided",
+   "program": "lockfile_conflict-occ2-sync-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/replicates-2026-10-05/run-12/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-0/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-upstream-keep-removals",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-3/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-keep-local-merge",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "diverged-occ1-diverged-fork-sync-merge",
+   "family": "diverged",
+   "variant": "merge"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-5/library-two-sided",
+   "program": "lockfile_conflict-occ2-lockfile-conflict-keep-local-merge",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-6/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-keep-local-removals",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-7/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-keep-local-removals",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-8/library-two-sided",
+   "program": "lockfile_conflict-occ2-lockfile-conflict-keep-local-upstream-additions",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-1/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-keep-local-removals",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-3/library-two-sided",
+   "program": "lockfile_conflict-occ2-merge-upstream-keep-local-lockfile",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-6/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-keep-local-deps",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-9/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-keep-local-add-upstream",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/replicates-2026-11-15/run-14/library-two-sided",
+   "program": "lockfile_conflict-occ2-merge-upstream-keep-local-deps",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/replicates-2026-10-05/run-13/library-two-sided",
+   "program": "lockfile_conflict-occ3-merge-upstream-keep-local-depfile",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-0/library-two-sided",
+   "program": "lockfile_conflict-occ2-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-1/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-merge-upstream-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "diverged-occ1-diverged-fork-sync-merge",
+   "family": "diverged",
+   "variant": "merge"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "lockfile_conflict-occ1-resolve-dependency-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-5/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-6/library-two-sided",
+   "program": "lockfile_conflict-occ2-lockfile-conflict-merge-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-8/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-0/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-occ3-sync-lockfile-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-4/library-two-sided",
+   "program": "lockfile_conflict-occ1-resolve-lockfile-sync-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-6/library-two-sided",
+   "program": "lockfile_conflict-occ2-merge-upstream-lockfile-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-11-15/run-14/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-11-15/run-15/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-10-05/run-11/library-two-sided",
+   "program": "lockfile_conflict-occ2-sync-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-10-05/run-12/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps/.packages.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-10-05/run-13/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "diverged-occ1-diverged-fork-sync-merge",
+   "family": "diverged",
+   "variant": "merge"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "lockfile_conflict-occ1-resolve-dependency-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/0-5/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/R-0/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-occ3-sync-lockfile-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/R-4/library-two-sided",
+   "program": "lockfile_conflict-occ1-resolve-lockfile-sync-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/R-6/library-two-sided",
+   "program": "lockfile_conflict-occ2-merge-upstream-lockfile-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/replicates-2026-11-15/run-15/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/replicates-2026-10-05/run-11/library-two-sided",
+   "program": "lockfile_conflict-occ2-sync-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/replicates-2026-10-05/run-12/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/replicates-2026-10-05/run-13/library-two-sided",
+   "program": "diverged-occ1-sync-fork-discard",
+   "family": "diverged",
+   "variant": "discard"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-0/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-upstream-keep-removals",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-3/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-keep-local-merge",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "diverged-occ1-diverged-fork-sync-merge",
+   "family": "diverged",
+   "variant": "merge"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-5/library-two-sided",
+   "program": "lockfile_conflict-occ2-lockfile-conflict-keep-local-merge",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-6/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-keep-local-removals",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-7/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-keep-local-removals",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-8/library-two-sided",
+   "program": "lockfile_conflict-occ2-lockfile-conflict-keep-local-upstream-additions",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-1/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-keep-local-removals",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-3/library-two-sided",
+   "program": "lockfile_conflict-occ2-merge-upstream-keep-local-lockfile",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-6/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-keep-local-deps",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-9/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-keep-local-add-upstream",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/replicates-2026-11-15/run-14/library-two-sided",
+   "program": "lockfile_conflict-occ2-merge-upstream-keep-local-deps",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/replicates-2026-10-05/run-11/library-two-sided",
+   "program": "lockfile_conflict-occ2-sync-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/replicates-2026-10-05/run-12/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/replicates-2026-10-05/run-13/library-two-sided",
+   "program": "diverged-occ1-sync-fork-discard",
+   "family": "diverged",
+   "variant": "discard"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/replicates-2026-10-05/run-13/library-two-sided",
+   "program": "lockfile_conflict-occ3-merge-upstream-keep-local-depfile",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-0/library-two-sided",
+   "program": "lockfile_conflict-occ2-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-1/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-merge-upstream-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "diverged-occ1-diverged-fork-sync-merge",
+   "family": "diverged",
+   "variant": "merge"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "lockfile_conflict-occ1-resolve-dependency-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-5/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-6/library-two-sided",
+   "program": "lockfile_conflict-occ2-lockfile-conflict-merge-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-8/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-0/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-occ3-sync-lockfile-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-4/library-two-sided",
+   "program": "lockfile_conflict-occ1-resolve-lockfile-sync-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-6/library-two-sided",
+   "program": "lockfile_conflict-occ2-merge-upstream-lockfile-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-11-15/run-14/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-11-15/run-15/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-10-05/run-11/library-two-sided",
+   "program": "lockfile_conflict-occ2-sync-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-10-05/run-12/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-10-05/run-13/library-two-sided",
+   "program": "diverged-occ1-sync-fork-discard",
+   "family": "diverged",
+   "variant": "discard"
+  },
+  {
+   "path": "tools/build cache/state.lock",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-10-05/run-13/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "diverged-occ1-diverged-fork-sync-merge",
+   "family": "diverged",
+   "variant": "merge"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "lockfile_conflict-occ1-resolve-dependency-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/R-0/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-occ3-sync-lockfile-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/R-4/library-two-sided",
+   "program": "lockfile_conflict-occ1-resolve-lockfile-sync-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/R-6/library-two-sided",
+   "program": "lockfile_conflict-occ2-merge-upstream-lockfile-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/R-7/library-two-sided",
+   "program": "diverged-occ5-diverged-sync-merge-preserve-history",
+   "family": "diverged",
+   "variant": "merge"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/replicates-2026-10-05/run-11/library-two-sided",
+   "program": "lockfile_conflict-occ2-sync-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/replicates-2026-10-05/run-12/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-0/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-upstream-keep-removals",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-3/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-keep-local-merge",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "diverged-occ1-diverged-fork-sync-merge",
+   "family": "diverged",
+   "variant": "merge"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-5/library-two-sided",
+   "program": "lockfile_conflict-occ2-lockfile-conflict-keep-local-merge",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-6/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-keep-local-removals",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-7/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-keep-local-removals",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-8/library-two-sided",
+   "program": "lockfile_conflict-occ2-lockfile-conflict-keep-local-upstream-additions",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-1/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-keep-local-removals",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-3/library-two-sided",
+   "program": "lockfile_conflict-occ2-merge-upstream-keep-local-lockfile",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-6/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-keep-local-deps",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-7/library-two-sided",
+   "program": "diverged-occ5-diverged-sync-merge-preserve-history",
+   "family": "diverged",
+   "variant": "merge"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-9/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-keep-local-add-upstream",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/replicates-2026-11-15/run-14/library-two-sided",
+   "program": "lockfile_conflict-occ2-merge-upstream-keep-local-deps",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/replicates-2026-10-05/run-13/library-two-sided",
+   "program": "lockfile_conflict-occ3-merge-upstream-keep-local-depfile",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-0/library-two-sided",
+   "program": "lockfile_conflict-occ2-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "diverged-occ1-diverged-fork-sync-merge",
+   "family": "diverged",
+   "variant": "merge"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "lockfile_conflict-occ1-resolve-dependency-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-6/library-two-sided",
+   "program": "lockfile_conflict-occ2-lockfile-conflict-merge-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-0/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-occ3-sync-lockfile-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-4/library-two-sided",
+   "program": "lockfile_conflict-occ1-resolve-lockfile-sync-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-6/library-two-sided",
+   "program": "lockfile_conflict-occ2-merge-upstream-lockfile-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-7/library-two-sided",
+   "program": "diverged-occ5-diverged-sync-merge-preserve-history",
+   "family": "diverged",
+   "variant": "merge"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-11-15/run-14/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-10-05/run-11/library-two-sided",
+   "program": "lockfile_conflict-occ2-sync-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-10-05/run-12/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "deps-lock.txt",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-10-05/run-13/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "diverged-occ1-diverged-fork-sync-merge",
+   "family": "diverged",
+   "variant": "merge"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "lockfile_conflict-occ1-resolve-dependency-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/R-0/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-occ3-sync-lockfile-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/R-4/library-two-sided",
+   "program": "lockfile_conflict-occ1-resolve-lockfile-sync-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/R-6/library-two-sided",
+   "program": "lockfile_conflict-occ2-merge-upstream-lockfile-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/refusal-population-2026-11-15/builds/R-7/library-two-sided",
+   "program": "diverged-occ5-diverged-sync-merge-preserve-history",
+   "family": "diverged",
+   "variant": "merge"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/replicates-2026-10-05/run-11/library-two-sided",
+   "program": "lockfile_conflict-occ2-sync-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 0,
+   "state": "additions_only",
+   "library": "results/replicates-2026-10-05/run-12/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-0/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-upstream-keep-removals",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-3/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-keep-local-merge",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "diverged-occ1-diverged-fork-sync-merge",
+   "family": "diverged",
+   "variant": "merge"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-5/library-two-sided",
+   "program": "lockfile_conflict-occ2-lockfile-conflict-keep-local-merge",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-6/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-keep-local-removals",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-7/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-keep-local-removals",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-8/library-two-sided",
+   "program": "lockfile_conflict-occ2-lockfile-conflict-keep-local-upstream-additions",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-1/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-keep-local-removals",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-3/library-two-sided",
+   "program": "lockfile_conflict-occ2-merge-upstream-keep-local-lockfile",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-6/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-keep-local-deps",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-7/library-two-sided",
+   "program": "diverged-occ5-diverged-sync-merge-preserve-history",
+   "family": "diverged",
+   "variant": "merge"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-9/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-keep-local-add-upstream",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/replicates-2026-11-15/run-14/library-two-sided",
+   "program": "lockfile_conflict-occ2-merge-upstream-keep-local-deps",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 2,
+   "state": "local_removed",
+   "library": "results/replicates-2026-10-05/run-13/library-two-sided",
+   "program": "lockfile_conflict-occ3-merge-upstream-keep-local-depfile",
+   "family": "lockfile_conflict",
+   "variant": "keep_local"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-0/library-two-sided",
+   "program": "lockfile_conflict-occ2-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "diverged-occ1-diverged-fork-sync-merge",
+   "family": "diverged",
+   "variant": "merge"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+   "program": "lockfile_conflict-occ1-resolve-dependency-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/0-6/library-two-sided",
+   "program": "lockfile_conflict-occ2-lockfile-conflict-merge-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-0/library-two-sided",
+   "program": "lockfile_conflict-occ3-lockfile-conflict-occ3-sync-lockfile-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-4/library-two-sided",
+   "program": "lockfile_conflict-occ1-resolve-lockfile-sync-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-6/library-two-sided",
+   "program": "lockfile_conflict-occ2-merge-upstream-lockfile-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/refusal-population-2026-11-15/builds/R-7/library-two-sided",
+   "program": "diverged-occ5-diverged-sync-merge-preserve-history",
+   "family": "diverged",
+   "variant": "merge"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-11-15/run-14/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-10-05/run-11/library-two-sided",
+   "program": "lockfile_conflict-occ2-sync-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-10-05/run-12/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  },
+  {
+   "path": "packages.lockfile",
+   "seed": 5,
+   "state": "upstream_removed",
+   "library": "results/replicates-2026-10-05/run-13/library-two-sided",
+   "program": "lockfile_conflict-occ1-lockfile-conflict-merge-take-upstream",
+   "family": "lockfile_conflict",
+   "variant": "take_upstream"
+  }
+ ]
+}

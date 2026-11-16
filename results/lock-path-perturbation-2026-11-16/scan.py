@@ -1,4 +1,4 @@
-"""Every precondition in every committed library that recognises lock files by a fixed list of names.
+"""Every precondition in every committed library that knows lock files by a fixed list of names.
 
 Run from the repository root:
 
@@ -17,8 +17,17 @@ import yaml
 
 # Two or more of these names in one probe means it carries a closed list of lock-file names.
 NAMES = [
-    "deps.lock", "package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml",
-    "Cargo.lock", "poetry.lock", "Pipfile.lock", "uv.lock", "go.sum", "Gemfile.lock",
+    "deps.lock",
+    "package-lock.json",
+    "npm-shrinkwrap.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+    "Cargo.lock",
+    "poetry.lock",
+    "Pipfile.lock",
+    "uv.lock",
+    "go.sum",
+    "Gemfile.lock",
     "composer.lock",
 ]
 
@@ -34,18 +43,30 @@ def named(probe: str) -> list[str]:
 
 def main() -> None:
     hits = []
-    libraries = sorted({p.parent.parent for p in Path("results").glob("*/**/program.yaml")
-                        if p.parent.parent.name.startswith("library")})
+    libraries = sorted(
+        {
+            p.parent.parent
+            for p in Path("results").glob("*/**/program.yaml")
+            if p.parent.parent.name.startswith("library")
+        }
+    )
     for library in libraries:
         for program in sorted(library.glob("*/program.yaml")):
             spec = yaml.safe_load(program.read_text(encoding="utf-8"))
             for pre in spec.get("preconditions") or []:
                 found = named(pre.get("probe") or "")
                 if len(found) >= 2:
-                    hits.append({"library": str(library), "program": program.parent.name,
-                                 "precondition": pre["name"], "names": found,
-                                 "any_lock_suffix": bool(SUFFIX.search(pre["probe"])),
-                                 "probe": pre["probe"], "expect_exit": pre.get("expect_exit")})
+                    hits.append(
+                        {
+                            "library": str(library),
+                            "program": program.parent.name,
+                            "precondition": pre["name"],
+                            "names": found,
+                            "any_lock_suffix": bool(SUFFIX.search(pre["probe"])),
+                            "probe": pre["probe"],
+                            "expect_exit": pre.get("expect_exit"),
+                        }
+                    )
     json.dump({"libraries": len(libraries), "hits": hits}, sys.stdout, indent=1, ensure_ascii=False)
     print()
 
