@@ -40,7 +40,7 @@ from "identical except commit SHAs". Reproduce with
 
 **The issue is confirmed on the two measurable faults, and its example is
 exact.** `diverged` seeds 0 and 4 both resolve to `merge`; the strict-`xfail` pin
-`diverged-merge-0-4` in `tests/test_instance_diversity.py` fails on exactly that
+`diverged-merge-0-4` in `tests/experiment/stages/test_instance_diversity.py` fails on exactly that
 pair today, and fails because the two environments are equal. The family offers
 **3 content-distinct environments per measurable fault and 6 across the two** —
 which is #86's "6 independent observations" — over 60 seeds.
@@ -157,7 +157,7 @@ draw has to be constrained by that fact, and checked against it.
    counts. A reader must not be able to take a larger seed count for more power.
 
 9. **The strict-`xfail` test is the acceptance test.**
-   `tests/test_instance_diversity.py::test_same_resolution_seeds_build_different_environments`
+   `tests/experiment/stages/test_instance_diversity.py::test_same_resolution_seeds_build_different_environments`
    builds two real sandboxes per measurable resolution and asserts their content
    signatures differ. It is `xfail(strict=True)` today, with a reason naming #86;
    the change that lands this ADR deletes the marker, and the work is not done

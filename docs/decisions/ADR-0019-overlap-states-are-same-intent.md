@@ -58,7 +58,7 @@ because `observe` reports a missing submodule as "not initialised, upstream stil
 references it". Under this decision that made every diverged state, and the fault-free
 sandbox, an `init` overlap state where a submodule program's fire would count as
 correct. The rule was fixed rather than the decision: every submodule rule now first
-requires a submodule in `HEAD`, and `tests/test_overlap_states.py` pins it.
+requires a submodule in `HEAD`, and `tests/tasks/test_overlap_states.py` pins it.
 
 ## Alternatives rejected
 

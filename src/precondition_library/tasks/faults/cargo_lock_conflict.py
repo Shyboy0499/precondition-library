@@ -44,7 +44,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from ...sandbox import (
+from precondition_library.sandbox import (
     Sandbox,
     git_out,
     provide_rust_toolchain,
@@ -52,9 +52,9 @@ from ...sandbox import (
     run_git,
     tip_contained,
 )
-from ...signatures import CARGO_LOCK, StateFingerprint
-from ..intent import IntentSpec, ResolutionVariant, sample_index
-from ..spec import FaultSpec, GroundTruth
+from precondition_library.signatures import CARGO_LOCK, StateFingerprint
+from precondition_library.tasks.intent import IntentSpec, ResolutionVariant, sample_index
+from precondition_library.tasks.spec import FaultSpec, GroundTruth
 
 LOCK = "Cargo.lock"
 MANIFEST = "Cargo.toml"
@@ -173,7 +173,7 @@ EXPECTED: dict[str, set[tuple[str, str]]] = {
 # --- the intent (#306): rules over the package-level fingerprint fields ---------------------
 #
 # Pinned against `check` by replaying each resolution in each state
-# (`tests/test_cargo_lock_conflict.py`), as `lockfile_conflict`'s are.
+# (`tests/tasks/test_cargo_lock_conflict.py`), as `lockfile_conflict`'s are.
 
 STATE_VARIANT = {
     "both_added": "reconcile_upstream_lock",

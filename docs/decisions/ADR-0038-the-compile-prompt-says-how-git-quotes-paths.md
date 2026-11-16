@@ -30,7 +30,7 @@ An audit of the three committed libraries covered every admitted probe that read
 list. The `dirty_tree` collision checks are the probes whose input a held-out state varies. All 10
 such preconditions were run on scratch repositories with a colliding path that is plain, spaced or
 non-ASCII. The path was either an untracked file upstream adds, or a tracked file both sides edit.
-Three break, in two programs, and `tests/test_path_quoting.py` keeps the untracked-file cases as
+Three break, in two programs, and `tests/runtime/test_path_quoting.py` keeps the untracked-file cases as
 controls:
 
 - **Replicate 3's `stash` program** has two probes, one for untracked files and one for modified
@@ -70,7 +70,7 @@ that git quotes paths.
    a test repository lacks. It also says to read every path list with `-z` and turn the NULs into
    newlines, and to list untracked files with `git ls-files --others --exclude-standard -z` rather
    than by parsing `git status`. It shows the collision check written that way, as a block scalar.
-2. **The rule is pinned by what git does, not only by its wording** (`tests/test_path_quoting.py`):
+2. **The rule is pinned by what git does, not only by its wording** (`tests/runtime/test_path_quoting.py`):
    - The tests read the example probe out of the prompt as YAML and run it against real
      repositories, on a plain, a spaced and a non-ASCII colliding path. On each it must see the
      collision, and it must hold when the untracked file lies elsewhere.

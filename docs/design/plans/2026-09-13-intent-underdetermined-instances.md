@@ -47,14 +47,14 @@ Live git sandboxes and `inject()` (#4/#5) · the compile and admission pipeline 
 | `src/precondition_library/bench/pairs.py` | **Create.** `LabelledPair`, `label`, `labelled_pairs`, `ambiguous_subset`, `decision_is_correct`, `denominator_report`. |
 | `src/precondition_library/bench/textcontrol.py` | **Create.** Bag-of-words logistic regression, rank-based AUC, per-regime verdict: gates the uninformed channel as a plumbing tripwire and measures the informed one. |
 | `tests/conftest.py` | **Create.** State grids and a `make_state` helper shared across tests. |
-| `tests/test_intent_ambiguity.py` | **Create.** Variant count, partition of the state space, label invariance under wording. |
-| `tests/test_task_text_is_not_a_label.py` | **Create.** The control, plus the positive control that proves the control works. |
-| `tests/test_text_determinism.py` | **Create.** Same seed → same text, including across processes. |
-| `tests/test_pairs.py` | **Create.** Pair labelling, negative pairs, denominators. |
-| `tests/test_gold_programs.py` | **Create.** Gold fixtures parse, are well-formed, and cover ≥2 resolutions per intent. |
+| `tests/tasks/test_intent_ambiguity.py` | **Create.** Variant count, partition of the state space, label invariance under wording. |
+| `tests/controls/test_task_text_is_not_a_label.py` | **Create.** The control, plus the positive control that proves the control works. |
+| `tests/tasks/test_text_determinism.py` | **Create.** Same seed → same text, including across processes. |
+| `tests/experiment/test_pairs.py` | **Create.** Pair labelling, negative pairs, denominators. |
+| `tests/tasks/test_gold_programs.py` | **Create.** Gold fixtures parse, are well-formed, and cover ≥2 resolutions per intent. |
 | `bench/gold/sync_fork_with_upstream.yaml` | **Create.** Three hand-written resolution programs. |
 | `bench/gold/restore_submodule_state.yaml` | **Create.** Three hand-written resolution programs. |
-| `tests/test_faults_deterministic.py` | **Modify.** Un-skip the parts that are pure functions now that they can really run. |
+| `tests/tasks/test_faults_deterministic.py` | **Modify.** Un-skip the parts that are pure functions now that they can really run. |
 | `docs/design/specs/2026-09-13-precondition-library-design.md` | **Modify.** §3 (task family), §5 (artifact), §10 (testing) reflect variants and the control. |
 | `CHANGELOG.md` | **Modify.** Unreleased entry. |
 
@@ -64,11 +64,11 @@ Live git sandboxes and `inject()` (#4/#5) · the compile and admission pipeline 
 
 **Files:**
 - Modify: `src/precondition_library/signatures.py`
-- Test: `tests/test_intent_ambiguity.py`
+- Test: `tests/tasks/test_intent_ambiguity.py`
 
 - [ ] **Step 1: Write the failing test**
 
-Create `tests/test_intent_ambiguity.py`:
+Create `tests/tasks/test_intent_ambiguity.py`:
 
 ```python
 """The state space must carry enough information to decide a resolution.
@@ -123,7 +123,7 @@ def test_defaults_keep_existing_construction_valid() -> None:
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest tests/test_intent_ambiguity.py -v`
+Run: `uv run pytest tests/tasks/test_intent_ambiguity.py -v`
 Expected: FAIL — `fixture 'make_state' not found` (conftest lands in Task 2) and, once it exists, `TypeError: StateFingerprint.__init__() got an unexpected keyword argument 'local_touched_files'`.
 
 To make this step's expectation exact, Task 2 creates the conftest first. If you are executing tasks out of order, run this file after Task 2.
@@ -204,13 +204,13 @@ class StateFingerprint(BaseModel):
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `uv run pytest tests/test_intent_ambiguity.py -v`
+Run: `uv run pytest tests/tasks/test_intent_ambiguity.py -v`
 Expected: PASS, 4 tests.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/precondition_library/signatures.py tests/test_intent_ambiguity.py
+git add src/precondition_library/signatures.py tests/tasks/test_intent_ambiguity.py
 git commit -m "feat(state): add observable discriminators for the ambiguous intents"
 ```
 
@@ -336,11 +336,11 @@ git commit -m "test: add shared state fingerprints covering each resolution and 
 
 **Files:**
 - Create: `src/precondition_library/tasks/intent.py`
-- Test: `tests/test_text_determinism.py`
+- Test: `tests/tasks/test_text_determinism.py`
 
 - [ ] **Step 1: Write the failing test**
 
-Create `tests/test_text_determinism.py`:
+Create `tests/tasks/test_text_determinism.py`:
 
 ```python
 """A reported episode must be reproducible from its seed alone.
@@ -426,7 +426,7 @@ def test_intent_rejects_missing_parts() -> None:
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest tests/test_text_determinism.py -v`
+Run: `uv run pytest tests/tasks/test_text_determinism.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'precondition_library.tasks.intent'`.
 
 - [ ] **Step 3: Write minimal implementation**
@@ -477,7 +477,7 @@ def sample_index(seed: int, salt: str, n: int) -> int:
     Uses sha256 rather than `hash()` because CPython salts `hash()` for strings
     per process, so the same seed would yield different task text in a different
     run -- and the point of a seed is that a reported episode can be reproduced
-    exactly. `tests/test_text_determinism.py` pins this with two subprocesses.
+    exactly. `tests/tasks/test_text_determinism.py` pins this with two subprocesses.
     """
     if n <= 0:
         raise ValueError("n must be positive")
@@ -540,7 +540,7 @@ class IntentSpec:
     files upstream left alone" versus "something is off with my fork").
 
     State may influence the request ONLY through this declared map. That is what
-    `tests/test_task_text_is_not_a_label.py` pins, because an undeclared channel
+    `tests/controls/test_task_text_is_not_a_label.py` pins, because an undeclared channel
     from state to wording would quietly restore the original flaw: the text would
     again be a label, and a dispatch comparison would again measure nothing.
     """
@@ -623,7 +623,7 @@ class IntentSpec:
 
 - [ ] **Step 4: Run the tests and confirm the two deferrals are skips, not errors**
 
-Run: `uv run pytest tests/test_text_determinism.py -v`
+Run: `uv run pytest tests/tasks/test_text_determinism.py -v`
 Expected: the four real tests PASS; `test_same_seed_same_text` and `test_text_does_not_depend_on_process_hash_seed` are reported SKIPPED with the reason `the intent registry lands in Task 7; un-skipped there`.
 
 The two registry-dependent tests are marked `@pytest.mark.skip`, not left failing, and neither imports `ambiguous_intents` at module level: `test_same_seed_same_text` imports it inside the function body, and `test_text_does_not_depend_on_process_hash_seed` reaches it only through the subprocess snippet it runs. A `ModuleNotFoundError` raised while importing the module is a *collection* error and fails the whole module, taking the four runnable tests down with it — so a module-level registry import would hide real results behind a Task 7 dependency. Skipping keeps the module importable and the four real tests honest. The repository's own convention (CONTRIBUTING.md rule 4) is that a skipped test names the phase that implements it, which the skip reason does.
@@ -631,7 +631,7 @@ The two registry-dependent tests are marked `@pytest.mark.skip`, not left failin
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/precondition_library/tasks/intent.py tests/test_text_determinism.py
+git add src/precondition_library/tasks/intent.py tests/tasks/test_text_determinism.py
 git commit -m "feat(tasks): add IntentSpec with deterministic paraphrase sampling"
 ```
 
@@ -642,7 +642,7 @@ git commit -m "feat(tasks): add IntentSpec with deterministic paraphrase samplin
 **Files:**
 - Modify: `src/precondition_library/tasks/faults/diverged.py`
 - Modify: `src/precondition_library/program.py`
-- Test: `tests/test_intent_ambiguity.py`
+- Test: `tests/tasks/test_intent_ambiguity.py`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -693,7 +693,7 @@ def test_diverged_variants_each_explain_themselves() -> None:
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest tests/test_intent_ambiguity.py -v -k diverged`
+Run: `uv run pytest tests/tasks/test_intent_ambiguity.py -v -k diverged`
 Expected: FAIL — `ImportError: cannot import name 'INTENT' from 'precondition_library.tasks.faults.diverged'`.
 
 - [ ] **Step 3: Write minimal implementation**
@@ -838,13 +838,13 @@ Add `variant` to `Program` in `src/precondition_library/program.py`, immediately
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `uv run pytest tests/test_intent_ambiguity.py -v`
+Run: `uv run pytest tests/tasks/test_intent_ambiguity.py -v`
 Expected: PASS, 11 tests (4 from Task 1, 7 from this task).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/precondition_library/tasks/faults/diverged.py src/precondition_library/program.py tests/test_intent_ambiguity.py
+git add src/precondition_library/tasks/faults/diverged.py src/precondition_library/program.py tests/tasks/test_intent_ambiguity.py
 git commit -m "feat(tasks): give diverged three state-decided resolutions"
 ```
 
@@ -854,14 +854,14 @@ git commit -m "feat(tasks): give diverged three state-decided resolutions"
 
 **Files:**
 - Modify: `src/precondition_library/tasks/faults/submodule_moved.py`
-- Test: `tests/test_intent_ambiguity.py`
+- Test: `tests/tasks/test_intent_ambiguity.py`
 
 - [ ] **Step 1: Write the failing test**
 
-Append to `tests/test_intent_ambiguity.py`:
+Append to `tests/tasks/test_intent_ambiguity.py`:
 
 ```python
-# Add this to the top import block of tests/test_intent_ambiguity.py, in sorted
+# Add this to the top import block of tests/tasks/test_intent_ambiguity.py, in sorted
 # order -- do NOT append it here, or ruff E402/I001 fails the file:
 # from precondition_library.tasks.faults.submodule_moved import INTENT as SUBMODULE
 
@@ -891,7 +891,7 @@ def test_submodule_phrasings_mostly_do_not_name_the_fault() -> None:
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest tests/test_intent_ambiguity.py -v -k submodule`
+Run: `uv run pytest tests/tasks/test_intent_ambiguity.py -v -k submodule`
 Expected: FAIL — `ImportError: cannot import name 'INTENT' from 'precondition_library.tasks.faults.submodule_moved'`.
 
 - [ ] **Step 3: Write minimal implementation**
@@ -1010,13 +1010,13 @@ Every phrasing currently names the submodule, so the intent leaks. Rewrite the `
 
 Fenced as `text`, not `python`, on purpose: this is a **fragment** of an `IntentSpec(...)` call rather than a complete statement, and CI runs `ruff format --check` over Python code inside markdown files. A fragment in a `python` fence gets reformatted into something that is no longer a faithful excerpt of the file it replaces — which is exactly what happened on the first CI run of this plan.
 
-Run: `uv run pytest tests/test_intent_ambiguity.py -v`
+Run: `uv run pytest tests/tasks/test_intent_ambiguity.py -v`
 Expected: PASS, 15 tests. `naming_fraction` over 50 seeds is 1/7 ≈ 0.143, under the 0.35 ceiling.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/precondition_library/tasks/faults/submodule_moved.py tests/test_intent_ambiguity.py
+git add src/precondition_library/tasks/faults/submodule_moved.py tests/tasks/test_intent_ambiguity.py
 git commit -m "feat(tasks): give submodule_moved three state-decided resolutions"
 ```
 
@@ -1025,7 +1025,7 @@ git commit -m "feat(tasks): give submodule_moved three state-decided resolutions
 ### Task 6: Partition the state space, and pin label invariance
 
 **Files:**
-- Test: `tests/test_intent_ambiguity.py`
+- Test: `tests/tasks/test_intent_ambiguity.py`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1092,7 +1092,7 @@ def test_label_does_not_depend_on_wording(state_grid) -> None:
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest tests/test_intent_ambiguity.py -v -k "grid or reachable or benign or wording"`
+Run: `uv run pytest tests/tasks/test_intent_ambiguity.py -v -k "grid or reachable or benign or wording"`
 Expected: FAIL — `ModuleNotFoundError: No module named 'precondition_library.tasks.registry'` (the registry is Task 7).
 
 - [ ] **Step 3: Commit once Task 7 lands**
@@ -1106,11 +1106,11 @@ This task has no implementation of its own; it is the property suite that pins T
 **Files:**
 - Create: `src/precondition_library/tasks/registry.py`
 - Modify: `src/precondition_library/tasks/__init__.py`
-- Test: `tests/test_intent_ambiguity.py` (from Task 6)
+- Test: `tests/tasks/test_intent_ambiguity.py` (from Task 6)
 
 - [ ] **Step 1: Write the failing test**
 
-Append to `tests/test_intent_ambiguity.py`:
+Append to `tests/tasks/test_intent_ambiguity.py`:
 
 ```python
 def test_registry_exposes_only_intents_with_a_surface() -> None:
@@ -1127,7 +1127,7 @@ def test_registry_intents_name_a_real_fault() -> None:
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest tests/test_intent_ambiguity.py -v -k registry`
+Run: `uv run pytest tests/tasks/test_intent_ambiguity.py -v -k registry`
 Expected: FAIL — `ModuleNotFoundError: No module named 'precondition_library.tasks.registry'`.
 
 - [ ] **Step 3: Write minimal implementation**
@@ -1189,17 +1189,17 @@ __all__ = [
 ]
 ```
 
-Then remove the two `@pytest.mark.skip` decorators added in Task 3 to `tests/test_text_determinism.py` (`test_same_seed_same_text` and `test_text_does_not_depend_on_process_hash_seed`). With `tasks/registry.py` in place `ambiguous_intents` imports, so both become real tests; the second is the point where the process-hash-seed determinism check actually runs, proving the sampler does not depend on `hash()`'s per-process salt.
+Then remove the two `@pytest.mark.skip` decorators added in Task 3 to `tests/tasks/test_text_determinism.py` (`test_same_seed_same_text` and `test_text_does_not_depend_on_process_hash_seed`). With `tasks/registry.py` in place `ambiguous_intents` imports, so both become real tests; the second is the point where the process-hash-seed determinism check actually runs, proving the sampler does not depend on `hash()`'s per-process salt.
 
 - [ ] **Step 4: Run the whole suite**
 
 Run: `uv run pytest -q`
-Expected: PASS — `tests/test_intent_ambiguity.py` and `tests/test_text_determinism.py` fully green, plus the pre-existing `2 passed, 30 skipped` from the rest.
+Expected: PASS — `tests/tasks/test_intent_ambiguity.py` and `tests/tasks/test_text_determinism.py` fully green, plus the pre-existing `2 passed, 30 skipped` from the rest.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/precondition_library/tasks/registry.py src/precondition_library/tasks/__init__.py tests/test_intent_ambiguity.py
+git add src/precondition_library/tasks/registry.py src/precondition_library/tasks/__init__.py tests/tasks/test_intent_ambiguity.py
 git commit -m "feat(tasks): register ambiguous intents and pin the label-invariance property"
 ```
 
@@ -1209,11 +1209,11 @@ git commit -m "feat(tasks): register ambiguous intents and pin the label-invaria
 
 **Files:**
 - Create: `src/precondition_library/bench/pairs.py`
-- Test: `tests/test_pairs.py`
+- Test: `tests/experiment/test_pairs.py`
 
 - [ ] **Step 1: Write the failing test**
 
-Create `tests/test_pairs.py`:
+Create `tests/experiment/test_pairs.py`:
 
 ```python
 """The primary metric's raw material.
@@ -1304,7 +1304,7 @@ def test_every_ambiguous_intent_contributes_pairs(state_grid) -> None:
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest tests/test_pairs.py -v`
+Run: `uv run pytest tests/experiment/test_pairs.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'precondition_library.bench.pairs'`.
 
 - [ ] **Step 3: Write minimal implementation**
@@ -1424,13 +1424,13 @@ def denominator_report(pairs: Iterable[LabelledPair]) -> dict[str, int]:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `uv run pytest tests/test_pairs.py -v`
+Run: `uv run pytest tests/experiment/test_pairs.py -v`
 Expected: PASS, 7 tests.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/precondition_library/bench/pairs.py tests/test_pairs.py
+git add src/precondition_library/bench/pairs.py tests/experiment/test_pairs.py
 git commit -m "feat(bench): add the labelled dispatch-pair generator"
 ```
 
@@ -1440,7 +1440,7 @@ git commit -m "feat(bench): add the labelled dispatch-pair generator"
 
 **Files:**
 - Create: `src/precondition_library/bench/textcontrol.py`
-- Test: `tests/test_task_text_is_not_a_label.py`
+- Test: `tests/controls/test_task_text_is_not_a_label.py`
 - Modify: `src/precondition_library/tasks/intent.py` (one place decides the channel), `src/precondition_library/bench/pairs.py` (the regime on each pair, both regimes generated)
 
 > **Correction after implementation (2026-09-13).** The first draft of this task
@@ -1514,7 +1514,7 @@ git commit -m "feat(bench): add the labelled dispatch-pair generator"
 
 - [ ] **Step 1: Write the failing test**
 
-Create `tests/test_task_text_is_not_a_label.py`:
+Create `tests/controls/test_task_text_is_not_a_label.py`:
 
 ```python
 """The control that measures how far the request text alone gets a dispatcher.
@@ -1843,7 +1843,7 @@ def test_same_declared_phrasings_imply_same_text_for_every_seed(make_state) -> N
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest tests/test_task_text_is_not_a_label.py -v`
+Run: `uv run pytest tests/controls/test_task_text_is_not_a_label.py -v`
 Expected: FAIL -- `ModuleNotFoundError: No module named 'precondition_library.bench.textcontrol'`.
 
 - [ ] **Step 3: Write minimal implementation**
@@ -1888,7 +1888,7 @@ counts. The question is whether the text *can* be sufficient, not whether a
 sophisticated model could exploit it -- if even a linear model separates the classes,
 the flaw is proven, and a stronger model would only widen the separation.
 
-`tests/test_task_text_is_not_a_label.py` pins three things: a positive control that
+`tests/controls/test_task_text_is_not_a_label.py` pins three things: a positive control that
 the detector fires on informed wording that fully determines the answer, a
 plumbing tripwire that the uninformed sampler never consults state, and a
 reported -- not gated -- measurement of the informed boundary. The measured AUC per
@@ -2137,7 +2137,7 @@ def leakage_verdict(
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `uv run pytest tests/test_task_text_is_not_a_label.py -v`
+Run: `uv run pytest tests/controls/test_task_text_is_not_a_label.py -v`
 Expected: PASS, 14 tests. The positive control fires on the informed channel
 (`leaks is True`); the uninformed test passes because the sampler never consults
 state, which fixes that regime's AUC at 0.500; the informed boundary is measured at
@@ -2157,8 +2157,8 @@ issue #27.
 
 ```bash
 git add src/precondition_library/tasks/intent.py src/precondition_library/bench/pairs.py \
-  src/precondition_library/bench/textcontrol.py tests/test_task_text_is_not_a_label.py \
-  tests/test_pairs.py
+  src/precondition_library/bench/textcontrol.py tests/controls/test_task_text_is_not_a_label.py \
+  tests/experiment/test_pairs.py
 git commit -m "test(bench): report the text-only control per request regime"
 ```
 
@@ -2170,11 +2170,11 @@ git commit -m "test(bench): report the text-only control per request regime"
 **Files:**
 - Create: `bench/gold/sync_fork_with_upstream.yaml`
 - Create: `bench/gold/restore_submodule_state.yaml`
-- Test: `tests/test_gold_programs.py`
+- Test: `tests/tasks/test_gold_programs.py`
 
 - [ ] **Step 1: Write the failing test**
 
-Create `tests/test_gold_programs.py`:
+Create `tests/tasks/test_gold_programs.py`:
 
 ```python
 """Gold resolutions must be well-formed, and must exist for every resolution.
@@ -2244,7 +2244,7 @@ def test_gold_provenance_says_hand_written(intent: str) -> None:
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest tests/test_gold_programs.py -v`
+Run: `uv run pytest tests/tasks/test_gold_programs.py -v`
 Expected: FAIL — `FileNotFoundError: .../bench/gold/sync_fork_with_upstream.yaml`.
 
 - [ ] **Step 3: Write the gold files, and correct the gold README**
@@ -2432,15 +2432,15 @@ programs:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `uv run pytest tests/test_gold_programs.py -v`
+Run: `uv run pytest tests/tasks/test_gold_programs.py -v`
 Expected: PASS, 10 tests (5 parametrised tests × 2 intents).
 
-**Also in this step:** two docs still describe the gold check as absent, and both sentences become false the moment the test above runs: `README.md` says `bench/gold/` "currently contains only a README", and `bench/gold/README.md` presents `tests/test_checkers_against_gold.py` as "the enforcement; it runs in CI" even though that file is skipped. Replace the paragraph in each with the text below; the spec's §10 status block also says "no gold solution exists yet" and now records that the resolutions exist but no checker has run against them.
+**Also in this step:** two docs still describe the gold check as absent, and both sentences become false the moment the test above runs: `README.md` says `bench/gold/` "currently contains only a README", and `bench/gold/README.md` presents `tests/tasks/test_checkers_against_gold.py` as "the enforcement; it runs in CI" even though that file is skipped. Replace the paragraph in each with the text below; the spec's §10 status block also says "no gold solution exists yet" and now records that the resolutions exist but no checker has run against them.
 
 ```markdown
 The gold check runs today for the two ambiguous intents: gold resolutions live in
 `sync_fork_with_upstream.yaml` and `restore_submodule_state.yaml`, and
-`tests/test_gold_programs.py` validates that they parse, are well-formed, cover
+`tests/tasks/test_gold_programs.py` validates that they parse, are well-formed, cover
 every declared resolution, and have distinct bodies. It is still skipped for the
 faults whose injection needs a live sandbox (issue #4), because a checker cannot
 be validated without a state to check.
@@ -2451,14 +2451,14 @@ Leaving a stale "not implemented yet" note in place after implementing it is the
 - [ ] **Step 5: Commit**
 
 ```bash
-git add bench/gold/sync_fork_with_upstream.yaml bench/gold/restore_submodule_state.yaml tests/test_gold_programs.py README.md bench/gold/README.md docs/design/specs/2026-09-13-precondition-library-design.md
+git add bench/gold/sync_fork_with_upstream.yaml bench/gold/restore_submodule_state.yaml tests/tasks/test_gold_programs.py README.md bench/gold/README.md docs/design/specs/2026-09-13-precondition-library-design.md
 git commit -F - <<'MSG'
 test(bench): add hand-written gold resolutions for both ambiguous intents
 
 Each ambiguous intent has one hand-written candidate per declared resolution.
 The compile step that would generate them does not exist yet (issue #4), and
 gold-first requires hand-written solutions before any agent result is believed.
-tests/test_gold_programs.py checks they parse as Programs, cover every declared
+tests/tasks/test_gold_programs.py checks they parse as Programs, cover every declared
 variant, remain status=candidate (admission has not run for any of them), and
 have distinct bodies.
 
@@ -2483,11 +2483,11 @@ MSG
 ### Task 11: Un-skip the determinism tests that can now really run
 
 **Files:**
-- Modify: `tests/test_faults_deterministic.py`
+- Modify: `tests/tasks/test_faults_deterministic.py`
 
 - [ ] **Step 1: Rewrite the file**
 
-Replace the whole of `tests/test_faults_deterministic.py`:
+Replace the whole of `tests/tasks/test_faults_deterministic.py`:
 
 ```python
 """Same seed, same faulty environment.
@@ -2580,7 +2580,7 @@ def test_injected_states_are_distinguishable(fault_type: str) -> None:
 
 - [ ] **Step 2: Run the tests**
 
-Run: `uv run pytest tests/test_faults_deterministic.py -v`
+Run: `uv run pytest tests/tasks/test_faults_deterministic.py -v`
 Expected: PASS — 6 tests pass (2 task-text intents + 2 occurrence intents + 2 delegation faults), 10 remain skipped (the two sandbox-dependent tests for each of the five faults).
 
 If `test_occurrences_are_not_clones` fails with "some phrasings are unreachable", the sampler is skewed; the fix is to check `sample_index` distributes over the phrasing count, not to lower the assertion.
@@ -2588,7 +2588,7 @@ If `test_occurrences_are_not_clones` fails with "some phrasings are unreachable"
 - [ ] **Step 3: Commit**
 
 ```bash
-git add tests/test_faults_deterministic.py
+git add tests/tasks/test_faults_deterministic.py
 git commit -m "test(tasks): un-skip task-text determinism and prove phrasings are all reachable"
 ```
 
@@ -2634,7 +2634,7 @@ state may reach the request only through that declared map. The fraction of
 sampled uninformed requests that name the fault is documented and asserted:
 `sync_fork_with_upstream` 0.000 over seeds 0–49 and `restore_submodule_state`
 0.060 over 0–49 and 0.125 over 0–199, both at ≤ 0.35
-(`tests/test_intent_ambiguity.py`).
+(`tests/tasks/test_intent_ambiguity.py`).
 
 #### The boundary condition
 
@@ -2719,7 +2719,7 @@ Add to `CHANGELOG.md` under `## [Unreleased]`, replacing the `### Changed` stub.
 - `Program.variant`, so a wrong dispatch decision is definable at all.
 - Determinism tests over the task text, proving every declared phrasing is
   reachable and the same seed yields the same wording
-  (`tests/test_faults_deterministic.py`).
+  (`tests/tasks/test_faults_deterministic.py`).
 
 ### Changed
 

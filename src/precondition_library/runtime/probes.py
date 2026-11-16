@@ -48,8 +48,10 @@ import string
 import time
 from pathlib import Path
 
-from ..program import GroundTruthResult, Predicate, PredicateResult, Program
-from ..sandbox import (
+from precondition_library.program import GroundTruthResult, Predicate, PredicateResult, Program
+from precondition_library.runtime.confine import run_confined
+from precondition_library.runtime.guard import Verdict, screen
+from precondition_library.sandbox import (
     Sandbox,
     gitmodules_path,
     harness_upstream_branch,
@@ -57,8 +59,6 @@ from ..sandbox import (
     run_git,
     submodule_path,
 )
-from .confine import run_confined
-from .guard import Verdict, screen
 
 VOCABULARY: frozenset[str] = frozenset(
     {"work_dir", "upstream_remote", "upstream_branch", "submodule_path"}
@@ -652,7 +652,7 @@ def repository_bindings(work: Path) -> dict[str, str]:
     leaves `submodule_path` absent: `substitute` then raises `UnboundParameterError`,
     and a program that needs it is inapplicable here rather than run against a guess.
     The harness keeps `bindings`; on a harness sandbox the two agree
-    (`tests/test_repository_bindings.py`), which is what makes a program compiled in
+    (`tests/tasks/test_repository_bindings.py`), which is what makes a program compiled in
     the harness meaningful on a checkout.
     """
     values = {"work_dir": str(work)}

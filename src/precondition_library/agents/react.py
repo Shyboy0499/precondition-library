@@ -24,20 +24,26 @@ import json
 import shlex
 import subprocess
 
-from ..program import EpisodeOutcome
-from ..provider import Provider, ProviderAuthError
-from ..runtime.confine import run_confined
-from ..runtime.guard import Verdict, screen
-from ..sandbox import (
+from precondition_library.agents.command_screen import command_running_reason
+from precondition_library.agents.file_tools import (
+    READ_FILE,
+    WRITE_FILE,
+    file_tools,
+    read_file,
+    write_file,
+)
+from precondition_library.program import EpisodeOutcome
+from precondition_library.provider import Provider, ProviderAuthError
+from precondition_library.runtime.confine import run_confined
+from precondition_library.runtime.guard import Verdict, screen
+from precondition_library.sandbox import (
     ALLOWED_GIT_CONFIG_OVERRIDES,
     Sandbox,
     disallowed_git_config_overrides,
     run_env,
     run_git,
 )
-from ..signatures import TaskSignature
-from .command_screen import command_running_reason
-from .file_tools import READ_FILE, WRITE_FILE, file_tools, read_file, write_file
+from precondition_library.signatures import TaskSignature
 
 _GIT_TIMEOUT_S = 30.0
 """Wall-clock bound on one tool call. A git command in a local sandbox is

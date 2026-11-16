@@ -9,13 +9,13 @@ counted into a rate as if it were evidence.
 
 from __future__ import annotations
 
-from .faults.branch_renamed import INTENT as BRANCH_RENAMED_INTENT
-from .faults.config_renamed import INTENT as CONFIG_RENAMED_INTENT
-from .faults.dirty_tree import INTENT as DIRTY_TREE_INTENT
-from .faults.diverged import INTENT as DIVERGED_INTENT
-from .faults.lockfile_conflict import INTENT as LOCKFILE_INTENT
-from .faults.submodule_moved import INTENT as SUBMODULE_INTENT
-from .intent import IntentSpec
+from precondition_library.tasks.faults.branch_renamed import INTENT as BRANCH_RENAMED_INTENT
+from precondition_library.tasks.faults.config_renamed import INTENT as CONFIG_RENAMED_INTENT
+from precondition_library.tasks.faults.dirty_tree import INTENT as DIRTY_TREE_INTENT
+from precondition_library.tasks.faults.diverged import INTENT as DIVERGED_INTENT
+from precondition_library.tasks.faults.lockfile_conflict import INTENT as LOCKFILE_INTENT
+from precondition_library.tasks.faults.submodule_moved import INTENT as SUBMODULE_INTENT
+from precondition_library.tasks.intent import IntentSpec
 
 INTENTS: dict[str, IntentSpec] = {
     intent.name: intent

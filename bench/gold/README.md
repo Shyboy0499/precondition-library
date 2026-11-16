@@ -7,13 +7,13 @@ checkers work before any agent result is believed.
 What runs today for the five ambiguous intents is form validation only: gold
 resolutions live in `sync_fork_with_upstream.yaml`,
 `restore_submodule_state.yaml`, `keep_uncommitted_work_and_sync.yaml`,
-`follow_renamed_upstream_branch.yaml` and `sync_through_a_conflicting_lockfile.yaml`, and `tests/test_gold_programs.py` validates that
+`follow_renamed_upstream_branch.yaml` and `sync_through_a_conflicting_lockfile.yaml`, and `tests/tasks/test_gold_programs.py` validates that
 they parse, are well-formed, cover every declared resolution, have distinct
 bodies, and describe themselves without naming a resolution — a description is
 part of the text arm 2 compares a request against (`library._program_text`), so a
 label in one would be the leak `test_no_phrasing_names_a_resolution` forbids on
 the request side. No probe has ever been executed against a sandbox:
-`tests/test_checkers_against_gold.py` is skipped for every fault until checker
+`tests/tasks/test_checkers_against_gold.py` is skipped for every fault until checker
 execution lands (issue #4), because a checker cannot be validated without a state
 to check.
 

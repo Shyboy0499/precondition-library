@@ -79,7 +79,7 @@ test is skipped — and that exact sentence was a defect here once.
 ### 5. Status lives in one place
 
 A document must not restate whether something is implemented. It either links to the
-declared inventory in `tests/test_declared_state.py` — which CI checks against the
+declared inventory in `tests/meta/test_declared_state.py` — which CI checks against the
 code — or states the claim in that file's claims table, where the fact behind it is
 asserted.
 

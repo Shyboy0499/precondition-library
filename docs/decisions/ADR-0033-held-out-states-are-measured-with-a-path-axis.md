@@ -127,7 +127,7 @@ vacuous, with a message that describes hand-written gold rather than a compiled 
 libraries with no model call; the mechanism the other faults' axes will reuse; and a test
 that proves no shipped seed's state moved.
 
-**New obligations:** `tests/test_heldout_states.py` must be extended in lockstep with
+**New obligations:** `tests/experiment/stages/test_heldout_states.py` must be extended in lockstep with
 `HELD_OUT_FAULTS` -- a fault listed there without a declared axis fails a test rather than
 silently measuring the shipped states again; and any change to the block, the pool or the
 reading is a pre-registration revision in the spec's revision history before the data it
@@ -147,7 +147,7 @@ would be read from exists.
 
 ## What would reverse this decision
 
-- **A shipped seed's state moving.** `tests/test_heldout_states.py` asserts the shipped
+- **A shipped seed's state moving.** `tests/experiment/stages/test_heldout_states.py` asserts the shipped
   triple for every seed below the base; a failure means the committed figures are no longer
   recomputable and the axis must be re-drawn.
 - **Arm 3 mis-firing on the held-out block.** Then the in-distribution result does not

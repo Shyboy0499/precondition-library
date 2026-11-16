@@ -31,7 +31,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 
-from .program import Program, ProgramStatus
+from precondition_library.program import Program, ProgramStatus
 
 _QUOTED = re.compile(r"(['\"`])(?:(?!\1).)+\1")
 _PATH = re.compile(r"\S*/\S*")

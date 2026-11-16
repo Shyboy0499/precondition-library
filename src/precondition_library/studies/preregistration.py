@@ -1,0 +1,68 @@
+"""Measurements that may run only under a committed pre-registration (#298).
+
+A pre-registration fixes a study's hypotheses, unit, metric, test, sample and exclusions before
+any of its data is seen. Its commit is its timestamp, so it is only worth anything if the code
+that measures cannot run against a registration that was edited afterwards, or never committed.
+
+Each registered study pins its document's SHA-256 here. `require` refuses to return unless the
+document exists, hashes to the pinned value, is tracked by git and has no uncommitted change. An
+amendment made before measuring is a new commit that changes the document *and* the pin, so it
+shows in review; one made after measuring is a deviation, reported in the study's results rather
+than written into the registration.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import subprocess
+from pathlib import Path
+
+REPOSITORY = Path(__file__).resolve().parents[3]
+
+REGISTRATIONS: dict[str, str] = {
+    "real-merges": "77bc2f861f117bbe7d97b58fb777f1e8e70cc4b92800904f7b1e06efa4e13d30",
+    "refusal-population": "f320aeee8c05a4ad07816175f33c2642152c12ca83b0572e937a971b583501c1",
+    "lock-oracle": "3e9afab264823c215f70abf11b1a0e7137dfa513350292c343b4228789375afe",
+    "ecosystem-unify": "23f87bb165d52d27d21a11ca7046f3917234adda37ac64d1ab1157be1fc5efdd",
+    "divergence-gate": "8de35aa3d216b9c09e7771cc7df9c057680163225517632804f50603e445261c",
+    "tool-precondition": "bfcf7e25e691e93a774ab55255b984e291ed9cffecd4a5275115a6989529f15c",
+}
+"""Each registered study's document, by name, and the SHA-256 of its bytes."""
+
+
+class UnregisteredError(RuntimeError):
+    """A measurement was asked for without the committed registration it is bound to."""
+
+
+def document(name: str, root: Path = REPOSITORY) -> Path:
+    return root / "docs" / "preregistration" / f"{name}.md"
+
+
+def digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def require(name: str, root: Path = REPOSITORY) -> Path:
+    """The registration `name` is bound to, or `UnregisteredError` saying why it does not hold."""
+    if name not in REGISTRATIONS:
+        raise UnregisteredError(f"no study named {name!r} is registered")
+    path = document(name, root)
+    if not path.is_file():
+        raise UnregisteredError(f"{path} does not exist; the study is not registered")
+    if digest(path) != REGISTRATIONS[name]:
+        raise UnregisteredError(
+            f"{path} differs from the registered text; an amendment before measuring changes "
+            "the pin in the same commit, and one after measuring is a deviation in the results"
+        )
+    relative = path.relative_to(root).as_posix()
+    tracked = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", "--", relative], cwd=root, capture_output=True
+    )
+    if tracked.returncode != 0:
+        raise UnregisteredError(f"{relative} is not committed; its commit is its timestamp")
+    changed = subprocess.run(
+        ["git", "diff", "--quiet", "HEAD", "--", relative], cwd=root, capture_output=True
+    )
+    if changed.returncode != 0:
+        raise UnregisteredError(f"{relative} has uncommitted changes")
+    return path

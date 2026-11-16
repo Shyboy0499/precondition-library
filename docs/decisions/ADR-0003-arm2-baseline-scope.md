@@ -35,7 +35,7 @@ A constant scorer that cannot discriminate gives AUC 0.5000 and top-1 0/48 on th
 So the pooled baseline is **above chance, not below it**, and the two intents differ by 0.25 AUC and
 20 points of top-1. Neither intent's number describes the family, and the pooled number describes
 neither of them. Reproduce the table with
-`pytest tests/test_similarity_probe.py -q -s -k pooled_baseline`.
+`pytest tests/experiment/scorers/test_similarity_probe.py -q -s -k pooled_baseline`.
 
 The replacements #116 left open were also measured, over the same pairs and crossings
 (`-k weighting_alternatives`):

@@ -96,7 +96,7 @@ partial measured one.
 running what ADR-0038 found by reading, and it shows the failure is not confined to one program.
 
 **New obligations:** a fault's held-out axis must leave every seed below the base on its
-shipped draw and identity (`tests/test_heldout_states.py` pins it for this fault).
+shipped draw and identity (`tests/experiment/stages/test_heldout_states.py` pins it for this fault).
 
 ## Alternatives rejected
 

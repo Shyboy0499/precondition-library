@@ -60,12 +60,12 @@ says it found no usable upstream. Widening the charset means arguing, character 
 that the shell cannot read it.
 
 **Gained:** nothing the repository supplies reaches a shell as anything but a plain word.
-`tests/test_shell_safe_bindings.py` pins the measured case: no `PWNED`, and the probe reported
+`tests/runtime/test_shell_safe_bindings.py` pins the measured case: no `PWNED`, and the probe reported
 not applicable. With the screening removed, it and the two `.gitmodules` cases fail.
 
 **Unchanged:** every value the harness binds is `upstream`, one of the five branch names its
 faults use, or `vendor/libcore`. All are shell-safe, so no harness binding and no committed
-figure moves. The harness-agreement tests in `tests/test_repository_bindings.py` pass for
+figure moves. The harness-agreement tests in `tests/tasks/test_repository_bindings.py` pass for
 every measured state.
 
 ## Alternatives rejected

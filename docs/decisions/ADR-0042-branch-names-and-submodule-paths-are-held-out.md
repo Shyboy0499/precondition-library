@@ -69,7 +69,7 @@ refuses.
 by how a program gets the value that varies.
 
 **New obligations:** none beyond ADR-0033's: a held-out axis keeps every seed below the base on
-its shipped draw, pinned per fault in `tests/test_heldout_states.py`.
+its shipped draw, pinned per fault in `tests/experiment/stages/test_heldout_states.py`.
 
 ## Alternatives rejected
 

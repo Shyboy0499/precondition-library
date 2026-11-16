@@ -34,7 +34,7 @@ import hashlib
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 
-from ..signatures import StateFingerprint
+from precondition_library.signatures import StateFingerprint
 
 
 def sample_index(seed: int, salt: str, n: int) -> int:
@@ -43,7 +43,7 @@ def sample_index(seed: int, salt: str, n: int) -> int:
     Uses sha256 rather than `hash()` because CPython salts `hash()` for strings
     per process, so the same seed would yield different task text in a different
     run -- and the point of a seed is that a reported episode can be reproduced
-    exactly. `tests/test_text_determinism.py` pins this with two subprocesses.
+    exactly. `tests/tasks/test_text_determinism.py` pins this with two subprocesses.
     """
     if n <= 0:
         raise ValueError("n must be positive")
@@ -97,7 +97,7 @@ class ResolutionVariant:
     (issue #172, ADR-0023). `None` means the resolution is acceptable only where it is
     the label. It never makes an unlabelled state acceptable: a state no rule labels
     stays a negative, where every fire is wrong. The declaration is pinned against the
-    checker by `tests/test_acceptable_variants.py`, which replays every gold resolution
+    checker by `tests/tasks/test_acceptable_variants.py`, which replays every gold resolution
     on every state and requires the two to agree.
     """
 
@@ -138,7 +138,7 @@ class IntentSpec:
     files upstream left alone" versus "something is off with my fork").
 
     State may influence the request ONLY through this declared map. That is what
-    `tests/test_task_text_is_not_a_label.py` pins, because an undeclared channel
+    `tests/controls/test_task_text_is_not_a_label.py` pins, because an undeclared channel
     from state to wording would quietly restore the original flaw: the text would
     again be a label, and a dispatch comparison would again measure nothing.
     """

@@ -1,7 +1,7 @@
 """The only place in this codebase allowed to talk to an LLM.
 
 `runtime/replay.py` must never import this module — that invariant is enforced
-by tests/test_replay_isolated_from_provider.py. If a replay episode ever
+by tests/core/test_replay_isolated_from_provider.py. If a replay episode ever
 records a nonzero token count, the project's central claim is void, and we want
 to learn that from a failing test rather than from a reviewer.
 """
@@ -200,7 +200,7 @@ class DeepSeekProvider:
     DeepSeek's own field, not OpenAI's ``prompt_tokens_details.cached_tokens``.
     The name is **confirmed by the live runs** (#163): the third run's ledgers
     record a nonzero ``cached_tokens_in`` on 72 of their 223 rows, so the field
-    exists and is populated. ``tests/test_provider.py`` never reaches the
+    exists and is populated. ``tests/core/test_provider.py`` never reaches the
     network, so it pins the parsing, not the field's presence. If DeepSeek
     renames the field, ``cached_tokens_in`` falls back to 0: the call still
     succeeds and its real token cost is still recorded, but cache hits would go

@@ -130,7 +130,7 @@ the same metric and the same frozen libraries -- and, if the judge clears the fl
 that can actually falsify "running checks beats reading text".
 
 **New obligations:** the prompt, model or temperature may not change without a new cache, a new
-prompt hash and a registration revision; `tests/test_judge_similarity.py` must keep pinning the
+prompt hash and a registration revision; `tests/experiment/scorers/test_judge_similarity.py` must keep pinning the
 failure paths, the cache's refusal rules and the usage accounting; and the README sentence that
 says a scorer reading the state through an LLM call was not tried must be corrected in place the
 moment a judge result is committed.

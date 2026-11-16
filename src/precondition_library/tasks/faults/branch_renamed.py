@@ -33,10 +33,22 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from ...sandbox import Sandbox, git_config, git_out, record_base, run_git, tip_contained
-from ...signatures import StateFingerprint
-from ..intent import IntentSpec, ResolutionVariant, draw_index, sample_index
-from ..spec import HELD_OUT_SEED_BASE, FaultSpec, GroundTruth
+from precondition_library.sandbox import (
+    Sandbox,
+    git_config,
+    git_out,
+    record_base,
+    run_git,
+    tip_contained,
+)
+from precondition_library.signatures import StateFingerprint
+from precondition_library.tasks.intent import (
+    IntentSpec,
+    ResolutionVariant,
+    draw_index,
+    sample_index,
+)
+from precondition_library.tasks.spec import HELD_OUT_SEED_BASE, FaultSpec, GroundTruth
 
 # The three live states a seed selects between, and the salt that chooses them.
 # Appending a state would change which state an existing seed injects, so add
@@ -148,7 +160,7 @@ def state_for_seed(seed: int) -> str:
 # --- the intent (#190), registered in `tasks.registry` (ADR-0028) ---------------
 #
 # Its acceptable sets are pinned against `check` by replay
-# (`tests/test_branch_renamed_intent.py`).
+# (`tests/tasks/test_branch_renamed_intent.py`).
 
 STATE_VARIANT = {"plain": "rename", "local_work": "merge", "name_taken": "retrack"}
 """Which resolution each injected state is labelled with; what `INTENT`'s rules decide."""

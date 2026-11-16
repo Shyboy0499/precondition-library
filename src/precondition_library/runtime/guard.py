@@ -52,7 +52,10 @@ import shlex
 from dataclasses import dataclass
 from enum import StrEnum
 
-from ..sandbox import ALLOWED_GIT_CONFIG_OVERRIDES, disallowed_git_config_overrides
+from precondition_library.sandbox import (
+    ALLOWED_GIT_CONFIG_OVERRIDES,
+    disallowed_git_config_overrides,
+)
 
 
 class Verdict(StrEnum):

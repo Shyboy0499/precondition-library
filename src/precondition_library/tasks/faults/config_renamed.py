@@ -39,10 +39,20 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from ...sandbox import Sandbox, record_base, run_git
-from ...signatures import CONFIG_DIR, RENAMES_FILE, StateFingerprint, config_assignments
-from ..intent import IntentSpec, ResolutionVariant, draw_index, sample_index
-from ..spec import FaultSpec, GroundTruth
+from precondition_library.sandbox import Sandbox, record_base, run_git
+from precondition_library.signatures import (
+    CONFIG_DIR,
+    RENAMES_FILE,
+    StateFingerprint,
+    config_assignments,
+)
+from precondition_library.tasks.intent import (
+    IntentSpec,
+    ResolutionVariant,
+    draw_index,
+    sample_index,
+)
+from precondition_library.tasks.spec import FaultSpec, GroundTruth
 
 SETTINGS_FILE = f"{CONFIG_DIR}/settings.conf"
 LOCAL_FILE = f"{CONFIG_DIR}/local.conf"
@@ -238,7 +248,7 @@ def layout_for_seed(seed: int) -> _Layout:
 # --- the intent (#266), registered in `tasks.registry` (ADR-0041) ---------------
 #
 # Its acceptable sets are pinned against `check` by replay
-# (`tests/test_config_renamed_intent.py`).
+# (`tests/tasks/test_config_renamed_intent.py`).
 
 
 def has_stale_config(state: StateFingerprint) -> bool:

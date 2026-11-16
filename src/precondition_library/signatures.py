@@ -24,7 +24,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from .sandbox import Sandbox, git_config, run_git, submodule_path, upstream_ref
+from precondition_library.sandbox import Sandbox, git_config, run_git, submodule_path, upstream_ref
 
 
 def _render(value: object) -> str:

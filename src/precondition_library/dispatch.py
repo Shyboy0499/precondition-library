@@ -27,12 +27,12 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from .checkout import open_checkout, snapshot
-from .library import Library
-from .program import Program, ProgramStatus
-from .runtime.probes import evaluate_preconditions, sandbox_state
-from .runtime.replay import ReplayResult, replay
-from .sandbox import Sandbox, git_out, run_git
+from precondition_library.checkout import open_checkout, snapshot
+from precondition_library.library import Library
+from precondition_library.program import Program, ProgramStatus
+from precondition_library.runtime.probes import evaluate_preconditions, sandbox_state
+from precondition_library.runtime.replay import ReplayResult, replay
+from precondition_library.sandbox import Sandbox, git_out, run_git
 
 DRY_RUN_COPY = "dry-run"
 """The scratch directory the dry run replays in; distinct from the probing copy."""

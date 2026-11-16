@@ -30,7 +30,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from ...sandbox import (
+from precondition_library.sandbox import (
     RECORDED_SUBMODULE_PATH,
     Sandbox,
     create_submodule_origin,
@@ -38,9 +38,14 @@ from ...sandbox import (
     record_base,
     run_git,
 )
-from ...signatures import StateFingerprint
-from ..intent import IntentSpec, ResolutionVariant, draw_index, sample_index
-from ..spec import HELD_OUT_SEED_BASE, FaultSpec, GroundTruth
+from precondition_library.signatures import StateFingerprint
+from precondition_library.tasks.intent import (
+    IntentSpec,
+    ResolutionVariant,
+    draw_index,
+    sample_index,
+)
+from precondition_library.tasks.spec import HELD_OUT_SEED_BASE, FaultSpec, GroundTruth
 
 # The path the submodule lives at, and the directory inside the sandbox root that
 # plays its origin. Both are fixed, so the same seed rebuilds the same URLs and

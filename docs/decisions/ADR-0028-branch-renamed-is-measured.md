@@ -83,7 +83,7 @@
 **New obligations:**
 - Any intent whose resolutions sync commits must refuse a branch that follows a renamed
   one. `StateFingerprint.follows_a_renamed_branch` is the shared test.
-- `tests/test_declared_state.py` now expects one excluded fault.
+- `tests/meta/test_declared_state.py` now expects one excluded fault.
 
 ## Alternatives rejected
 

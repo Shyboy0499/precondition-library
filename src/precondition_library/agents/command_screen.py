@@ -30,7 +30,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 
-from ..sandbox import git_invocation
+from precondition_library.sandbox import git_invocation
 
 SAFE_CONFIG_KEYS = re.compile(
     r"(?:"

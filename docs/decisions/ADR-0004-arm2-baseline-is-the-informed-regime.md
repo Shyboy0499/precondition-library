@@ -34,8 +34,8 @@ against `sync_fork_with_upstream` **0.6007 and 7-of-12**; embedding is 0.6389 an
 0.5729 and 4-of-12. The uninformed regime holds all **8 negative pairs** (4 per intent) — pairs
 where no resolution is correct — and the informed regime holds none, because informed wording
 exists only where a resolution does. Reproduce with
-`pytest tests/test_similarity_probe.py -s -k informed_baseline` and
-`pytest tests/test_embedding_similarity.py -s -k measured_against_lexical`.
+`pytest tests/experiment/scorers/test_similarity_probe.py -s -k informed_baseline` and
+`pytest tests/experiment/scorers/test_embedding_similarity.py -s -k measured_against_lexical`.
 
 Two readings follow, and both cut against the claim. First, the corrected baseline is **stronger**
 than the one ADR-0003 recorded: **63%, not 48%**. A stronger baseline makes Claim 2 harder to

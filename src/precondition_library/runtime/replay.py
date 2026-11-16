@@ -3,7 +3,7 @@
 INVARIANT — this module must not import `precondition_library.provider`,
 directly or transitively. The project's central claim is that a replay costs no
 tokens, so the cheapest way to make the claim false is an import that quietly
-reintroduces a model call. tests/test_replay_isolated_from_provider.py walks
+reintroduces a model call. tests/core/test_replay_isolated_from_provider.py walks
 the import graph under `src/` and fails if provider becomes reachable from here.
 That test is the guardrail; this docstring is just the explanation.
 
@@ -28,12 +28,18 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from ..program import GroundTruthResult, Program
-from ..sandbox import Sandbox, run_env
-from .confine import network_isolation_available, run_confined
-from .guard import Verdict, screen
-from .probes import SHELL, UnboundParameterError, bindings, evaluate_predicates, substitute
-from .templates import run_steps
+from precondition_library.program import GroundTruthResult, Program
+from precondition_library.runtime.confine import network_isolation_available, run_confined
+from precondition_library.runtime.guard import Verdict, screen
+from precondition_library.runtime.probes import (
+    SHELL,
+    UnboundParameterError,
+    bindings,
+    evaluate_predicates,
+    substitute,
+)
+from precondition_library.runtime.templates import run_steps
+from precondition_library.sandbox import Sandbox, run_env
 
 
 class ReplayResult(BaseModel):

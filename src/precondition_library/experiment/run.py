@@ -1,0 +1,1431 @@
+"""Running episodes: the repeat structure that makes the claim testable.
+
+Why the shape of this file is part of the argument rather than plumbing: a
+claim about amortization needs repeats, and repeats need to be *comparable*.
+Each fault type is therefore injected `occurrences` times with different seeds,
+so that occurrence_index counts genuine recurrences of a task family rather
+than repetitions of one scripted scenario. The seed varies across occurrences
+and the fault type stays fixed, which is the experimental design in one line.
+
+Repeats are also the difficulty, and the runner has to be honest about it. A
+fault's injector draws a small environment per seed, so a later occurrence can
+draw the same **instance** an earlier one already built -- and a program admitted
+from that earlier episode will be offered for it. That occurrence is a genuine
+repeat of the same environment and a *dependent* observation of the same
+experiment, so the
+runner labels every row with the role the plan gives it (`bench.splits`) rather
+than leaving the report to infer independence from the occurrence index. Both
+things are wanted: the recurrence is what makes amortization visible, and the
+label is what keeps it out of an independence claim. Since ADR-0005 the key is
+the instance and not the resolution, so a seed that draws a *new* environment of
+an already-seen resolution is an independent observation rather than a replay.
+
+Each arm builds its library from empty and sees the same faults in the same
+order, so the arms cannot differ by luck of scheduling.
+
+Two rules from the design decide the code below, and both are easy to break by
+"simplifying" the flow:
+
+* **The arm decides when to stop; the caller grades afterwards.** `react.solve`
+  is never allowed to consult the fault's checker, and neither is anything here:
+  the checker runs once, after the arm has stopped, and its verdict becomes
+  `ground_truth_ok`. Using it to decide whether an episode is "done" would hand
+  the compiled arms an oracle arm 1 was denied (issue #9).
+* **An episode that could not run is recorded, not dropped.** A sandbox that
+  fails to build becomes an `EpisodeRecord` with `outcome=INVALID`, because
+  dropping it would shrink every denominator silently (spec §7, item 9).
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+from precondition_library.agents.compile import (
+    AdmissionGate,
+    RefusalStates,
+    admit,
+    compile_program,
+    observe_negative_state,
+)
+from precondition_library.agents.dispatch import (
+    Dispatch,
+    dispatch_intent_key,
+    dispatch_preconditions,
+    dispatch_semantic,
+    dispatch_soft_vote,
+)
+from precondition_library.agents.memory import SuccessMemory, render
+from precondition_library.agents.react import executed_tool_calls, solve
+from precondition_library.experiment.gold import load_gold_programs
+from precondition_library.experiment.ledger import (
+    Arm,
+    EpisodeRecord,
+    OccurrenceRole,
+    append,
+    append_transcript,
+    transcripts_path,
+)
+from precondition_library.experiment.splits import occurrence_roles
+from precondition_library.library import Library, ProgramIdCollisionError
+from precondition_library.program import EpisodeOutcome, Program, ProgramStatus, accepts
+from precondition_library.provider import (
+    Completion,
+    Provider,
+    ProviderAuthError,
+    ProviderEmptyCompletionError,
+    ProviderError,
+    ProviderTransportError,
+    TokenUsage,
+)
+from precondition_library.runtime.probes import evaluate_preconditions
+from precondition_library.runtime.replay import ReplayResult, replay
+from precondition_library.sandbox import Sandbox
+from precondition_library.signatures import StateFingerprint, TaskSignature
+from precondition_library.similarity import (
+    Similarity,
+    SimilarityUsage,
+    lexical_similarity,
+    similarity_usage,
+)
+from precondition_library.tasks.faults import FAULTS, build_sandbox
+from precondition_library.tasks.intent import IntentSpec, ResolutionVariant
+from precondition_library.tasks.invariants import recorded_state_intact
+from precondition_library.tasks.registry import EXCLUDED_FROM_BENCHMARK, ambiguous_intents
+from precondition_library.tasks.spec import FaultSpec
+
+_EXCLUDED_NOTICE = (
+    "excluded from the benchmark: their request text is a fixed sentence, so the "
+    "text is the class label and a text-reading dispatcher could not mis-fire. "
+    "Refusing the request rather than skipping it silently (issue #25)"
+)
+
+_RATE_LIMIT_STATUS = 429
+"""HTTP 429: the provider is asking the caller to slow down, so it is retryable."""
+
+_SERVER_ERROR_FLOOR = 500
+"""5xx is transient by HTTP's own contract, unlike a 4xx the request caused."""
+
+_MAX_RETRY_ATTEMPTS = 3
+"""One initial call plus two retries. A small cap: an episode must still fail in
+bounded time, and a transient rate limit is the case this exists for."""
+
+_RETRY_BASE_DELAY_S = 0.5
+_RETRY_MAX_DELAY_S = 2.0
+"""Capped exponential backoff: 0.5s then 1.0s, never more than the cap."""
+
+
+class _AccountingProvider:
+    """Wrap a `Provider` and sum what one episode spends through it.
+
+    Every call in an episode — the ReAct loop's turns and the compile step's one
+    reply — goes through this object, so the ledger's token fields are the sum of
+    the completions the episode actually made rather than an estimate assembled
+    from return values. Nothing else counts tokens: the compile result carries
+    its own usage, but that completion was already seen here, and adding both
+    would double the compile's cost onto the episode that triggered it.
+
+    Spec §8 gives retry policy to the caller and requires it to be visible, so a
+    rate-limit or 5xx response is retried here with a capped backoff and a 4xx is
+    not. Every *attempt* is added to `llm_calls`, including the ones that raised,
+    which is what keeps a retry from hiding itself: the ledger records three
+    calls for a completion that took three tries, and the token totals stay the
+    sum of the responses that actually returned usage. A failed request's token
+    spend is unknown to us, and inventing a value would be worse than the gap —
+    the count of calls is the part that is knowable, so it is the part recorded.
+
+    The sampling temperature is read off the completions the same way, so the row
+    records what the calls were sent with. An episode whose calls report different
+    temperatures raises rather than recording one of them: a single value would then
+    misdescribe the episode, and a mid-episode change is a configuration defect.
+    """
+
+    def __init__(self, provider: Provider) -> None:
+        self._provider = provider
+        self.tokens_in = 0
+        self.tokens_out = 0
+        self.uncached_tokens_in = 0
+        self.cached_tokens_in = 0
+        self.cache_write_tokens_in = 0
+        self.llm_calls = 0
+        self.temperature: float | None = None
+
+    def complete(
+        self, *, system: str, messages: list[dict], tools: list[dict] | None = None
+    ) -> Completion:
+        for attempt in range(1, _MAX_RETRY_ATTEMPTS + 1):
+            try:
+                completion = self._provider.complete(system=system, messages=messages, tools=tools)
+            except ProviderError as error:
+                self.llm_calls += 1
+                if isinstance(error, ProviderEmptyCompletionError):
+                    self._add(error.usage)
+                if attempt == _MAX_RETRY_ATTEMPTS or not _is_retryable(error):
+                    raise
+                time.sleep(_retry_delay_s(attempt))
+                continue
+            self._add(completion.usage)
+            self.llm_calls += completion.llm_calls
+            self._record_temperature(completion.temperature)
+            return completion
+        raise AssertionError("unreachable: the loop returns or raises")
+
+    def _add(self, usage: TokenUsage) -> None:
+        """Add one call's tokens to the episode's totals."""
+        self.tokens_in += usage.tokens_in
+        self.tokens_out += usage.tokens_out
+        self.uncached_tokens_in += usage.uncached_tokens_in
+        self.cached_tokens_in += usage.cached_tokens_in
+        self.cache_write_tokens_in += usage.cache_write_tokens_in
+
+    def _record_temperature(self, temperature: float | None) -> None:
+        """Keep the episode's one temperature, or raise if its calls disagree."""
+        if temperature is None:
+            return
+        if self.temperature is not None and self.temperature != temperature:
+            raise ValueError(
+                f"one episode's model calls reported temperatures {self.temperature} and "
+                f"{temperature}; the ledger records one value per episode (issue #6)"
+            )
+        self.temperature = temperature
+
+
+def _is_retryable(error: ProviderError) -> bool:
+    """Whether a provider error is transient (spec §8): rate limit, 5xx, or transport.
+
+    A 4xx means the request itself was wrong and will be wrong again, so retrying
+    it would only spend more of the budget on the same failure. A transport failure
+    -- a timeout, a dropped connection (`ProviderTransportError`) -- never reached a
+    response and is transient by nature, so it is retried under the same cap (issue
+    #157), and so is an empty completion (`ProviderEmptyCompletionError`), which a
+    repeat of the same request is not known to return. Any other `ProviderError` with
+    no status is a malformed body, which is deterministic for the same reply, and is
+    not retried.
+    """
+    if isinstance(error, (ProviderTransportError, ProviderEmptyCompletionError)):
+        return True
+    status = error.status_code
+    return status is not None and (status == _RATE_LIMIT_STATUS or status >= _SERVER_ERROR_FLOOR)
+
+
+def _retry_delay_s(attempt: int) -> float:
+    """The capped exponential backoff before retry number `attempt + 1`."""
+    return min(_RETRY_BASE_DELAY_S * (2 ** (attempt - 1)), _RETRY_MAX_DELAY_S)
+
+
+@dataclass
+class _ArmResult:
+    """How the arm's mechanism completed, before ground truth is applied.
+
+    Mutable because the compile step runs after grading (the sandbox it would
+    otherwise rebuild at the same path is destroyed first), and it fills in
+    `admitted`/`program_id` when the arm had to solve a task it could not replay.
+    """
+
+    outcome: EpisodeOutcome
+    transcript: list[dict] | None
+    """The ReAct transcript, when the arm solved. `None` means the episode was a
+    replay: no model was consulted and there is nothing to compile."""
+    fired_variant: str | None
+    program_id: str | None
+    dispatch_score: float | None
+    admitted: bool | None
+    refusal_reason: str | None
+    """The guard's own reason, set only when the body it refused was the outcome."""
+    compile_failure_reason: str | None
+    """Why the fallback's compile or admission produced no usable program.
+
+    A separate field from `refusal_reason` because they are different signals:
+    the guard refusal rate is a safety metric, the compile success rate a
+    compile-quality one, and one field cannot carry both without conflating
+    them (issue #60)."""
+    replay_failure_reason: str | None
+    """Why a fired program could not be run at all, when that is the cause a row
+    must name (issue #76). None for a refusal, which carries `refusal_reason`,
+    and for a body that ran and failed its postconditions, whose evidence is the
+    demotion and the postcondition results."""
+    timed_out: bool
+    compilable: bool
+    """Whether this episode solved a task whose solution should be compiled.
+
+    Set by `_run_arm` from what actually happened: true only when a compiled arm
+    had to solve, **the agent itself declared the task done** (issue #160 -- a
+    transcript that ran out of budget is not a solution, and the agent's own verdict
+    is the one the no-oracle rule allows), has a transcript, and owns a library to
+    store into. It is a
+    property of the result rather than of the arm so `_learn_from_solution`
+    branches on the episode, not on which arm ran it -- §4 keeps arm-specific
+    logic inside `dispatch.py`, and a fourth arm must not need this file audited
+    for it. Arm 1's solve is not compilable because arm 1 has no library; a
+    replay hit is not compilable because no model ran."""
+    memory_recalled: int | None = None
+    """How many memory entries arm 1b put in this episode's prompt; `None` for other arms."""
+    compile_attempts: int | None = None
+    """How many compiles this episode's solution took, `COMPILE_ATTEMPTS` at most;
+    `None` when nothing was compiled (ADR-0030)."""
+    unparsed_replies: list[dict] = field(default_factory=list)
+    """Each compile reply that did not parse, with its attempt and why: the transcript log
+    keeps them, so a failed compile can be diagnosed from the run (the tenth live run's
+    first episode lost both its reply and its repair to "not a YAML mapping")."""
+
+
+def run_benchmark(
+    *,
+    arms: list[Arm],
+    faults: list[str],
+    occurrences: int,
+    seeds: list[int],
+    out: Path,
+    model: str,
+    provider: Provider,
+    similarity: Similarity | None = None,
+    frozen_library: Path | None = None,
+    reranker: Similarity | None = None,
+    gold_programs: dict[str, dict[str, Program]] | None = None,
+    soft_threshold: float | None = None,
+    replicate: int = 1,
+) -> Path:
+    """Run every (arm, fault, occurrence) episode and write the ledger.
+
+    Episodes within an arm run in occurrence order — the library must accumulate
+    the way it would in use, so an arm cannot benefit from a program compiled
+    against a later state. Returns the ledger path.
+
+    `similarity` is arm 2's seam, injected for the same reason `provider` is: knowing what
+    an embedding model costs means being able to run with one. It defaults to the lexical
+    implementation, which spends nothing, so every row's `embedding_tokens` stays 0 until a
+    model is behind the seam (issue #104).
+
+    `gold_programs` is the oracle floor's injected input, needed only when `arms` names
+    `Arm.GOLD` (issue #7, ADR-0014): the committed hand-written resolutions indexed by
+    fault then variant (`bench.gold.load_gold_programs`). It defaults to loading the
+    repository's own `bench/gold/`; a caller injects a different set the way it injects a
+    different `similarity`. When the gold arm runs, coverage is checked up front -- every
+    measured fault's every variant must have exactly one gold resolution -- so the oracle
+    can always answer, rather than silently falling to a non-oracle path mid-run.
+
+    `soft_threshold` is arm 2b's learned floor (issue #7, ADR-0016), required when `arms`
+    names `Arm.SOFT_VOTE` and refused up front when it is missing: an untuned default
+    would be recorded on every row as if it had been learned. Learn it on the tune seeds
+    with `bench.soft_vote.learn_soft_threshold`.
+
+    `seeds` supplies the seed for each occurrence, positionally: occurrence `k`
+    runs against `seeds[k - 1]`, so the same seed reaches every arm and the
+    comparison stays paired. `provider` is injected rather than built from
+    `model` because the provider owns its credentials and this repository reads
+    no environment variables; `model` is the identifier recorded on every row.
+
+    Each occurrence's role -- variant the first time an instance is seen, replay
+    only on a genuine repeat of one (ADR-0005) -- is read from the plan
+    (`bench.splits.occurrence_roles`)
+    and written onto the row, so the report can group by it instead of inferring
+    it. The roles depend only on the seed sequence and the fault, never on the
+    arm, so they are computed once and shared; a reader can therefore reproduce
+    the labelling from the ledger's `seed` and `fault_type` alone.
+
+    **Two library modes** (issue #4, ADR-0009). By default each arm grows its own
+    library from empty, compiling on fallback -- the online mode the cost curve
+    (Claim 1) is about. With `frozen_library`, every arm dispatches against that one
+    already-built directory (`bench.build_library`) and nothing is written to it, so
+    the arms differ in their dispatch function alone and every row carries the same
+    `library_hash`. The hash is re-read after the last episode and a change raises:
+    a comparison whose shared artifact moved under it is not the comparison run.
+
+    Only faults with a registered, ambiguous intent are measurable. A fault in
+    `EXCLUDED_FROM_BENCHMARK`, or one with no intent at all, raises before any
+    episode runs: silently skipping it would make the run's denominator a
+    property of the caller's typo rather than of the design.
+    """
+    _require_measurable(faults)
+    if occurrences < 1:
+        raise ValueError(f"occurrences must be at least 1, got {occurrences}")
+    if len(seeds) < occurrences:
+        raise ValueError(
+            f"{occurrences} occurrence(s) need {occurrences} seed(s), got {len(seeds)}; "
+            f"reusing one seed across occurrences would make them one instance, not repeats"
+        )
+
+    # The plan's role for each occurrence, per fault. Arm-independent, so it is
+    # computed once: every arm must label the same occurrence the same way, or
+    # the report's grouping would be a property of the arm rather than of the
+    # plan. `seeds[:occurrences]` because the extra seeds, if any, are never run.
+    roles = {fault_type: occurrence_roles(seeds[:occurrences], fault_type) for fault_type in faults}
+
+    scorer = similarity if similarity is not None else lexical_similarity
+    frozen_hash: str | None = None
+    gate: AdmissionGate | None = AdmissionGate.TWO_SIDED
+    if frozen_library is not None:
+        frozen_hash = _require_frozen_library(frozen_library)
+        gate = read_admission_gate(frozen_library)
+
+    if Arm.REACT_MEMORY in arms and frozen_library is not None:
+        raise ValueError(
+            "arm 1b (react_memory) learns from its own episodes, and a frozen run exists so "
+            "that nothing learns mid-run (ADR-0009); run 1b in the online mode, where the cost "
+            "curve it is a baseline for is measured (ADR-0017)"
+        )
+
+    if Arm.SOFT_VOTE in arms and soft_threshold is None:
+        raise ValueError(
+            "arm 2b (soft_vote) needs a learned soft_threshold; learn one on the tune seeds "
+            "with bench.soft_vote.learn_soft_threshold and pass run_benchmark(soft_threshold=...)"
+        )
+
+    # The oracle floor's programs, resolved and coverage-checked only when the gold
+    # arm is in the run, so a run without it needs no gold directory on disk.
+    gold_index: dict[str, dict[str, Program]] = {}
+    if Arm.GOLD in arms:
+        gold_index = gold_programs if gold_programs is not None else load_gold_programs()
+        _require_gold_covers(faults, gold_index)
+
+    for arm in arms:
+        if frozen_library is not None:
+            library = Library(
+                frozen_library,
+                similarity=scorer,
+                evaluate_preconditions=evaluate_preconditions,
+                reranker=reranker,
+                soft_threshold=soft_threshold,
+            )
+        else:
+            library_root = out.parent / f"library-{arm.value}"
+            _require_empty_library(library_root, arm)
+            library = Library(
+                library_root,
+                similarity=scorer,
+                evaluate_preconditions=evaluate_preconditions,
+                reranker=reranker,
+                soft_threshold=soft_threshold,
+            )
+        # Arm 1b's memory: one per arm per run, grown in occurrence order like a library,
+        # so no replicate or other arm starts from its trajectories (ADR-0017).
+        memory = SuccessMemory() if arm is Arm.REACT_MEMORY else None
+        for occurrence in range(1, occurrences + 1):
+            for fault_type in faults:
+                record = run_episode(
+                    arm,
+                    fault_type,
+                    seeds[occurrence - 1],
+                    occurrence,
+                    role=roles[fault_type][occurrence - 1],
+                    provider=provider,
+                    library=library,
+                    model=model,
+                    frozen=frozen_library is not None,
+                    admission_gate=gate,
+                    gold_variants=gold_index.get(fault_type, {}),
+                    memory=memory,
+                    replicate=replicate,
+                    transcript_log=transcripts_path(out),
+                )
+                append(out, record)
+
+    if frozen_library is not None and Library(frozen_library).library_hash() != frozen_hash:
+        raise RuntimeError(
+            f"the frozen library at {frozen_library} changed during the run; every arm must "
+            f"dispatch against one unchanged artifact (issue #4), so this ledger is not that "
+            f"comparison"
+        )
+    return out
+
+
+def run_episode(
+    arm: Arm,
+    fault_type: str,
+    seed: int,
+    occurrence: int,
+    *,
+    role: OccurrenceRole,
+    provider: Provider,
+    library: Library,
+    model: str,
+    frozen: bool = False,
+    admission_gate: AdmissionGate | None = AdmissionGate.TWO_SIDED,
+    gold_variants: dict[str, Program] | None = None,
+    memory: SuccessMemory | None = None,
+    replicate: int = 1,
+    transcript_log: Path | None = None,
+    request: str | None = None,
+    refusals: RefusalStates | None = None,
+) -> EpisodeRecord:
+    """One episode: build a sandbox, let the arm act, check ground truth, record.
+
+    Ground truth is checked for every arm with the same fault checker, so
+    success means the same thing everywhere. The record is returned rather than
+    written, so the caller owns the ledger path and `run_benchmark` appends one
+    line per episode.
+
+    `role` is required and never defaulted: only the caller that owns the whole
+    seed sequence can know whether this occurrence is the first sight of its
+    instance, and a default would silently label a repeat as an independent
+    observation -- the one error the field exists to prevent. `run_benchmark`
+    reads it from the plan; a caller running one episode in isolation labels it
+    explicitly.
+
+    The three arms differ in exactly one place, `_run_arm`: arm 1 solves with
+    the agent, arms 2 and 3 ask their dispatcher for a stored program and fall
+    back to solving when none applies. Everything after that — the checker, the
+    record, the token accounting — is shared, which is what makes a difference
+    between arms attributable to dispatch.
+
+    `library` is unused by arm 1 (it has no library) and required anyway, so the
+    three arms share one call shape rather than one arm having a different
+    signature.
+
+    `frozen=True` dispatches against `library` without ever writing to it (issue #4,
+    ADR-0009): a fallback is not compiled, a failed fire is not demoted and a wrong
+    fire is not counted toward quarantine. The row still records the fire, the
+    misfire and the fallback's cost; only the library's evolution is withheld, so
+    every arm dispatching against one frozen artifact sees the same files.
+
+    `request` replaces the fault's own request text. Only the build's admit set passes
+    one, to ask for the resolution an episode covers (ADR-0032); every measured run
+    leaves it `None`, so the request is the fault's phrasing for the seed.
+
+    `refusals` is study 2's refusal set, passed only by a configuration R build: the
+    episode's compile must also refuse every state in it to be admitted (refusal-population
+    §5).
+    """
+    intent = _intent_for(fault_type)
+    fault = FAULTS[fault_type]
+    started = time.monotonic()
+    accounting = _AccountingProvider(provider)
+    # Read the digest before the arm runs: it describes the library the episode
+    # dispatched against, and the compile below may add to it afterwards.
+    library_hash = library.library_hash()
+    library_program_ids = library.program_ids()
+    box: Sandbox | None = None
+    # The surface `recorded_state_intact` was actually handed, or `None` while it has
+    # not run. Set from the declaration only once the call returns, so a row can never
+    # claim a surface was applied when the fault's own clause failed first (issue #96).
+    applied_surface: tuple[str, ...] | None = None
+
+    def invalid(exc: Exception) -> EpisodeRecord:
+        """The row for this episode if it cannot be graded, with what it has spent."""
+        return _invalid_record(
+            arm,
+            intent.name,
+            fault_type,
+            seed,
+            occurrence,
+            role,
+            model,
+            started,
+            str(exc),
+            accounting=accounting,
+            library_hash=library_hash,
+            library_program_ids=library_program_ids,
+            threshold=library.threshold,
+            soft_threshold=library.soft_threshold if arm is Arm.SOFT_VOTE else None,
+            rerank_k=_rerank_k(library),
+            change_surface=applied_surface,
+            replicate=replicate,
+        )
+
+    try:
+        try:
+            box = build_sandbox(seed, [fault_type])
+            state = StateFingerprint.observe(box)
+        except Exception as exc:
+            return invalid(exc)
+
+        if request is None:
+            request = fault.task_text(seed)
+        correct = intent.correct_variant(state)
+        acceptable = intent.acceptable_variants(state)
+        signature = TaskSignature(intent=request, fingerprint=state, target=str(box.work))
+
+        # The oracle floor's program for this state: the gold resolution of the
+        # ground-truth variant (issue #7, ADR-0014). Resolved here, where ground
+        # truth is known, and handed to `_run_arm` so that function stays a pure
+        # dispatch of what the arm was given -- it is `None` for every non-gold arm
+        # and for a benign state no gold answers. Consulting `correct` is the oracle
+        # nature the floor is defined by, not a leak into the compared arms.
+        oracle = (gold_variants or {}).get(correct.id) if correct is not None else None
+
+        # Measured around the arm's run, so the row carries what this episode's dispatch
+        # spent through the seam rather than the library's lifetime total.
+        embedding_before = _arm2_usage(library)
+        result = _run_arm(
+            arm,
+            signature,
+            box,
+            library,
+            fault_type,
+            seed,
+            occurrence,
+            accounting,
+            frozen=frozen,
+            oracle=oracle,
+            memory=memory,
+        )
+        embedding_after = _arm2_usage(library)
+        try:
+            ground_truth_ok, state_intact, applied_surface = _grade(fault, box, seed)
+        except Exception as exc:
+            return invalid(exc)
+
+        # Grading is done with this sandbox, so it is safe to release it now.
+        # Admission (below) rebuilds sandboxes at deterministic paths, and one of
+        # them is this episode's own (seed, fault) pair; leaving the box alive
+        # would let admission's `build_sandbox` replace it under the checker.
+        box.destroy()
+        if not frozen:
+            _learn_from_solution(
+                result,
+                signature,
+                box,
+                library,
+                fault_type,
+                seed,
+                occurrence,
+                accounting,
+                refusals=refusals,
+            )
+            _record_mismatch(result, library, correct, acceptable, fault_type, seed, occurrence)
+
+        record = EpisodeRecord(
+            arm=arm,
+            task_id=intent.name,
+            fault_type=fault_type,
+            occurrence_index=occurrence,
+            occurrence_role=role,
+            seed=seed,
+            replicate=replicate,
+            tokens_in=accounting.tokens_in,
+            tokens_out=accounting.tokens_out,
+            embedding_tokens=embedding_after.tokens - embedding_before.tokens,
+            embedding_calls=embedding_after.calls - embedding_before.calls,
+            uncached_tokens_in=accounting.uncached_tokens_in,
+            cached_tokens_in=accounting.cached_tokens_in,
+            cache_write_tokens_in=accounting.cache_write_tokens_in,
+            llm_calls=accounting.llm_calls,
+            tool_calls=executed_tool_calls(result.transcript),
+            temperature=accounting.temperature,
+            wall_clock_s=time.monotonic() - started,
+            outcome=result.outcome,
+            correct_variant=correct.id if correct is not None else None,
+            acceptable_variants=list(acceptable),
+            fired_variant=result.fired_variant,
+            ground_truth_ok=ground_truth_ok,
+            recorded_state_intact=state_intact,
+            change_surface=applied_surface,
+            program_id=result.program_id,
+            dispatch_score=result.dispatch_score,
+            similarity_threshold=library.threshold,
+            soft_threshold=library.soft_threshold if arm is Arm.SOFT_VOTE else None,
+            memory_recalled=result.memory_recalled,
+            rerank_k=_rerank_k(library),
+            library_hash=library_hash,
+            library_program_ids=library_program_ids,
+            admission_gate=None
+            if arm not in DISPATCHING_ARMS or admission_gate is None
+            else admission_gate.value,
+            admitted=result.admitted,
+            refusal_reason=result.refusal_reason,
+            compile_failure_reason=result.compile_failure_reason,
+            compile_attempts=result.compile_attempts,
+            replay_failure_reason=result.replay_failure_reason,
+            timed_out=result.timed_out,
+            model=model,
+        )
+        if transcript_log is not None and result.transcript is not None:
+            # Every solve's transcript, beside its row (issue #171); a replay ran no agent.
+            append_transcript(
+                transcript_log, record, result.transcript, unparsed=result.unparsed_replies
+            )
+        return record
+    finally:
+        if box is not None:
+            box.destroy()
+
+
+def _run_arm(
+    arm: Arm,
+    signature: TaskSignature,
+    box: Sandbox,
+    library: Library,
+    fault_type: str,
+    seed: int,
+    occurrence: int,
+    accounting: _AccountingProvider,
+    *,
+    frozen: bool = False,
+    oracle: Program | None = None,
+    memory: SuccessMemory | None = None,
+) -> _ArmResult:
+    """The one arm-specific decision. Everything downstream is shared.
+
+    Arm 1 solves and stops when the model declares itself finished. The
+    dispatching arms (2, 3, and the baselines 2b and 2c) dispatch first; a hit
+    is replayed with no model call, and anything else — no
+    applicable program, a fire whose body or postconditions failed, or a guard
+    refusal — falls back to the agent for this episode only, at full price (spec
+    §8). A fallback is a cost, and the tokens it spends are charged to the arm
+    that had to pay them.
+
+    The gold arm is the oracle floor (issue #7, ADR-0014): `oracle` is the
+    hand-written resolution for the ground-truth variant, resolved by the caller,
+    and the arm simply replays it with no model call. It never falls back and
+    never compiles -- the floor's whole point is a zero-token run -- so a gold
+    replay that fails is recorded as a failure rather than paid for again by the
+    agent. It cannot misfire: it fires the correct variant by construction.
+
+    Arm 1b (issue #7, ADR-0017) is arm 1 with the most similar entries of its own
+    memory placed before the task; it writes the trajectory back only when the model
+    declares the task done, before the checker has run, so no ground truth reaches it.
+    """
+    if arm is Arm.GOLD:
+        return _run_gold(oracle, box)
+
+    if arm is Arm.REACT_MEMORY:
+        return _run_react_memory(signature, box, accounting, memory)
+
+    if arm is Arm.REACT:
+        outcome, transcript = solve(signature, box, accounting)
+        return _ArmResult(
+            outcome,
+            transcript,
+            fired_variant=None,
+            program_id=None,
+            dispatch_score=None,
+            admitted=None,
+            refusal_reason=None,
+            compile_failure_reason=None,
+            replay_failure_reason=None,
+            timed_out=False,
+            # Arm 1 has no library, so its solution is not compiled.
+            compilable=False,
+        )
+
+    decision = _dispatch(arm, signature, library, box)
+
+    if decision.program is None:
+        outcome, transcript = solve(signature, box, accounting)
+        return _ArmResult(
+            _after_fallback(outcome),
+            transcript,
+            fired_variant=None,
+            program_id=None,
+            dispatch_score=decision.score,
+            admitted=None,
+            refusal_reason=None,
+            compile_failure_reason=None,
+            replay_failure_reason=None,
+            timed_out=False,
+            compilable=outcome is EpisodeOutcome.SUCCESS,
+        )
+
+    fired = decision.program
+    replayed = replay(fired, box)
+    if replayed.ok:
+        # The replay path never touched `accounting`, which is the invariant the
+        # cost model rests on: a program that applies costs zero LLM calls.
+        return _ArmResult(
+            EpisodeOutcome.SUCCESS,
+            None,
+            fired_variant=fired.variant,
+            program_id=fired.id,
+            dispatch_score=decision.score,
+            admitted=True,
+            refusal_reason=None,
+            compile_failure_reason=None,
+            replay_failure_reason=None,
+            timed_out=False,
+            # No model ran, so there is no transcript to compile.
+            compilable=False,
+        )
+
+    fired_variant = None if replayed.refused else fired.variant
+    if _is_genuine_miss(replayed) and not frozen:
+        # §8: a fire that could not work is demoted, and the fallback is charged
+        # to this episode. That is a body whose postconditions failed, and also a
+        # body that never ran because this environment cannot bind a parameter it
+        # names (issue #76) -- the program fired on a state it cannot serve, which
+        # is the same "too permissive to be correct" defect. Anything else -- a
+        # guard refusal, a timeout -- is a runtime outcome rather than evidence
+        # the program is wrong, so the program is left as it was. A frozen library
+        # is never demoted: the row records the failed fire, and the artifact every
+        # arm shares stays what it was (ADR-0009).
+        library.set_status(
+            fired.id, ProgramStatus.DEMOTED, episode_id=_episode_id(fault_type, seed, occurrence)
+        )
+
+    outcome, transcript = solve(signature, box, accounting)
+    if replayed.refused:
+        return _ArmResult(
+            EpisodeOutcome.REFUSAL,
+            transcript,
+            fired_variant=None,
+            program_id=fired.id,
+            dispatch_score=decision.score,
+            admitted=True,
+            refusal_reason=replayed.reason,
+            compile_failure_reason=None,
+            # A refusal is a safety signal, not a replay failure: it must not be
+            # read as one, or the refusal rate would pick up rows no guard refused
+            # (issue #60).
+            replay_failure_reason=None,
+            timed_out=replayed.timed_out,
+            compilable=outcome is EpisodeOutcome.SUCCESS,
+        )
+    return _ArmResult(
+        _after_fallback(outcome),
+        transcript,
+        fired_variant=fired_variant,
+        program_id=fired.id,
+        dispatch_score=decision.score,
+        admitted=True,
+        refusal_reason=None,
+        compile_failure_reason=None,
+        # None for a postcondition miss, whose evidence is the demotion; set when
+        # the body could not run at all (issue #76).
+        replay_failure_reason=replayed.reason if replayed.unbound_parameter else None,
+        timed_out=replayed.timed_out,
+        compilable=outcome is EpisodeOutcome.SUCCESS,
+    )
+
+
+DISPATCHING_ARMS: frozenset[Arm] = frozenset(
+    {Arm.SEMANTIC, Arm.PRECONDITION, Arm.INTENT_KEY, Arm.SOFT_VOTE}
+)
+"""The arms that choose a stored program from a library (issue #4).
+
+These are the arms a frozen run compares: each dispatches against the one shared
+artifact, carries its admission gate on every row, and differs from the others only
+in the matcher `_dispatch` calls. Arm 1, arm 1b and the gold oracle are not here --
+they never read a library -- and record no gate. Named once so `_dispatch`, the
+gate field and the tests cannot disagree about which arms these are."""
+
+
+def _dispatch(arm: Arm, signature: TaskSignature, library: Library, box: Sandbox) -> Dispatch:
+    """The dispatching arm's one call into `agents.dispatch`.
+
+    An explicit table rather than an if/else whose last branch catches "everything
+    else": a new arm that reached here without its own entry would otherwise run
+    arm 3's matcher under its own name, and its rows would be arm 3's. It serves
+    exactly `DISPATCHING_ARMS`, which a test pins.
+    """
+    if arm is Arm.SEMANTIC:
+        return dispatch_semantic(signature, library)
+    if arm is Arm.PRECONDITION:
+        return dispatch_preconditions(signature, library, box)
+    if arm is Arm.INTENT_KEY:
+        return dispatch_intent_key(signature, library)
+    if arm is Arm.SOFT_VOTE:
+        return dispatch_soft_vote(signature, library, box)
+    raise ValueError(f"arm {arm.value!r} does not dispatch from a library")
+
+
+def _run_react_memory(
+    signature: TaskSignature,
+    box: Sandbox,
+    accounting: _AccountingProvider,
+    memory: SuccessMemory | None,
+) -> _ArmResult:
+    """Arm 1b: ReAct with its own past successes in the prompt (issue #7, ADR-0017).
+
+    Recall, solve, then remember. The write happens here, inside the arm, on the
+    model's own declaration of success -- `run_episode` runs the fault's checker only
+    after this returns, so the memory cannot be filtered by ground truth. The tokens
+    the longer prompt costs are spent through `accounting` like any other call, so
+    they are 1b's on the row. Like arm 1 it has no library: nothing is compiled.
+    """
+    if memory is None:
+        raise ValueError(
+            "arm 1b needs its run's SuccessMemory; run it through run_benchmark, or pass "
+            "run_episode(memory=SuccessMemory())"
+        )
+    recalled = memory.recall(signature.intent)
+    outcome, transcript = solve(signature, box, accounting, prelude=render(recalled))
+    if outcome is EpisodeOutcome.SUCCESS:
+        memory.record(signature.intent, transcript)
+    return _ArmResult(
+        outcome,
+        transcript,
+        fired_variant=None,
+        program_id=None,
+        dispatch_score=None,
+        admitted=None,
+        refusal_reason=None,
+        compile_failure_reason=None,
+        replay_failure_reason=None,
+        timed_out=False,
+        # 1b keeps memory, not a library, so its solution is not compiled.
+        compilable=False,
+        memory_recalled=len(recalled),
+    )
+
+
+def _run_gold(oracle: Program | None, box: Sandbox) -> _ArmResult:
+    """The oracle floor: replay the ground-truth variant's gold program (issue #7).
+
+    No model is ever consulted -- the floor exists to bound cost at zero LLM calls
+    -- so there is no fallback and no compile. `oracle` is `None` only for a benign
+    state no gold answers; `run_benchmark` checks coverage before the run, so for a
+    measured fault the oracle is always present. A `None` oracle is recorded as a
+    failure with no spend rather than handed to the agent, because a floor that
+    quietly called the model would no longer be a zero-token floor.
+
+    `fired_variant` is the gold program's own variant, which is the ground-truth
+    variant by construction, so the oracle never misfires. `admitted` and
+    `dispatch_score` stay `None`: the oracle has no library and no score, exactly
+    as arm 1 has none, and `compilable` is false because no model ran.
+    """
+    if oracle is None:
+        return _ArmResult(
+            EpisodeOutcome.FAIL,
+            None,
+            fired_variant=None,
+            program_id=None,
+            dispatch_score=None,
+            admitted=None,
+            refusal_reason=None,
+            compile_failure_reason=None,
+            replay_failure_reason="no gold resolution for this state's variant",
+            timed_out=False,
+            compilable=False,
+        )
+    replayed = replay(oracle, box)
+    return _ArmResult(
+        EpisodeOutcome.SUCCESS if replayed.ok else EpisodeOutcome.FAIL,
+        None,
+        # The gold program fires the ground-truth variant, so the oracle's fire is
+        # recorded even on a replay failure: the floor fired the right resolution
+        # and the environment rejected it, which is a fact about the run, not a
+        # misfire. `refused` leaves no variant, matching the compiled arms.
+        fired_variant=None if replayed.refused else oracle.variant,
+        program_id=oracle.id,
+        dispatch_score=None,
+        admitted=None,
+        refusal_reason=replayed.reason if replayed.refused else None,
+        compile_failure_reason=None,
+        replay_failure_reason=replayed.reason if replayed.unbound_parameter else None,
+        timed_out=replayed.timed_out,
+        compilable=False,
+    )
+
+
+def _record_mismatch(
+    result: _ArmResult,
+    library: Library,
+    correct: ResolutionVariant | None,
+    acceptable: tuple[str, ...],
+    fault_type: str,
+    seed: int,
+    occurrence: int,
+) -> None:
+    """Count one wrong-variant fire against the program that fired (spec §8).
+
+    `misfired` is the ledger's own definition -- a program fired a resolution
+    that was not this state's ground truth -- and it is independent of episode
+    success, which is why this is a separate step from the demotion in
+    `_is_genuine_miss`. A program can be wrong about the resolution and still
+    satisfy its postconditions (`discard` on a state with real local work leaves a
+    synced tree while destroying that work), so it is never demoted and would
+    mis-fire on every later occurrence; `Library.record_mismatch` withdraws it after
+    the second. "Wrong" is outside the state's acceptable set (ADR-0023): `rebase` on
+    a `merge`-labelled state is accepted by the checker and is not counted.
+
+    Nothing is counted when the body did not run to completion: a guard refusal
+    leaves `fired_variant` None, and a timeout is a runtime mishap rather than
+    evidence about the program, matching the bar `_is_genuine_miss` sets for
+    demotion. This runs after grading because the row is derived once the arm has
+    stopped -- the arm itself is never allowed to see ground truth.
+    """
+    correct_id = correct.id if correct is not None else None
+    if result.fired_variant is None or accepts(correct_id, acceptable, result.fired_variant):
+        return
+    if result.program_id is None or result.timed_out:
+        return
+    library.record_mismatch(result.program_id, episode_id=_episode_id(fault_type, seed, occurrence))
+
+
+def _is_genuine_miss(replayed: ReplayResult) -> bool:
+    """Whether a failed replay is evidence the program is wrong (spec §8).
+
+    Demotion is terminal (`library._TRANSITIONS`), so it must rest on the
+    program's own contract, not on the runtime's mood. Two outcomes qualify: a
+    body that ran to completion and left its postconditions unsatisfied, and a
+    body this environment cannot bind a declared parameter for, which never ran
+    at all (issue #76). Both are the program's own defect -- its preconditions
+    accepted a state where it cannot work -- so both are the "too permissive to
+    be correct" evidence §8 demotes on. A guard refusal executed nothing and a
+    timeout was killed before it finished, and neither says anything about the
+    program; they are excluded. The body exiting non-zero is not in this test on
+    purpose: the postconditions are the program's own statement of done, and
+    spec §8 demotes on a postcondition miss, not on an exit code. A transient
+    timeout demoting a correct program would remove it permanently and shrink
+    coverage -- the variable the comparison is matched on.
+    """
+    if replayed.refused or replayed.timed_out:
+        return False
+    if replayed.unbound_parameter:
+        return True
+    return replayed.postconditions is not None and not replayed.postconditions.ok
+
+
+COMPILE_ATTEMPTS = 2
+"""Compiles one solution may take: a first one and, if admission refuses it, one
+revision told why (ADR-0030). Every attempt's tokens are the episode's."""
+
+
+def _learn_from_solution(
+    result: _ArmResult,
+    signature: TaskSignature,
+    box: Sandbox,
+    library: Library,
+    fault_type: str,
+    seed: int,
+    occurrence: int,
+    accounting: _AccountingProvider,
+    *,
+    refusals: RefusalStates | None = None,
+) -> None:
+    """Compile the episode's solution into a candidate and gate it, in place.
+
+    `refusals`, when given, is study 2's refusal set, which `admit` checks after its two
+    sides (configuration R); a state it fired on is shown to the revision with the rest.
+
+    The decision to compile is read from the result, not from the arm: an episode
+    that solved a task and owns a library is compilable, a replay is not (no model
+    ran), and arm 1's solve is not (arm 1 has no library). `_run_arm` sets that
+    flag where the episode's shape is known, so this function needs no arm branch
+    — §4 keeps per-arm logic inside `dispatch.py`, and a fourth arm must not
+    require auditing here.
+
+    Only a fallback reaches here, so the compile — and every token it spends —
+    belongs to the episode that needed it. `box` has already been destroyed:
+    `compile_program` reads the signature and the transcript, and only uses the
+    environment for its name, so a throwaway target is honest. Building the
+    program is `compile_program`'s job; deciding whether it may be dispatched is
+    `admit`'s, and this function only stores the verdict. A program that fails the
+    gate is kept as a `candidate` — §8: a rejected program is data, not rubbish —
+    and its reason is recorded on the row rather than lost with the traceback a
+    raise would produce.
+
+    The program is stored under an id derived from the episode (`_program_id`),
+    and its provenance names the fault this episode injected, so the family its
+    `variant` is scoreable against is recorded by the caller rather than the
+    model (issues #69, #80).
+    """
+    if not result.compilable or result.transcript is None:
+        # `compilable` is set only where a transcript exists; the second test is
+        # what lets the type checker see that, without a branch on the arm.
+        return
+
+    episode_id = _episode_id(fault_type, seed, occurrence)
+    intent = _intent_for(fault_type)
+    program: Program | None = None
+    admitted, gate_reason = False, ""
+    revision: tuple[Program, str] | None = None
+    refused_states: list[StateFingerprint] = []
+    first_refused: tuple[Program, str] | None = None
+    revision_failure: str | None = None
+    unparsed: tuple[str, str] | None = None
+    for attempt in range(1, COMPILE_ATTEMPTS + 1):
+        try:
+            compiled = compile_program(
+                signature,
+                box,
+                result.transcript,
+                accounting,
+                fault=fault_type,
+                variant_ids=[variant.id for variant in intent.variants],
+                revision=revision,
+                refused_states=refused_states,
+                unparsed=unparsed,
+            )
+        except ProviderAuthError:
+            raise  # not this program's failure: the run stops (`ProviderAuthError`)
+        except Exception as exc:
+            result.compile_attempts = attempt
+            if program is None:
+                raised = f"compile raised {type(exc).__name__}: {exc}"
+                if unparsed is not None:
+                    raised = f"{unparsed[1]}; the repair {raised.removeprefix('compile ')}"
+                _record_compile_failure(result, raised)
+                return
+            # The revision failed; the refused program and its reason stand, and the row
+            # says the revision was tried and why it produced nothing.
+            revision_failure = f"the revision raised {type(exc).__name__}: {exc}"
+            break
+        result.compile_attempts = attempt
+        if not compiled.ok or compiled.program is None:
+            reason = compiled.reason or "the compile returned no program"
+            if compiled.reply:
+                result.unparsed_replies.append(
+                    {"attempt": attempt, "reason": reason, "reply": compiled.reply}
+                )
+            if program is None:
+                if attempt < COMPILE_ATTEMPTS:
+                    # A reply that did not parse gets the one retry, shown what it wrote
+                    # and why it was not a program (ADR-0030).
+                    unparsed = (compiled.reply, reason)
+                    continue
+                if unparsed is not None:
+                    reason = f"{unparsed[1]}; the repair did not parse either: {reason}"
+                _record_compile_failure(result, reason)
+                return
+            revision_failure = (
+                f"the revision did not parse: {compiled.reason or 'no program returned'}"
+            )
+            break
+        # The stored id is derived from this episode's identity, not taken from the
+        # model: a later episode reusing a slug must not lose its program to the
+        # library's correct refusal to overwrite (issue #80).
+        program = compiled.program.model_copy(
+            update={"id": _program_id(fault_type, occurrence, compiled.program.id)}
+        )
+        fired_on: list[tuple[tuple[str, ...], int]] = []
+        refused_on: list[StateFingerprint] = []
+        admitted, gate_reason = admit(
+            program,
+            fault_type,
+            seeds=[seed],
+            fired_on=fired_on,
+            refusals=refusals,
+            refused_on=refused_on,
+        )
+        if admitted:
+            break
+        revision = (program, gate_reason)
+        refused_states = [observe_negative_state(*fired) for fired in fired_on] + refused_on
+        first_refused = first_refused or revision
+    assert program is not None  # the loop returns before here when no program parsed
+    try:
+        library.add(program)
+    except ProgramIdCollisionError as exc:
+        # Reachable only when one episode compiles twice into one library (a
+        # re-run at the same occurrence). It is a naming collision, not a reply
+        # that failed to parse or a gate rejection, and the row must say so.
+        _record_compile_failure(result, f"program id collision: {exc}")
+        return
+    except ValueError as exc:
+        # The library never overwrites, so a refused add is reported. The episode
+        # keeps the cost of the compile that produced it.
+        _record_compile_failure(result, str(exc))
+        return
+    if first_refused is not None and first_refused[0] is not program:
+        refused, reason = first_refused
+        library.record_revision(program.id, refused=refused, reason=reason, episode_id=episode_id)
+    if admitted:
+        library.set_status(program.id, ProgramStatus.ADMITTED, episode_id=episode_id)
+    elif revision_failure is not None:
+        _record_compile_failure(result, f"{gate_reason}; {revision_failure}")
+    else:
+        _record_compile_failure(result, gate_reason)
+
+    if result.program_id is None:
+        result.program_id = program.id
+    if result.admitted is None:
+        result.admitted = admitted
+
+
+def _record_compile_failure(result: _ArmResult, reason: str) -> None:
+    """Attach a failed compile or admission to the row without overwriting facts.
+
+    `admitted` is only filled in when the arm has not already established it (a
+    fired program was admitted by definition); `compile_failure_reason` keeps the
+    first reason recorded. It never touches `refusal_reason`: that field is the
+    guard's alone, and writing a malformed reply into it would put a compile
+    failure into the guard refusal rate (issue #60).
+    """
+    if result.admitted is None:
+        result.admitted = False
+    if result.compile_failure_reason is None:
+        result.compile_failure_reason = reason
+
+
+def _after_fallback(agent_outcome: EpisodeOutcome) -> EpisodeOutcome:
+    """The episode's outcome once the agent has taken over.
+
+    A fallback that the agent completes is `FALLBACK`: no stored program applied,
+    or the one that fired did not work, and the episode's cost is the agent's.
+    If the agent itself failed — a provider error, or a step budget exhausted —
+    the outcome is `FAIL`, because an episode that ended in failure must not be
+    averaged in as an expected fallback.
+    """
+    return (
+        EpisodeOutcome.FALLBACK if agent_outcome is EpisodeOutcome.SUCCESS else EpisodeOutcome.FAIL
+    )
+
+
+def _intent_for(fault_type: str) -> IntentSpec:
+    """The ambiguous intent that makes `fault_type` measurable, or a loud refusal."""
+    if fault_type in EXCLUDED_FROM_BENCHMARK:
+        raise ValueError(f"fault {fault_type!r} is {_EXCLUDED_NOTICE}")
+    measured = {intent.fault: intent for intent in ambiguous_intents()}
+    intent = measured.get(fault_type)
+    if intent is None:
+        raise ValueError(
+            f"fault {fault_type!r} has no registered ambiguous intent, so it cannot be "
+            f"measured; measurable faults: {sorted(measured)}"
+        )
+    return intent
+
+
+def _require_measurable(faults: list[str]) -> None:
+    """Refuse a request naming an unmeasurable fault, before any episode runs."""
+    for fault_type in faults:
+        _intent_for(fault_type)
+
+
+def _require_gold_covers(faults: list[str], gold_index: dict[str, dict[str, Program]]) -> None:
+    """Refuse a gold-arm run whose oracle cannot answer some measured state (issue #7).
+
+    The oracle picks the gold resolution of the ground-truth variant, so every
+    variant the intent can require must have exactly one gold program. Checking it
+    once, before any episode, keeps the floor honest: a missing resolution would
+    otherwise surface mid-run as a zero-spend failure that reads like a gold
+    program that could not run, when the real cause is a gap in the oracle. Refusing
+    up front, the way an unmeasurable fault is refused, makes the gap a
+    configuration error rather than a silent dent in the floor.
+    """
+    for fault_type in faults:
+        intent = _intent_for(fault_type)
+        have = gold_index.get(fault_type, {})
+        want = {variant.id for variant in intent.variants}
+        missing = sorted(want - set(have))
+        if missing:
+            raise ValueError(
+                f"the gold oracle has no resolution for fault {fault_type!r} variant(s) "
+                f"{missing}; it cannot be the floor for a state those variants resolve. "
+                f"Add them to bench/gold or run without the gold arm"
+            )
+
+
+def _rerank_k(library: Library) -> int | None:
+    """The `rerank_k` a row records: the library's, or `None` when it has no reranker."""
+    return library.rerank_k if library.reranker is not None else None
+
+
+def _arm2_usage(library: Library) -> SimilarityUsage:
+    """What arm 2's scorers have spent so far: the similarity seam plus the reranker.
+
+    Summed per distinct scorer, so one object used as both stages is counted once.
+    The reranker spends in the same currency as the embedding seam -- its own, never the
+    LLM's -- so it lands in the same `embedding_*` fields (issue #104, ADR-0011).
+    """
+    scorers: list[Similarity] = [library.similarity]
+    if library.reranker is not None and library.reranker is not library.similarity:
+        scorers.append(library.reranker)
+    usages = [similarity_usage(scorer) for scorer in scorers]
+    return SimilarityUsage(
+        tokens=sum(usage.tokens for usage in usages),
+        calls=sum(usage.calls for usage in usages),
+    )
+
+
+MANIFEST = "build.json"
+"""The file in a built root that says which admission gate built it
+(`bench.build_library`). Not a program, so it changes neither `load_all` nor
+`library_hash`; the runner reads it to label every row with its gate."""
+
+
+def read_admission_gate(root: Path) -> AdmissionGate | None:
+    """The gate a built root was admitted under, or `None` for a root with no manifest."""
+    manifest = root / MANIFEST
+    if not manifest.exists():
+        return None
+    return AdmissionGate(json.loads(manifest.read_text(encoding="utf-8"))["admission_gate"])
+
+
+DEFAULT_REPLICATES = 3
+"""Whole-run replicates per plan: issue #6's k >= 3 repeats per (fault, seed, arm)."""
+
+
+def run_replicates(
+    *, out_dir: Path, replicates: int = DEFAULT_REPLICATES, **run_kwargs: Any
+) -> list[Path]:
+    """Run the whole benchmark `replicates` times, each from scratch (issue #6, ADR-0012).
+
+    Replicate `r` writes `out_dir/replicate-r/ledger.jsonl`, and in the online mode grows
+    its per-arm libraries beside that ledger, so no replicate starts from another's
+    programs: every replicate is the same plan run again, and the spread between them is
+    the arms' run-to-run variation. A frozen library is shared -- it is read-only, so
+    sharing it is the point. Returns the ledger paths in replicate order.
+
+    Rows from different replicates of one (arm, fault, seed) are repeats of one instance,
+    not new observations, and the analysis clusters on the instance for that reason
+    (`bench.report.cluster_bootstrap`).
+    """
+    if replicates < 1:
+        raise ValueError(f"replicates must be at least 1, got {replicates}")
+    if "out" in run_kwargs or "replicate" in run_kwargs:
+        raise ValueError("run_replicates sets each replicate's `out` and `replicate` itself")
+    ledgers: list[Path] = []
+    for replicate in range(1, replicates + 1):
+        ledger = out_dir / f"replicate-{replicate}" / "ledger.jsonl"
+        ledger.parent.mkdir(parents=True, exist_ok=True)
+        ledgers.append(run_benchmark(out=ledger, replicate=replicate, **run_kwargs))
+    return ledgers
+
+
+def _require_frozen_library(root: Path) -> str:
+    """The frozen library's hash, or a refusal when there is nothing to dispatch.
+
+    A missing directory or one with no `admitted` program would make every dispatch a
+    fallback, and the run would read as two arms that never fire rather than as a
+    library that was never built. A library holding a program learned on a checkout is
+    refused too: measured libraries hold harness-compiled programs only (ADR-0026).
+    """
+    library = Library(root)
+    admitted = [p for p in library.load_all() if p.status is ProgramStatus.ADMITTED]
+    if not admitted:
+        raise ValueError(
+            f"the frozen library at {root} holds no admitted program; build it first with "
+            f"bench.build_library, or run without frozen_library to grow one per arm"
+        )
+    learned = sorted(p.id for p in admitted if p.provenance.learned_on is not None)
+    if learned:
+        raise ValueError(
+            f"the frozen library at {root} holds program(s) learned on a checkout "
+            f"({', '.join(learned)}); a measured library holds only harness-compiled "
+            f"programs, because a checkout-learned program was admitted partly on a "
+            f"person's confirmation (ADR-0026)"
+        )
+    return library.library_hash()
+
+
+def _require_empty_library(root: Path, arm: Arm) -> None:
+    """Each arm starts from empty, so a stale run cannot be mistaken for one.
+
+    A library left behind by an earlier run would silently preload programs and
+    change what the arm replays, so this refuses rather than merging the two.
+    """
+    if root.exists() and Library(root).load_all():
+        raise ValueError(
+            f"{root} already holds programs, but arm {arm.value!r} must start from an "
+            f"empty library; remove it or choose a fresh output directory"
+        )
+
+
+def _episode_id(fault_type: str, seed: int, occurrence: int) -> str:
+    return f"{fault_type}/seed-{seed}/occurrence-{occurrence}"
+
+
+def _program_id(fault_type: str, occurrence: int, proposed: str) -> str:
+    """The id a compiled program is stored under: unique to its episode.
+
+    The model's `id` is a readability hint, not a key. Two episodes can emit the
+    same slug, and `Library.add` refuses a duplicate rather than overwriting, so
+    the later episode's program would be paid for and dropped -- a library whose
+    growth depends on how the model happened to name things (issue #80). The
+    episode's `(fault, occurrence)` pair is unique within a run -- one compile per
+    episode -- so prefixing it makes the stored id unique by construction.
+    `occurrence` rather than `seed` because it is the episode's identity in the
+    ledger and is stable across a re-seeded run.
+
+    The model's slug is kept as a suffix so a directory still says what it does.
+    It is sanitised because it is model output used as a path component:
+    `Library.add` rejects anything that is not a single component, and letting a
+    stray `/` decide whether the program is stored would be the same defect in
+    another form. A collision can then still occur only if one episode compiles
+    twice into one library, which the runner records as a collision.
+    """
+    slug = re.sub(r"[^a-z0-9]+", "-", proposed.lower()).strip("-") or "program"
+    return f"{fault_type}-occ{occurrence}-{slug}"
+
+
+def _grade(
+    fault: FaultSpec, box: Sandbox, seed: int
+) -> tuple[bool, bool | None, tuple[str, ...] | None]:
+    """Ground truth for `box` after the arm: `(ground_truth_ok, recorded_state_intact,
+    the change surface applied)`. Raises when the checker cannot grade the state.
+
+    Reaching the expected state is not sufficient on its own: a resolution can reach it
+    by discarding everything else, and then the arm would be scored as succeeding by
+    destroying the repository rather than by repairing the fault (issue #9, item 3).
+    Checked only when the fault's own clause passed, so a fault-level failure keeps its
+    own reason rather than being reported as a ref violation -- and the surface is
+    reported as applied only once `recorded_state_intact` returns (issue #96).
+    """
+    verdict = fault.check(box)
+    if not verdict.ok:
+        return False, None, None
+    surface = fault.change_surface_for_seed(seed)
+    intact = recorded_state_intact(box, surface=surface)
+    return intact.ok, intact.ok, surface
+
+
+def _invalid_record(
+    arm: Arm,
+    task_id: str,
+    fault_type: str,
+    seed: int,
+    occurrence: int,
+    role: OccurrenceRole,
+    model: str,
+    started: float,
+    reason: str,
+    *,
+    accounting: _AccountingProvider,
+    library_hash: str,
+    threshold: float,
+    library_program_ids: list[str] | None = None,
+    rerank_k: int | None = None,
+    soft_threshold: float | None = None,
+    change_surface: tuple[str, ...] | None = None,
+    replicate: int = 1,
+) -> EpisodeRecord:
+    """The row for an episode that could not run.
+
+    `ground_truth_ok` stays `None` — "not checked" is passed deliberately, since
+    the episode never reached a state the checker could grade. The row carries
+    whatever `accounting` has already seen, because an episode can become invalid
+    *after* the arm ran: a `fault.check` failure happens with the solve already
+    paid for, and hardcoding zero there would drop real spend from the ledger
+    (spec §7, item 9: invalid episodes are "excluded from denominators but never
+    hidden"). It is recorded so it appears in the denominator's own invalid rate
+    rather than vanishing.
+
+    `change_surface` is the surface `recorded_state_intact` was actually handed, and
+    it defaults to `None` because that is the honest value for the invalid rows this
+    helper records: the sandbox never built, or grading raised before the surface check
+    completed. It is a parameter rather than the fault's declaration because an invalid
+    row must not claim a surface was applied when it was not (issue #96); a caller that
+    invalidates an episode *after* the surface was applied passes it through instead.
+    `()` is kept distinct from `None` here exactly as it is on `EpisodeRecord`: an empty
+    surface that was applied is the strictest declaration, not a missing one.
+
+    The reason goes to `invalid_reason`, not `refusal_reason`: a sandbox that
+    would not build is not a guard refusal, and putting it in the refusal field
+    would inflate the safety metric (issue #60).
+
+    The role is written even here. It is a property of the plan's seed sequence,
+    knowable before any sandbox exists, so an episode that never ran still has
+    one -- and leaving it off would make the row unreadable by a report that
+    groups by role, which is the report's only defence against counting a repeat
+    as an independent observation.
+    """
+    return EpisodeRecord(
+        arm=arm,
+        task_id=task_id,
+        fault_type=fault_type,
+        occurrence_index=occurrence,
+        occurrence_role=role,
+        seed=seed,
+        replicate=replicate,
+        tokens_in=accounting.tokens_in,
+        tokens_out=accounting.tokens_out,
+        cached_tokens_in=accounting.cached_tokens_in,
+        llm_calls=accounting.llm_calls,
+        temperature=accounting.temperature,
+        wall_clock_s=time.monotonic() - started,
+        outcome=EpisodeOutcome.INVALID,
+        correct_variant=None,
+        ground_truth_ok=None,
+        change_surface=change_surface,
+        similarity_threshold=threshold,
+        soft_threshold=soft_threshold,
+        rerank_k=rerank_k,
+        library_hash=library_hash,
+        library_program_ids=library_program_ids,
+        invalid_reason=reason,
+        model=model,
+    )
