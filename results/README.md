@@ -54,7 +54,9 @@ States built by this project's fault injectors, graded by its own rules. Code:
   at new paths), [heldout-2026-10-19](heldout-2026-10-19/) (new branch names and submodule paths),
   [realhost-2026-10-20](realhost-2026-10-20/) (real repositories' histories),
   [heldout-2026-11-16](heldout-2026-11-16/) (the lock-file paths again, on the 22 libraries built
-  since the compile prompt changed).
+  since the compile prompt changed),
+  [lock-path-perturbation-2026-11-16](lock-path-perturbation-2026-11-16/) (which checks know lock
+  files only by name, and what a build-time test at unseen paths would refuse).
 - **What a fire does, and why arm 3 sits out.** [consequences-2026-10-21](consequences-2026-10-21/),
   [consequences-heldout-2026-10-21](consequences-heldout-2026-10-21/),
   [consequences-realhost-2026-10-21](consequences-realhost-2026-10-21/),
