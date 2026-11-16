@@ -70,15 +70,17 @@ def main() -> None:
                     for root, _, admitted in loaded:
                         for program in admitted:
                             if evaluate_preconditions(program, box).ok:
-                                rows.append({
-                                    "path": path,
-                                    "seed": seed,
-                                    "state": lockfile_conflict.state_for_seed(seed),
-                                    "library": str(root),
-                                    "program": program.id,
-                                    "family": program.provenance.fault,
-                                    "variant": program.variant,
-                                })
+                                rows.append(
+                                    {
+                                        "path": path,
+                                        "seed": seed,
+                                        "state": lockfile_conflict.state_for_seed(seed),
+                                        "library": str(root),
+                                        "program": program.id,
+                                        "family": program.provenance.fault,
+                                        "variant": program.variant,
+                                    }
+                                )
                 finally:
                     box.destroy()
                 print(f"{path} seed {seed}: done", file=sys.stderr, flush=True)
@@ -87,12 +89,17 @@ def main() -> None:
 
     for root, digest, _ in loaded:
         assert Library(root).library_hash() == digest, f"{root} changed while it was read"
-    json.dump({
-        "paths": PATHS,
-        "seeds": seeds(),
-        "libraries": [str(root) for root, _, _ in loaded],
-        "fires": rows,
-    }, sys.stdout, indent=1, ensure_ascii=False)
+    json.dump(
+        {
+            "paths": PATHS,
+            "seeds": seeds(),
+            "libraries": [str(root) for root, _, _ in loaded],
+            "fires": rows,
+        },
+        sys.stdout,
+        indent=1,
+        ensure_ascii=False,
+    )
     print()
 
 
