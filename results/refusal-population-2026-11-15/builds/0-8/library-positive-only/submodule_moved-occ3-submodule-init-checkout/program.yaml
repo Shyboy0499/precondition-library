@@ -1,0 +1,45 @@
+id: submodule_moved-occ3-submodule-init-checkout
+intent: initialise the nested submodule declared in the superproject and check it
+  out at the commit it is pinned to
+parameters:
+- submodule_path
+preconditions:
+- name: submodule_declared_as_gitlink
+  description: HEAD records a gitlink (mode 160000) at the submodule path, so the
+    nested repository is declared
+  probe: git ls-tree HEAD -- {submodule_path}
+  expect_exit: 0
+  expect_pattern: ^160000 commit [0-9a-f]{40}
+- name: submodule_not_initialised
+  description: the submodule is not checked out yet, so it still carries the '-' prefix
+    in the status listing
+  probe: git submodule status -- {submodule_path}
+  expect_exit: 0
+  expect_pattern: ^-
+body: |
+  git submodule update --init -- {submodule_path}
+steps: null
+postconditions:
+- name: submodule_checked_out_at_recorded_commit
+  description: the submodule is initialised and its HEAD is the commit recorded in
+    the superproject (blank status prefix)
+  probe: git submodule status -- {submodule_path}
+  expect_exit: 0
+  expect_pattern: ^ [0-9a-f]{40}
+- name: superproject_clean_for_submodule
+  description: with submodules considered, the superproject reports no change for
+    the submodule path
+  probe: '! git --no-optional-locks status --porcelain --ignore-submodules=none --
+    {submodule_path} | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+variant: init
+provenance:
+  compiled_from_task: A nested repository in this project needs bringing into line.
+    Initialise the nested repository and check it out.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: A nested repository in this project needs bringing into line. Initialise
+    the nested repository and check it out./seed-4-submodule_moved-29979
+  fault: submodule_moved
+status: admitted

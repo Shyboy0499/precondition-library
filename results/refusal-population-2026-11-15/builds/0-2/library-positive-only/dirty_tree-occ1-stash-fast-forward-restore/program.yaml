@@ -1,0 +1,78 @@
+id: dirty_tree-occ1-stash-fast-forward-restore
+intent: Stash uncommitted and untracked work, fast-forward the current branch to the
+  upstream branch, then restore the stashed work.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: dirty_worktree
+  description: the working tree has tracked or untracked changes to preserve
+  probe: test -n "$(git status --porcelain -uall)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_existing_stash
+  description: the stash list is empty so the new stash is the one that will be popped
+  probe: '! git stash list | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_exists
+  description: the upstream branch ref is present locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: behind_upstream
+  description: HEAD is strictly behind the upstream branch and has no local commits
+    ahead of it
+  probe: |-
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0 &&
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -eq 0
+  expect_exit: 0
+  expect_pattern: null
+- name: no_upstream_overlap_with_local_changes
+  description: upstream does not modify any path that has local edits or untracked
+    files
+  probe: |-
+    ! comm -12 \
+      <( { git diff --name-only -z HEAD; git ls-files --others --exclude-standard -z; } | tr '\0' '\n' | LC_ALL=C sort ) \
+      <( git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | LC_ALL=C sort ) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git stash push -u -m "autostash before fast-forward to {upstream_remote}/{upstream_branch}"
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+  git stash pop
+steps: null
+postconditions:
+- name: matches_upstream
+  description: HEAD is the upstream branch commit
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: stash_empty
+  description: no stash entry remains
+  probe: '! git stash list | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: work_restored
+  description: the working tree is dirty again with the user's restored changes
+  probe: test -n "$(git status --porcelain -uall)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unresolved_conflicts
+  description: no index entries are left unmerged
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+variant: stash
+provenance:
+  compiled_from_task: I am in the middle of something and upstream moved on. Sort
+    it out without losing my edits. Stash my uncommitted work, update the branch,
+    then put my work back.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: I am in the middle of something and upstream moved on. Sort it out without
+    losing my edits. Stash my uncommitted work, update the branch, then put my work
+    back./seed-10-dirty_tree-27083
+  fault: dirty_tree
+status: admitted

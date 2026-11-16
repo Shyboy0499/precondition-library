@@ -1,0 +1,266 @@
+id: config_renamed-occ4-rename-stale-config-keys
+intent: Rename stale config keys according to the project's rename mapping, preserving
+  each value, and commit the change.
+parameters: []
+preconditions:
+- name: clean_worktree
+  description: the working tree has no staged, unstaged, or untracked changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: renames_file_present
+  description: the project declares a tracked config/renames.conf mapping file
+  probe: |-
+    test -f config/renames.conf
+    git ls-files --error-unmatch config/renames.conf >/dev/null 2>&1
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_key_cleanly_renamable
+  description: a tracked file contains a key listed as renamed, with no existing new
+    key and no duplicate keys
+  probe: |-
+    set -euo pipefail
+    renames_file="config/renames.conf"
+    test -f "$renames_file"
+    stale=0
+    collision=0
+    duplicate=0
+    while IFS= read -r -d '' f; do
+      if [ "$f" = "$renames_file" ]; then
+        continue
+      fi
+      out=$(awk '
+        FILENAME == ARGV[1] {
+          line=$0
+          sub(/#.*/, "", line)
+          if (line ~ /^[[:space:]]*$/) next
+          pos=index(line,"=")
+          if (pos==0) next
+          old=substr(line,1,pos-1)
+          new=substr(line,pos+1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+          if (old != "" && new != "") { oldnew[old]=new; olds[old]=1 }
+          next
+        }
+        {
+          pos=index($0,"=")
+          if (pos>0) {
+            key=substr($0,1,pos-1)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+            if (key != "") {
+              if (key in present) duplicate=1
+              present[key]=1
+            }
+          }
+        }
+        END {
+          if (duplicate) print "duplicate"
+          for (o in olds) {
+            if (o in present) {
+              print "stale"
+              if (oldnew[o] in present) print "collision"
+            }
+          }
+        }
+      ' "$renames_file" "$f")
+      case "$out" in *stale*) stale=1;; esac
+      case "$out" in *collision*) collision=1;; esac
+      case "$out" in *duplicate*) duplicate=1;; esac
+    done < <(git ls-files -z)
+    [ "$stale" -eq 1 ] && [ "$collision" -eq 0 ] && [ "$duplicate" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+  renames_file="config/renames.conf"
+  test -f "$renames_file"
+
+  changed_files=()
+  while IFS= read -r -d '' f; do
+    if [ "$f" = "$renames_file" ]; then
+      continue
+    fi
+    tmp=$(mktemp)
+    awk '
+      FILENAME == ARGV[1] {
+        line=$0
+        sub(/#.*/, "", line)
+        if (line ~ /^[[:space:]]*$/) next
+        pos=index(line,"=")
+        if (pos==0) next
+        old=substr(line,1,pos-1)
+        new=substr(line,pos+1)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+        if (old != "" && new != "") map[old]=new
+        next
+      }
+      {
+        line=$0
+        pos=index(line,"=")
+        if (pos>0) {
+          left=substr(line,1,pos-1)
+          key=left
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+          if (key in map) {
+            match(left, /^[[:space:]]*/)
+            lead=substr(left,1,RLENGTH)
+            rest=substr(left,RLENGTH+1)
+            match(rest, /[[:space:]]*$/)
+            trail=substr(rest,RSTART,RLENGTH)
+            line=lead map[key] trail substr(line,pos)
+          }
+        }
+        print line
+      }
+    ' "$renames_file" "$f" > "$tmp"
+    if ! cmp -s "$tmp" "$f"; then
+      cat "$tmp" > "$f"
+      changed_files+=("$f")
+    fi
+    rm -f "$tmp"
+  done < <(git ls-files -z)
+
+  if [ "${#changed_files[@]}" -eq 0 ]; then
+    echo "no stale config keys found" >&2
+    exit 1
+  fi
+
+  git add -- "${changed_files[@]}"
+  git commit -m "fix: rename stale config keys"
+steps: null
+postconditions:
+- name: stale_keys_gone
+  description: no tracked file still contains a key listed in config/renames.conf
+    and no file has duplicate keys
+  probe: |-
+    set -euo pipefail
+    renames_file="config/renames.conf"
+    stale=0
+    duplicate=0
+    while IFS= read -r -d '' f; do
+      if [ "$f" = "$renames_file" ]; then
+        continue
+      fi
+      out=$(awk '
+        FILENAME == ARGV[1] {
+          line=$0
+          sub(/#.*/, "", line)
+          if (line ~ /^[[:space:]]*$/) next
+          pos=index(line,"=")
+          if (pos==0) next
+          old=substr(line,1,pos-1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+          if (old != "") olds[old]=1
+          next
+        }
+        {
+          pos=index($0,"=")
+          if (pos>0) {
+            key=substr($0,1,pos-1)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+            if (key != "") {
+              if (key in present) duplicate=1
+              present[key]=1
+            }
+          }
+        }
+        END {
+          if (duplicate) print "duplicate"
+          for (o in olds) if (o in present) print "stale"
+        }
+      ' "$renames_file" "$f")
+      case "$out" in *stale*) stale=1;; esac
+      case "$out" in *duplicate*) duplicate=1;; esac
+    done < <(git ls-files -z)
+    [ "$stale" -eq 0 ] && [ "$duplicate" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: renamed_values_preserved
+  description: each renamed key has the value it had before the commit
+  probe: |-
+    set -euo pipefail
+    renames_file="config/renames.conf"
+    git rev-parse --verify HEAD^ >/dev/null 2>&1
+    while IFS= read -r -d '' f; do
+      if [ "$f" = "$renames_file" ]; then
+        continue
+      fi
+      if git cat-file -e "HEAD^:$f" 2>/dev/null; then
+        awk '
+          FILENAME == ARGV[1] {
+            line=$0
+            sub(/#.*/, "", line)
+            if (line ~ /^[[:space:]]*$/) next
+            pos=index(line,"=")
+            if (pos==0) next
+            old=substr(line,1,pos-1)
+            new=substr(line,pos+1)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+            if (old != "" && new != "") map[old]=new
+            next
+          }
+          FILENAME == ARGV[2] {
+            pos=index($0,"=")
+            if (pos>0) {
+              key=substr($0,1,pos-1)
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+              if (key in map) {
+                val=substr($0,pos+1)
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+                oldval[key]=val
+              }
+            }
+            next
+          }
+          {
+            pos=index($0,"=")
+            if (pos>0) {
+              key=substr($0,1,pos-1)
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+              if (key != "") {
+                val=substr($0,pos+1)
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+                cur[key]=val
+              }
+            }
+          }
+          END {
+            for (o in map) {
+              n=map[o]
+              if (o in oldval) {
+                if (!(n in cur) || oldval[o] != cur[n]) {
+                  print "value mismatch for " o " -> " n > "/dev/stderr"
+                  exit 1
+                }
+              }
+            }
+          }
+        ' "$renames_file" <(git show "HEAD^:$f") "$f" || exit 1
+      fi
+    done < <(git ls-files -z)
+  expect_exit: 0
+  expect_pattern: null
+- name: renames_file_unchanged
+  description: the rename mapping file was not modified
+  probe: git diff --quiet HEAD^ -- config/renames.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree_after_commit
+  description: all changes are committed and the working tree is clean
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: Fix the stale config entry the app is warning about, without
+    losing any setting. Rename the old key in the project's settings and keep its
+    value.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Fix the stale config entry the app is warning about, without losing
+    any setting. Rename the old key in the project's settings and keep its value./seed-8-config_renamed-4812
+  fault: config_renamed
+status: admitted

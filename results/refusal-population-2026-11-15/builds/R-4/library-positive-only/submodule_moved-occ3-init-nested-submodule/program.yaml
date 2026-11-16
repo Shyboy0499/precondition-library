@@ -1,0 +1,72 @@
+id: submodule_moved-occ3-init-nested-submodule
+intent: Initialise a repository's nested submodule and check it out at the commit
+  recorded by the superproject.
+parameters:
+- submodule_path
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: submodule_declared
+  description: .gitmodules declares a submodule whose path is the expected nested
+    path
+  probe: git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | cut -d'
+    ' -f2- | grep -Fx -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: null
+- name: head_records_gitlink
+  description: HEAD records a gitlink entry for the nested path
+  probe: git ls-tree -z HEAD -- "{submodule_path}" | tr '\0' '\n' | grep -q '^160000
+    commit '
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_not_initialised
+  description: the nested repository is still marked uninitialised by git submodule
+    status
+  probe: git submodule status -- "{submodule_path}" | grep -q '^-'
+  expect_exit: 0
+  expect_pattern: null
+- name: index_matches_head_for_submodule
+  description: the index records the same gitlink as HEAD for the nested path
+  probe: git diff --quiet --cached HEAD -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: null
+- name: pin_matches_upstream
+  description: the gitlink in HEAD matches the gitlink recorded on the upstream branch
+  probe: test "$(git ls-tree -z HEAD -- "{submodule_path}" | tr '\0' '\n' | awk '{print
+    $3}')" = "$(git ls-tree -z "{upstream_remote}/{upstream_branch}" -- "{submodule_path}"
+    | tr '\0' '\n' | awk '{print $3}')"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git submodule update --init -- "{submodule_path}"
+steps: null
+postconditions:
+- name: submodule_checked_out_at_pin
+  description: the nested repository HEAD equals the gitlink recorded by the superproject
+  probe: test "$(git -C "{submodule_path}" rev-parse HEAD 2>/dev/null)" = "$(git ls-tree
+    -z HEAD -- "{submodule_path}" | tr '\0' '\n' | awk '{print $3}')"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_status_clean
+  description: git submodule status reports the nested repository as checked out with
+    no mismatch
+  probe: git submodule status -- "{submodule_path}" | grep -q '^ '
+  expect_exit: 0
+  expect_pattern: null
+- name: pin_still_matches_upstream
+  description: the checked-out dependency remains at the upstream-recorded gitlink
+  probe: test "$(git -C "{submodule_path}" rev-parse HEAD 2>/dev/null)" = "$(git ls-tree
+    -z "{upstream_remote}/{upstream_branch}" -- "{submodule_path}" | tr '\0' '\n'
+    | awk '{print $3}')"
+  expect_exit: 0
+  expect_pattern: null
+variant: init
+provenance:
+  compiled_from_task: Get this repo's nested dependency consistent with upstream.
+    Initialise the nested repository and check it out.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this repo's nested dependency consistent with upstream. Initialise
+    the nested repository and check it out./seed-5-submodule_moved-29016
+  fault: submodule_moved
+status: candidate

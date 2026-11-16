@@ -1,0 +1,226 @@
+id: config_renamed-occ1-config-drop-renamed-key
+intent: delete the old key's line when a config setting has been renamed and the new
+  name is already set
+parameters: []
+preconditions:
+- name: renames_map_exists
+  description: config/renames.conf exists and is tracked
+  probe: |-
+    test -f config/renames.conf &&
+    git ls-files --error-unmatch config/renames.conf >/dev/null 2>&1
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: the worktree has no uncommitted changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: has_stale_key
+  description: a tracked config file sets both an old key and its new name
+  probe: |-
+    git ls-files -z -- 'config/*' | while IFS= read -r -d '' f; do
+      [ "$f" = config/renames.conf ] && continue
+      awk -v map="config/renames.conf" '
+        BEGIN {
+          while ((getline line < map) > 0) {
+            if (line ~ /^[[:space:]]*#/) continue
+            eq = index(line, "=")
+            if (eq == 0) continue
+            old = substr(line, 1, eq-1)
+            new = substr(line, eq+1)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+            if (old != "" && new != "" && old != new) {
+              n++
+              olds[n] = old
+              news[n] = new
+            }
+          }
+          close(map)
+        }
+        {
+          eq = index($0, "=")
+          if (eq > 0) {
+            key = substr($0, 1, eq-1)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+            for (i = 1; i <= n; i++) {
+              if (key == olds[i]) has_old[i] = 1
+              if (key == news[i]) has_new[i] = 1
+            }
+          }
+        }
+        END {
+          for (i = 1; i <= n; i++) {
+            if (has_old[i] && has_new[i]) {
+              print FILENAME
+              exit 0
+            }
+          }
+          exit 1
+        }
+      ' "$f"
+    done | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+  renames_file=config/renames.conf
+
+  # Parse old=new pairs from the renames file.
+  pairs=$(mktemp)
+  trap 'rm -f "$pairs"' EXIT
+  awk '
+    /^[[:space:]]*#/ { next }
+    {
+      eq = index($0, "=")
+      if (eq == 0) next
+      old = substr($0, 1, eq-1)
+      new = substr($0, eq+1)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+      if (old != "" && new != "" && old != new) printf "%s\t%s\n", old, new
+    }
+  ' "$renames_file" > "$pairs"
+
+  # For each tracked config file (excluding the renames map), remove any
+  # line whose key is an old name, but only if the same file also sets the
+  # corresponding new name.
+  git ls-files -z -- 'config/*' | while IFS= read -r -d '' f; do
+    [ "$f" = "$renames_file" ] && continue
+    while IFS=$'\t' read -r old new; do
+      tmp=$(mktemp "${f}.XXXXXX")
+      if awk -v old="$old" -v new="$new" '
+        {
+          lines[NR] = $0
+          eq = index($0, "=")
+          if (eq > 0) {
+            key = substr($0, 1, eq-1)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+            if (key == old) has_old = 1
+            if (key == new) has_new = 1
+          }
+        }
+        END {
+          if (!(has_old && has_new)) exit 1
+          for (i = 1; i <= NR; i++) {
+            line = lines[i]
+            eq = index(line, "=")
+            if (eq > 0) {
+              key = substr(line, 1, eq-1)
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+              if (key == old) continue
+            }
+            print line
+          }
+        }
+      ' "$f" > "$tmp"; then
+        mv "$tmp" "$f"
+      else
+        rm -f "$tmp"
+      fi
+    done < "$pairs"
+  done
+
+  # Stage and commit any changes.
+  git add -A -- 'config/*'
+  if ! git diff --cached --quiet; then
+    git commit -m "config: drop renamed keys (old names superseded by new names)"
+  fi
+steps: null
+postconditions:
+- name: no_stale_keys
+  description: no tracked config file sets both an old key and its new name
+  probe: |-
+    ! git ls-files -z -- 'config/*' | while IFS= read -r -d '' f; do
+      [ "$f" = config/renames.conf ] && continue
+      awk -v map="config/renames.conf" '
+        BEGIN {
+          while ((getline line < map) > 0) {
+            if (line ~ /^[[:space:]]*#/) continue
+            eq = index(line, "=")
+            if (eq == 0) continue
+            old = substr(line, 1, eq-1)
+            new = substr(line, eq+1)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+            if (old != "" && new != "" && old != new) {
+              n++
+              olds[n] = old
+              news[n] = new
+            }
+          }
+          close(map)
+        }
+        {
+          eq = index($0, "=")
+          if (eq > 0) {
+            key = substr($0, 1, eq-1)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+            for (i = 1; i <= n; i++) {
+              if (key == olds[i]) has_old[i] = 1
+              if (key == news[i]) has_new[i] = 1
+            }
+          }
+        }
+        END {
+          for (i = 1; i <= n; i++) {
+            if (has_old[i] && has_new[i]) {
+              print FILENAME
+              exit 0
+            }
+          }
+          exit 1
+        }
+      ' "$f"
+    done | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_after_commit
+  description: the worktree is clean after the change is committed
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: new_keys_preserved
+  description: the commit does not remove any line whose key is a new name
+  probe: |-
+    git show --format= --unified=0 HEAD -- 'config/*' |
+    awk -v map="config/renames.conf" '
+      BEGIN {
+        while ((getline line < map) > 0) {
+          if (line ~ /^[[:space:]]*#/) continue
+          eq = index(line, "=")
+          if (eq == 0) continue
+          new = substr(line, eq+1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+          if (new != "") news[new] = 1
+        }
+        close(map)
+      }
+      /^-/ && !/^---/ {
+        line = substr($0, 2)
+        eq = index(line, "=")
+        if (eq > 0) {
+          key = substr(line, 1, eq-1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+          if (key in news) {
+            print "new key removed: " $0
+            bad = 1
+          }
+        }
+      }
+      END { exit bad }
+    '
+  expect_exit: 0
+  expect_pattern: null
+variant: drop_old
+provenance:
+  compiled_from_task: Some setting in my config has been renamed upstream. Sort the
+    config out. The new name is already set too, so delete the old key's line and
+    keep the new one.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Some setting in my config has been renamed upstream. Sort the config
+    out. The new name is already set too, so delete the old key's line and keep the
+    new one./seed-31-config_renamed-29980
+  fault: config_renamed
+status: admitted

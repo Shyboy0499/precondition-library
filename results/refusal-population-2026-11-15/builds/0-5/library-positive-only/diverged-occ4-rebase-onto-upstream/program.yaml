@@ -1,0 +1,57 @@
+id: diverged-occ4-rebase-onto-upstream
+intent: Replay local commits on top of the upstream branch so the local history stays
+  linear.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: worktree_clean
+  description: there are no uncommitted or untracked changes to preserve before rebasing
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_ahead
+  description: the current branch has at least one commit that upstream does not have
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: upstream_commits_ahead
+  description: upstream has at least one commit that the current branch does not have,
+    so a rebase is actually needed
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+body: |
+  git rebase {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: upstream_is_ancestor
+  description: upstream's tip is an ancestor of HEAD after the rebase
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: history_linear
+  description: no merge commits were introduced between upstream and HEAD
+  probe: test -z "$(git rev-list --merges {upstream_remote}/{upstream_branch}..HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_replayed
+  description: the local commits still sit on top of upstream
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: worktree_clean_after
+  description: the working tree is clean once the rebase completes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: rebase
+provenance:
+  compiled_from_task: Upstream moved ahead of me. Get me back in line with it. Replay
+    my local commits on top of upstream so the history stays linear.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Upstream moved ahead of me. Get me back in line with it. Replay my local
+    commits on top of upstream so the history stays linear./seed-2-diverged-19837
+  fault: diverged
+status: admitted

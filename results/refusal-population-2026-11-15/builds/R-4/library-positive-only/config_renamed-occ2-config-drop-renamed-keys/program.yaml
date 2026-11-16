@@ -1,0 +1,185 @@
+id: config_renamed-occ2-config-drop-renamed-keys
+intent: delete config lines that use an old key name when the renamed new key is already
+  set in the same file
+parameters: []
+preconditions:
+- name: renames_file_present
+  description: the repository declares key renames in config/renames.conf
+  probe: test -f config/renames.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_renamed_key_present
+  description: at least one tracked file sets both an old key and its renamed new
+    key
+  probe: |-
+    git ls-files -z | tr '\0' '\n' | while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      [ -f "$f" ] || continue
+      [ "$f" = "config/renames.conf" ] && continue
+      awk '
+        FILENAME == ARGV[1] {
+          if ($0 ~ /^[[:space:]]*#/) next
+          n = split($0, a, "=")
+          if (n >= 2) {
+            o = a[1]; w = a[2]
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", o)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", w)
+            if (o != "" && w != "") rn[o] = w
+          }
+          next
+        }
+        {
+          L[++m] = $0
+          k = $0
+          sub(/^[[:space:]]*/, "", k)
+          if (k !~ /^#/ && match(k, /^[^=[:space:]]+[[:space:]]*=/)) {
+            kk = k
+            sub(/[[:space:]]*=.*/, "", kk)
+            p[kk] = 1
+          }
+        }
+        END {
+          for (i = 1; i <= m; i++) {
+            Ln = L[i]
+            k = Ln
+            sub(/^[[:space:]]*/, "", k)
+            if (k ~ /^#/) continue
+            if (match(k, /^[^=[:space:]]+[[:space:]]*=/)) {
+              kk = k
+              sub(/[[:space:]]*=.*/, "", kk)
+              if ((kk in rn) && (rn[kk] in p)) print FILENAME ":" i
+            }
+          }
+        }
+      ' config/renames.conf "$f"
+    done | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  renames=config/renames.conf
+  [ -f "$renames" ] || exit 0
+
+  tmp=$(mktemp)
+  trap 'rm -f "$tmp"' EXIT
+
+  changed_files=()
+
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    [ -f "$f" ] || continue
+    [ "$f" = "$renames" ] && continue
+    if awk '
+      FILENAME == ARGV[1] {
+        if ($0 ~ /^[[:space:]]*#/) next
+        n = split($0, a, "=")
+        if (n >= 2) {
+          o = a[1]; w = a[2]
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", o)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", w)
+          if (o != "" && w != "") rn[o] = w
+        }
+        next
+      }
+      {
+        L[++m] = $0
+        k = $0
+        sub(/^[[:space:]]*/, "", k)
+        if (k !~ /^#/ && match(k, /^[^=[:space:]]+[[:space:]]*=/)) {
+          kk = k
+          sub(/[[:space:]]*=.*/, "", kk)
+          p[kk] = 1
+        }
+      }
+      END {
+        for (i = 1; i <= m; i++) {
+          Ln = L[i]
+          k = Ln
+          sub(/^[[:space:]]*/, "", k)
+          if (k ~ /^#/) { print Ln; continue }
+          if (match(k, /^[^=[:space:]]+[[:space:]]*=/)) {
+            kk = k
+            sub(/[[:space:]]*=.*/, "", kk)
+            if ((kk in rn) && (rn[kk] in p)) { dropped = 1; continue }
+          }
+          print Ln
+        }
+        exit (dropped ? 0 : 1)
+      }
+    ' "$renames" "$f" > "$tmp"; then
+      cat "$tmp" > "$f"
+      changed_files+=("$f")
+    fi
+  done < <(git ls-files -z | tr '\0' '\n')
+
+  if [ ${#changed_files[@]} -gt 0 ]; then
+    git commit -m "chore: drop renamed config keys" -- "${changed_files[@]}"
+  fi
+steps: null
+postconditions:
+- name: no_stale_renamed_keys
+  description: no tracked file still sets both an old key and its renamed new key
+  probe: |-
+    stale=$(git ls-files -z | tr '\0' '\n' | while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      [ -f "$f" ] || continue
+      [ "$f" = "config/renames.conf" ] && continue
+      awk '
+        FILENAME == ARGV[1] {
+          if ($0 ~ /^[[:space:]]*#/) next
+          n = split($0, a, "=")
+          if (n >= 2) {
+            o = a[1]; w = a[2]
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", o)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", w)
+            if (o != "" && w != "") rn[o] = w
+          }
+          next
+        }
+        {
+          L[++m] = $0
+          k = $0
+          sub(/^[[:space:]]*/, "", k)
+          if (k !~ /^#/ && match(k, /^[^=[:space:]]+[[:space:]]*=/)) {
+            kk = k
+            sub(/[[:space:]]*=.*/, "", kk)
+            p[kk] = 1
+          }
+        }
+        END {
+          for (i = 1; i <= m; i++) {
+            Ln = L[i]
+            k = Ln
+            sub(/^[[:space:]]*/, "", k)
+            if (k ~ /^#/) continue
+            if (match(k, /^[^=[:space:]]+[[:space:]]*=/)) {
+              kk = k
+              sub(/[[:space:]]*=.*/, "", kk)
+              if ((kk in rn) && (rn[kk] in p)) print FILENAME ":" i
+            }
+          }
+        }
+      ' config/renames.conf "$f"
+    done)
+    if [ -n "$stale" ]; then
+      printf '%s\n' "$stale"
+      exit 1
+    fi
+  expect_exit: 0
+  expect_pattern: null
+- name: change_committed
+  description: the removal was committed so the fix persists
+  probe: git log -1 --format=%s
+  expect_exit: 0
+  expect_pattern: drop renamed config keys
+variant: drop_old
+provenance:
+  compiled_from_task: Some setting in my config has been renamed upstream. Sort the
+    config out. The new name is already set too, so delete the old key's line and
+    keep the new one.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Some setting in my config has been renamed upstream. Sort the config
+    out. The new name is already set too, so delete the old key's line and keep the
+    new one./seed-31-config_renamed-29016
+  fault: config_renamed
+status: admitted

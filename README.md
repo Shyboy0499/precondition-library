@@ -416,7 +416,7 @@ did not make. This is the answer as of the studies below; each line links to whe
 | Precondition dispatch rarely mis-fires (0 of 563 on this project's states) | **Falsified** on real merges: wrong on 62/150 and 132/244 fires in two of three libraries (study 1, rule 2). |
 | Executing checks is what beats text similarity | On this project's states a decision tree reading the state, and one reading only the library's own precondition verdicts, matched it. On real merges the only difference left was refusal. |
 | The lock-file task's line-level resolutions express what maintainers do | They express 1 of 161 real conflicts (study 1); package sets replaced them (studies 3–5). |
-| Compiled probes generalise to unseen states | On held-out paths, absence probes failed open: 41 of 101 lock-file fires wrong. |
+| Compiled probes generalise to unseen states | On held-out paths, absence probes failed open: 41 of 101 lock-file fires wrong. On the 22 libraries built since the compile prompt asked for `-z`, the quoting defect is gone: 0 wrong in 205 fires on the spaced and non-ASCII paths. But one library failed open another way, recognising lock files by a fixed list of names: 20 of 403 fires wrong ([held-out, 22 new libraries](results/heldout-2026-11-16/README.md), exploratory). |
 | The ecosystem's tool, held to the merge's date, labels what the computed merge cannot | It recovers 30 of 156 such files: npm 14 of 52, Composer 11 of 84, pnpm 5 of 20 ([npm](results/lock-tool-dated-2026-11-03/README.md), [pnpm and Composer](results/lock-tool-dated-2026-11-08/README.md), exploratory). Composer cannot replay branch dependencies, and maintainers changed more than their manifests required. No study is registered on it. |
 | A lock file the tool accepts is the right one | The tool also accepts 52 npm and 154 Composer sides that are not the maintainer's set. Where exactly one side passes, it is the maintainer's in about two files in three. One merge in seven is committed in a state the tool rejects, five times the rate of ordinary commits, and in 61 of those 85 both parents' files had passed: resolving the conflict made the defect ([lock-tool-check](results/lock-tool-check-2026-11-08/README.md), exploratory). As a tie-breaker after study 5's gate, the check lifts coverage from 0.40 to 0.69 at mismatch 0.32, beating "take your own branch" on 20 files and never losing. |
 | Rule D, the gate's merge then the side the check alone accepts, rarely mis-fires | Study 6, H2 (expected to fail as a claim, and it did): mean mismatch 0.320 [0.228, 0.412]. It covers 0.71 of files at mismatch 0.27, against the gate's 0.45 at 0.30 ([study 6](results/tool-precondition-2026-11-09/README.md)). Run before the manifests are resolved, it covers 0.58 at 0.30. Most of what the check added came from files where it read the maintainer's resolved manifest ([manifest audit](results/manifest-leak-2026-11-11/README.md), exploratory). |
@@ -425,7 +425,7 @@ did not make. This is the answer as of the studies below; each line links to whe
 
 | question | blocked on |
 | --- | --- |
-| Is refusal a property of the method or of one build? (#307, study 2, registered before its data) | running: the 20 builds started on 2026-11-15 |
+| Is refusal a property of the method or of one build? (#307, study 2, registered before its data) | running: the 20 builds are frozen ([builds](results/refusal-population-2026-11-15/builds/README.md)), and the registered analysis is mining the evaluation repositories |
 | Does it hold outside this provider, or across several builds per compiling model? (#266) | One build each of two DeepSeek models agreed with runs 11–13 ([six-family replicates](results/replicates-2026-11-15/README.md)). A second provider needs its key; several builds per model need study 2's spread first (ADR-0061) |
 | Does a stronger judge, or one shown the probes, match arm 3? | ADR-0034 ran one model without the probe strings ([LLM judge](results/judge-2026-11-15/README.md)); either is a new registration |
 | Do people agree with the labelling rules? (#299 step 3) | independent raters; the kit is built |
@@ -793,8 +793,9 @@ non-ASCII paths, 41 of 60 fires were wrong. On its nested and dotfile paths, non
   admitted programs that such a path could break (ADR-0038, corrected by ADR-0039). The lock-file
   block ran them: four of its probes cause all 41 of its mis-fires.
 - **What changed.**
-  - The compile prompt now tells the model to read path lists with `-z`. Whether that removes the
-    defect is for the next live build.
+  - The compile prompt now tells the model to read path lists with `-z`. On the 22 libraries
+    built since, no fire misread a quoted path, but one library's lock-file check recognised lock
+    files by a fixed list of names and failed open on two of the held-out paths ([held-out, 22 new libraries](results/heldout-2026-11-16/README.md)).
   - The harness's own fingerprint had the same bug, and is fixed.
   - The hand-written reference programs had a hard-coded file name, and now refuse rather than
     mis-fire.

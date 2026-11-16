@@ -1,0 +1,129 @@
+id: diverged-occ2-diverged-occ2-sync-fork-merge
+intent: Get a diverged fork back in sync with upstream without losing local commits,
+  by merging the upstream branch into the checked-out branch so both histories are
+  kept.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_tracking_ref_exists
+  description: the remote-tracking ref for the upstream branch is already present
+    locally
+  probe: git rev-parse --verify --quiet "{upstream_remote}/{upstream_branch}^{commit}"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: no staged, modified or untracked files are present
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_diverged
+  description: the checked-out branch and upstream each have commits the other lacks
+  probe: |-
+    ahead=$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)
+    behind=$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})
+    [ "$ahead" -gt 0 ] && [ "$behind" -gt 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_or_rebase_in_progress
+  description: the repository is not already in the middle of a merge or rebase
+  probe: |-
+    ! test -e "$(git rev-parse --git-path MERGE_HEAD)" \
+      && ! test -d "$(git rev-parse --git-path rebase-merge)" \
+      && ! test -d "$(git rev-parse --git-path rebase-apply)"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_branch_named_like_upstream_branch
+  description: the checked-out branch carries the same name as the upstream branch,
+    so upstream has not renamed its default branch out from under the fork
+  probe: '[ "$(git rev-parse --abbrev-ref HEAD)" = "{upstream_branch}" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_tracks_the_branch_being_merged
+  description: the checked-out branch's configured upstream is exactly the remote
+    branch this program merges
+  probe: '[ "$(git rev-parse --abbrev-ref ''@{upstream}'' 2>/dev/null)" = "{upstream_remote}/{upstream_branch}"
+    ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_default_branch_matches
+  description: the upstream's default branch, where it is visible (remote HEAD symref
+    locally, else the remote itself), is the branch being synced rather than a differently
+    named one
+  probe: |-
+    target=$(git symbolic-ref -q "refs/remotes/{upstream_remote}/HEAD" 2>/dev/null || true)
+    if [ -z "$target" ]; then
+      listing=$(timeout 5 git ls-remote --symref "{upstream_remote}" 2>/dev/null || true)
+      cand=$(printf '%s\n' "$listing" | awk '/^ref:/ {print $2; exit}')
+      if [ -n "$cand" ] && printf '%s\n' "$listing" | awk -v t="$cand" '$1 != "ref:" && $2 == t {f=1} END {exit !f}'; then
+        target="$cand"
+      fi
+    fi
+    b=${target#refs/remotes/{upstream_remote}/}
+    b=${b#refs/heads/}
+    [ -z "$b" ] || [ "$b" = "{upstream_branch}" ]
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_would_be_clean
+  description: merging the upstream branch into the checked-out branch resolves without
+    conflicts, so this is a plain fork sync rather than a conflict-resolution job
+  probe: |-
+    base=$(git merge-base HEAD "{upstream_remote}/{upstream_branch}") || exit 1
+    up="{upstream_remote}/{upstream_branch}"
+    if out=$(git merge-tree "$base" HEAD "$up" 2>/dev/null); then
+      ! printf '%s\n' "$out" | grep -q '<<<<<<<'
+      exit
+    fi
+    common=$(comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" "$up" | tr '\0' '\n' | sort))
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      a=$(git diff -U0 --no-color "$base" HEAD -- "$f" | awk '/^@@ /{split($2,p,","); s=substr(p[1],2)+0; c=(p[2]==""?1:p[2]+0); if(c==0) print s; else for(i=0;i<c;i++) print s+i}' | sort -u)
+      b=$(git diff -U0 --no-color "$base" "$up" -- "$f" | awk '/^@@ /{split($2,p,","); s=substr(p[1],2)+0; c=(p[2]==""?1:p[2]+0); if(c==0) print s; else for(i=0;i<c;i++) print s+i}' | sort -u)
+      [ -n "$(comm -12 <(printf '%s\n' "$a") <(printf '%s\n' "$b"))" ] && exit 1
+    done < <(printf '%s\n' "$common")
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git merge --no-ff --no-edit -m "Merge {upstream_remote}/{upstream_branch}" {upstream_remote}/{upstream_branch} \
+    || { git merge --abort; exit 1; }
+steps: null
+postconditions:
+- name: upstream_is_ancestor
+  description: the upstream branch is now fully contained in the checked-out branch
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: head_is_merge_commit
+  description: HEAD is a merge commit with two parents
+  probe: test "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 3
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_preserved
+  description: the pre-merge HEAD is still an ancestor of the new HEAD
+  probe: git merge-base --is-ancestor ORIG_HEAD HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_entries
+  description: the index holds no conflicted entries after the merge
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_merge
+  description: the merge left no staged, modified or untracked files
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: Get this fork back in sync with upstream without losing my commits.
+    Merge upstream into my branch and keep both histories.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this fork back in sync with upstream without losing my commits.
+    Merge upstream into my branch and keep both histories./seed-4-diverged-29980
+  fault: diverged
+status: admitted

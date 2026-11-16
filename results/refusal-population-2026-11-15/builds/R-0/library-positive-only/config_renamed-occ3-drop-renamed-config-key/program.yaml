@@ -1,0 +1,225 @@
+id: config_renamed-occ3-drop-renamed-config-key
+intent: Remove obsolete old-name config key lines when the new name is already set,
+  using config/renames.conf mappings, and commit the cleanup.
+parameters: []
+preconditions:
+- name: clean_worktree
+  description: the working tree has no staged, unstaged, or untracked changes
+  probe: '[ -z "$(git status --porcelain)" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: has_rename_map
+  description: the repository tracks config/renames.conf with at least one old = new
+    mapping
+  probe: git ls-files --error-unmatch config/renames.conf >/dev/null 2>&1 && grep
+    -Eq '^[[:space:]]*[^#[:space:]]+[[:space:]]*=' config/renames.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: has_stale_duplicate_key
+  description: a config file still sets both an old key and its replacement
+  probe: |-
+    map=config/renames.conf
+    [ -f "$map" ] || exit 1
+    config_dir=$(dirname "$map")
+    key_present() {
+      awk -v k="$1" '
+        {
+          if (index($0, "=") == 0) next
+          line=$0
+          sub(/^[[:space:]]*/, "", line)
+          key=line
+          sub(/[[:space:]]*=.*/, "", key)
+          if (key == k) found=1
+        }
+        END { exit(found ? 0 : 1) }
+      ' "$2"
+    }
+    found=0
+    while IFS= read -r line; do
+      case "$line" in ''|'#'*) continue;; esac
+      old=${line%%=*}
+      new=${line#*=}
+      old=$(printf '%s' "$old" | tr -d '[:space:]')
+      new=$(printf '%s' "$new" | tr -d '[:space:]')
+      [ -n "$old" ] && [ -n "$new" ] || continue
+      if [ "$config_dir" = "." ]; then
+        file_list=$(git ls-files -z | tr '\0' '\n')
+      else
+        file_list=$(git ls-files -z -- "$config_dir" | tr '\0' '\n')
+      fi
+      while IFS= read -r f; do
+        [ -z "$f" ] && continue
+        [ "$f" = "$map" ] && continue
+        if key_present "$old" "$f" && key_present "$new" "$f"; then
+          found=1
+        fi
+      done <<< "$file_list"
+    done < "$map"
+    [ "$found" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  set -e
+  map=config/renames.conf
+  config_dir=$(dirname "$map")
+  key_present() {
+    awk -v k="$1" '
+      {
+        if (index($0, "=") == 0) next
+        line=$0
+        sub(/^[[:space:]]*/, "", line)
+        key=line
+        sub(/[[:space:]]*=.*/, "", key)
+        if (key == k) found=1
+      }
+      END { exit(found ? 0 : 1) }
+    ' "$2"
+  }
+  remove_key() {
+    awk -v k="$1" '
+      {
+        if (index($0, "=") > 0) {
+          line=$0
+          sub(/^[[:space:]]*/, "", line)
+          key=line
+          sub(/[[:space:]]*=.*/, "", key)
+          if (key == k) next
+        }
+        print
+      }
+    ' "$2"
+  }
+  changed=0
+  while IFS= read -r line; do
+    case "$line" in ''|'#'*) continue;; esac
+    old=${line%%=*}
+    new=${line#*=}
+    old=$(printf '%s' "$old" | tr -d '[:space:]')
+    new=$(printf '%s' "$new" | tr -d '[:space:]')
+    [ -n "$old" ] && [ -n "$new" ] || continue
+    if [ "$config_dir" = "." ]; then
+      file_list=$(git ls-files -z | tr '\0' '\n')
+    else
+      file_list=$(git ls-files -z -- "$config_dir" | tr '\0' '\n')
+    fi
+    while IFS= read -r f; do
+      [ -z "$f" ] && continue
+      [ "$f" = "$map" ] && continue
+      if key_present "$old" "$f" && key_present "$new" "$f"; then
+        tmp=$(mktemp)
+        remove_key "$old" "$f" > "$tmp"
+        if ! cmp -s "$f" "$tmp"; then
+          cat "$tmp" > "$f"
+          changed=1
+        fi
+        rm -f "$tmp"
+      fi
+    done <<< "$file_list"
+  done < "$map"
+  if [ "$changed" -eq 1 ]; then
+    git add -u
+    git -c user.name="Config Bot" -c user.email="config-bot@example.com" commit -m "Remove obsolete config keys renamed upstream"
+  fi
+steps: null
+postconditions:
+- name: no_stale_duplicate_keys
+  description: no config file sets both an old key and its replacement
+  probe: |-
+    map=config/renames.conf
+    [ -f "$map" ] || exit 1
+    config_dir=$(dirname "$map")
+    key_present() {
+      awk -v k="$1" '
+        {
+          if (index($0, "=") == 0) next
+          line=$0
+          sub(/^[[:space:]]*/, "", line)
+          key=line
+          sub(/[[:space:]]*=.*/, "", key)
+          if (key == k) found=1
+        }
+        END { exit(found ? 0 : 1) }
+      ' "$2"
+    }
+    found=0
+    while IFS= read -r line; do
+      case "$line" in ''|'#'*) continue;; esac
+      old=${line%%=*}
+      new=${line#*=}
+      old=$(printf '%s' "$old" | tr -d '[:space:]')
+      new=$(printf '%s' "$new" | tr -d '[:space:]')
+      [ -n "$old" ] && [ -n "$new" ] || continue
+      if [ "$config_dir" = "." ]; then
+        file_list=$(git ls-files -z | tr '\0' '\n')
+      else
+        file_list=$(git ls-files -z -- "$config_dir" | tr '\0' '\n')
+      fi
+      while IFS= read -r f; do
+        [ -z "$f" ] && continue
+        [ "$f" = "$map" ] && continue
+        if key_present "$old" "$f" && key_present "$new" "$f"; then
+          found=1
+        fi
+      done <<< "$file_list"
+    done < "$map"
+    [ "$found" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_after_commit
+  description: the cleanup is committed and the working tree is clean
+  probe: '[ -z "$(git status --porcelain)" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: old_key_removed_only_where_new_key_kept
+  description: for every committed config change, the old key was dropped only where
+    the replacement key remains
+  probe: |-
+    map=config/renames.conf
+    [ -f "$map" ] || exit 1
+    key_present_in_text() {
+      awk -v k="$1" '
+        {
+          if (index($0, "=") == 0) next
+          line=$0
+          sub(/^[[:space:]]*/, "", line)
+          key=line
+          sub(/[[:space:]]*=.*/, "", key)
+          if (key == k) found=1
+        }
+        END { exit(found ? 0 : 1) }
+      '
+    }
+    changed_files=$(git diff-tree --no-commit-id --name-only -r -z HEAD | tr '\0' '\n')
+    while IFS= read -r line; do
+      case "$line" in ''|'#'*) continue;; esac
+      old=${line%%=*}
+      new=${line#*=}
+      old=$(printf '%s' "$old" | tr -d '[:space:]')
+      new=$(printf '%s' "$new" | tr -d '[:space:]')
+      [ -n "$old" ] && [ -n "$new" ] || continue
+      while IFS= read -r f; do
+        [ -z "$f" ] && continue
+        parent=$(git show "HEAD^:$f" 2>/dev/null) || continue
+        current=$(git show "HEAD:$f" 2>/dev/null) || continue
+        if printf '%s\n' "$parent" | key_present_in_text "$old" && printf '%s\n' "$parent" | key_present_in_text "$new"; then
+          printf '%s\n' "$current" | key_present_in_text "$new" || exit 1
+          if printf '%s\n' "$current" | key_present_in_text "$old"; then
+            exit 1
+          fi
+        fi
+      done <<< "$changed_files"
+    done < "$map"
+  expect_exit: 0
+  expect_pattern: null
+variant: drop_old
+provenance:
+  compiled_from_task: Some setting in my config has been renamed upstream. Sort the
+    config out. The new name is already set too, so delete the old key's line and
+    keep the new one.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Some setting in my config has been renamed upstream. Sort the config
+    out. The new name is already set too, so delete the old key's line and keep the
+    new one./seed-31-config_renamed-28615
+  fault: config_renamed
+status: candidate

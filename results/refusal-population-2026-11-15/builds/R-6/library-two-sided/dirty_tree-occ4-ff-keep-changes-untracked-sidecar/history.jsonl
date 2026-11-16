@@ -1,0 +1,2 @@
+{"episode_id": "My working tree has changes and the branch is behind upstream. Fix that and keep my changes. Keep my unsaved file beside upstream's version, as `<name>.local`, and update./seed-7-dirty_tree-17967", "from": null, "program_id": "dirty_tree-occ4-ff-keep-changes-untracked-sidecar", "to": "candidate"}
+{"episode_id": "dirty_tree/seed-7/occurrence-4", "from": "candidate", "program_id": "dirty_tree-occ4-ff-keep-changes-untracked-sidecar", "to": "admitted"}

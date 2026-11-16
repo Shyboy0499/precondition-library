@@ -1,0 +1,222 @@
+id: lockfile_conflict-occ3-merge-upstream-keep-local-additions
+intent: Merge upstream into the current fork branch and resolve dependency-file conflicts
+  by keeping the local version while adding entries that upstream introduced.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_exists
+  description: The configured upstream remote can be resolved.
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_and_local_have_diverged
+  description: Both HEAD and the upstream tracking branch have commits the other lacks,
+    so a merge is needed.
+  probe: |-
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0 &&
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_and_not_merging
+  description: No uncommitted changes are present and no merge is already in progress.
+  probe: |-
+    test -z "$(git status --porcelain)" &&
+    test ! -f "$(git rev-parse --git-path MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: dependency_file_collision
+  description: At least one dependency lock file changed on both sides since the merge
+    base.
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+    comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) |
+    grep -Eq '(^|/)(deps\.lock|[^/]+\.lock|package-lock\.json|Cargo\.lock|poetry\.lock|Gemfile\.lock|requirements\.txt|go\.sum|go\.mod|pom\.xml|build\.gradle)$'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+
+  upstream_ref="{upstream_remote}/{upstream_branch}"
+
+  git fetch "{upstream_remote}"
+
+  if git merge --no-edit "$upstream_ref"; then
+    exit 0
+  fi
+
+  if ! git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+    echo 'merge failed without leaving a merge in progress' >&2
+    exit 1
+  fi
+
+  BASE=$(git merge-base HEAD MERGE_HEAD)
+  UPSTREAM_REF="$upstream_ref"
+  export BASE UPSTREAM_REF
+
+  python3 - <<'PY'
+  import os
+  import subprocess
+  import sys
+  import difflib
+
+  base_ref = os.environ['BASE']
+  upstream_ref = os.environ['UPSTREAM_REF']
+
+  def git_show(ref, path):
+      return subprocess.check_output(
+          ['git', 'show', f'{ref}:{path}']
+      ).decode('utf-8', 'surrogateescape').splitlines(keepends=True)
+
+  def git_show_optional(ref, path):
+      try:
+          return git_show(ref, path)
+      except subprocess.CalledProcessError:
+          return []
+
+  def find_seq(lines, seq, start=0, end=None):
+      if not seq:
+          return -1
+      n = len(seq)
+      if end is None:
+          end = len(lines)
+      for i in range(start, end - n + 1):
+          if lines[i:i+n] == seq:
+              return i
+      return -1
+
+  def find_insert_index(local, after, before):
+      for k in range(min(5, len(after)), 0, -1):
+          idx = find_seq(local, after[:k])
+          if idx != -1:
+              return idx
+      for k in range(min(5, len(before)), 0, -1):
+          seq = before[-k:]
+          idx = -1
+          for i in range(len(local) - len(seq) + 1):
+              if local[i:i+len(seq)] == seq:
+                  idx = i
+          if idx != -1:
+              return idx + len(seq)
+      for i in range(len(local) - 1, -1, -1):
+          if local[i].strip() in (']', '}', ')'):
+              return i
+      return len(local)
+
+  raw = subprocess.check_output(
+      ['git', 'diff', '--name-only', '--diff-filter=U', '-z']
+  )
+  paths = [p for p in raw.decode('utf-8', 'surrogateescape').split('\0') if p]
+
+  for path in paths:
+      base = git_show_optional(base_ref, path)
+      upstream = git_show_optional(upstream_ref, path)
+      local = git_show_optional('HEAD', path)
+
+      sm = difflib.SequenceMatcher(None, base, upstream, autojunk=False)
+      targets = []
+      local_set = set(local)
+      for tag, i1, i2, j1, j2 in sm.get_opcodes():
+          if tag != 'insert':
+              continue
+          inserted = upstream[j1:j2]
+          after = upstream[j2:j2+5]
+          before = upstream[max(0, j1-5):j1]
+          missing = []
+          seen = set()
+          for line in inserted:
+              if line not in local_set and line not in seen:
+                  missing.append(line)
+                  seen.add(line)
+          if missing:
+              idx = find_insert_index(local, after, before)
+              targets.append((idx, missing))
+
+      groups = {}
+      for idx, lines in targets:
+          groups.setdefault(idx, []).extend(lines)
+      for idx in sorted(groups, reverse=True):
+          local[idx:idx] = groups[idx]
+
+      with open(path, 'w', encoding='utf-8', errors='surrogateescape') as f:
+          f.writelines(local)
+      subprocess.check_call(['git', 'add', '--', path])
+  PY
+
+  git commit --no-edit
+steps: null
+postconditions:
+- name: merge_completed
+  description: The merge is committed and no unmerged paths remain.
+  probe: |-
+    test ! -f "$(git rev-parse --git-path MERGE_HEAD)" &&
+    test -z "$(git diff --name-only --diff-filter=U)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: The upstream branch tip is an ancestor of HEAD.
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: The merge result is committed with a clean worktree.
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: No conflict markers remain in the committed tree.
+  probe: '! git grep -q ''^<<<<<<< '' HEAD'
+  expect_exit: 0
+  expect_pattern: null
+- name: resolution_matches_merge_semantics
+  description: For files changed on both sides, upstream's newly inserted lines are
+    present and lines removed locally remain absent.
+  probe: |-
+    python3 - <<'PY'
+    import subprocess, difflib, sys
+    def git(*args):
+        return subprocess.check_output(args)
+    def show(ref, path):
+        return git('git','show',f'{ref}:{path}').decode('utf-8','surrogateescape').splitlines(keepends=True)
+    parents = git('git','log','-1','--pretty=%P','HEAD').decode().split()
+    if len(parents) < 2:
+        sys.exit(1)
+    local_ref, upstream_ref = parents[0], parents[1]
+    base_ref = git('git','merge-base',local_ref,upstream_ref).decode().strip()
+    local_paths = {p for p in git('git','diff','--name-only','-z',base_ref,local_ref).decode('utf-8','surrogateescape').split('\0') if p}
+    upstream_paths = {p for p in git('git','diff','--name-only','-z',base_ref,upstream_ref).decode('utf-8','surrogateescape').split('\0') if p}
+    for path in sorted(local_paths & upstream_paths):
+        base = show(base_ref, path)
+        local = show(local_ref, path)
+        upstream = show(upstream_ref, path)
+        head = show('HEAD', path)
+        head_set = set(head)
+        local_set = set(local)
+        for line in base:
+            if line not in local_set and line in head_set:
+                print(f'locally removed line reappeared in {path}: {line!r}', file=sys.stderr)
+                sys.exit(1)
+        sm = difflib.SequenceMatcher(None, base, upstream, autojunk=False)
+        for tag, i1, i2, j1, j2 in sm.get_opcodes():
+            if tag == 'insert':
+                for line in upstream[j1:j2]:
+                    if line not in head_set:
+                        print(f'upstream addition missing in {path}: {line!r}', file=sys.stderr)
+                        sys.exit(1)
+    PY
+  expect_exit: 0
+  expect_pattern: null
+variant: keep_local
+provenance:
+  compiled_from_task: Get my fork current with upstream; our dependency changes collided.
+    Keep my dependency file, with what I removed still removed, and add what upstream
+    added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get my fork current with upstream; our dependency changes collided.
+    Keep my dependency file, with what I removed still removed, and add what upstream
+    added./seed-3-lockfile_conflict-29016
+  fault: lockfile_conflict
+status: candidate

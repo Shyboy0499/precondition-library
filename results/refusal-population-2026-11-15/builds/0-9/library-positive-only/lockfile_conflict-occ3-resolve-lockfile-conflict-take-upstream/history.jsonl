@@ -1,0 +1,2 @@
+{"episode_id": "The sync conflicts. Resolve it the way this project expects. Start from upstream's dependency file and add back what I added./seed-6-lockfile_conflict-29980", "from": null, "program_id": "lockfile_conflict-occ3-resolve-lockfile-conflict-take-upstream", "to": "candidate"}
+{"episode_id": "The sync conflicts. Resolve it the way this project expects. Start from upstream's dependency file and add back what I added./seed-6-lockfile_conflict-29980", "from": "candidate", "program_id": "lockfile_conflict-occ3-resolve-lockfile-conflict-take-upstream", "to": "admitted"}

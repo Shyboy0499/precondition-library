@@ -1,0 +1,118 @@
+id: submodule_moved-occ2-repin-submodule-to-upstream
+intent: Fast-forward the superproject to upstream and check the nested submodule out
+  at the commit upstream pins.
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: upstream_ref_exists
+  description: the upstream tracking ref is already present
+  probe: git rev-parse --verify --quiet "{upstream_remote}/{upstream_branch}^{commit}"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_declared
+  description: the nested path is declared as a submodule
+  probe: git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | sed 's/^[^
+    ]* //' | grep -Fx -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_reference_at_head
+  description: HEAD records the nested path as a gitlink
+  probe: test "$(git ls-tree HEAD -- "{submodule_path}" | awk '{print $1}')" = 160000
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_initialised
+  description: the nested repository is initialised
+  probe: test -e "{submodule_path}/.git"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_worktree_clean
+  description: the nested repository has no tracked modifications
+  probe: test -z "$(git -C "{submodule_path}" status --porcelain=v1 --untracked-files=no)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_references_submodule
+  description: upstream still records the nested path as a gitlink
+  probe: test "$(git ls-tree "{upstream_remote}/{upstream_branch}" -- "{submodule_path}"
+    | awk '{print $1}')" = 160000
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_pin_differs
+  description: the upstream gitlink commit differs from the current one
+  probe: test "$(git ls-tree HEAD -- "{submodule_path}" | awk '{print $3}')" != "$(git
+    ls-tree "{upstream_remote}/{upstream_branch}" -- "{submodule_path}" | awk '{print
+    $3}')"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_not_ahead
+  description: the current branch has no commits absent from upstream
+  probe: test "$(git rev-list --count "{upstream_remote}/{upstream_branch}..HEAD")"
+    -eq 0
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ahead
+  description: the upstream branch has commits ahead of the current branch
+  probe: test "$(git rev-list --count "HEAD..{upstream_remote}/{upstream_branch}")"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: superproject_tracked_clean
+  description: the superproject has no tracked modifications
+  probe: test -z "$(git status --porcelain=v1 --untracked-files=no)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_collisions
+  description: untracked files would not be overwritten by the fast-forward
+  probe: |-
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD "{upstream_remote}/{upstream_branch}" \
+        | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch "{upstream_remote}"
+  git merge --ff-only "{upstream_remote}/{upstream_branch}"
+  git submodule sync -- "{submodule_path}"
+  git submodule update --init "{submodule_path}"
+steps: null
+postconditions:
+- name: superproject_at_upstream
+  description: HEAD equals the upstream branch commit
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse "{upstream_remote}/{upstream_branch}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_at_upstream_pin
+  description: the nested HEAD equals the commit upstream records
+  probe: test "$(git -C "{submodule_path}" rev-parse HEAD)" = "$(git ls-tree "{upstream_remote}/{upstream_branch}"
+    -- "{submodule_path}" | awk '{print $3}')"
+  expect_exit: 0
+  expect_pattern: null
+- name: index_records_upstream_pin
+  description: the superproject index records the upstream-pinned commit
+  probe: test "$(git ls-files --stage -- "{submodule_path}" | awk '{print $2}')" =
+    "$(git ls-tree "{upstream_remote}/{upstream_branch}" -- "{submodule_path}" | awk
+    '{print $3}')"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the superproject has no tracked modifications
+  probe: test -z "$(git status --porcelain=v1 --untracked-files=no)"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_worktree_clean_after
+  description: the nested repository has no tracked modifications
+  probe: test -z "$(git -C "{submodule_path}" status --porcelain=v1 --untracked-files=no)"
+  expect_exit: 0
+  expect_pattern: null
+variant: repin
+provenance:
+  compiled_from_task: Sort out the nested checkout so it matches what upstream expects.
+    Check the nested repository out at the commit upstream now pins.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Sort out the nested checkout so it matches what upstream expects. Check
+    the nested repository out at the commit upstream now pins./seed-2-submodule_moved-10981
+  fault: submodule_moved
+status: admitted

@@ -1,0 +1,2 @@
+{"episode_id": "The app keeps warning that my config uses old setting names. Make the warning go away without changing what the settings do. The new name is already set too, so delete the old key's line and keep the new one./seed-23-config_renamed-7516", "from": null, "program_id": "config_renamed-occ3-drop-obsolete-config-alias", "to": "candidate"}
+{"episode_id": "config_renamed/seed-23/occurrence-3", "from": "candidate", "program_id": "config_renamed-occ3-drop-obsolete-config-alias", "to": "admitted"}

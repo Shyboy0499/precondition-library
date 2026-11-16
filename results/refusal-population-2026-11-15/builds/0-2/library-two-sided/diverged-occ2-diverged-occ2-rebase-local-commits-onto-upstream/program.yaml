@@ -1,0 +1,130 @@
+id: diverged-occ2-diverged-occ2-rebase-local-commits-onto-upstream
+intent: Fetch upstream and rebase the current branch's local commits onto it, preserving
+  linear history.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: clean_worktree
+  description: There are no staged, unstaged, or untracked changes.
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_present
+  description: The upstream remote-tracking branch exists locally.
+  probe: git rev-parse --verify --quiet "refs/remotes/{upstream_remote}/{upstream_branch}"
+    >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_ahead
+  description: The current branch has at least one commit not in upstream.
+  probe: test "$(git rev-list --count "refs/remotes/{upstream_remote}/{upstream_branch}..HEAD")"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_commits_ahead
+  description: Upstream has at least one commit not in the current branch, so the
+    histories diverged.
+  probe: test "$(git rev-list --count "HEAD..refs/remotes/{upstream_remote}/{upstream_branch}")"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: local_and_upstream_paths_disjoint
+  description: Local and upstream commits since their merge base touch no common paths,
+    so an automatic rebase is unlikely to conflict.
+  probe: |-
+    base=$(git merge-base "refs/remotes/{upstream_remote}/{upstream_branch}" HEAD)
+    ! comm -12 \
+      <(git diff --name-only -z --no-renames "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z --no-renames "$base" "refs/remotes/{upstream_remote}/{upstream_branch}" | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: local_remote_head_matches_target
+  description: If the upstream remote-tracking HEAD is recorded locally, it points
+    at the branch being rebased onto; a recorded default branch that names some other
+    branch means upstream renamed its mainline and this is a different case.
+  probe: |-
+    head_ref=$(git symbolic-ref -q --short "refs/remotes/{upstream_remote}/HEAD" 2>/dev/null) || exit 0
+    test -z "$head_ref" || test "$head_ref" = "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: remote_head_matches_target
+  description: The upstream repository's own HEAD, when it can be read, is the branch
+    being rebased onto; an upstream HEAD that names a renamed default branch is a
+    different situation. Unreadable remote HEAD is tolerated.
+  probe: |-
+    ref=$(git ls-remote --symref "{upstream_remote}" HEAD 2>/dev/null | awk '$1 == "ref:" && $3 == "HEAD" { print $2; exit }') || true
+    test -z "$ref" || test "$ref" = "refs/heads/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_branch_matches_target
+  description: If the current branch records an upstream merge ref, that ref names
+    the branch being rebased onto; a tracking entry left pointing at a renamed or
+    different branch means the request is not a plain replay onto this branch.
+  probe: |-
+    cur=$(git symbolic-ref --quiet --short HEAD) || exit 0
+    tracked=$(git config --get "branch.$cur.merge") || exit 0
+    test -z "$tracked" || test "$tracked" = "refs/heads/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: target_branch_still_exists_upstream
+  description: When the upstream remote can be listed, the branch being rebased onto
+    still exists there; a target branch that only survives as a stale remote-tracking
+    ref means upstream renamed its default branch. An unlistable remote is tolerated.
+  probe: |-
+    heads=$(git ls-remote --heads "{upstream_remote}" 2>/dev/null) || true
+    test -z "$heads" || printf '%s\n' "$heads" | awk -v b="refs/heads/{upstream_branch}" '$2 == b { found = 1 } END { exit !found }'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch "{upstream_remote}"
+  base=$(git merge-base "refs/remotes/{upstream_remote}/{upstream_branch}" HEAD)
+  if comm -12 \
+      <(git diff --name-only -z --no-renames "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z --no-renames "$base" "refs/remotes/{upstream_remote}/{upstream_branch}" | tr '\0' '\n' | sort) | grep -q .; then
+    echo "local and upstream changes overlap; refusing automatic rebase" >&2
+    exit 1
+  fi
+  git rebase "refs/remotes/{upstream_remote}/{upstream_branch}"
+steps: null
+postconditions:
+- name: head_contains_upstream
+  description: Upstream is an ancestor of the current HEAD.
+  probe: git merge-base --is-ancestor "refs/remotes/{upstream_remote}/{upstream_branch}"
+    HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: no_upstream_commits_missing
+  description: The current branch contains all commits from upstream.
+  probe: test "$(git rev-list --count "HEAD..refs/remotes/{upstream_remote}/{upstream_branch}")"
+    -eq 0
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_replayed
+  description: The current branch still has commits beyond upstream after the rebase.
+  probe: test "$(git rev-list --count "refs/remotes/{upstream_remote}/{upstream_branch}..HEAD")"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: history_linear
+  description: The replayed local history contains no merge commits.
+  probe: test "$(git rev-list --count --merges "refs/remotes/{upstream_remote}/{upstream_branch}..HEAD")"
+    -eq 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_rebase
+  description: The rebase left no staged, unstaged, or untracked changes.
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: rebase
+provenance:
+  compiled_from_task: Upstream moved ahead of me. Get me back in line with it. Replay
+    my local commits on top of upstream so the history stays linear.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Upstream moved ahead of me. Get me back in line with it. Replay my local
+    commits on top of upstream so the history stays linear./seed-2-diverged-27083
+  fault: diverged
+status: admitted

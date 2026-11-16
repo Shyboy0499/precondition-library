@@ -1,0 +1,190 @@
+id: lockfile_conflict-occ1-merge-upstream-keep-local-lockfile
+intent: Merge the upstream branch into the current branch, resolving conflicts in
+  shared dependency files so that local removals stay removed, local additions survive,
+  upstream additions are included, and conflicting modifications take upstream's value.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_exists
+  description: the configured upstream remote resolves by name
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_exists
+  description: the remote-tracking ref for the upstream branch resolves to a commit
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}^{commit}
+  expect_exit: 0
+  expect_pattern: null
+- name: local_has_commits_not_upstream
+  description: the current branch has at least one commit the upstream branch lacks
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: upstream_has_commits_not_local
+  description: the upstream branch has at least one commit the current branch lacks
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: clean_worktree
+  description: there are no staged, unstaged or untracked changes before the merge
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_and_upstream_touch_same_file
+  description: at least one file relative to the merge base is modified by both the
+    current branch and the upstream branch
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort -u) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort -u) \
+      | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote} {upstream_branch}
+  if ! git merge --no-ff --no-edit {upstream_remote}/{upstream_branch}; then
+    git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1 || exit 1
+  fi
+  python3 - <<'PY'
+  import subprocess
+  import difflib
+  import sys
+
+  def run(args):
+      return subprocess.run(args, capture_output=True)
+
+  def blob(stage, path):
+      proc = run(['git', 'show', ':' + str(stage) + ':' + path])
+      if proc.returncode != 0:
+          return None
+      return proc.stdout.decode('utf-8', 'surrogateescape')
+
+  raw = run(['git', 'diff', '--name-only', '--diff-filter=U', '-z']).stdout
+  paths = [item for item in raw.decode('utf-8', 'surrogateescape').split('\0') if item]
+
+  def annotate(base, side):
+      n = len(base)
+      ins = [[] for _ in range(n + 1)]
+      rep = [('same', None)] * n
+      matcher = difflib.SequenceMatcher(None, base, side, autojunk=False)
+      for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+          if tag == 'equal':
+              k = 0
+              while k < i2 - i1:
+                  rep[i1 + k] = ('same', [side[j1 + k]])
+                  k += 1
+          elif tag == 'insert':
+              ins[i1].extend(side[j1:j2])
+          elif tag == 'delete':
+              k = i1
+              while k < i2:
+                  rep[k] = ('del', [])
+                  k += 1
+          else:
+              if i2 - i1 == j2 - j1:
+                  k = 0
+                  while k < i2 - i1:
+                      rep[i1 + k] = ('mod', [side[j1 + k]])
+                      k += 1
+              else:
+                  k = i1
+                  while k < i2:
+                      rep[k] = ('del', [])
+                      k += 1
+                  ins[i1].extend(side[j1:j2])
+      return ins, rep
+
+  def merge3(base, ours, theirs):
+      o_ins, o_rep = annotate(base, ours)
+      t_ins, t_rep = annotate(base, theirs)
+      res = []
+      n = len(base)
+      p = 0
+      while p <= n:
+          res.extend(o_ins[p])
+          res.extend(t_ins[p])
+          if p < n:
+              o = o_rep[p]
+              t = t_rep[p]
+              if o[0] == 'del' or t[0] == 'del':
+                  pass
+              elif o[0] == 'mod' and t[0] == 'mod':
+                  if o[1] == t[1]:
+                      res.extend(o[1])
+                  else:
+                      res.extend(t[1])
+              elif o[0] == 'mod':
+                  res.extend(o[1])
+              elif t[0] == 'mod':
+                  res.extend(t[1])
+              elif o[1] is not None:
+                  res.extend(o[1])
+              else:
+                  res.extend(t[1])
+          p += 1
+      return res
+
+  for path in paths:
+      base = blob(1, path)
+      ours = blob(2, path)
+      theirs = blob(3, path)
+      if ours is None:
+          run(['git', 'rm', '-f', '--', path])
+          continue
+      if base is None or theirs is None:
+          data = ours
+      else:
+          merged = merge3(base.splitlines(keepends=True),
+                          ours.splitlines(keepends=True),
+                          theirs.splitlines(keepends=True))
+          data = ''.join(merged)
+      handle = open(path, 'wb')
+      handle.write(data.encode('utf-8', 'surrogateescape'))
+      handle.close()
+      run(['git', 'add', '--', path])
+  sys.exit(0)
+  PY
+  if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+    git commit --no-edit
+  fi
+steps: null
+postconditions:
+- name: merge_commit_has_two_parents
+  description: HEAD is a merge commit with two parents
+  probe: git show -s --format=%p HEAD
+  expect_exit: 0
+  expect_pattern: ^[0-9a-f]+ [0-9a-f]+$
+- name: upstream_merged_into_head
+  description: the upstream tip is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: the index has no remaining conflict entries
+  probe: test -z "$(git ls-files --unmerged)"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_merge
+  description: no staged, unstaged or untracked changes remain after the merge
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers_left
+  description: no tracked file contains a left conflict-marker line
+  probe: '! git grep -q -I ''^<<<<<<< '' -- .'
+  expect_exit: 0
+  expect_pattern: null
+variant: keep_local
+provenance:
+  compiled_from_task: Update this branch from upstream and make sure the dependency
+    list still makes sense. Keep my dependency file, with what I removed still removed,
+    and add what upstream added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Update this branch from upstream and make sure the dependency list still
+    makes sense. Keep my dependency file, with what I removed still removed, and add
+    what upstream added./seed-2-lockfile_conflict-7488
+  fault: lockfile_conflict
+status: admitted

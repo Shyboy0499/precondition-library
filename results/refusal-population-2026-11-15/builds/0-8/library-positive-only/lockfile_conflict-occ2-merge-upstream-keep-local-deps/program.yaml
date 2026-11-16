@@ -1,0 +1,168 @@
+id: lockfile_conflict-occ2-merge-upstream-keep-local-deps
+intent: Merge upstream into the current branch, keeping the local dependency file's
+  removals while adding upstream's dependency additions.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_exists
+  description: the configured upstream remote is present
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_branch_tracking_ref_exists
+  description: the upstream branch's remote-tracking ref is available
+  probe: git rev-parse --verify --quiet refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: there are no uncommitted or conflicted changes before the merge
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_diverged
+  description: the current branch and upstream both have commits the other lacks
+  probe: |-
+    read -r ahead behind < <(git rev-list --left-right --count HEAD...{upstream_remote}/{upstream_branch})
+    [ "$ahead" -gt 0 ] && [ "$behind" -gt 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: common_changed_file
+  description: local and upstream commits both touch at least one of the same files
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+    comm -12 \
+      <(git diff --name-only -z "$base"..HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base"..{upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) |
+    grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -eo pipefail
+  git fetch {upstream_remote} {upstream_branch}
+  if git merge --no-edit {upstream_remote}/{upstream_branch}; then
+    exit 0
+  fi
+  if ! git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+    exit 1
+  fi
+  git diff --name-only --diff-filter=U -z | while IFS= read -r -d '' f; do
+    ours=$(mktemp)
+    base=$(mktemp)
+    theirs=$(mktemp)
+    if git cat-file -e ":2:$f" 2>/dev/null; then git show ":2:$f" > "$ours"; else : > "$ours"; fi
+    if git cat-file -e ":1:$f" 2>/dev/null; then git show ":1:$f" > "$base"; else : > "$base"; fi
+    if git cat-file -e ":3:$f" 2>/dev/null; then git show ":3:$f" > "$theirs"; else : > "$theirs"; fi
+    awk -v ours_file="$ours" -v base_file="$base" -v theirs_file="$theirs" '
+      FILENAME==ours_file { ours[++no]=$0; ours_seen[$0]=1; k=keyof($0); if (k!="") okey[k]=1; next }
+      FILENAME==base_file { base[++nb]=$0; base_seen[$0]=1; k=keyof($0); if (k!="") bkey[k]=$0; next }
+      FILENAME==theirs_file { theirs[++nt]=$0; theirs_seen[$0]=1; next }
+      END {
+        for (i=1;i<=nb;i++) {
+          line=base[i]
+          if (line in ours_seen) continue
+          deleted_seen[line]=1
+          k=keyof(line)
+          if (k!="") deleted_keys[k]=1
+        }
+        for (i=1;i<=nt;i++) {
+          line=theirs[i]
+          k=keyof(line)
+          if (k!="") tkey[k]=line
+        }
+        na=0
+        for (i=1;i<=nt;i++) {
+          line=theirs[i]
+          if (line in base_seen) continue
+          if (line in ours_seen) continue
+          if (line in deleted_seen) continue
+          k=keyof(line)
+          if (k!="") {
+            if (k in okey) continue
+            if (k in deleted_keys) continue
+          }
+          if (line in add_seen) continue
+          add[++na]=line
+          add_seen[line]=1
+        }
+        all_pkg=1
+        for (j=1;j<=na;j++) if (add[j] !~ /^[[:space:]]*"/) all_pkg=0
+        insert_after=0
+        insert_before=0
+        if (na>0) {
+          if (all_pkg) {
+            for (i=1;i<=no;i++) if (ours[i] ~ /^[[:space:]]*"/) insert_after=i
+          }
+          if (insert_after==0) {
+            for (i=1;i<=no;i++) if (ours[i] ~ /^[[:space:]]*[]}]/) insert_before=i
+          }
+        }
+        for (i=1;i<=no;i++) {
+          if (insert_before==i) for (j=1;j<=na;j++) print add[j]
+          line=ours[i]
+          k=keyof(line)
+          if (k!="" && (k in tkey) && (!(k in bkey) || tkey[k] != bkey[k])) line=tkey[k]
+          print line
+          if (insert_after==i) for (j=1;j<=na;j++) print add[j]
+        }
+        if (na>0 && insert_after==0 && insert_before==0) for (j=1;j<=na;j++) print add[j]
+      }
+      function keyof(line, k) {
+        if (match(line, /^[[:space:]]*[^=[:space:]"]+[[:space:]]*=/)) {
+          k=line
+          sub(/[[:space:]]*=.*/, "", k)
+          gsub(/^[[:space:]]+/, "", k)
+          return k
+        }
+        if (match(line, /^[[:space:]]*"[^"]+"/)) {
+          k=line
+          sub(/^[[:space:]]*"/, "", k)
+          sub(/[ "].*/, "", k)
+          return k
+        }
+        return ""
+      }
+    ' "$ours" "$base" "$theirs" > "$f"
+    rm -f "$ours" "$base" "$theirs"
+  done
+  git add -A
+  git commit --no-edit
+steps: null
+postconditions:
+- name: merge_concluded
+  description: no merge is left in progress
+  probe: '! git rev-parse -q --verify MERGE_HEAD'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: the upstream branch tip is contained in the current branch
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: every conflicted path has been resolved
+  probe: test -z "$(git diff --name-only --diff-filter=U)"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_commit
+  description: the merge resolution is committed
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: no conflict markers remain in tracked files
+  probe: '! git grep -n -E ''^(<<<<<<<|=======|>>>>>>>)'' -- .'
+  expect_exit: 0
+  expect_pattern: null
+variant: keep_local
+provenance:
+  compiled_from_task: Update this branch from upstream and make sure the dependency
+    list still makes sense. Keep my dependency file, with what I removed still removed,
+    and add what upstream added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Update this branch from upstream and make sure the dependency list still
+    makes sense. Keep my dependency file, with what I removed still removed, and add
+    what upstream added./seed-2-lockfile_conflict-29979
+  fault: lockfile_conflict
+status: admitted

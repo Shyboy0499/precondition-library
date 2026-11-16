@@ -16,7 +16,7 @@ maintainers committed. Code: `src/precondition_library/studies/`.
 | study | question | folder |
 | --- | --- | --- |
 | 1 | Does precondition dispatch reproduce maintainers' lock-file merges better than text similarity? | [real-merges-2026-10-26](real-merges-2026-10-26/) |
-| 2 | Is refusal a property of the method or of one build? (registration, refusal set R) | [refusal-population-2026-11-01](refusal-population-2026-11-01/) |
+| 2 | Is refusal a property of the method or of one build? | registration and refusal set R: [refusal-population-2026-11-01](refusal-population-2026-11-01/); the 20 builds and, when it finishes, the analysis: [refusal-population-2026-11-15](refusal-population-2026-11-15/) |
 | 3 | Which computed action reproduces a maintainer's lock file? | [lock-oracle-2026-11-02](lock-oracle-2026-11-02/) |
 | 4 | Does the ecosystem's resolver predict which package-level merge maintainers kept? | [ecosystem-unify-2026-11-02](ecosystem-unify-2026-11-02/) |
 | 5 | Does refusing where a package diverges make the merge rarely wrong? | [divergence-gate-2026-11-08](divergence-gate-2026-11-08/) |
@@ -52,7 +52,9 @@ States built by this project's fault injectors, graded by its own rules. Code:
 - **States no library saw.** [heldout-2026-10-10](heldout-2026-10-10/),
   [heldout-2026-10-16](heldout-2026-10-16/), [heldout-2026-10-18](heldout-2026-10-18/) (lock files
   at new paths), [heldout-2026-10-19](heldout-2026-10-19/) (new branch names and submodule paths),
-  [realhost-2026-10-20](realhost-2026-10-20/) (real repositories' histories).
+  [realhost-2026-10-20](realhost-2026-10-20/) (real repositories' histories),
+  [heldout-2026-11-16](heldout-2026-11-16/) (the lock-file paths again, on the 22 libraries built
+  since the compile prompt changed).
 - **What a fire does, and why arm 3 sits out.** [consequences-2026-10-21](consequences-2026-10-21/),
   [consequences-heldout-2026-10-21](consequences-heldout-2026-10-21/),
   [consequences-realhost-2026-10-21](consequences-realhost-2026-10-21/),

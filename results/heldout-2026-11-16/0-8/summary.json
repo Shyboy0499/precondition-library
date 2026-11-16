@@ -1,0 +1,70 @@
+{
+  "source": "results/refusal-population-2026-11-15/builds/0-8",
+  "library_root": "results/refusal-population-2026-11-15/builds/0-8/library-two-sided",
+  "library_hash_before": "9efb8f75bbe30c73c9eaaf6c4685c8114b4d56547a1a0e1bf1892ce0fbd1ed6d",
+  "library_hash_after": "9efb8f75bbe30c73c9eaaf6c4685c8114b4d56547a1a0e1bf1892ce0fbd1ed6d",
+  "scorer": {
+    "scorer": "lexical"
+  },
+  "faults": [
+    "lockfile_conflict"
+  ],
+  "seeds": [
+    3000,
+    3001,
+    3002,
+    3003,
+    3004,
+    3005,
+    3006,
+    3007,
+    3008,
+    3009,
+    3010,
+    3011,
+    3012,
+    3013,
+    3014,
+    3015,
+    3016,
+    3017,
+    3018,
+    3019,
+    3020,
+    3021,
+    3022,
+    3023,
+    3024,
+    3025,
+    3026,
+    3027,
+    3028,
+    3029,
+    3030,
+    3031,
+    3032,
+    3033,
+    3034,
+    3035,
+    3036,
+    3037,
+    3038,
+    3039
+  ],
+  "distinct_instances": {
+    "lockfile_conflict": 37
+  },
+  "pairs": 80,
+  "programs": 19,
+  "admitted": 16,
+  "arm3_fires": 31,
+  "arm3_wrong": 0,
+  "arm2_at_matched": "arm 2 (threshold 0.14018691588785046) mismatches 25/32 at arm 3's coverage, coverage gap +0.013, mismatch difference (arm 2 - arm 3) +0.7812",
+  "smallest_detectable_difference": 0.3530110340160699,
+  "wording": "no held-out floor is measured, so this stage may not say precondition dispatch beats text similarity; it reports the held-out coverage, the mis-fire counts and the comparison",
+  "figure": "Primary metric, uninformed regime, 80 labelled pairs (spec §7 item 1, ADR-0008)\n  arm 3 (pre-registered coverage point): coverage 31/80, mismatch 0/31\n  arm 2 curve: 31 operating point(s), each with a 95% Wilson interval in figure1.csv\n  at matched coverage arm 2 (threshold 0.14018691588785046) has mismatch 25/32; coverage gap +0.013; mismatch difference (arm 2 - arm 3) +0.7812\n  power (item 3): with 32 and 31 fires, alpha 0.05 two-sided and power 0.8, the smallest detectable mismatch difference is 0.353 at a 50% base rate and 0.345 at the observed 0.397\n  baseline arm 2b (soft vote): curve, 2 operating point(s) -- context, not part of the claim\n  baseline arm 2c (intent key): point, 1 operating point(s) -- context, not part of the claim\n",
+  "wrong_fires": [],
+  "artifacts": {
+    "primary": "primary"
+  }
+}

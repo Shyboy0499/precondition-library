@@ -1,0 +1,68 @@
+id: submodule_moved-occ1-submodule-moved-occ1-init-submodule-checkout
+intent: initialise the declared nested repository and check it out at its recorded
+  commit
+parameters:
+- submodule_path
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: submodule_declared
+  description: .gitmodules declares a submodule at the target path
+  probe: git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | sed 's/^[^
+    ]* //' | grep -qxF -- '{submodule_path}'
+  expect_exit: 0
+  expect_pattern: null
+- name: gitlink_recorded
+  description: the index records a gitlink for the target path
+  probe: git ls-files -s -- '{submodule_path}' | grep -q '^160000 '
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_uninitialised
+  description: the nested repository has not been initialised yet
+  probe: git submodule status -- '{submodule_path}' | grep -q '^-'
+  expect_exit: 0
+  expect_pattern: null
+- name: pin_matches_upstream
+  description: the recorded submodule commit matches the upstream branch's gitlink
+  probe: |-
+    test -n "$(git ls-tree HEAD -- '{submodule_path}' | awk '{print $3}')" &&
+    test "$(git ls-tree HEAD -- '{submodule_path}' | awk '{print $3}')" = "$(git ls-tree '{upstream_remote}/{upstream_branch}' -- '{submodule_path}' | awk '{print $3}')"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_index_entries
+  description: the index has no unresolved merge entries, so no merge conflict is
+    in progress
+  probe: '! git ls-files -u | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: matches_upstream_branch
+  description: HEAD is exactly the upstream branch's commit, so the superproject has
+    not diverged or accumulated local/upstream changes
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse '{upstream_remote}/{upstream_branch}')"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git submodule update --init -- '{submodule_path}'
+steps: null
+postconditions:
+- name: submodule_checked_out
+  description: the nested repository is checked out at its recorded gitlink
+  probe: git submodule status -- '{submodule_path}'
+  expect_exit: 0
+  expect_pattern: ^ [0-9a-f]{40} {submodule_path}( |$)
+- name: submodule_head_matches_gitlink
+  description: the nested repository's HEAD is the commit recorded by the superproject
+  probe: test "$(git -C '{submodule_path}' rev-parse HEAD)" = "$(git ls-tree HEAD
+    -- '{submodule_path}' | awk '{print $3}')"
+  expect_exit: 0
+  expect_pattern: null
+variant: init
+provenance:
+  compiled_from_task: A nested repository in this project needs bringing into line.
+    Initialise the nested repository and check it out.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: A nested repository in this project needs bringing into line. Initialise
+    the nested repository and check it out./seed-4-submodule_moved-213
+  fault: submodule_moved
+status: admitted

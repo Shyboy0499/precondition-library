@@ -1,0 +1,66 @@
+id: submodule_moved-occ2-init-submodule-checkout
+intent: Initialise the nested submodule and check it out at the commit recorded by
+  upstream.
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: has_submodule_gitlink
+  description: HEAD records a gitlink entry at the nested dependency path
+  probe: git ls-tree HEAD -- "{submodule_path}" | grep -q '^160000 commit '
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_declared
+  description: .gitmodules declares the nested dependency path
+  probe: git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | grep -Fq
+    "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_uninitialised
+  description: the nested repository is not initialised in the worktree
+  probe: git submodule status -- "{submodule_path}" | grep -q '^-'
+  expect_exit: 0
+  expect_pattern: null
+- name: pin_matches_upstream
+  description: the gitlink commit in HEAD equals the one recorded on the upstream
+    branch
+  probe: test "$(git rev-parse --verify "HEAD:{submodule_path}")" = "$(git rev-parse
+    --verify "{upstream_remote}/{upstream_branch}:{submodule_path}")"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch {upstream_remote}
+  test "$(git rev-parse --verify "HEAD:{submodule_path}")" = "$(git rev-parse --verify "{upstream_remote}/{upstream_branch}:{submodule_path}")"
+  git submodule update --init -- "{submodule_path}"
+steps: null
+postconditions:
+- name: submodule_initialised
+  description: the nested repository is initialised at the recorded gitlink
+  probe: git submodule status -- "{submodule_path}" | grep -Eq '^ [0-9a-f]{40} '
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_matches_gitlink
+  description: the nested repository's HEAD equals the gitlink commit recorded in
+    the superproject
+  probe: test "$(git rev-parse --verify "HEAD:{submodule_path}")" = "$(git -C "{submodule_path}"
+    rev-parse --verify HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_pin_still_matches
+  description: the superproject's recorded gitlink still matches the upstream branch
+  probe: test "$(git rev-parse --verify "HEAD:{submodule_path}")" = "$(git rev-parse
+    --verify "{upstream_remote}/{upstream_branch}:{submodule_path}")"
+  expect_exit: 0
+  expect_pattern: null
+variant: init
+provenance:
+  compiled_from_task: Get this repo's nested dependency consistent with upstream.
+    Initialise the nested repository and check it out.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this repo's nested dependency consistent with upstream. Initialise
+    the nested repository and check it out./seed-5-submodule_moved-19837
+  fault: submodule_moved
+status: admitted

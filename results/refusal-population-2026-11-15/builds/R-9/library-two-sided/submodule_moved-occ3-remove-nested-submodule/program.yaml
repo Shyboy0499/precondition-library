@@ -1,0 +1,122 @@
+id: submodule_moved-occ3-remove-nested-submodule
+intent: Remove the nested submodule checkout and its .gitmodules entry so the repository
+  matches upstream's removal.
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: worktree_clean
+  description: No tracked, staged, or untracked changes are present.
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_branch_available
+  description: The upstream remote-tracking branch exists.
+  probe: git rev-parse --verify --quiet "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_submodule_gitlink
+  description: The local index records a gitlink at the nested dependency path.
+  probe: git ls-files -s -- "{submodule_path}" | grep -q '^160000 '
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_dropped_submodule
+  description: Upstream's tree has no entry at the nested dependency path.
+  probe: '! git ls-tree -r --name-only "{upstream_remote}/{upstream_branch}" -- "{submodule_path}"
+    | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_gitmodules_dropped_submodule
+  description: Upstream's .gitmodules does not mention the nested dependency path.
+  probe: '! git show "{upstream_remote}/{upstream_branch}:.gitmodules" 2>/dev/null
+    | grep -Fq "{submodule_path}"'
+  expect_exit: 0
+  expect_pattern: null
+- name: local_gitmodules_declares_submodule
+  description: The local .gitmodules contains a path entry for the nested dependency.
+  probe: |-
+    found=$(
+      git config -f .gitmodules --get-regexp '^submodule\..*\.path$' 2>/dev/null |
+      while read -r key value; do
+        if [ "$value" = "{submodule_path}" ]; then
+          printf 'yes\n'
+          break
+        fi
+      done
+    )
+    test "$found" = yes
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git rm -f -- "{submodule_path}"
+
+  if [ -f .gitmodules ]; then
+    section=$(
+      git config -f .gitmodules --get-regexp '^submodule\..*\.path$' 2>/dev/null |
+      while read -r key value; do
+        if [ "$value" = "{submodule_path}" ]; then
+          printf '%s\n' "$key"
+          break
+        fi
+      done
+    )
+    if [ -n "$section" ]; then
+      git config -f .gitmodules --remove-section "${section%.path}"
+    fi
+  fi
+
+  if git cat-file -e "{upstream_remote}/{upstream_branch}:.gitmodules" 2>/dev/null; then
+    if [ -f .gitmodules ] && ! git config -f .gitmodules --get-regexp '^submodule\.' >/dev/null 2>&1; then
+      : > .gitmodules
+    fi
+  else
+    git rm -f -- .gitmodules >/dev/null 2>&1 || true
+    rm -f .gitmodules
+  fi
+
+  git add -A
+  git commit -m "chore: drop nested library"
+steps: null
+postconditions:
+- name: worktree_clean_after
+  description: The removal is committed and the working tree is clean.
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_entry_gone
+  description: The nested dependency path is no longer tracked.
+  probe: '! git ls-files -- "{submodule_path}" | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: gitmodules_entry_gone
+  description: .gitmodules no longer declares the nested dependency path.
+  probe: |-
+    found=$(
+      git config -f .gitmodules --get-regexp '^submodule\..*\.path$' 2>/dev/null |
+      while read -r key value; do
+        if [ "$value" = "{submodule_path}" ]; then
+          printf 'yes\n'
+          break
+        fi
+      done
+    )
+    test "$found" != yes
+  expect_exit: 0
+  expect_pattern: null
+- name: matches_upstream_paths
+  description: The nested dependency path and .gitmodules match upstream.
+  probe: git diff --quiet "{upstream_remote}/{upstream_branch}" HEAD -- .gitmodules
+    "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: null
+variant: remove
+provenance:
+  compiled_from_task: Get this repo's nested dependency consistent with upstream.
+    Remove the nested checkout, the way upstream did.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this repo's nested dependency consistent with upstream. Remove the
+    nested checkout, the way upstream did./seed-0-submodule_moved-12721
+  fault: submodule_moved
+status: admitted

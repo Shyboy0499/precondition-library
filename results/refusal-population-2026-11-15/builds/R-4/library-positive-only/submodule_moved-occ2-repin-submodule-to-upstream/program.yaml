@@ -1,0 +1,85 @@
+id: submodule_moved-occ2-repin-submodule-to-upstream
+intent: fast-forward the clone to upstream and check out the nested submodule at the
+  commit upstream pins
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: on_a_branch
+  description: HEAD is attached to a local branch
+  probe: git symbolic-ref --quiet HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree_and_submodule
+  description: no tracked, staged, or submodule changes are present
+  probe: test -z "$(git status --porcelain --ignore-submodules=none)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_remote_exists
+  description: the upstream remote is configured
+  probe: git remote get-url "{upstream_remote}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_branch_exists
+  description: the upstream remote-tracking branch resolves to a commit
+  probe: git rev-parse --verify --quiet "{upstream_remote}/{upstream_branch}^{commit}"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_head_is_ancestor_of_upstream
+  description: the local branch can fast-forward to upstream
+  probe: git merge-base --is-ancestor HEAD "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_references_submodule
+  description: local HEAD records a gitlink at the nested repository path
+  probe: git ls-tree HEAD -- "{submodule_path}" | grep -q '^160000 commit '
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_references_submodule
+  description: upstream still records a gitlink at the nested repository path
+  probe: git ls-tree "{upstream_remote}/{upstream_branch}" -- "{submodule_path}" |
+    grep -q '^160000 commit '
+  expect_exit: 0
+  expect_pattern: null
+- name: local_pin_differs_from_upstream
+  description: the local gitlink and upstream gitlink point at different commits
+  probe: test "$(git rev-parse "HEAD:{submodule_path}")" != "$(git rev-parse "{upstream_remote}/{upstream_branch}:{submodule_path}")"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch "{upstream_remote}"
+  git merge --ff-only "{upstream_remote}/{upstream_branch}"
+  git submodule update --init --recursive -- "{submodule_path}"
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: local HEAD is the upstream branch commit
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse "{upstream_remote}/{upstream_branch}^{commit}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_at_upstream_pin
+  description: nested repository HEAD is the commit upstream records
+  probe: test "$(git -C "{submodule_path}" rev-parse HEAD)" = "$(git rev-parse "{upstream_remote}/{upstream_branch}:{submodule_path}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_status_in_sync
+  description: submodule status has no leading plus or minus marker
+  probe: git submodule status -- "{submodule_path}" | grep -q '^ [0-9a-f]'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: no tracked, staged, or submodule changes remain
+  probe: test -z "$(git status --porcelain --ignore-submodules=none)"
+  expect_exit: 0
+  expect_pattern: null
+variant: repin
+provenance:
+  compiled_from_task: Upstream and this clone disagree about a nested repository.
+    Reconcile them. Check the nested repository out at the commit upstream now pins.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Upstream and this clone disagree about a nested repository. Reconcile
+    them. Check the nested repository out at the commit upstream now pins./seed-1-submodule_moved-29016
+  fault: submodule_moved
+status: admitted

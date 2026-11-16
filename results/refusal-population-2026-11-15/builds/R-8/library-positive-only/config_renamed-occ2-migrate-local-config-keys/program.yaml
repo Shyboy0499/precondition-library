@@ -1,0 +1,259 @@
+id: config_renamed-occ2-migrate-local-config-keys
+intent: Rename stale setting keys in ignored local override configuration files using
+  the repository's rename map, leaving those files untracked and out of git.
+parameters: []
+preconditions:
+- name: has_rename_map
+  description: a config/renames.conf file (tracked or present in the working tree)
+    maps old setting names to new ones
+  probe: test -f config/renames.conf || git ls-files | grep -qE '(^|/)renames\.conf$'
+  expect_exit: 0
+  expect_pattern: null
+- name: has_ignored_config_with_stale_key
+  description: at least one ignored, untracked config-like file still assigns an old
+    key named in the rename map
+  probe: |-
+    renames=config/renames.conf
+    if [ ! -f "$renames" ]; then
+      renames=$(git ls-files | grep -E '(^|/)renames\.conf$' | head -n1 || true)
+    fi
+    [ -n "${renames:-}" ] && [ -f "$renames" ] || exit 1
+    pairs=()
+    while IFS= read -r line; do
+      line=${line%$'\r'}
+      case "$line" in ''|\#*) continue ;; esac
+      case "$line" in *=*) ;; *) continue ;; esac
+      old=${line%%=*}
+      new=${line#*=}
+      old=$(printf '%s' "$old" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+      new=$(printf '%s' "$new" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+      [ -n "$old" ] && [ -n "$new" ] && pairs+=("$old"$'\t'"$new")
+    done < "$renames"
+    [ "${#pairs[@]}" -gt 0 ] || exit 1
+    while IFS= read -r -d '' f; do
+      case "$f" in
+        *.conf|*.cfg|*.ini|*.local|config/*|*/config/*) ;;
+        *) continue ;;
+      esac
+      [ "$f" = "$renames" ] && continue
+      for pair in "${pairs[@]}"; do
+        old=${pair%%$'\t'*}
+        if awk -v old="$old" '
+          /^[[:space:]]*#/ { next }
+          {
+            eq = index($0, "=")
+            if (eq > 0) {
+              key = substr($0, 1, eq - 1)
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+              if (key == old) { found = 1; exit }
+            }
+          }
+          END { exit found ? 0 : 1 }
+        ' "$f"; then
+          exit 0
+        fi
+      done
+    done < <(git ls-files --others --ignored --exclude-standard -z)
+    exit 1
+  expect_exit: 0
+  expect_pattern: null
+- name: no_stale_keys_in_tracked_configs
+  description: no tracked config-like file still assigns an old key named in the rename
+    map
+  probe: |-
+    renames=config/renames.conf
+    if [ ! -f "$renames" ]; then
+      renames=$(git ls-files | grep -E '(^|/)renames\.conf$' | head -n1 || true)
+    fi
+    [ -n "${renames:-}" ] && [ -f "$renames" ] || exit 1
+    pairs=()
+    while IFS= read -r line; do
+      line=${line%$'\r'}
+      case "$line" in ''|\#*) continue ;; esac
+      case "$line" in *=*) ;; *) continue ;; esac
+      old=${line%%=*}
+      new=${line#*=}
+      old=$(printf '%s' "$old" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+      new=$(printf '%s' "$new" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+      [ -n "$old" ] && [ -n "$new" ] && pairs+=("$old"$'\t'"$new")
+    done < "$renames"
+    [ "${#pairs[@]}" -gt 0 ] || exit 1
+    while IFS= read -r -d '' f; do
+      case "$f" in
+        *.conf|*.cfg|*.ini|*.local|config/*|*/config/*) ;;
+        *) continue ;;
+      esac
+      [ "$f" = "$renames" ] && continue
+      for pair in "${pairs[@]}"; do
+        old=${pair%%$'\t'*}
+        if awk -v old="$old" '
+          /^[[:space:]]*#/ { next }
+          {
+            eq = index($0, "=")
+            if (eq > 0) {
+              key = substr($0, 1, eq - 1)
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+              if (key == old) { found = 1; exit }
+            }
+          }
+          END { exit found ? 0 : 1 }
+        ' "$f"; then
+          exit 1
+        fi
+      done
+    done < <(git ls-files -z)
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_worktree_clean
+  description: the tracked worktree and index have no uncommitted changes before migration
+  probe: git diff --quiet && git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  set -euo pipefail
+
+  renames="config/renames.conf"
+  if [ ! -f "$renames" ]; then
+    renames="$(git ls-files | grep -E '(^|/)renames\.conf$' | head -n1 || true)"
+  fi
+  [ -n "${renames:-}" ] && [ -f "$renames" ]
+
+  pairs=()
+  while IFS= read -r line; do
+    line="${line%$'\r'}"
+    case "$line" in
+      ''|\#*) continue ;;
+    esac
+    case "$line" in
+      *=*) ;;
+      *) continue ;;
+    esac
+    old="${line%%=*}"
+    new="${line#*=}"
+    old="$(printf '%s' "$old" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    new="$(printf '%s' "$new" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    if [ -n "$old" ] && [ -n "$new" ]; then
+      pairs+=("$old"$'\t'"$new")
+    fi
+  done < "$renames"
+
+  if [ "${#pairs[@]}" -eq 0 ]; then
+    exit 0
+  fi
+
+  while IFS= read -r -d '' f; do
+    case "$f" in
+      *.conf|*.cfg|*.ini|*.local|config/*|*/config/*) ;;
+      *) continue ;;
+    esac
+    [ "$f" = "$renames" ] && continue
+
+    tmp="$(mktemp "${TMPDIR:-/tmp}/config-rename.XXXXXX")"
+    cp -- "$f" "$tmp"
+
+    for pair in "${pairs[@]}"; do
+      old="${pair%%$'\t'*}"
+      new="${pair#*$'\t'}"
+      awk -v old="$old" -v new="$new" '
+        /^[[:space:]]*#/ { print; next }
+        {
+          line = $0
+          eq = index(line, "=")
+          if (eq > 0) {
+            left = substr(line, 1, eq - 1)
+            key = left
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+            if (key == old) {
+              pos = index(left, old)
+              if (pos > 0) {
+                newleft = substr(left, 1, pos - 1) new substr(left, pos + length(old))
+                print newleft "=" substr(line, eq + 1)
+                next
+              }
+            }
+          }
+          print line
+        }
+      ' "$tmp" > "$tmp.new"
+      mv -- "$tmp.new" "$tmp"
+    done
+
+    if ! cmp -s -- "$f" "$tmp"; then
+      cat -- "$tmp" > "$f"
+    fi
+    rm -f -- "$tmp"
+  done < <(git ls-files --others --ignored --exclude-standard -z)
+steps: null
+postconditions:
+- name: no_stale_keys_in_ignored_configs
+  description: no ignored config-like file still assigns an old key named in the rename
+    map
+  probe: |-
+    renames=config/renames.conf
+    if [ ! -f "$renames" ]; then
+      renames=$(git ls-files | grep -E '(^|/)renames\.conf$' | head -n1 || true)
+    fi
+    [ -n "${renames:-}" ] && [ -f "$renames" ] || exit 1
+    pairs=()
+    while IFS= read -r line; do
+      line=${line%$'\r'}
+      case "$line" in ''|\#*) continue ;; esac
+      case "$line" in *=*) ;; *) continue ;; esac
+      old=${line%%=*}
+      new=${line#*=}
+      old=$(printf '%s' "$old" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+      new=$(printf '%s' "$new" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+      [ -n "$old" ] && [ -n "$new" ] && pairs+=("$old"$'\t'"$new")
+    done < "$renames"
+    [ "${#pairs[@]}" -gt 0 ] || exit 0
+    while IFS= read -r -d '' f; do
+      case "$f" in
+        *.conf|*.cfg|*.ini|*.local|config/*|*/config/*) ;;
+        *) continue ;;
+      esac
+      [ "$f" = "$renames" ] && continue
+      for pair in "${pairs[@]}"; do
+        old=${pair%%$'\t'*}
+        if awk -v old="$old" '
+          /^[[:space:]]*#/ { next }
+          {
+            eq = index($0, "=")
+            if (eq > 0) {
+              key = substr($0, 1, eq - 1)
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+              if (key == old) { found = 1; exit }
+            }
+          }
+          END { exit found ? 0 : 1 }
+        ' "$f"; then
+          exit 1
+        fi
+      done
+    done < <(git ls-files --others --ignored --exclude-standard -z)
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: ignored_override_remains
+  description: at least one ignored, untracked config-like override file remains in
+    the working tree
+  probe: git ls-files --others --ignored --exclude-standard -z | tr '\0' '\n' | grep
+    -qE '\.(conf|cfg|ini|local)$|(^|/)config/'
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_worktree_clean
+  description: the migration did not modify any tracked file or the index
+  probe: git diff --quiet && git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+variant: migrate_local
+provenance:
+  compiled_from_task: Bring my configuration up to date with the setting names the
+    app uses now. Rename the old key in my own override file, and keep that file out
+    of git.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Bring my configuration up to date with the setting names the app uses
+    now. Rename the old key in my own override file, and keep that file out of git./seed-2-config_renamed-3956
+  fault: config_renamed
+status: admitted

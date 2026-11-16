@@ -1,0 +1,282 @@
+id: lockfile_conflict-occ1-lockfile-conflict-take-upstream
+intent: Merge upstream into the local branch, resolving the dependency-file conflict
+  by taking upstream's version and re-adding locally added dependency entries without
+  reviving entries either side removed.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: has_upstream_ref
+  description: the upstream remote-tracking branch exists
+  probe: git rev-parse --verify {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: has_merge_base
+  description: the local branch and upstream share a merge base
+  probe: git merge-base HEAD {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: diverged
+  description: the local branch and upstream each have commits the other lacks
+  probe: |-
+    ahead=$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)
+    behind=$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})
+    [ "$ahead" -gt 0 ] && [ "$behind" -gt 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: deps_lock_changed_both_sides
+  description: deps.lock is modified on both the local branch and upstream since their
+    merge base
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+    git diff --name-only -z "$base" HEAD | tr '\0' '\n' | grep -qx 'deps.lock' &&
+    git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | grep -qx 'deps.lock'
+  expect_exit: 0
+  expect_pattern: null
+- name: only_shared_change_is_deps_lock
+  description: deps.lock is the only path changed on both sides of the divergence
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+    shared=$(comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | LC_ALL=C sort) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | LC_ALL=C sort))
+    [ "$shared" = "deps.lock" ]
+  expect_exit: 0
+  expect_pattern: null
+- name: deps_lock_exists_on_both_sides
+  description: deps.lock exists in both local HEAD and upstream
+  probe: |-
+    git cat-file -e HEAD:deps.lock &&
+    git cat-file -e {upstream_remote}/{upstream_branch}:deps.lock
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_state_is_upstream_merge_or_absent
+  description: there is no merge in progress, or the in-progress merge is the upstream
+    merge
+  probe: |-
+    if git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+      [ "$(git rev-parse MERGE_HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})" ]
+    else
+      exit 0
+    fi
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_or_only_deps_lock_conflicted
+  description: the only dirty path is a conflicted deps.lock
+  probe: '! git status --porcelain -z | tr ''\0'' ''\n'' | grep -v ''^.. deps.lock$''
+    | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: not_local_drop_without_upstream_drop
+  description: the local branch has not dropped package names that upstream still
+    has without upstream dropping any package names itself
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+    upstream_dropped=$(comm -23 \
+      <(git show "$base:deps.lock" | awk -F'"' '/^[[:space:]]*"/ {split($2, p, " "); print p[1]}' | LC_ALL=C sort -u) \
+      <(git show {upstream_remote}/{upstream_branch}:deps.lock | awk -F'"' '/^[[:space:]]*"/ {split($2, p, " "); print p[1]}' | LC_ALL=C sort -u) || true)
+    local_dropped=$(comm -23 \
+      <(git show "$base:deps.lock" | awk -F'"' '/^[[:space:]]*"/ {split($2, p, " "); print p[1]}' | LC_ALL=C sort -u) \
+      <(git show HEAD:deps.lock | awk -F'"' '/^[[:space:]]*"/ {split($2, p, " "); print p[1]}' | LC_ALL=C sort -u) || true)
+    if [ -n "$local_dropped" ] && [ -z "$upstream_dropped" ]; then
+      exit 1
+    fi
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+  path=deps.lock
+  base=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+  tmp=$(mktemp -d)
+  trap 'rm -rf "$tmp"' EXIT
+
+  if git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+    :
+  else
+    git merge --no-commit --no-edit {upstream_remote}/{upstream_branch} || true
+  fi
+
+  if git cat-file -e "$base:$path" 2>/dev/null; then
+    git show "$base:$path" > "$tmp/base"
+  else
+    : > "$tmp/base"
+  fi
+  git show "{upstream_remote}/{upstream_branch}:$path" > "$tmp/upstream"
+  git show "HEAD:$path" > "$tmp/local"
+
+  python3 - "$tmp/base" "$tmp/local" "$tmp/upstream" "$path" <<'PY'
+  import re
+  import sys
+
+  base_path, local_path, upstream_path, out_path = sys.argv[1:5]
+
+  def read_lines(filename):
+      with open(filename, encoding='utf-8') as handle:
+          return handle.readlines()
+
+  base = read_lines(base_path)
+  local = read_lines(local_path)
+  upstream = read_lines(upstream_path)
+
+  pkg_re = re.compile(r'^\s*"([^"]+)"\s*,?\s*$')
+
+  def package_name(line):
+      match = pkg_re.match(line)
+      if match is None:
+          return None
+      return match.group(1).split()[0]
+
+  base_pkgs = set(package_name(line) for line in base if package_name(line) is not None)
+  local_pkgs = set(package_name(line) for line in local if package_name(line) is not None)
+  upstream_pkgs = set(package_name(line) for line in upstream if package_name(line) is not None)
+
+  added_names = set(name for name in local_pkgs if name not in base_pkgs)
+  removed_names = set(name for name in base_pkgs if name not in local_pkgs)
+
+  result = list(upstream)
+  if removed_names:
+      result = [line for line in result if package_name(line) not in removed_names]
+
+  seen = set()
+  for idx, line in enumerate(local):
+      name = package_name(line)
+      if name is None or name not in added_names or name in seen:
+          continue
+      seen.add(name)
+      if name in upstream_pkgs:
+          continue
+      if not line.endswith('\n'):
+          line = line + '\n'
+      anchor_name = None
+      for later in local[idx + 1:]:
+          later_name = package_name(later)
+          if later_name is not None and later_name in upstream_pkgs:
+              anchor_name = later_name
+              break
+      inserted = False
+      if anchor_name is not None:
+          for pos, result_line in enumerate(result):
+              if package_name(result_line) == anchor_name:
+                  result.insert(pos, line)
+                  inserted = True
+                  break
+      if not inserted:
+          previous_name = None
+          for earlier in reversed(local[:idx]):
+              earlier_name = package_name(earlier)
+              if earlier_name is not None and earlier_name in upstream_pkgs:
+                  previous_name = earlier_name
+                  break
+          if previous_name is not None:
+              last_pos = None
+              for pos, result_line in enumerate(result):
+                  if package_name(result_line) == previous_name:
+                      last_pos = pos
+              if last_pos is not None:
+                  result.insert(last_pos + 1, line)
+                  inserted = True
+      if not inserted:
+          for pos, result_line in enumerate(result):
+              if result_line.strip() == ']':
+                  result.insert(pos, line)
+                  inserted = True
+                  break
+      if not inserted:
+          result.append(line)
+
+  with open(out_path, 'w', encoding='utf-8', newline='') as handle:
+      handle.writelines(result)
+  PY
+
+  git add "$path"
+  git commit --no-edit
+steps: null
+postconditions:
+- name: merge_completed
+  description: no unmerged paths remain
+  probe: '! git ls-files -u | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: upstream tip is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_commit_has_two_parents
+  description: HEAD is a merge commit with local and upstream parents
+  probe: test "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 3
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: deps.lock in HEAD contains no conflict markers
+  probe: '! git show HEAD:deps.lock | grep -qE ''^(<<<<<<<|=======|>>>>>>>)'''
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the working tree is clean after committing the merge
+  probe: '! git status --porcelain -z | tr ''\0'' ''\n'' | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_version_kept
+  description: the version line from upstream's deps.lock is present in the committed
+    file
+  probe: |-
+    upstream_version=$(git show {upstream_remote}/{upstream_branch}:deps.lock | grep -E '^[[:space:]]*version[[:space:]]*=' | head -n 1 || true)
+    if [ -n "$upstream_version" ]; then
+      git show HEAD:deps.lock | grep -Fqx -- "$upstream_version"
+    fi
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_removals_not_revived
+  description: package entries removed by upstream relative to the merge base are
+    absent from the committed file
+  probe: |-
+    base=$(git merge-base HEAD^1 HEAD^2)
+    dropped=$(comm -23 \
+      <(git show "$base:deps.lock" | LC_ALL=C sort) \
+      <(git show {upstream_remote}/{upstream_branch}:deps.lock | LC_ALL=C sort) \
+      | grep -E '^[[:space:]]*"' || true)
+    if [ -n "$dropped" ]; then
+      while IFS= read -r line; do
+        if git show HEAD:deps.lock | grep -Fqx -- "$line"; then
+          exit 1
+        fi
+      done <<< "$dropped"
+    fi
+  expect_exit: 0
+  expect_pattern: null
+- name: local_additions_present
+  description: package entries added locally and not already present upstream are
+    in the committed file
+  probe: |-
+    base=$(git merge-base HEAD^1 HEAD^2)
+    local_added=$(comm -13 \
+      <(git show "$base:deps.lock" | LC_ALL=C sort) \
+      <(git show HEAD^1:deps.lock | LC_ALL=C sort) \
+      | grep -E '^[[:space:]]*"' || true)
+    if [ -n "$local_added" ]; then
+      upstream_names=$(git show {upstream_remote}/{upstream_branch}:deps.lock \
+        | awk -F'"' '/^[[:space:]]*"/ {split($2, parts, " "); print parts[1]}' \
+        | LC_ALL=C sort -u)
+      while IFS= read -r line; do
+        name=$(printf '%s\n' "$line" | awk -F'"' '/^[[:space:]]*"/ {split($2, parts, " "); print parts[1]; exit}')
+        if [ -n "$name" ] && printf '%s\n' "$upstream_names" | grep -Fqx -- "$name"; then
+          continue
+        fi
+        git show HEAD:deps.lock | grep -Fqx -- "$line" || exit 1
+      done <<< "$local_added"
+    fi
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: Catch up with upstream without losing what either side added,
+    or reviving what either side removed. Start from upstream's dependency file and
+    add back what I added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Catch up with upstream without losing what either side added, or reviving
+    what either side removed. Start from upstream's dependency file and add back what
+    I added./seed-5-lockfile_conflict-211
+  fault: lockfile_conflict
+status: admitted

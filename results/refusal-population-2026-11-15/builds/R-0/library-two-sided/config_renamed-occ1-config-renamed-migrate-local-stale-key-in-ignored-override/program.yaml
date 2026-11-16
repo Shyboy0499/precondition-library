@@ -1,0 +1,111 @@
+id: config_renamed-occ1-config-renamed-migrate-local-stale-key-in-ignored-override
+intent: Rename a config key that upstream renamed inside the user's own git-ignored
+  local override file, migrating that local file to the new key name and leaving it
+  untracked and ignored.
+parameters: []
+preconditions:
+- name: renames_mapping_present
+  description: the tracked config/renames.conf exists and records at least one old=new
+    key mapping
+  probe: |-
+    test -f config/renames.conf \
+      && sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' config/renames.conf | grep -q '='
+  expect_exit: 0
+  expect_pattern: null
+- name: local_override_ignored
+  description: config/local.conf exists on disk, is ignored by git, and is not tracked,
+    so the stale setting lives in the user's own override and not in a tracked file
+  probe: |-
+    test -f config/local.conf \
+      && git check-ignore -q -- config/local.conf \
+      && ! git ls-files --error-unmatch -- config/local.conf >/dev/null 2>&1
+  expect_exit: 0
+  expect_pattern: null
+- name: local_override_has_stale_key
+  description: config/local.conf sets at least one key that renames.conf lists under
+    its old name, so the migration is confined to the ignored override file
+  probe: |-
+    comm -12 \
+      <(sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' config/renames.conf | sed -n 's/[[:space:]]*=.*$//p' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | sort -u) \
+      <(sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' config/local.conf | sed -n 's/[[:space:]]*=.*$//p' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | sort -u) \
+      | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  renames=config/renames.conf
+  local=config/local.conf
+  tmp=$(mktemp)
+  awk '
+  FNR == NR {
+    if ($0 ~ /^[[:space:]]*#/) next
+    eq = index($0, "=")
+    if (eq == 0) next
+    old = substr($0, 1, eq - 1)
+    new = substr($0, eq + 1)
+    gsub(/^[[:space:]]+/, "", old)
+    gsub(/[[:space:]]+$/, "", old)
+    gsub(/^[[:space:]]+/, "", new)
+    gsub(/[[:space:]]+$/, "", new)
+    if (old != "" && new != "") map[old] = new
+    next
+  }
+  {
+    line = $0
+    eq = index(line, "=")
+    if (eq > 0 && line !~ /^[[:space:]]*#/) {
+      keyfield = substr(line, 1, eq - 1)
+      rest = substr(line, eq)
+      match(keyfield, /^[[:space:]]*/)
+      lead = substr(keyfield, 1, RLENGTH)
+      tail = substr(keyfield, RLENGTH + 1)
+      match(tail, /[[:space:]]*$/)
+      trail = substr(tail, RSTART)
+      key = substr(tail, 1, RSTART - 1)
+      if (key in map) line = lead map[key] trail rest
+    }
+    print line
+  }
+  ' "$renames" "$local" > "$tmp" && cat "$tmp" > "$local"
+  rm -f "$tmp"
+steps: null
+postconditions:
+- name: stale_keys_gone
+  description: config/local.conf no longer sets any key that renames.conf lists under
+    its old name
+  probe: |-
+    ! comm -12 \
+      <(sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' config/renames.conf | sed -n 's/[[:space:]]*=.*$//p' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | sort -u) \
+      <(sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' config/local.conf | sed -n 's/[[:space:]]*=.*$//p' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | sort -u) \
+      | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: new_key_present
+  description: at least one of the new key names from renames.conf now appears in
+    the local override
+  probe: |-
+    comm -12 \
+      <(sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' config/renames.conf | sed -n 's/^[^=]*=//p' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | sort -u) \
+      <(sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' config/local.conf | sed -n 's/[[:space:]]*=.*$//p' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | sort -u) \
+      | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: local_override_still_untracked_ignored
+  description: config/local.conf remains on disk, ignored and not tracked after the
+    migration
+  probe: |-
+    test -f config/local.conf \
+      && git check-ignore -q -- config/local.conf \
+      && ! git ls-files --error-unmatch -- config/local.conf >/dev/null 2>&1
+  expect_exit: 0
+  expect_pattern: null
+variant: migrate_local
+provenance:
+  compiled_from_task: Some setting in my config has been renamed upstream. Sort the
+    config out. Rename the old key in my own override file, and keep that file out
+    of git.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Some setting in my config has been renamed upstream. Sort the config
+    out. Rename the old key in my own override file, and keep that file out of git./seed-12-config_renamed-28615
+  fault: config_renamed
+status: admitted

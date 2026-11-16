@@ -1,0 +1,75 @@
+id: submodule_moved-occ2-repin-submodule-to-upstream
+intent: Fetch upstream, fast-forward the current branch to it, and check the nested
+  submodule out at the commit upstream pins.
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: upstream_tracking_ref_exists
+  description: the upstream tracking ref is available locally
+  probe: git rev-parse --verify --quiet "{upstream_remote}/{upstream_branch}^{commit}"
+  expect_exit: 0
+  expect_pattern: null
+- name: head_can_fast_forward_to_upstream
+  description: HEAD is an ancestor of the upstream tip
+  probe: git merge-base --is-ancestor HEAD "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: head_has_submodule_gitlink
+  description: HEAD records the given path as a submodule gitlink
+  probe: git ls-tree -z HEAD -- "{submodule_path}" | tr '\0' '\n' | cut -d' ' -f1
+    | grep -qx 160000
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_has_submodule_gitlink
+  description: upstream records the same path as a submodule gitlink
+  probe: git ls-tree -z "{upstream_remote}/{upstream_branch}" -- "{submodule_path}"
+    | tr '\0' '\n' | cut -d' ' -f1 | grep -qx 160000
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_is_initialized
+  description: the submodule has its own git metadata at the checkout path
+  probe: test -e "{submodule_path}/.git"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_pin_or_checkout_differs_from_upstream
+  description: the superproject pin or the submodule checkout differs from upstream
+  probe: |-
+    head_pin=$(git rev-parse "HEAD:{submodule_path}")
+    upstream_pin=$(git rev-parse "{upstream_remote}/{upstream_branch}:{submodule_path}")
+    checkout_pin=$(git -C "{submodule_path}" rev-parse HEAD)
+    test "$head_pin" != "$upstream_pin" || test "$checkout_pin" != "$upstream_pin"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch "{upstream_remote}"
+  git merge --ff-only "{upstream_remote}/{upstream_branch}"
+  git submodule update --init "{submodule_path}"
+steps: null
+postconditions:
+- name: head_matches_upstream_tip
+  description: HEAD is the upstream tip
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse "{upstream_remote}/{upstream_branch}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: superproject_pin_matches_upstream
+  description: the superproject gitlink for the submodule matches upstream
+  probe: test "$(git rev-parse "HEAD:{submodule_path}")" = "$(git rev-parse "{upstream_remote}/{upstream_branch}:{submodule_path}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_checkout_matches_upstream_pin
+  description: the submodule checkout is the commit upstream pins
+  probe: test "$(git -C "{submodule_path}" rev-parse HEAD)" = "$(git rev-parse "{upstream_remote}/{upstream_branch}:{submodule_path}")"
+  expect_exit: 0
+  expect_pattern: null
+variant: repin
+provenance:
+  compiled_from_task: Upstream and this clone disagree about a nested repository.
+    Reconcile them. Check the nested repository out at the commit upstream now pins.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Upstream and this clone disagree about a nested repository. Reconcile
+    them. Check the nested repository out at the commit upstream now pins./seed-1-submodule_moved-4812
+  fault: submodule_moved
+status: admitted

@@ -1,0 +1,69 @@
+id: submodule_moved-occ3-repin-submodule-to-upstream
+intent: Initialise the nested submodule and update its pinned commit to the submodule's
+  upstream head, committing the new gitlink.
+parameters:
+- submodule_path
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: has_submodule_declaration
+  description: .gitmodules declares the given submodule path
+  probe: git config -f .gitmodules --get-regexp '\.path$' | sed 's/^[^ ]* //' | grep
+    -qxF -- '{submodule_path}'
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_clean_if_initialised
+  description: an already-initialised submodule has no local modifications that would
+    block checkout
+  probe: |-
+    if git submodule status -- "{submodule_path}" | grep -q '^-'; then
+      exit 0
+    fi
+    test -z "$(git -C "{submodule_path}" status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_needs_repin
+  description: the submodule is uninitialised, disagrees with the superproject index,
+    or is behind the last-known remote head
+  probe: |-
+    if git submodule status -- "{submodule_path}" | grep -q '^[+-]'; then
+      exit 0
+    fi
+    test "$(git -C "{submodule_path}" rev-parse HEAD)" != "$(git -C "{submodule_path}" rev-parse refs/remotes/origin/HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: tracks_upstream
+  description: the current branch tracks the supplied upstream remote branch
+  probe: test "$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}')" =
+    '{upstream_remote}/{upstream_branch}'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git -c protocol.file.allow=always submodule update --init --remote "{submodule_path}"
+  git add -- "{submodule_path}"
+  if ! git diff --cached --quiet -- "{submodule_path}"; then
+    git -c user.name='git maintenance' -c user.email='maintenance@invalid' commit -m "chore: update {submodule_path} to upstream" -- "{submodule_path}"
+  fi
+steps: null
+postconditions:
+- name: submodule_initialised_and_pinned
+  description: the submodule is checked out at the commit recorded in the superproject
+    index
+  probe: git submodule status -- "{submodule_path}" | grep -q '^ '
+  expect_exit: 0
+  expect_pattern: null
+- name: superproject_clean_for_submodule
+  description: the superproject has no pending changes for the submodule path
+  probe: test -z "$(git status --porcelain -- "{submodule_path}")"
+  expect_exit: 0
+  expect_pattern: null
+variant: repin
+provenance:
+  compiled_from_task: Get this repo's nested dependency consistent with upstream.
+    Initialise the nested repository and check it out.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this repo's nested dependency consistent with upstream. Initialise
+    the nested repository and check it out./seed-5-submodule_moved-4812
+  fault: submodule_moved
+status: candidate

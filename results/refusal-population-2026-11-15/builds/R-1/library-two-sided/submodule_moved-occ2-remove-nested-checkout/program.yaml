@@ -1,0 +1,84 @@
+id: submodule_moved-occ2-remove-nested-checkout
+intent: Bring the nested submodule into line with upstream by fast-forwarding to upstream's
+  commit that dropped it and deleting the leftover nested checkout.
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: upstream_tracking_ref_exists
+  description: The upstream remote-tracking branch is present and resolves to a commit.
+  probe: git rev-parse --verify --quiet "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: head_tracks_submodule_at_path
+  description: HEAD records a gitlink (mode 160000) at the submodule path.
+  probe: git ls-tree HEAD -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: ^160000 commit [0-9a-f]+
+- name: upstream_no_longer_has_path
+  description: Upstream's tree contains nothing at the submodule path, so upstream
+    dropped it.
+  probe: '! git ls-tree "{upstream_remote}/{upstream_branch}" -- "{submodule_path}"
+    | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: fast_forward_possible
+  description: HEAD is an ancestor of upstream, so the update is a fast-forward.
+  probe: git merge-base --is-ancestor HEAD "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: No staged or unstaged changes to tracked files.
+  probe: git diff --quiet && git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+- name: nested_checkout_present
+  description: The nested checkout directory still exists on disk.
+  probe: test -d "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch "{upstream_remote}" || true
+  set -e
+  git merge --ff-only "{upstream_remote}/{upstream_branch}"
+  git clean -ffd -- "{submodule_path}" || true
+  rm -rf -- "{submodule_path}"
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is exactly upstream's tip after the fast-forward.
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse "{upstream_remote}/{upstream_branch}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_entry_removed
+  description: HEAD no longer records a gitlink at the submodule path.
+  probe: '! git ls-tree HEAD -- "{submodule_path}" | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: gitmodules_no_longer_lists_path
+  description: HEAD's .gitmodules has no submodule path entry for the given path.
+  probe: test -z "$(git config -f .gitmodules --get-regexp '\.path$' 2>/dev/null |
+    sed 's/^[^ ]* //' | grep -xF -- "{submodule_path}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: nested_checkout_deleted
+  description: The nested checkout directory is gone from the working tree.
+  probe: '! test -e "{submodule_path}"'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after
+  description: The working tree has no modified, staged or untracked files left.
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: remove
+provenance:
+  compiled_from_task: A nested repository in this project needs bringing into line.
+    Remove the nested checkout, the way upstream did.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: A nested repository in this project needs bringing into line. Remove
+    the nested checkout, the way upstream did./seed-8-submodule_moved-214
+  fault: submodule_moved
+status: admitted

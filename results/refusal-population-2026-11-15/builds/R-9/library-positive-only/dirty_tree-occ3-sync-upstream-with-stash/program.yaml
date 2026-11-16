@@ -1,0 +1,82 @@
+id: dirty_tree-occ3-sync-upstream-with-stash
+intent: Fetch the latest from the upstream remote, fast-forward the current branch
+  to it, and keep every uncommitted change by stashing it (including untracked files)
+  before the update and popping it back afterwards.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_present
+  description: the remote named by upstream_remote is configured in this repository
+  probe: git remote get-url {upstream_remote} >/dev/null 2>&1
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_dirty
+  description: there is uncommitted or untracked work in the tree, i.e. something
+    that has to be stashed and restored rather than discarded
+  probe: git status --porcelain=v1 | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_present
+  description: the remote-tracking branch for the given remote and branch exists locally
+  probe: git rev-parse --verify --quiet refs/remotes/{upstream_remote}/{upstream_branch}^{commit}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ahead_of_head
+  description: the remote-tracking branch has commits the current branch does not
+  probe: test "$(git rev-list --count HEAD..refs/remotes/{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: fast_forwardable
+  description: the current branch is an ancestor of the remote-tracking branch, so
+    the update is a fast-forward with no local-only commits to reconcile
+  probe: git merge-base --is-ancestor HEAD refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: no_existing_stash_entries
+  description: the stash stack is empty, so the entry this program creates and drops
+    is unambiguous and leaving it behind would mean the restore failed
+  probe: '! git stash list | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git stash push --include-untracked -m "pre-update WIP"
+  git fetch {upstream_remote}
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+  git stash pop
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: the current branch now points at the same commit as the upstream branch
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse refs/remotes/{upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: work_restored
+  description: uncommitted work is present in the working tree again after the update
+  probe: git status --porcelain=v1 | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_entries
+  description: the restored work applied cleanly, with no conflicted index entries
+  probe: '! git ls-files -u | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: stash_emptied
+  description: the stash entry the program created was popped and dropped, so nothing
+    was left stranded and the pop did not fail
+  probe: '! git stash list | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+variant: stash
+provenance:
+  compiled_from_task: Get the latest from upstream here, and keep every change I have
+    not saved yet. Stash my uncommitted work, update the branch, then put my work
+    back.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get the latest from upstream here, and keep every change I have not
+    saved yet. Stash my uncommitted work, update the branch, then put my work back./seed-5-dirty_tree-12721
+  fault: dirty_tree
+status: admitted

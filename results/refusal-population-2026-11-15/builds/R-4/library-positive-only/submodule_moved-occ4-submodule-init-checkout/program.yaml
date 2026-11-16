@@ -1,0 +1,51 @@
+id: submodule_moved-occ4-submodule-init-checkout
+intent: initialise a declared nested repository and check it out at the recorded commit
+parameters:
+- submodule_path
+preconditions:
+- name: submodule_declared
+  description: .gitmodules declares a submodule at the requested path
+  probe: git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | sed 's/^[^
+    ]* //' | grep -Fxq '{submodule_path}'
+  expect_exit: 0
+  expect_pattern: null
+- name: gitlink_recorded
+  description: the superproject index records a gitlink at the requested path
+  probe: git ls-files -s -- '{submodule_path}' | awk '$1 == "160000" { found = 1 }
+    END { exit !found }'
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_not_initialised
+  description: the submodule at the requested path has not been checked out yet
+  probe: git submodule status -- '{submodule_path}' | grep -q '^-'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git submodule update --init -- '{submodule_path}'
+steps: null
+postconditions:
+- name: submodule_checked_out
+  description: the submodule is initialised and its HEAD matches the recorded gitlink
+  probe: git submodule status -- '{submodule_path}' | grep -q '^ '
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_worktree_clean
+  description: the initialised submodule has no local modifications
+  probe: '! git -C ''{submodule_path}'' status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: superproject_clean_for_submodule
+  description: the superproject reports no modification for the submodule path
+  probe: '! git status --porcelain -- ''{submodule_path}'' | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+variant: init
+provenance:
+  compiled_from_task: A nested repository in this project needs bringing into line.
+    Initialise the nested repository and check it out.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: A nested repository in this project needs bringing into line. Initialise
+    the nested repository and check it out./seed-4-submodule_moved-29016
+  fault: submodule_moved
+status: admitted

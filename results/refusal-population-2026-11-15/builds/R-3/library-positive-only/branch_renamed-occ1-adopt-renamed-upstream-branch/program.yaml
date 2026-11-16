@@ -1,0 +1,74 @@
+id: branch_renamed-occ1-adopt-renamed-upstream-branch
+intent: Rename the current local branch to the upstream remote's new default branch
+  name, set it to track that branch, and fast-forward it when possible.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_default_branch_is_target
+  description: The upstream remote's HEAD advertises the requested branch as its default.
+  probe: git ls-remote --symref "{upstream_remote}" HEAD
+  expect_exit: 0
+  expect_pattern: 'ref: refs/heads/{upstream_branch}[[:space:]]+HEAD'
+- name: current_branch_needs_rename
+  description: HEAD is attached to a different local branch and no local branch already
+    has the upstream name.
+  probe: |-
+    cur=$(git symbolic-ref --quiet --short HEAD) || exit 1
+    [ -n "$cur" ] || exit 1
+    [ "$cur" != "{upstream_branch}" ] || exit 1
+    ! git show-ref --verify --quiet "refs/heads/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_is_clean
+  description: There are no tracked or untracked changes that a fetch or fast-forward
+    could disturb.
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  set -e
+  git fetch "{upstream_remote}" "+refs/heads/{upstream_branch}:refs/remotes/{upstream_remote}/{upstream_branch}"
+  git branch -m "{upstream_branch}"
+  git branch --set-upstream-to="{upstream_remote}/{upstream_branch}" "{upstream_branch}"
+  if git merge-base --is-ancestor HEAD "refs/remotes/{upstream_remote}/{upstream_branch}"; then
+    git merge --ff-only "refs/remotes/{upstream_remote}/{upstream_branch}"
+  fi
+steps: null
+postconditions:
+- name: head_is_renamed_branch
+  description: HEAD is attached to the upstream branch name.
+  probe: '[ "$(git symbolic-ref --quiet --short HEAD)" = "{upstream_branch}" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_tracks_upstream
+  description: The renamed local branch's upstream is the requested remote-tracking
+    branch.
+  probe: test "$(git for-each-ref --format='%(upstream:short)' 'refs/heads/{upstream_branch}')"
+    = "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: fast_forwarded_when_possible
+  description: If the local branch could be fast-forwarded to upstream, it now points
+    at upstream.
+  probe: |-
+    if git merge-base --is-ancestor HEAD "refs/remotes/{upstream_remote}/{upstream_branch}"; then
+      test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/remotes/{upstream_remote}/{upstream_branch}")"
+    fi
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_remains_clean
+  description: The fetch and optional fast-forward left no uncommitted changes.
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: I think upstream renamed things. Get this fork following it
+    again. Rename my branch to upstream's new name and track it.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: I think upstream renamed things. Get this fork following it again. Rename
+    my branch to upstream's new name and track it./seed-4-branch_renamed-12361
+  fault: branch_renamed
+status: admitted

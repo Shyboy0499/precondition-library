@@ -1,0 +1,153 @@
+id: lockfile_conflict-occ3-merge-upstream-lockfile
+intent: Catch up with upstream by merging it, resolving each conflicted file by starting
+  from upstream's version and re-adding only the lines the local side inserted, so
+  neither upstream-removed nor locally-removed content is revived, then committing
+  the merge.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_present
+  description: the upstream remote-tracking branch exists locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: behind_upstream
+  description: upstream has at least one commit that HEAD does not contain
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_ahead
+  description: the local branch has at least one commit upstream does not contain
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_or_merging
+  description: either the worktree is clean, or a merge is already in progress
+  probe: test -z "$(git status --porcelain)" || git rev-parse -q --verify MERGE_HEAD
+    >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+- name: overlapping_changes
+  description: both sides changed at least one common path since the merge base
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+    comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort -u) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort -u) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote} || true
+  if ! git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+    git merge --no-ff --no-commit {upstream_remote}/{upstream_branch} || true
+  fi
+  tmp=$(mktemp -d)
+  git diff --name-only --diff-filter=U -z | tr '\0' '\n' > "$tmp/conflicts"
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    if ! git cat-file -e "MERGE_HEAD:$f" 2>/dev/null || ! git cat-file -e "HEAD:$f" 2>/dev/null; then
+      git rm -f --ignore-unmatch -- "$f" >/dev/null 2>&1
+      continue
+    fi
+    base=$(git merge-base HEAD MERGE_HEAD)
+    git show "MERGE_HEAD:$f" > "$tmp/up"
+    git show "HEAD:$f" > "$tmp/local"
+    if git cat-file -e "$base:$f" 2>/dev/null; then
+      git show "$base:$f" > "$tmp/base"
+    else
+      : > "$tmp/base"
+    fi
+    git diff --no-index -U0 "$tmp/base" "$tmp/local" > "$tmp/ldiff" 2>/dev/null || true
+    awk '
+      function flush(   i) {
+        if (na > nd) for (i = nd + 1; i <= na; i++) print adds[i]
+        na = 0; nd = 0
+      }
+      /^@@/ { flush(); next }
+      /^\+\+\+/ { next }
+      /^---/ { next }
+      /^\+/ { adds[++na] = substr($0, 2); next }
+      /^-/ { nd++; next }
+      END { flush() }
+    ' "$tmp/ldiff" > "$tmp/add"
+    if [ -s "$tmp/add" ]; then
+      grep -v '^$' "$tmp/up" > "$tmp/uppat" 2>/dev/null || true
+      grep -vxF -f "$tmp/uppat" "$tmp/add" > "$tmp/add2" 2>/dev/null || true
+      cat "$tmp/add2" > "$tmp/add"
+    fi
+    if [ -s "$tmp/add" ]; then
+      anchor=$(ADD="$tmp/add" UP="$tmp/up" awk '
+        FILENAME == ENVIRON["ADD"] { add[$0] = 1; next }
+        FILENAME == ENVIRON["UP"] { up[$0] = 1; next }
+        { L[++n] = $0 }
+        END {
+          last = 0
+          for (i = 1; i <= n; i++) if (L[i] in add) last = i
+          for (i = last + 1; i <= n; i++) if (L[i] in up) { print L[i]; exit }
+        }' "$tmp/add" "$tmp/up" "$tmp/local")
+      if [ -z "$anchor" ] && [ -s "$tmp/up" ]; then
+        anchor=$(tail -n 1 "$tmp/up")
+      fi
+      ADD="$tmp/add" ANCHOR="$anchor" awk '
+        FILENAME == ENVIRON["ADD"] { A[++na] = $0; next }
+        {
+          if (!done && ENVIRON["ANCHOR"] != "" && $0 == ENVIRON["ANCHOR"]) {
+            for (i = 1; i <= na; i++) print A[i]
+            done = 1
+          }
+          print
+        }
+        END { if (!done) for (i = 1; i <= na; i++) print A[i] }
+      ' "$tmp/add" "$tmp/up" > "$tmp/merged"
+    else
+      cat "$tmp/up" > "$tmp/merged"
+    fi
+    cat "$tmp/merged" > "$f"
+    git add -- "$f"
+  done < "$tmp/conflicts"
+  rm -rf "$tmp"
+  git commit -m "merge {upstream_remote}/{upstream_branch}: keep upstream deps and re-add local additions" || true
+steps: null
+postconditions:
+- name: merge_committed
+  description: no merge is left in progress
+  probe: '! git rev-parse -q --verify MERGE_HEAD'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_now_merged
+  description: the upstream branch is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: history_preserved
+  description: HEAD is a merge commit whose first parent is the pre-merge local tip,
+    not upstream
+  probe: test "$(git rev-list --parents -n 1 HEAD | awk '{print NF}')" -eq 3 && test
+    "$(git rev-parse HEAD^1)" != "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: no tracked file still contains conflict markers
+  probe: '! git grep -I -n -e ''^<<<<<<< '' -e ''^>>>>>>> '' -- .'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the working tree is clean after the merge commit
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: Catch up with upstream without losing what either side added,
+    or reviving what either side removed. Start from upstream's dependency file and
+    add back what I added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Catch up with upstream without losing what either side added, or reviving
+    what either side removed. Start from upstream's dependency file and add back what
+    I added./seed-5-lockfile_conflict-7516
+  fault: lockfile_conflict
+status: admitted

@@ -1,0 +1,7 @@
+Primary metric, uninformed regime, 480 labelled pairs (spec §7 item 1, ADR-0008)
+  arm 3 (pre-registered coverage point): coverage 240/480, mismatch 0/240
+  arm 2 curve: 82 operating point(s), each with a 95% Wilson interval in figure1.csv
+  NO COMPARISON: arm 3 decides all 480 pairs correctly, so it is the labelling rule rather than a dispatcher: the comparison needs fallible (compiled) programs
+  power (item 3): with 241 and 240 fires, alpha 0.05 two-sided and power 0.8, the smallest detectable mismatch difference is 0.128 at a 50% base rate and 0.128 at the observed 0.470
+  baseline arm 2b (soft vote): curve, 2 operating point(s) -- context, not part of the claim
+  baseline arm 2c (intent key): point, 1 operating point(s) -- context, not part of the claim

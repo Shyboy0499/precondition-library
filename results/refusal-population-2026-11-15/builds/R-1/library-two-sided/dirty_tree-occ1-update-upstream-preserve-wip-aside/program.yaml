@@ -1,0 +1,118 @@
+id: dirty_tree-occ1-update-upstream-preserve-wip-aside
+intent: Bring the current branch up to date with upstream while preserving work in
+  progress, keeping any unsaved file that collides with upstream's version beside
+  it as <name>.local.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_has_new_commits
+  description: the remote-tracking upstream branch has at least one commit that HEAD
+    lacks
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: no_local_only_commits
+  description: HEAD has no commits that upstream lacks, so the update can be a fast-forward
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^0$
+- name: has_untracked_upstream_collision
+  description: an untracked work-in-progress file occupies a path present in upstream's
+    tree
+  probe: |-
+    comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort -u) \
+      <(git ls-tree -r --name-only -z {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort -u) \
+      | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: the repository is not in the middle of a merge that would block a fast-forward
+  probe: '! git rev-parse -q --verify MERGE_HEAD'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+
+  tmp=$(mktemp -d)
+  trap 'rm -rf "$tmp"' EXIT
+
+  git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} \
+    | tr '\0' '\n' | sort -u > "$tmp/upstream_changed"
+  git ls-tree -r --name-only -z {upstream_remote}/{upstream_branch} \
+    | tr '\0' '\n' | sort -u > "$tmp/upstream_tree"
+  git diff --name-only -z HEAD \
+    | tr '\0' '\n' | sort -u > "$tmp/local_tracked"
+  git ls-files --others --exclude-standard -z \
+    | tr '\0' '\n' | sort -u > "$tmp/local_untracked"
+
+  comm -12 "$tmp/local_tracked" "$tmp/upstream_changed" > "$tmp/tracked_collisions"
+  comm -12 "$tmp/local_untracked" "$tmp/upstream_tree" > "$tmp/untracked_collisions"
+
+  while IFS= read -r p; do
+    [ -z "$p" ] && continue
+    [ -e "$p" ] || continue
+    cp -- "$p" "$p.local"
+  done < "$tmp/tracked_collisions"
+
+  while IFS= read -r p; do
+    [ -z "$p" ] && continue
+    cp -- "$p" "$p.local"
+  done < "$tmp/untracked_collisions"
+
+  while IFS= read -r p; do
+    [ -z "$p" ] && continue
+    if git cat-file -e "HEAD:$p" 2>/dev/null; then
+      git checkout HEAD -- "$p"
+    else
+      git rm --cached --ignore-unmatch -- "$p" >/dev/null 2>&1 || true
+      rm -f -- "$p"
+    fi
+  done < "$tmp/tracked_collisions"
+
+  while IFS= read -r p; do
+    [ -z "$p" ] && continue
+    rm -f -- "$p"
+  done < "$tmp/untracked_collisions"
+
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: head_is_upstream
+  description: the branch now points at upstream's commit
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_collision_saved_as_local
+  description: a saved `<name>.local` file sits beside a path that is now tracked
+    in upstream's tree
+  probe: |-
+    found=
+    while IFS= read -r f; do
+      [ -z "$f" ] && continue
+      case "$f" in
+        *.local)
+          base=${f%.local}
+          if git cat-file -e "HEAD:$base" 2>/dev/null; then
+            found=1
+            break
+          fi
+          ;;
+      esac
+    done < <(git ls-files --others --exclude-standard -z | tr '\0' '\n')
+    [ -n "$found" ]
+  expect_exit: 0
+  expect_pattern: null
+variant: aside
+provenance:
+  compiled_from_task: Bring this branch up to date with upstream, but my work in progress
+    must survive. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Bring this branch up to date with upstream, but my work in progress
+    must survive. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update./seed-2-dirty_tree-8327
+  fault: dirty_tree
+status: admitted

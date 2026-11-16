@@ -1,0 +1,141 @@
+id: lockfile_conflict-occ4-resolve-lockfile-conflict-take-upstream
+intent: Resolve a merge conflict in the dependency lock file by taking upstream's
+  version as the base and re-adding the lines the local side added, then commit the
+  merge.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_exists
+  description: the upstream remote-tracking branch exists
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_diverged
+  description: the local branch and the upstream branch have each moved since their
+    merge base
+  probe: |-
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0 &&
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: shared_file_changed
+  description: both sides changed at least one common file since the merge base
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+    comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) |
+    grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_ready
+  description: the tracked worktree is clean or a merge is already in progress
+  probe: test -z "$(git status --porcelain --untracked-files=no)" || test -n "$(git
+    rev-parse --verify --quiet MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch {upstream_remote}
+  if [ -z "$(git rev-parse --verify --quiet MERGE_HEAD)" ]; then
+    git merge --no-edit {upstream_remote}/{upstream_branch} || true
+  fi
+  base=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+  while IFS= read -r -d '' f; do
+    tmp=$(mktemp -d)
+    git show {upstream_remote}/{upstream_branch}:"$f" > "$tmp/up"
+    git show HEAD:"$f" > "$tmp/local"
+    git diff --unified=0 --no-color "$base" HEAD -- "$f" |
+      awk '/^@@/ { if (h && !m) for (i=1;i<=n;i++) print a[i]; h=1; m=0; n=0; next } h && /^-/ { m=1; next } h && /^\+/ { a[++n]=substr($0,2) } END { if (h && !m) for (i=1;i<=n;i++) print a[i] }' > "$tmp/adds"
+    awk -v first="$tmp/up" -v addfile="$tmp/adds" '
+      FILENAME==first { up[++nu]=$0; ups[$0]=1; next }
+      { loc[++nl]=$0 }
+      END {
+        na=0
+        while ((getline line < addfile) > 0) {
+          if (line in ups) continue
+          if (line in seen) continue
+          seen[line]=1
+          adds[++na]=line
+        }
+        for (j=1;j<=na;j++) {
+          ai=0
+          li=0
+          for (k=1;k<=nl;k++) if (loc[k]==adds[j]) { li=k; break }
+          if (li>0) {
+            for (k=li-1;k>=1;k--) {
+              if (loc[k] in ups) {
+                for (m=1;m<=nu;m++) if (up[m]==loc[k]) ai=m
+                break
+              }
+            }
+          }
+          anchor[j] = (ai>0) ? ai : -1
+        }
+        for (j=1;j<=na;j++) if (anchor[j]==-1) print adds[j]
+        for (i=1;i<=nu;i++) {
+          print up[i]
+          for (j=1;j<=na;j++) if (anchor[j]==i) print adds[j]
+        }
+      }
+    ' "$tmp/up" "$tmp/local" > "$tmp/resolved"
+    cat "$tmp/resolved" > "$f"
+    git add -- "$f"
+    rm -rf "$tmp"
+  done < <(git diff --name-only --diff-filter=U -z)
+  if [ -n "$(git rev-parse --verify --quiet MERGE_HEAD)" ]; then
+    git commit --no-edit
+  fi
+steps: null
+postconditions:
+- name: merge_committed
+  description: HEAD is a merge commit with two parents
+  probe: test "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 3
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: no conflicted paths remain in the index
+  probe: '! git diff --name-only --diff-filter=U -z | tr ''\0'' ''\n'' | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: none of the files changed on both sides still contain conflict markers
+  probe: |-
+    base=$(git merge-base HEAD^1 HEAD^2) &&
+    comm -12 \
+      <(git diff --name-only -z "$base" HEAD^1 | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" HEAD^2 | tr '\0' '\n' | sort) |
+    while IFS= read -r f; do
+      if grep -I -q -E '^(<<<<<<< |=======$|>>>>>>> )' "$f"; then
+        exit 1
+      fi
+    done
+  expect_exit: 0
+  expect_pattern: null
+- name: local_additions_preserved
+  description: every line the local side added to a file both sides changed is present
+    in the result
+  probe: |-
+    base=$(git merge-base HEAD^1 HEAD^2) &&
+    comm -12 \
+      <(git diff --name-only -z "$base" HEAD^1 | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" HEAD^2 | tr '\0' '\n' | sort) |
+    while IFS= read -r f; do
+      awk -v first="$f" 'FILENAME==first { seen[$0]=1; next } { if (!($0 in seen)) bad=1 } END { exit (bad+0) }' \
+        "$f" \
+        <(git diff --unified=0 --no-color "$base" HEAD^1 -- "$f" | awk '/^@@/ { if (h && !m) for (i=1;i<=n;i++) print a[i]; h=1; m=0; n=0; next } h && /^-/ { m=1; next } h && /^\+/ { a[++n]=substr($0,2) } END { if (h && !m) for (i=1;i<=n;i++) print a[i] }') ||
+      exit 1
+    done
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: The sync conflicts. Resolve it the way this project expects.
+    Start from upstream's dependency file and add back what I added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: The sync conflicts. Resolve it the way this project expects. Start from
+    upstream's dependency file and add back what I added./seed-6-lockfile_conflict-7516
+  fault: lockfile_conflict
+status: admitted

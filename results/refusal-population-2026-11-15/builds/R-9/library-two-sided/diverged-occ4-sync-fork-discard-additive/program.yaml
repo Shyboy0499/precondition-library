@@ -1,0 +1,92 @@
+id: diverged-occ4-sync-fork-discard-additive
+intent: Get a diverged fork back in sync with upstream by discarding local commits
+  when they only add new files, so the current branch matches upstream exactly.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_present
+  description: the named upstream remote is configured
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_present
+  description: the upstream branch has a remote-tracking ref that can be reset to
+  probe: git rev-parse --verify --quiet refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: current_branch_attached
+  description: HEAD is on a branch, so reset moves that branch rather than a detached
+    HEAD
+  probe: git symbolic-ref -q HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: there are no tracked or untracked changes that reset would discard
+  probe: test -z "$(git status --porcelain --untracked-files=normal)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_conflicts
+  description: there are no unmerged paths from a conflict in progress
+  probe: test -z "$(git diff --name-only --diff-filter=U)"
+  expect_exit: 0
+  expect_pattern: null
+- name: has_local_commits_to_discard
+  description: the current branch has commits not present upstream
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_has_new_commits
+  description: upstream has commits that the branch does not yet contain
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: local_changes_only_add_files
+  description: local-only commits add new files and do not modify, delete, or rename
+    files that already exist at the merge base
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    test -z "$(git diff --name-only --diff-filter=MDRT -z "$base" HEAD | tr '\0' '\n')"
+  expect_exit: 0
+  expect_pattern: null
+- name: remote_head_matches_upstream_branch
+  description: if the upstream remote declares a default branch, it is the branch
+    being reset to
+  probe: |-
+    ref=$(git symbolic-ref -q refs/remotes/{upstream_remote}/HEAD) || exit 0
+    test "$ref" = "refs/remotes/{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git reset --hard {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is exactly upstream's commit
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_local_commits_remain
+  description: the current branch has no commits absent from upstream
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -eq 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_reset
+  description: the reset left a clean working tree
+  probe: test -z "$(git status --porcelain --untracked-files=normal)"
+  expect_exit: 0
+  expect_pattern: null
+variant: discard
+provenance:
+  compiled_from_task: 'Get this fork back in sync with upstream without losing my
+    commits. My local commits can go: make my branch match upstream exactly.'
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: 'Get this fork back in sync with upstream without losing my commits.
+    My local commits can go: make my branch match upstream exactly./seed-1-diverged-12721'
+  fault: diverged
+status: admitted

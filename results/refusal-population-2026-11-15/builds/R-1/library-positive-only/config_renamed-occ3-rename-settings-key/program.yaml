@@ -1,0 +1,153 @@
+id: config_renamed-occ3-rename-settings-key
+intent: Migrate the project's settings to the current key names by renaming each stale
+  old key to its new name and preserving its value.
+parameters: []
+preconditions:
+- name: renames_mapping_present
+  description: a tracked renames mapping file exists and contains at least one old
+    = new pair
+  probe: |-
+    renames=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n1)
+    test -n "$renames" || exit 1
+    test -f "$renames" || exit 1
+    found=1
+    while IFS= read -r line; do
+      case "$line" in
+        \#*|"") continue ;;
+      esac
+      old=${line%%=*}
+      new=${line#*=}
+      old=$(printf '%s' "$old" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+      new=$(printf '%s' "$new" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+      if [ -n "$old" ] && [ -n "$new" ]; then
+        found=0
+        break
+      fi
+    done < "$renames"
+    [ "$found" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_key_present
+  description: a tracked file other than the renames mapping contains at least one
+    old key assignment
+  probe: |-
+    renames=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n1)
+    test -n "$renames" || exit 1
+    found=1
+    while IFS= read -r line; do
+      case "$line" in
+        \#*|"") continue ;;
+      esac
+      old=${line%%=*}
+      new=${line#*=}
+      old=$(printf '%s' "$old" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+      new=$(printf '%s' "$new" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+      [ -n "$old" ] && [ -n "$new" ] || continue
+      old_re=$(printf '%s' "$old" | sed 's/[][\.^$*+?(){}|/]/\\&/g')
+      while IFS= read -r -d '' file; do
+        [ "$file" = "$renames" ] && continue
+        case "$file" in
+          */renames.conf|renames.conf) continue ;;
+        esac
+        [ -f "$file" ] || continue
+        [ -L "$file" ] && continue
+        if grep -IqE "^[[:space:]]*${old_re}[[:space:]]*=" "$file"; then
+          found=0
+          break 2
+        fi
+      done < <(git ls-files -z)
+    done < "$renames"
+    [ "$found" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the working tree has no staged, unstaged, or untracked changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+
+  renames=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n1)
+  test -n "$renames"
+
+  while IFS= read -r line; do
+    case "$line" in
+      \#*|"") continue ;;
+    esac
+    old=${line%%=*}
+    new=${line#*=}
+    old=$(printf '%s' "$old" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    new=$(printf '%s' "$new" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    [ -n "$old" ] && [ -n "$new" ] || continue
+
+    old_re=$(printf '%s' "$old" | sed 's/[][\.^$*+?(){}|/]/\\&/g')
+    new_repl=$(printf '%s' "$new" | sed 's/[\/&\\]/\\&/g')
+
+    while IFS= read -r -d '' file; do
+      [ "$file" = "$renames" ] && continue
+      case "$file" in
+        */renames.conf|renames.conf) continue ;;
+      esac
+      [ -f "$file" ] || continue
+      [ -L "$file" ] && continue
+      if grep -IqE "^[[:space:]]*${old_re}[[:space:]]*=" "$file"; then
+        sed -i -E "s/^([[:space:]]*)${old_re}([[:space:]]*)=(.*)$/\1${new_repl}\2=\3/" "$file"
+      fi
+    done < <(git ls-files -z)
+  done < "$renames"
+
+  git add -u
+  if ! git diff --cached --quiet; then
+    git -c user.name="Setting Migrator" -c user.email="setting-migrator@example.com" commit -m "Rename old setting keys to current names"
+  fi
+steps: null
+postconditions:
+- name: no_stale_key_remains
+  description: no tracked file other than the renames mapping still contains an old
+    key assignment
+  probe: |-
+    renames=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n1)
+    test -n "$renames" || exit 1
+    found=1
+    while IFS= read -r line; do
+      case "$line" in
+        \#*|"") continue ;;
+      esac
+      old=${line%%=*}
+      new=${line#*=}
+      old=$(printf '%s' "$old" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+      new=$(printf '%s' "$new" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+      [ -n "$old" ] && [ -n "$new" ] || continue
+      old_re=$(printf '%s' "$old" | sed 's/[][\.^$*+?(){}|/]/\\&/g')
+      while IFS= read -r -d '' file; do
+        [ "$file" = "$renames" ] && continue
+        case "$file" in
+          */renames.conf|renames.conf) continue ;;
+        esac
+        [ -f "$file" ] || continue
+        [ -L "$file" ] && continue
+        if grep -IqE "^[[:space:]]*${old_re}[[:space:]]*=" "$file"; then
+          found=0
+          break 2
+        fi
+      done < <(git ls-files -z)
+    done < "$renames"
+    [ "$found" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_commit
+  description: the migration has been committed and the working tree is clean
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: Migrate my settings to the current key names. Rename the old
+    key in the project's settings and keep its value.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Migrate my settings to the current key names. Rename the old key in
+    the project's settings and keep its value./seed-0-config_renamed-8327
+  fault: config_renamed
+status: candidate

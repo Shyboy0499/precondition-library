@@ -1,0 +1,67 @@
+id: dirty_tree-occ2-commit-dirty-then-rebase
+intent: Commit the user's uncommitted changes, then rebase the current branch onto
+  upstream so it is up to date while the changes are preserved.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: has_upstream_tracking_ref
+  description: the upstream remote-tracking branch exists locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_behind_upstream
+  description: the upstream branch has at least one commit not reachable from HEAD
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_dirty
+  description: there are uncommitted changes or untracked files in the working tree
+  probe: git status --porcelain -z | tr '\0' '\n' | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_or_rebase_in_progress
+  description: the repository is not in the middle of a merge, rebase, or cherry-pick
+  probe: |-
+    test ! -e "$(git rev-parse --git-path MERGE_HEAD)" &&
+    test ! -e "$(git rev-parse --git-path CHERRY_PICK_HEAD)" &&
+    test ! -d "$(git rev-parse --git-path rebase-merge)" &&
+    test ! -d "$(git rev-parse --git-path rebase-apply)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote} {upstream_branch}
+  git add -A
+  git commit -m "WIP: uncommitted work before syncing with upstream"
+  git rebase {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: worktree_clean
+  description: no uncommitted changes or untracked files remain
+  probe: '! git status --porcelain -z | tr ''\0'' ''\n'' | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: HEAD contains the fetched upstream tip
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commit_preserved
+  description: at least one local commit remains on top of upstream
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+variant: commit
+provenance:
+  compiled_from_task: My working tree has changes and the branch is behind upstream.
+    Fix that and keep my changes. Commit my uncommitted work first, then bring the
+    branch up to date.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: My working tree has changes and the branch is behind upstream. Fix that
+    and keep my changes. Commit my uncommitted work first, then bring the branch up
+    to date./seed-0-dirty_tree-25586
+  fault: dirty_tree
+status: admitted

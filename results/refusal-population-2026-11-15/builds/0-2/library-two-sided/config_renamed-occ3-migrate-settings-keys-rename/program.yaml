@@ -1,0 +1,203 @@
+id: config_renamed-occ3-migrate-settings-keys-rename
+intent: Rename outdated settings keys to their current names in the project settings,
+  preserving each key's value.
+parameters: []
+preconditions:
+- name: renames_file_present
+  description: the project declares key renames in config/renames.conf
+  probe: test -f config/renames.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: settings_file_present
+  description: the project has a settings file at config/settings.conf
+  probe: test -f config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: settings_tracked
+  description: config/settings.conf is tracked by git
+  probe: git ls-files --error-unmatch config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: settings_has_no_uncommitted_changes
+  description: config/settings.conf has no staged or unstaged changes
+  probe: git diff --quiet -- config/settings.conf && git diff --cached --quiet --
+    config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: has_stale_key
+  description: at least one outdated key from config/renames.conf is present and its
+    replacement is absent
+  probe: |-
+    awk '
+      FILENAME == ARGV[1] {
+        if ($0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*$/) next
+        eq = index($0, "=")
+        if (eq == 0) next
+        old = substr($0, 1, eq-1)
+        new = substr($0, eq+1)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+        if (old != "" && new != "") map[old] = new
+        next
+      }
+      {
+        line = $0
+        eq = index(line, "=")
+        if (eq > 0) {
+          key = substr(line, 1, eq-1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+          keys[key] = 1
+        }
+      }
+      END {
+        for (o in map) if ((o in keys) && !(map[o] in keys)) exit 0
+        exit 1
+      }
+    ' config/renames.conf config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflicting_new_keys
+  description: no outdated key is present alongside its replacement key
+  probe: |-
+    awk '
+      FILENAME == ARGV[1] {
+        if ($0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*$/) next
+        eq = index($0, "=")
+        if (eq == 0) next
+        old = substr($0, 1, eq-1)
+        new = substr($0, eq+1)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+        if (old != "" && new != "") map[old] = new
+        next
+      }
+      {
+        line = $0
+        eq = index(line, "=")
+        if (eq > 0) {
+          key = substr(line, 1, eq-1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+          keys[key] = 1
+        }
+      }
+      END {
+        for (o in map) if ((o in keys) && (map[o] in keys)) exit 1
+        exit 0
+      }
+    ' config/renames.conf config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  set -euo pipefail
+
+  settings=config/settings.conf
+  renames=config/renames.conf
+
+  while IFS= read -r line; do
+    case "$line" in
+      ''|'#'*|[[:space:]]*'#'*) continue ;;
+      *=*) ;;
+      *) continue ;;
+    esac
+    old=${line%%=*}
+    new=${line#*=}
+    old=$(printf '%s' "$old" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    new=$(printf '%s' "$new" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    [ -n "$old" ] || continue
+    [ -n "$new" ] || continue
+    tmp=$(mktemp)
+    awk -v old="$old" -v new="$new" '
+      {
+        line = $0
+        eq = index(line, "=")
+        if (eq > 0) {
+          keypart = substr(line, 1, eq-1)
+          trimmed = keypart
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", trimmed)
+          if (trimmed == old) {
+            lead = keypart
+            sub(/[^[:space:]].*$/, "", lead)
+            trail = keypart
+            sub(/^.*[^[:space:]]/, "", trail)
+            rest = substr(line, eq)
+            print lead new trail rest
+            next
+          }
+        }
+        print line
+      }
+    ' "$settings" > "$tmp"
+    cat "$tmp" > "$settings"
+    rm -f "$tmp"
+  done < "$renames"
+
+  git add -- "$settings"
+  if ! git diff --cached --quiet -- "$settings"; then
+    git commit -m "config: migrate settings keys to current names" -- "$settings"
+  fi
+steps: null
+postconditions:
+- name: settings_committed
+  description: the settings file is committed with no remaining local changes
+  probe: git diff --quiet HEAD -- config/settings.conf && git diff --cached --quiet
+    HEAD -- config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: settings_file_rewritten
+  description: the committed settings file is the previous version with every old
+    key renamed to its replacement, preserving values and formatting
+  probe: |-
+    awk '
+      FILENAME == ARGV[1] {
+        if ($0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*$/) next
+        eq = index($0, "=")
+        if (eq == 0) next
+        old = substr($0, 1, eq-1)
+        new = substr($0, eq+1)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+        if (old != "" && new != "") map[old] = new
+        next
+      }
+      FILENAME == ARGV[2] {
+        oldn++
+        line = $0
+        eq = index(line, "=")
+        if (eq > 0) {
+          keypart = substr(line, 1, eq-1)
+          trimmed = keypart
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", trimmed)
+          if (trimmed in map) {
+            lead = keypart
+            sub(/[^[:space:]].*$/, "", lead)
+            trail = keypart
+            sub(/^.*[^[:space:]]/, "", trail)
+            rest = substr(line, eq)
+            expected[oldn] = lead map[trimmed] trail rest
+            next
+          }
+        }
+        expected[oldn] = line
+        next
+      }
+      {
+        newn++
+        if ($0 != expected[newn]) bad = 1
+      }
+      END {
+        if (bad || newn != oldn) exit 1
+        exit 0
+      }
+    ' config/renames.conf <(git show HEAD^:config/settings.conf) <(git show HEAD:config/settings.conf)
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: Migrate my settings to the current key names. Rename the old
+    key in the project's settings and keep its value.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Migrate my settings to the current key names. Rename the old key in
+    the project's settings and keep its value./seed-0-config_renamed-27083
+  fault: config_renamed
+status: admitted

@@ -1,0 +1,49 @@
+id: submodule_moved-occ3-init-nested-repository
+intent: initialise the nested repository declared as a submodule and check it out
+  at the recorded pin
+parameters:
+- submodule_path
+preconditions:
+- name: submodule_declared_in_gitmodules
+  description: .gitmodules declares a submodule whose path is exactly the given nested
+    repository
+  probe: git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | cut -d'
+    ' -f2- | grep -Fxq -- '{submodule_path}'
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_not_initialised
+  description: the nested repository has not been initialised/checked out yet (status
+    marks it with '-')
+  probe: git submodule status -- {submodule_path} | grep -q '^-'
+  expect_exit: 0
+  expect_pattern: null
+body: git -c protocol.file.allow=always submodule update --init --recursive -- {submodule_path}
+steps: null
+postconditions:
+- name: submodule_initialised
+  description: the nested repository is initialised and sits exactly at the recorded
+    gitlink commit
+  probe: git submodule status -- {submodule_path} | grep -q '^ '
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_head_matches_gitlink
+  description: the nested repository's HEAD equals the commit recorded in the superproject
+    index
+  probe: test "$(git -C {submodule_path} rev-parse HEAD)" = "$(git rev-parse "HEAD:{submodule_path}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_registered
+  description: the submodule has a registered URL in the local configuration
+  probe: git config --get 'submodule.{submodule_path}.url'
+  expect_exit: 0
+  expect_pattern: null
+variant: init
+provenance:
+  compiled_from_task: A nested repository in this project needs bringing into line.
+    Initialise the nested repository and check it out.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: A nested repository in this project needs bringing into line. Initialise
+    the nested repository and check it out./seed-4-submodule_moved-17967
+  fault: submodule_moved
+status: admitted

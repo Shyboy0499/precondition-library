@@ -1,0 +1,147 @@
+id: config_renamed-occ1-config-drop-renamed-old-key
+intent: Remove stale config lines whose keys were renamed upstream when the new key
+  is already set, keeping the new setting.
+parameters: []
+preconditions:
+- name: config_files_tracked
+  description: config/renames.conf and config/settings.conf exist in the working tree
+    and are tracked by git
+  probe: test -f config/renames.conf && test -f config/settings.conf && git ls-files
+    -z | tr '\0' '\n' | grep -qxF 'config/renames.conf' && git ls-files -z | tr '\0'
+    '\n' | grep -qxF 'config/settings.conf'
+  expect_exit: 0
+  expect_pattern: null
+- name: has_rename_mapping
+  description: config/renames.conf contains at least one old = new key mapping
+  probe: |-
+    awk '
+      /^[[:space:]]*#/ { next }
+      /^[[:space:]]*$/ { next }
+      {
+        if (index($0, "=") == 0) next
+        o = $0; sub(/=.*/, "", o); sub(/#.*/, "", o); gsub(/[[:space:]]/, "", o)
+        n = $0; sub(/^[^=]*=/, "", n); sub(/#.*/, "", n); gsub(/[[:space:]]/, "", n)
+        if (o != "" && n != "" && o != n) found = 1
+      }
+      END { exit(found ? 0 : 1) }
+    ' config/renames.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_duplicate_present
+  description: at least one renamed old key and its already-set new key both appear
+    in config/settings.conf
+  probe: |-
+    awk '
+      NR == FNR {
+        if ($0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*$/) next
+        if (index($0, "=") == 0) next
+        o = $0; sub(/=.*/, "", o); sub(/#.*/, "", o); gsub(/[[:space:]]/, "", o)
+        n = $0; sub(/^[^=]*=/, "", n); sub(/#.*/, "", n); gsub(/[[:space:]]/, "", n)
+        if (o != "" && n != "" && o != n) ren[o] = n
+        next
+      }
+      {
+        if ($0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*$/) next
+        if (index($0, "=") == 0) next
+        k = $0; sub(/=.*/, "", k); gsub(/[[:space:]]/, "", k)
+        if (k != "") keys[k] = 1
+      }
+      END {
+        found = 0
+        for (o in ren) if (o in keys && (ren[o] in keys)) found = 1
+        exit(found ? 0 : 1)
+      }
+    ' config/renames.conf config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: head_and_tracked_worktree_clean
+  description: the repository has a HEAD commit and no staged or unstaged changes
+    to tracked files
+  probe: git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --quiet && git diff
+    --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  tmp=$(mktemp)
+  trap 'rm -f "$tmp"' EXIT
+  awk '
+    NR == FNR {
+      if ($0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*$/) next
+      if (index($0, "=") == 0) next
+      o = $0; sub(/=.*/, "", o); sub(/#.*/, "", o); gsub(/[[:space:]]/, "", o)
+      n = $0; sub(/^[^=]*=/, "", n); sub(/#.*/, "", n); gsub(/[[:space:]]/, "", n)
+      if (o != "" && n != "" && o != n) ren[o] = n
+      next
+    }
+    {
+      line[FNR] = $0
+      if ($0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*$/) next
+      if (index($0, "=") == 0) next
+      k = $0; sub(/=.*/, "", k); gsub(/[[:space:]]/, "", k)
+      if (k != "") keys[k] = 1
+    }
+    END {
+      for (o in ren) if (ren[o] in keys) drop[o] = 1
+      for (i = 1; i <= FNR; i++) {
+        k = line[i]
+        if (k ~ /^[[:space:]]*#/ || index(k, "=") == 0) { print line[i]; continue }
+        sub(/=.*/, "", k); gsub(/[[:space:]]/, "", k)
+        if (k in drop) continue
+        print line[i]
+      }
+    }
+  ' config/renames.conf config/settings.conf > "$tmp"
+  mv "$tmp" config/settings.conf
+  git add -- config/settings.conf
+  git commit -m "Remove renamed config keys superseded by new names"
+steps: null
+postconditions:
+- name: stale_duplicates_removed
+  description: no renamed old key remains alongside its already-set new key in config/settings.conf
+  probe: |-
+    awk '
+      NR == FNR {
+        if ($0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*$/) next
+        if (index($0, "=") == 0) next
+        o = $0; sub(/=.*/, "", o); sub(/#.*/, "", o); gsub(/[[:space:]]/, "", o)
+        n = $0; sub(/^[^=]*=/, "", n); sub(/#.*/, "", n); gsub(/[[:space:]]/, "", n)
+        if (o != "" && n != "" && o != n) ren[o] = n
+        next
+      }
+      {
+        if ($0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*$/) next
+        if (index($0, "=") == 0) next
+        k = $0; sub(/=.*/, "", k); gsub(/[[:space:]]/, "", k)
+        if (k != "") keys[k] = 1
+      }
+      END {
+        bad = 0
+        for (o in ren) if (o in keys && (ren[o] in keys)) bad = 1
+        exit(bad ? 1 : 0)
+      }
+    ' config/renames.conf config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: settings_file_intact
+  description: config/settings.conf still exists and is non-empty after removing the
+    stale lines
+  probe: test -s config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: change_committed
+  description: the configuration change is committed and the tracked worktree is clean
+  probe: git diff --quiet && git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+variant: drop_old
+provenance:
+  compiled_from_task: Some setting in my config has been renamed upstream. Sort the
+    config out. The new name is already set too, so delete the old key's line and
+    keep the new one.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Some setting in my config has been renamed upstream. Sort the config
+    out. The new name is already set too, so delete the old key's line and keep the
+    new one./seed-31-config_renamed-8327
+  fault: config_renamed
+status: admitted

@@ -1,0 +1,75 @@
+id: diverged-occ1-merge-upstream-diverged-branch
+intent: Merge upstream into the current branch so that both histories and both sides'
+  changes are preserved.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_branch
+  description: HEAD is attached to a local branch
+  probe: git symbolic-ref --quiet --short HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: the working tree and index have no uncommitted changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_remote_available
+  description: the upstream remote is configured
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_have_diverged
+  description: the current branch and upstream each have commits the other lacks
+  probe: |-
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0 \
+      && test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: no_operation_in_progress
+  description: no merge rebase cherry-pick or revert is currently in progress
+  probe: |-
+    test ! -e "$(git rev-parse --git-path MERGE_HEAD)" \
+      && test ! -e "$(git rev-parse --git-path CHERRY_PICK_HEAD)" \
+      && test ! -e "$(git rev-parse --git-path REVERT_HEAD)" \
+      && test ! -d "$(git rev-parse --git-path rebase-merge)" \
+      && test ! -d "$(git rev-parse --git-path rebase-apply)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch {upstream_remote}
+  git merge --no-edit {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: no_unmerged_paths
+  description: no paths remain in an unmerged state
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree_after_merge
+  description: the merge left no uncommitted changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_commit_created
+  description: HEAD is a merge commit with a second parent
+  probe: git rev-parse --verify --quiet HEAD^2
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tip_is_ancestor
+  description: upstream's tip is contained in the merged history
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: This branch and upstream have both changed. Bring it back into
+    line. Merge upstream into my branch and keep both histories.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: This branch and upstream have both changed. Bring it back into line.
+    Merge upstream into my branch and keep both histories./seed-0-diverged-7516
+  fault: diverged
+status: admitted

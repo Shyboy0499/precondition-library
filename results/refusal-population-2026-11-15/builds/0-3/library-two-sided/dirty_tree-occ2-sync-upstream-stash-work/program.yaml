@@ -1,0 +1,88 @@
+id: dirty_tree-occ2-sync-upstream-stash-work
+intent: Stash all uncommitted work (including untracked files), fast-forward the current
+  branch to the upstream branch, then restore the stashed work on top of the updated
+  branch so no local edits are lost.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: worktree_dirty
+  description: there are uncommitted changes (tracked or untracked) to stash
+  probe: test -n "$(git status --porcelain -z)"
+  expect_exit: 0
+  expect_pattern: null
+- name: on_a_branch
+  description: HEAD is attached to a branch, so the fast-forward moves that branch
+  probe: git symbolic-ref -q HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_exists
+  description: the upstream remote-tracking branch ref is already fetched locally
+  probe: git rev-parse --verify --quiet refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: behind_upstream_fast_forwardable
+  description: HEAD is strictly behind the upstream branch and can fast-forward to
+    it
+  probe: git merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch} &&
+    test "$(git rev-parse HEAD)" != "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_overlap_tracked_changes
+  description: no locally modified tracked file is also changed between HEAD and upstream,
+    so the pop applies cleanly
+  probe: |-
+    ! comm -12 \
+      <(git diff --name-only -z HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_upstream_collision
+  description: no untracked file sits at a path that upstream adds, so restoring untracked
+    files cannot be blocked
+  probe: |-
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git diff --name-only --diff-filter=A -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git stash push --include-untracked -m 'autostash-before-upstream-sync'
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+  git stash pop
+steps: null
+postconditions:
+- name: branch_matches_upstream
+  description: the current branch now points at the upstream branch's commit
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: stash_entry_consumed
+  description: the stash entry created for this operation has been popped, not left
+    behind
+  probe: '! git stash list | grep -q ''autostash-before-upstream-sync'''
+  expect_exit: 0
+  expect_pattern: null
+- name: local_work_restored
+  description: the working tree is dirty again, i.e. the stashed edits are back on
+    disk
+  probe: test -n "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_entries
+  description: the stash applied without leaving conflicted index entries
+  probe: test -z "$(git ls-files --unmerged)"
+  expect_exit: 0
+  expect_pattern: null
+variant: stash
+provenance:
+  compiled_from_task: I am in the middle of something and upstream moved on. Sort
+    it out without losing my edits. Stash my uncommitted work, update the branch,
+    then put my work back.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: I am in the middle of something and upstream moved on. Sort it out without
+    losing my edits. Stash my uncommitted work, update the branch, then put my work
+    back./seed-10-dirty_tree-28874
+  fault: dirty_tree
+status: admitted

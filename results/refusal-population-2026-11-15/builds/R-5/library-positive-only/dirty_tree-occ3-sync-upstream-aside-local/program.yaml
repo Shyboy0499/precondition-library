@@ -1,0 +1,112 @@
+id: dirty_tree-occ3-sync-upstream-aside-local
+intent: Fast-forward the current branch to upstream while preserving tracked working-tree
+  changes, moving each untracked file that upstream also adds aside as <name>.local.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ahead
+  description: the branch is behind the upstream-tracking branch
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: fast_forward_only
+  description: the branch has no local commits that upstream lacks
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -eq 0
+  expect_exit: 0
+  expect_pattern: null
+- name: dirty_tracked_files
+  description: at least one tracked file has uncommitted changes to preserve
+  probe: '! git diff --quiet HEAD --'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_tracked_overlap
+  description: upstream does not change any tracked file that is locally modified
+  probe: |-
+    ! comm -12 \
+      <(git diff --name-only -z HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: untracked_upstream_collision
+  description: an untracked local file has the same path as a file upstream adds
+  probe: |-
+    comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git ls-tree -r --name-only -z {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: backup_targets_free
+  description: no colliding untracked file already has a .local sibling
+  probe: |-
+    while IFS= read -r -d '' p; do
+      if git cat-file -e "{upstream_remote}/{upstream_branch}:$p" 2>/dev/null; then
+        if [ -e "$p.local" ] || [ -L "$p.local" ]; then
+          exit 1
+        fi
+      fi
+    done < <(git ls-files --others --exclude-standard -z)
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  while IFS= read -r -d '' p; do
+    if git cat-file -e "{upstream_remote}/{upstream_branch}:$p" 2>/dev/null; then
+      cp -a -- "$p" "$p.local"
+      rm -f -- "$p"
+    fi
+  done < <(git ls-files --others --exclude-standard -z)
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is now the upstream commit
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_changes_preserved
+  description: the tracked working-tree changes are still present
+  probe: '! git diff --quiet HEAD --'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_collisions
+  description: no untracked file still shadows a file tracked at HEAD
+  probe: |-
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git ls-tree -r --name-only -z HEAD | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: local_backup_present
+  description: at least one colliding file was saved beside its upstream version as
+    .local
+  probe: |-
+    found=0
+    while IFS= read -r -d '' f; do
+      case "$f" in
+        *.local)
+          b=${f%.local}
+          if git cat-file -e "HEAD:$b" 2>/dev/null; then
+            found=1
+          fi
+          ;;
+      esac
+    done < <(git ls-files --others --exclude-standard -z)
+    test "$found" -eq 1
+  expect_exit: 0
+  expect_pattern: null
+variant: aside
+provenance:
+  compiled_from_task: My working tree has changes and the branch is behind upstream.
+    Fix that and keep my changes. Keep my unsaved file beside upstream's version,
+    as `<name>.local`, and update.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: My working tree has changes and the branch is behind upstream. Fix that
+    and keep my changes. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update./seed-7-dirty_tree-7516
+  fault: dirty_tree
+status: admitted

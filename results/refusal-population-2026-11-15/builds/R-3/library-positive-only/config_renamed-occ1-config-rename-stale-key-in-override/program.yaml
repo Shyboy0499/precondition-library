@@ -1,0 +1,152 @@
+id: config_renamed-occ1-config-rename-stale-key-in-override
+intent: A setting has been renamed upstream according to a rename map committed in
+  the repository. Rewrite the stale old key to its new name inside the user's own
+  untracked/ignored config override file, leaving every tracked file and the git index
+  untouched so the override file stays out of git.
+parameters:
+- work_dir
+preconditions:
+- name: has_rename_map
+  description: a tracked file declares key renames as "old = new" pairs (a *rename*
+    file, or a file whose text mentions keys being renamed)
+  probe: |-
+    cd "{work_dir}" || exit 1
+    while IFS= read -r f; do
+      [ -f "$f" ] || continue
+      b=$(basename "$f" | tr '[:upper:]' '[:lower:]')
+      case "$b" in
+        *rename*) ;;
+        *) if grep -qi 'renamed' "$f" 2>/dev/null; then :; else continue; fi ;;
+      esac
+      if grep -qE '^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*$' "$f"; then
+        exit 0
+      fi
+    done < <(git ls-files -z | tr '\0' '\n')
+    exit 1
+  expect_exit: 0
+  expect_pattern: null
+- name: has_stale_key_in_untracked_override
+  description: a file that is not tracked (the local override) still defines an old
+    key that the rename map replaces with a new key
+  probe: |-
+    cd "{work_dir}" || exit 1
+    pairs=$(while IFS= read -r f; do
+      [ -f "$f" ] || continue
+      b=$(basename "$f" | tr '[:upper:]' '[:lower:]')
+      case "$b" in
+        *rename*) ;;
+        *) if grep -qi 'renamed' "$f" 2>/dev/null; then :; else continue; fi ;;
+      esac
+      grep -E '^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*$' "$f" 2>/dev/null | sed 's/[[:space:]]//g'
+    done < <(git ls-files -z | tr '\0' '\n') | sort -u | awk -F= '$1 != "" && $2 != "" && $1 != $2 { print $1 "\t" $2 }')
+    [ -n "$pairs" ] || exit 1
+    while IFS= read -r f; do
+      [ -f "$f" ] || continue
+      while IFS=$'\t' read -r o n; do
+        if [ -n "$o" ] && grep -qE "^[[:space:]]*$o[[:space:]]*=" "$f"; then
+          exit 0
+        fi
+      done <<< "$pairs"
+    done < <({ git ls-files --others -z; git ls-files --others --ignored --exclude-standard -z; } | tr '\0' '\n' | sed '/^$/d' | sort -u)
+    exit 1
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -eu
+  cd "{work_dir}"
+  tmp=$(mktemp -d)
+  trap 'rm -rf "$tmp"' EXIT
+  git ls-files -z | tr '\0' '\n' | sed '/^$/d' > "$tmp/tracked"
+  { git ls-files --others -z; git ls-files --others --ignored --exclude-standard -z; } | tr '\0' '\n' | sed '/^$/d' | sort -u > "$tmp/untracked"
+  : > "$tmp/pairs"
+  while IFS= read -r f; do
+    [ -f "$f" ] || continue
+    b=$(basename "$f" | tr '[:upper:]' '[:lower:]')
+    case "$b" in
+      *rename*) ;;
+      *) if grep -qi 'renamed' "$f" 2>/dev/null; then :; else continue; fi ;;
+    esac
+    grep -E '^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*$' "$f" 2>/dev/null | sed 's/[[:space:]]//g' | awk -F= '$1 != "" && $2 != "" && $1 != $2 { print $1 "\t" $2 }' >> "$tmp/pairs"
+  done < "$tmp/tracked"
+  sort -u -o "$tmp/pairs" "$tmp/pairs"
+  while IFS= read -r f; do
+    [ -f "$f" ] || continue
+    while IFS=$'\t' read -r o n; do
+      if [ -n "$o" ] && grep -qE "^[[:space:]]*$o[[:space:]]*=" "$f"; then
+        sed -i -E "s/^([[:space:]]*)$o([[:space:]]*=)/\1$n\2/" "$f"
+      fi
+    done < "$tmp/pairs"
+  done < "$tmp/untracked"
+steps: null
+postconditions:
+- name: no_stale_key_remains
+  description: no untracked config file still defines an old key from the rename map
+  probe: |-
+    cd "{work_dir}" || exit 1
+    pairs=$(while IFS= read -r f; do
+      [ -f "$f" ] || continue
+      b=$(basename "$f" | tr '[:upper:]' '[:lower:]')
+      case "$b" in
+        *rename*) ;;
+        *) if grep -qi 'renamed' "$f" 2>/dev/null; then :; else continue; fi ;;
+      esac
+      grep -E '^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*$' "$f" 2>/dev/null | sed 's/[[:space:]]//g'
+    done < <(git ls-files -z | tr '\0' '\n') | sort -u | awk -F= '$1 != "" && $2 != "" && $1 != $2 { print $1 "\t" $2 }')
+    [ -n "$pairs" ] || exit 1
+    stale=0
+    while IFS= read -r f; do
+      [ -f "$f" ] || continue
+      while IFS=$'\t' read -r o n; do
+        if [ -n "$o" ] && grep -qE "^[[:space:]]*$o[[:space:]]*=" "$f"; then
+          stale=1
+        fi
+      done <<< "$pairs"
+    done < <({ git ls-files --others -z; git ls-files --others --ignored --exclude-standard -z; } | tr '\0' '\n' | sed '/^$/d' | sort -u)
+    [ "$stale" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: renamed_key_present
+  description: an untracked config file now defines one of the renamed keys
+  probe: |-
+    cd "{work_dir}" || exit 1
+    pairs=$(while IFS= read -r f; do
+      [ -f "$f" ] || continue
+      b=$(basename "$f" | tr '[:upper:]' '[:lower:]')
+      case "$b" in
+        *rename*) ;;
+        *) if grep -qi 'renamed' "$f" 2>/dev/null; then :; else continue; fi ;;
+      esac
+      grep -E '^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*$' "$f" 2>/dev/null | sed 's/[[:space:]]//g'
+    done < <(git ls-files -z | tr '\0' '\n') | sort -u | awk -F= '$1 != "" && $2 != "" && $1 != $2 { print $1 "\t" $2 }')
+    [ -n "$pairs" ] || exit 1
+    found=0
+    while IFS= read -r f; do
+      [ -f "$f" ] || continue
+      while IFS=$'\t' read -r o n; do
+        if [ -n "$n" ] && grep -qE "^[[:space:]]*$n[[:space:]]*=" "$f"; then
+          found=1
+        fi
+      done <<< "$pairs"
+    done < <({ git ls-files --others -z; git ls-files --others --ignored --exclude-standard -z; } | tr '\0' '\n' | sed '/^$/d' | sort -u)
+    [ "$found" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_tree_untouched
+  description: no tracked file was added, staged or modified, so the override file
+    stays out of git
+  probe: |-
+    cd "{work_dir}" || exit 1
+    [ -z "$(git status --porcelain --untracked-files=no)" ]
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: Some setting in my config has been renamed upstream. Sort the
+    config out. Rename the old key in my own override file, and keep that file out
+    of git.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Some setting in my config has been renamed upstream. Sort the config
+    out. Rename the old key in my own override file, and keep that file out of git./seed-12-config_renamed-212
+  fault: config_renamed
+status: admitted

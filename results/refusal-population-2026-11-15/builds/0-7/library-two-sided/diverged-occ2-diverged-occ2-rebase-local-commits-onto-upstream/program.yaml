@@ -1,0 +1,146 @@
+id: diverged-occ2-diverged-occ2-rebase-local-commits-onto-upstream
+intent: Replay local commits on top of the upstream branch so the current branch has
+  linear history.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_exists
+  description: the named upstream remote is configured
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_exists
+  description: the upstream branch has already been fetched as a remote-tracking ref
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: head_is_attached
+  description: HEAD is on a branch rather than detached
+  probe: git symbolic-ref --quiet HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: head_branch_matches_upstream_branch
+  description: the current branch has the same name as the upstream branch being replayed
+    onto, so an upstream branch rename is not in play
+  probe: test "$(git symbolic-ref --quiet --short HEAD)" = "{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_tracks_given_upstream
+  description: the current branch is configured to track exactly the upstream branch
+    named by the parameters
+  probe: test "$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)"
+    = "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_head_name_matches_target
+  description: if the local clone knows the upstream default-branch symref, it names
+    the branch we are about to rebase onto
+  probe: |-
+    ! git symbolic-ref --quiet "refs/remotes/{upstream_remote}/HEAD" >/dev/null ||
+    test "$(git symbolic-ref --quiet "refs/remotes/{upstream_remote}/HEAD")" = "refs/remotes/{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_head_agrees_with_target
+  description: if the local clone knows the upstream default-branch ref, it points
+    at the same commit as the upstream branch
+  probe: |-
+    ! git rev-parse --verify --quiet "refs/remotes/{upstream_remote}/HEAD^{commit}" >/dev/null ||
+    test "$(git rev-parse "refs/remotes/{upstream_remote}/HEAD^{commit}")" = "$(git rev-parse "{upstream_remote}/{upstream_branch}^{commit}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: there are no tracked or untracked changes that could block a rebase
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_index_entries
+  description: the index has no unresolved merge entries
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_operation_in_progress
+  description: no rebase or merge is already in progress
+  probe: |-
+    test ! -e "$(git rev-parse --git-path rebase-merge)" &&
+    test ! -e "$(git rev-parse --git-path rebase-apply)" &&
+    test ! -e "$(git rev-parse --git-path MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_ahead
+  description: the current branch has commits that are not in upstream
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_commits_ahead
+  description: upstream has commits that the current branch does not contain
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_base_exists
+  description: the two histories share a merge base
+  probe: git merge-base HEAD {upstream_remote}/{upstream_branch} >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+- name: no_overlapping_changes
+  description: the local-only commits and the upstream-only commits touch disjoint
+    paths, so the replay will not conflict
+  probe: |-
+    base=$(git merge-base HEAD "{upstream_remote}/{upstream_branch}") || exit 1
+    ! comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" "{upstream_remote}/{upstream_branch}" | tr '\0' '\n' | sort) \
+      | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git rebase {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: upstream_tip_is_ancestor
+  description: the current branch now contains upstream's tip
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_remain
+  description: local commits still sit on top of upstream
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: linear_history
+  description: there are no merge commits between upstream and HEAD
+  probe: test "$(git rev-list --count --merges {upstream_remote}/{upstream_branch}..HEAD)"
+    -eq 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_rebase
+  description: the working tree is clean after the rebase
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: rebase_completed
+  description: no rebase is still paused or in progress
+  probe: |-
+    test ! -e "$(git rev-parse --git-path rebase-merge)" &&
+    test ! -e "$(git rev-parse --git-path rebase-apply)"
+  expect_exit: 0
+  expect_pattern: null
+- name: head_on_expected_branch
+  description: HEAD is still on the expected branch
+  probe: test "$(git symbolic-ref --quiet --short HEAD)" = "{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+variant: rebase
+provenance:
+  compiled_from_task: I have local work and upstream has new commits. Untangle it.
+    Replay my local commits on top of upstream so the history stays linear.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: I have local work and upstream has new commits. Untangle it. Replay
+    my local commits on top of upstream so the history stays linear./seed-5-diverged-12454
+  fault: diverged
+status: admitted

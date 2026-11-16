@@ -1,0 +1,83 @@
+id: submodule_moved-occ3-remove-nested-submodule-checkout
+intent: Remove a nested repository checkout by fast-forwarding to the upstream commit
+  that dropped the submodule, then cleaning the leftover submodule directory.
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: upstream_ref_exists
+  description: the upstream-tracking branch exists locally
+  probe: git rev-parse --verify --quiet "{upstream_remote}/{upstream_branch}^{commit}"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_submodule_gitlink_present
+  description: HEAD still records a gitlink at the submodule path
+  probe: git ls-tree HEAD -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: '^160000 commit '
+- name: upstream_removed_submodule_gitlink
+  description: upstream no longer records a gitlink at the submodule path
+  probe: '! git ls-tree {upstream_remote}/{upstream_branch} -- "{submodule_path}"
+    | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_dropped_submodule_config
+  description: upstream no longer mentions the submodule path in .gitmodules
+  probe: '! git show {upstream_remote}/{upstream_branch}:.gitmodules 2>/dev/null |
+    grep -qF -- "{submodule_path}"'
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_can_fast_forward_to_upstream
+  description: HEAD has no commits beyond upstream and upstream is ahead
+  probe: |-
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -ge 1 &&
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -eq 0
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_worktree_clean
+  description: no tracked files or index entries are modified
+  probe: test -z "$(git status --porcelain --untracked-files=no)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+  git clean -ffd -- "{submodule_path}"
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is the upstream commit after the fast-forward
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_removed_from_head
+  description: HEAD no longer records an entry at the submodule path
+  probe: '! git ls-tree HEAD -- "{submodule_path}" | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: gitmodules_no_longer_mentions_submodule
+  description: .gitmodules at HEAD no longer mentions the submodule path
+  probe: '! git show HEAD:.gitmodules 2>/dev/null | grep -qF -- "{submodule_path}"'
+  expect_exit: 0
+  expect_pattern: null
+- name: nested_checkout_removed
+  description: the leftover submodule directory is gone from the working tree
+  probe: test ! -e "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_worktree_clean_after
+  description: no tracked files or index entries remain modified
+  probe: test -z "$(git status --porcelain --untracked-files=no)"
+  expect_exit: 0
+  expect_pattern: null
+variant: remove
+provenance:
+  compiled_from_task: A nested repository in this project needs bringing into line.
+    Remove the nested checkout, the way upstream did.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: A nested repository in this project needs bringing into line. Remove
+    the nested checkout, the way upstream did./seed-8-submodule_moved-7516
+  fault: submodule_moved
+status: admitted

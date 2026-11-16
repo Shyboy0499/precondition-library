@@ -1,0 +1,53 @@
+id: submodule_moved-occ4-submodule-init-repin
+intent: Initialise the nested submodule at the declared path and check it out at its
+  upstream branch head.
+parameters:
+- submodule_path
+preconditions:
+- name: submodule_declared
+  description: .gitmodules declares a submodule at this path
+  probe: |
+    git config -f .gitmodules --get-regexp '^submodule\..*\.path$'
+  expect_exit: 0
+  expect_pattern: '{submodule_path}$'
+- name: submodule_gitlink_tracked
+  description: the index records a gitlink for the submodule path
+  probe: |
+    git ls-files -s -z -- "{submodule_path}" | tr '\0' '\n'
+  expect_exit: 0
+  expect_pattern: ^160000 [0-9a-f]+\s+[0-9]+\t{submodule_path}$
+- name: submodule_not_initialised
+  description: no nested repository exists at the submodule path yet
+  probe: '! test -e "{submodule_path}/.git"'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git submodule init -- "{submodule_path}"
+  git -c protocol.file.allow=always submodule update --init --remote --checkout -- "{submodule_path}"
+steps: null
+postconditions:
+- name: submodule_initialised
+  description: the submodule path contains a nested git repository with a checked-out
+    HEAD
+  probe: |
+    git -C "{submodule_path}" rev-parse --verify HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_matches_fetched_upstream
+  description: the submodule HEAD equals the commit just fetched from its upstream
+  probe: |-
+    head=$(git -C "{submodule_path}" rev-parse --verify HEAD 2>/dev/null) &&
+    fetch=$(git -C "{submodule_path}" rev-parse --verify FETCH_HEAD 2>/dev/null) &&
+    test -n "$head" && test "$head" = "$fetch"
+  expect_exit: 0
+  expect_pattern: null
+variant: repin
+provenance:
+  compiled_from_task: Get this repo's nested dependency consistent with upstream.
+    Initialise the nested repository and check it out.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this repo's nested dependency consistent with upstream. Initialise
+    the nested repository and check it out./seed-5-submodule_moved-3956
+  fault: submodule_moved
+status: admitted

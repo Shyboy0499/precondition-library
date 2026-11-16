@@ -1,0 +1,181 @@
+id: lockfile_conflict-occ1-merge-upstream-keep-additions
+intent: 'Catch the current branch up with the upstream branch when both sides changed
+  the same generated dependency/lock file: merge, and for each conflicted file start
+  from upstream''s version (so upstream''s and the local branch''s removals are not
+  revived and conflicting edits follow upstream), then re-insert only the lines the
+  local branch purely added, keeping local deletions, and commit the merge.'
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_exists
+  description: the upstream remote named by the environment is configured
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_diverged
+  description: the current branch and upstream each have commits the other lacks
+  probe: |-
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -ge 1 &&
+      test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -ge 1
+  expect_exit: 0
+  expect_pattern: null
+- name: both_sides_changed_a_common_file
+  description: at least one file was modified on both the local branch and upstream
+    since they diverged, so a merge of the two sides has to reconcile content
+  probe: |-
+    comm -12 \
+      <(git diff --name-only -z "$(git merge-base HEAD {upstream_remote}/{upstream_branch})" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$(git merge-base HEAD {upstream_remote}/{upstream_branch})" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote} || true
+  cat > /tmp/resolve_merge.py <<'PYEOF'
+  import sys, difflib
+
+  base_p, ours_p, theirs_p, out_p = sys.argv[1:5]
+
+  def read(p):
+      try:
+          with open(p, 'rb') as f:
+              return f.read()
+      except OSError:
+          return b''
+
+  base = read(base_p).splitlines(keepends=True)
+  ours = read(ours_p).splitlines(keepends=True)
+  theirs = read(theirs_p).splitlines(keepends=True)
+  result = list(theirs)
+
+  def find_block(seq, block, start):
+      n = len(block)
+      if n == 0:
+          return -1
+      for i in range(max(start, 0), len(seq) - n + 1):
+          if seq[i:i+n] == block:
+              return i
+      return -1
+
+  def find_line(seq, line, start):
+      for i in range(max(start, 0), len(seq)):
+          if seq[i] == line:
+              return i
+      return -1
+
+  def place(prev_line, next_line, cursor):
+      if prev_line is not None and cursor > 0 and result[cursor-1] == prev_line:
+          return cursor
+      if prev_line is not None:
+          p = find_line(result, prev_line, cursor)
+          while p >= 0:
+              if next_line is None or find_line(result, next_line, p+1) >= 0:
+                  return p + 1
+              p = find_line(result, prev_line, p+1)
+      if next_line is not None:
+          p = find_line(result, next_line, cursor)
+          if p >= 0:
+              return p
+      return len(result)
+
+  sm = difflib.SequenceMatcher(None, base, ours, autojunk=False)
+  cursor = 0
+  for tag, i1, i2, j1, j2 in sm.get_opcodes():
+      if tag == 'equal':
+          pos = find_block(result, ours[j1:j2], cursor)
+          if pos >= 0:
+              cursor = pos + (j2 - j1)
+          continue
+      if tag == 'insert':
+          inserted = ours[j1:j2]
+          prev_line = ours[j1-1] if j1 > 0 else None
+          next_line = ours[j2] if j2 < len(ours) else None
+          pos = place(prev_line, next_line, cursor)
+          if pos >= len(inserted) and result[pos-len(inserted):pos] == inserted:
+              pass
+          else:
+              result[pos:pos] = inserted
+              cursor = pos + len(inserted)
+          continue
+      if tag == 'delete':
+          block = base[i1:i2]
+          pos = find_block(result, block, cursor)
+          if pos < 0:
+              pos = find_block(result, block, 0)
+          if pos >= 0:
+              del result[pos:pos+len(block)]
+              cursor = pos
+          continue
+      if tag == 'replace':
+          replaced = i2 - i1
+          extra = ours[j1+replaced:j2]
+          if extra:
+              prev_line = ours[j1+replaced-1] if j1+replaced > 0 else None
+              next_line = ours[j2] if j2 < len(ours) else None
+              pos = place(prev_line, next_line, cursor)
+              result[pos:pos] = extra
+              cursor = pos + len(extra)
+          continue
+
+  with open(out_p, 'wb') as f:
+      f.write(b''.join(result))
+  PYEOF
+  if ! git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+    git merge --no-commit --no-edit {upstream_remote}/{upstream_branch} || true
+  fi
+  if ! git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+    echo "merge with {upstream_remote}/{upstream_branch} did not start" >&2
+    exit 1
+  fi
+  base=$(git merge-base HEAD MERGE_HEAD)
+  git diff --name-only --diff-filter=U -z | tr '\0' '\n' > /tmp/merge_conflicts.txt
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    git show "$base:$p" > /tmp/mg_base 2>/dev/null || true
+    git show "HEAD:$p" > /tmp/mg_ours 2>/dev/null || true
+    git show "MERGE_HEAD:$p" > /tmp/mg_theirs 2>/dev/null || true
+    if python3 /tmp/resolve_merge.py /tmp/mg_base /tmp/mg_ours /tmp/mg_theirs /tmp/mg_out; then
+      cat /tmp/mg_out > "$p"
+    else
+      cat /tmp/mg_theirs > "$p"
+    fi
+    git add -- "$p"
+  done < /tmp/merge_conflicts.txt
+  git commit --no-edit
+steps: null
+postconditions:
+- name: no_unmerged_paths
+  description: the index no longer contains conflicted entries
+  probe: '! git diff --name-only --diff-filter=U | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers_left
+  description: no tracked file still contains the beginning of a conflict block
+  probe: '! git grep -q -e ''^<<<<<<< '' -- .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: upstream's tip is now part of the current branch history
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the merge result is committed and nothing is staged or untracked
+  probe: |-
+    git diff --quiet &&
+      git diff --cached --quiet &&
+      test -z "$(git ls-files --others --exclude-standard)"
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: Catch up with upstream without losing what either side added,
+    or reviving what either side removed. Start from upstream's dependency file and
+    add back what I added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Catch up with upstream without losing what either side added, or reviving
+    what either side removed. Start from upstream's dependency file and add back what
+    I added./seed-5-lockfile_conflict-27083
+  fault: lockfile_conflict
+status: candidate

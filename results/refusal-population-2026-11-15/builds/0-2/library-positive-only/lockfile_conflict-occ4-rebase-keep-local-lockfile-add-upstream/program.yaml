@@ -1,0 +1,191 @@
+id: lockfile_conflict-occ4-rebase-keep-local-lockfile-add-upstream
+intent: Fetch upstream, rebase the current branch onto it, and resolve dependency-file
+  conflicts by keeping the local file while adding upstream's new entries.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_branch
+  description: HEAD is on a local branch
+  probe: git symbolic-ref --quiet --short HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: there are no staged, unstaged or untracked changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_exists
+  description: the upstream remote-tracking branch is present
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_have_diverged
+  description: the local branch and upstream each have commits the other lacks
+  probe: |-
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0 &&
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0 &&
+    git merge-base HEAD {upstream_remote}/{upstream_branch} >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+- name: both_sides_touched_a_common_file
+  description: local and upstream both modified at least one file since their merge
+    base
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+    comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote} || exit 1
+  export GIT_EDITOR=true
+  export GIT_SEQUENCE_EDITOR=true
+
+  # Start the rebase. It may stop with conflicts; they are resolved below.
+  git rebase {upstream_remote}/{upstream_branch} || true
+
+  n=0
+  while [ -d .git/rebase-merge ] || [ -d .git/rebase-apply ]; do
+    n=$((n + 1))
+    if [ "$n" -gt 20 ]; then
+      echo "too many rebase conflict rounds" >&2
+      exit 1
+    fi
+
+    # Resolve every unmerged path in the index.
+    while IFS= read -r -d '' path; do
+      [ -n "$path" ] || continue
+      if git cat-file -e ":1:$path" 2>/dev/null && \
+         git cat-file -e ":2:$path" 2>/dev/null && \
+         git cat-file -e ":3:$path" 2>/dev/null; then
+        python3 - "$path" <<'PY'
+  import difflib
+  import subprocess
+  import sys
+
+  path = sys.argv[1]
+
+  def blob(stage):
+      return subprocess.check_output(["git", "show", ":" + str(stage) + ":" + path])
+
+  base_b = blob(1)
+  up_b = blob(2)
+  local_b = blob(3)
+
+  base = base_b.decode("utf-8", "surrogateescape").splitlines(keepends=True)
+  up = up_b.decode("utf-8", "surrogateescape").splitlines(keepends=True)
+  local = local_b.decode("utf-8", "surrogateescape").splitlines(keepends=True)
+
+  def positions_of(block, haystack, start=0):
+      n = len(block)
+      return [i for i in range(start, len(haystack) - n + 1)
+              if haystack[i:i + n] == block]
+
+  sm = difflib.SequenceMatcher(None, base, up, autojunk=False)
+  for tag, i1, i2, j1, j2 in sm.get_opcodes():
+      if tag != "insert":
+          continue
+      additions = up[j1:j2]
+      additions = [line for line in additions
+                   if line not in local and line not in base]
+      if not additions:
+          continue
+
+      prev = up[max(0, j1 - 3):j1]
+      nxt = up[j2:min(len(up), j2 + 3)]
+
+      prev_positions = []
+      for length in range(len(prev), 0, -1):
+          hits = positions_of(prev[-length:], local)
+          if hits:
+              prev_positions = [hit + length for hit in hits]
+              break
+
+      next_positions = []
+      for length in range(len(nxt), 0, -1):
+          hits = positions_of(nxt[:length], local)
+          if hits:
+              next_positions = hits
+              break
+
+      if prev_positions and next_positions:
+          candidates = [hit for hit in next_positions
+                        if any(hit >= end for end in prev_positions)]
+          if candidates:
+              pos = candidates[0]
+          else:
+              pos = prev_positions[-1]
+      elif prev_positions:
+          pos = prev_positions[-1]
+      elif next_positions:
+          pos = next_positions[0]
+      else:
+          pos = len(local)
+
+      local[pos:pos] = additions
+
+  with open(path, "wb") as f:
+      f.write("".join(local).encode("utf-8", "surrogateescape"))
+  PY
+        git add -- "$path"
+      elif git cat-file -e ":3:$path" 2>/dev/null; then
+        # Local side exists; keep the local file.
+        git show ":3:$path" > "$path"
+        git add -- "$path"
+      elif git cat-file -e ":2:$path" 2>/dev/null; then
+        # Local side deleted this path; preserve that deletion.
+        git rm -f --ignore-unmatch -- "$path" >/dev/null 2>&1 || true
+      else
+        git rm -f --ignore-unmatch -- "$path" >/dev/null 2>&1 || true
+      fi
+    done < <(git diff --name-only --diff-filter=U -z)
+
+    if ! GIT_EDITOR=true git rebase --continue; then
+      if [ -d .git/rebase-merge ] || [ -d .git/rebase-apply ]; then
+        continue
+      fi
+      break
+    fi
+  done
+steps: null
+postconditions:
+- name: upstream_is_ancestor
+  description: the current history contains the upstream branch
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_remain
+  description: the current branch still has local commits beyond upstream
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: no uncommitted or unmerged changes remain
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_index_entries
+  description: the index has no conflict stages
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: no conflict markers remain in tracked files
+  probe: '! git grep -n -E ''^(<<<<<<<|>>>>>>>)'' -- . >/dev/null'
+  expect_exit: 0
+  expect_pattern: null
+variant: keep_local
+provenance:
+  compiled_from_task: Get my fork current with upstream; our dependency changes collided.
+    Keep my dependency file, with what I removed still removed, and add what upstream
+    added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get my fork current with upstream; our dependency changes collided.
+    Keep my dependency file, with what I removed still removed, and add what upstream
+    added./seed-3-lockfile_conflict-27083
+  fault: lockfile_conflict
+status: admitted

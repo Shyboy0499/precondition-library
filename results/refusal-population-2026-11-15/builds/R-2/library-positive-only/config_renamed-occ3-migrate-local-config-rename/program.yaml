@@ -1,0 +1,155 @@
+id: config_renamed-occ3-migrate-local-config-rename
+intent: Rename stale setting keys in the ignored local override config file to the
+  app's current names, keeping the override file out of git.
+parameters: []
+preconditions:
+- name: renames_map_has_mappings
+  description: config/renames.conf exists and contains at least one old-to-new key
+    mapping
+  probe: |-
+    test -f config/renames.conf
+    awk -F'=' '
+      /^[[:space:]]*#/ { next }
+      NF >= 2 {
+        old=$1; new=$2
+        gsub(/^[[:space:]]+/, "", old); gsub(/[[:space:]]+$/, "", old)
+        gsub(/^[[:space:]]+/, "", new); gsub(/[[:space:]]+$/, "", new)
+        if (old != "" && new != "") found=1
+      }
+      END { exit(found ? 0 : 1) }
+    ' config/renames.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: override_file_is_ignored_and_untracked
+  description: config/local.conf exists, is ignored by git, and is not tracked
+  probe: |-
+    test -f config/local.conf
+    git check-ignore -q -- config/local.conf
+    if git ls-files --error-unmatch -- config/local.conf >/dev/null 2>&1; then exit 1; fi
+  expect_exit: 0
+  expect_pattern: null
+- name: override_file_has_stale_key
+  description: config/local.conf contains a key that appears as an old name in config/renames.conf
+  probe: |-
+    found=1
+    while IFS=$'\t' read -r old new; do
+      [ -n "$old" ] || continue
+      if grep -Eq "^[[:space:]]*$old[[:space:]]*=" config/local.conf; then
+        found=0
+        break
+      fi
+    done < <(awk -F'=' '
+      /^[[:space:]]*#/ { next }
+      NF >= 2 {
+        old=$1; new=$2
+        gsub(/^[[:space:]]+/, "", old); gsub(/[[:space:]]+$/, "", old)
+        gsub(/^[[:space:]]+/, "", new); gsub(/[[:space:]]+$/, "", new)
+        if (old != "" && new != "") print old "\t" new
+      }
+    ' config/renames.conf)
+    [ "$found" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  set -euo pipefail
+  map=config/renames.conf
+  target=config/local.conf
+  tmp=$(mktemp -d)
+  trap 'rm -rf "$tmp"' EXIT
+  awk -F'=' '
+    /^[[:space:]]*#/ { next }
+    NF >= 2 {
+      old=$1; new=$2
+      gsub(/^[[:space:]]+/, "", old); gsub(/[[:space:]]+$/, "", old)
+      gsub(/^[[:space:]]+/, "", new); gsub(/[[:space:]]+$/, "", new)
+      if (old != "" && new != "") print old "\t" new
+    }
+  ' "$map" > "$tmp/pairs"
+  [ -s "$tmp/pairs" ] || exit 0
+  awk -F'\t' '
+    NR == FNR { new[$1] = $2; next }
+    {
+      line = $0
+      match(line, /^[[:space:]]*/)
+      indent = substr(line, 1, RLENGTH)
+      rest = substr(line, RLENGTH + 1)
+      eq = index(rest, "=")
+      if (eq > 0) {
+        keypart = substr(rest, 1, eq - 1)
+        key = keypart
+        gsub(/^[[:space:]]+/, "", key); gsub(/[[:space:]]+$/, "", key)
+        if (key in new) {
+          trail = keypart
+          sub(/^[^[:space:]]+/, "", trail)
+          print indent new[key] trail substr(rest, eq)
+          next
+        }
+      }
+      print line
+    }
+  ' "$tmp/pairs" "$target" > "$tmp/out"
+  cat "$tmp/out" > "$target"
+steps: null
+postconditions:
+- name: no_stale_keys_in_override
+  description: config/local.conf no longer contains any old key from config/renames.conf
+  probe: |-
+    stale=0
+    while IFS=$'\t' read -r old new; do
+      [ -n "$old" ] || continue
+      if grep -Eq "^[[:space:]]*$old[[:space:]]*=" config/local.conf; then
+        stale=1
+      fi
+    done < <(awk -F'=' '
+      /^[[:space:]]*#/ { next }
+      NF >= 2 {
+        old=$1; new=$2
+        gsub(/^[[:space:]]+/, "", old); gsub(/[[:space:]]+$/, "", old)
+        gsub(/^[[:space:]]+/, "", new); gsub(/[[:space:]]+$/, "", new)
+        if (old != "" && new != "") print old "\t" new
+      }
+    ' config/renames.conf)
+    [ "$stale" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: renamed_key_present
+  description: config/local.conf contains at least one current key name from config/renames.conf
+  probe: |-
+    found=1
+    while IFS=$'\t' read -r old new; do
+      [ -n "$new" ] || continue
+      if grep -Eq "^[[:space:]]*$new[[:space:]]*=" config/local.conf; then
+        found=0
+        break
+      fi
+    done < <(awk -F'=' '
+      /^[[:space:]]*#/ { next }
+      NF >= 2 {
+        old=$1; new=$2
+        gsub(/^[[:space:]]+/, "", old); gsub(/[[:space:]]+$/, "", old)
+        gsub(/^[[:space:]]+/, "", new); gsub(/[[:space:]]+$/, "", new)
+        if (old != "" && new != "") print old "\t" new
+      }
+    ' config/renames.conf)
+    [ "$found" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: override_remains_ignored_and_untracked
+  description: config/local.conf still exists, is ignored, and is not tracked by git
+  probe: |-
+    test -f config/local.conf
+    git check-ignore -q -- config/local.conf
+    if git ls-files --error-unmatch -- config/local.conf >/dev/null 2>&1; then exit 1; fi
+  expect_exit: 0
+  expect_pattern: null
+variant: migrate_local
+provenance:
+  compiled_from_task: Bring my configuration up to date with the setting names the
+    app uses now. Rename the old key in my own override file, and keep that file out
+    of git.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Bring my configuration up to date with the setting names the app uses
+    now. Rename the old key in my own override file, and keep that file out of git./seed-2-config_renamed-211
+  fault: config_renamed
+status: admitted

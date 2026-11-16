@@ -1,0 +1,77 @@
+id: branch_renamed-occ1-rename-branch-to-upstream-default
+intent: Rename the current local branch to the upstream's new default branch name,
+  point it at that upstream branch, and fast-forward it to upstream.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_a_local_branch
+  description: HEAD is attached to a local branch that can be renamed
+  probe: git symbolic-ref --quiet HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_not_already_renamed
+  description: the current branch does not already carry upstream's new name
+  probe: test "$(git symbolic-ref --short HEAD)" != "{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: target_branch_name_free
+  description: no other local branch already uses upstream's new name
+  probe: '! git show-ref --verify --quiet refs/heads/{upstream_branch}'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_branch_tracking_ref_exists
+  description: upstream's renamed branch is present in the remote-tracking refs
+  probe: git rev-parse --verify --quiet refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: head_fast_forwardable
+  description: HEAD is an ancestor of upstream's new branch, so a fast-forward is
+    possible
+  probe: git merge-base --is-ancestor HEAD refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: tracking_is_stale
+  description: the current branch does not already track upstream's new branch
+  probe: '! test "$(git rev-parse --abbrev-ref --symbolic-full-name ''@{u}'' 2>/dev/null)"
+    = "{upstream_remote}/{upstream_branch}"'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: there are no tracked or untracked changes that would block a fast-forward
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch --prune {upstream_remote}
+  old=$(git symbolic-ref --short HEAD)
+  git branch -m "$old" {upstream_branch}
+  git branch --set-upstream-to={upstream_remote}/{upstream_branch} {upstream_branch}
+  git pull --ff-only
+steps: null
+postconditions:
+- name: current_branch_has_upstream_name
+  description: HEAD is now on the branch named after upstream's renamed branch
+  probe: test "$(git symbolic-ref --short HEAD)" = "{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_tracks_upstream
+  description: the branch's upstream is the remote's new branch
+  probe: test "$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}')" = "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_matches_upstream
+  description: the local branch points at the same commit as upstream's new branch
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse refs/remotes/{upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: I think upstream renamed things. Get this fork following it
+    again. Rename my branch to upstream's new name and track it.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: I think upstream renamed things. Get this fork following it again. Rename
+    my branch to upstream's new name and track it./seed-4-branch_renamed-4812
+  fault: branch_renamed
+status: admitted

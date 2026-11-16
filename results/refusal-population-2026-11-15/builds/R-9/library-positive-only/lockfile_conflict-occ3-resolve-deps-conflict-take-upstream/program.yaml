@@ -1,0 +1,188 @@
+id: lockfile_conflict-occ3-resolve-deps-conflict-take-upstream
+intent: Merge upstream into the current branch and resolve dependency-file conflicts
+  by taking upstream's file as the base and re-adding locally inserted lines.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: worktree_clean
+  description: no staged, unstaged, or untracked changes are present
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: python3_available
+  description: python3 is available for the line-level merge
+  probe: command -v python3
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_exists
+  description: the upstream remote-tracking ref exists
+  probe: git rev-parse --verify --quiet "refs/remotes/{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_diverged
+  description: HEAD and upstream each contain commits the other lacks
+  probe: test "$(git rev-list --count "{upstream_remote}/{upstream_branch}..HEAD")"
+    -gt 0 && test "$(git rev-list --count "HEAD..{upstream_remote}/{upstream_branch}")"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: both_sides_changed_a_common_file
+  description: at least one path differs from the merge base on both sides
+  probe: base=$(git merge-base HEAD "{upstream_remote}/{upstream_branch}") && comm
+    -12 <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) <(git diff --name-only
+    -z "$base" "{upstream_remote}/{upstream_branch}" | tr '\0' '\n' | sort) | grep
+    -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+
+  git merge --no-edit "{upstream_remote}/{upstream_branch}" || true
+
+  if git rev-parse --quiet --verify MERGE_HEAD >/dev/null 2>&1; then
+    python3 - <<'PY'
+  import subprocess, os, tempfile, difflib, shutil
+
+  def run(args):
+      return subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+  def show(stage, path):
+      p = run(['git', 'show', ':' + str(stage) + ':' + path])
+      if p.returncode != 0:
+          return None
+      return p.stdout.decode('utf-8', 'surrogateescape')
+
+  def remove_path(path):
+      p = run(['git', 'rm', '-q', '-f', '--', path])
+      if p.returncode != 0:
+          try:
+              os.remove(path)
+          except OSError:
+              pass
+          run(['git', 'add', '-u', '--', path])
+
+  p = run(['git', 'diff', '--name-only', '--diff-filter=U', '-z'])
+  for raw in p.stdout.split(b'\0'):
+      if not raw:
+          continue
+      path = os.fsdecode(raw)
+      base = show(1, path)
+      local = show(2, path)
+      upstream = show(3, path)
+      if upstream is None:
+          remove_path(path)
+          continue
+      if local is None:
+          remove_path(path)
+          continue
+      if base is None:
+          base = ''
+      td = tempfile.mkdtemp()
+      try:
+          bp = os.path.join(td, 'base')
+          lp = os.path.join(td, 'local')
+          up = os.path.join(td, 'upstream')
+          with open(bp, 'w', encoding='utf-8', errors='surrogateescape') as f:
+              f.write(base)
+          with open(lp, 'w', encoding='utf-8', errors='surrogateescape') as f:
+              f.write(local)
+          with open(up, 'w', encoding='utf-8', errors='surrogateescape') as f:
+              f.write(upstream)
+          m = run(['git', 'merge-file', '-p', '--ours', up, bp, lp])
+          if m.returncode == 0 and m.stdout:
+              merged = m.stdout.decode('utf-8', 'surrogateescape')
+          else:
+              merged = upstream
+      finally:
+          shutil.rmtree(td, ignore_errors=True)
+      base_lines = base.splitlines()
+      local_lines = local.splitlines()
+      merged_lines = merged.splitlines()
+      trailing = merged.endswith('\n')
+      insertions = []
+      if base_lines:
+          sm = difflib.SequenceMatcher(None, base_lines, local_lines, autojunk=False)
+          for tag, i1, i2, j1, j2 in sm.get_opcodes():
+              if tag == 'insert':
+                  insertions.append((i1, local_lines[j1:j2]))
+      inserted_set = set()
+      for _, lines in insertions:
+          for line in lines:
+              inserted_set.add(line)
+      if inserted_set:
+          merged_lines = [line for line in merged_lines if line not in inserted_set]
+      sm2 = difflib.SequenceMatcher(None, base_lines, merged_lines, autojunk=False)
+      mapping = [-1] * len(base_lines)
+      for tag, i1, i2, j1, j2 in sm2.get_opcodes():
+          if tag == 'equal':
+              for k in range(i2 - i1):
+                  mapping[i1 + k] = j1 + k
+      buckets = [[] for _ in range(len(merged_lines) + 1)]
+      for i, lines in insertions:
+          pos = None
+          if i > 0 and mapping[i - 1] >= 0:
+              pos = mapping[i - 1] + 1
+          elif i < len(base_lines) and mapping[i] >= 0:
+              pos = mapping[i]
+          else:
+              for k in range(i, len(base_lines)):
+                  if mapping[k] >= 0:
+                      pos = mapping[k]
+                      break
+              if pos is None:
+                  for k in range(i - 1, -1, -1):
+                      if mapping[k] >= 0:
+                          pos = mapping[k] + 1
+                          break
+              if pos is None:
+                  pos = len(merged_lines)
+          buckets[pos].extend(lines)
+      result = []
+      for idx in range(len(merged_lines) + 1):
+          result.extend(buckets[idx])
+          if idx < len(merged_lines):
+              result.append(merged_lines[idx])
+      out = '\n'.join(result)
+      if trailing and result:
+          out += '\n'
+      with open(path, 'w', encoding='utf-8', errors='surrogateescape') as f:
+          f.write(out)
+      run(['git', 'add', '--', path])
+  PY
+    git commit --no-edit
+  fi
+steps: null
+postconditions:
+- name: merge_completed
+  description: no merge is left in progress
+  probe: test ! -e "$(git rev-parse --git-path MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: upstream's tip is contained in HEAD
+  probe: git merge-base --is-ancestor "{upstream_remote}/{upstream_branch}" HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: the index has no unmerged entries
+  probe: test -z "$(git diff --name-only --diff-filter=U)"
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree_after_merge
+  description: the merge left no staged or unstaged changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: Catch up with upstream without losing what either side added,
+    or reviving what either side removed. Start from upstream's dependency file and
+    add back what I added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Catch up with upstream without losing what either side added, or reviving
+    what either side removed. Start from upstream's dependency file and add back what
+    I added./seed-5-lockfile_conflict-12721
+  fault: lockfile_conflict
+status: admitted

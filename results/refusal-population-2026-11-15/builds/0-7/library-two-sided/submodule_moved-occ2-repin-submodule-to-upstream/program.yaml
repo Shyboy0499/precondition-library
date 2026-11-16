@@ -1,0 +1,77 @@
+id: submodule_moved-occ2-repin-submodule-to-upstream
+intent: Check out the nested submodule at the commit pinned by the upstream branch,
+  fast-forwarding the superproject to that branch first.
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: submodule_tracked
+  description: the nested path is recorded as a gitlink in the superproject index
+  probe: git ls-files --stage -- "{submodule_path}" | grep -q '^160000 '
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_pins_submodule
+  description: the upstream branch still records a gitlink at the nested path
+  probe: git ls-tree "{upstream_remote}/{upstream_branch}" -- "{submodule_path}" |
+    grep -q '^160000 '
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the superproject has no uncommitted or untracked changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_exists
+  description: the upstream branch is available as a remote-tracking ref
+  probe: git rev-parse --verify --quiet "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: strictly_behind_upstream
+  description: HEAD is an ancestor of the upstream branch and is not already at its
+    tip
+  probe: git merge-base --is-ancestor HEAD "{upstream_remote}/{upstream_branch}" &&
+    ! git merge-base --is-ancestor "{upstream_remote}/{upstream_branch}" HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: pin_differs_from_upstream
+  description: the submodule gitlink at HEAD differs from the upstream pin
+  probe: test "$(git rev-parse "HEAD:{submodule_path}")" != "$(git rev-parse "{upstream_remote}/{upstream_branch}:{submodule_path}")"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch "{upstream_remote}" "{upstream_branch}"
+  git merge --ff-only "{upstream_remote}/{upstream_branch}"
+  git submodule update --init "{submodule_path}"
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: the superproject HEAD is the upstream branch tip
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse "{upstream_remote}/{upstream_branch}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_at_upstream_pin
+  description: the nested checkout is at the commit pinned by upstream
+  probe: test "$(git -C "{submodule_path}" rev-parse HEAD)" = "$(git rev-parse "{upstream_remote}/{upstream_branch}:{submodule_path}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_status_clean
+  description: submodule status reports no plus or minus marker for the nested path
+  probe: '! git submodule status -- "{submodule_path}" | grep -q ''^[+-]'''
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after
+  description: the superproject has no uncommitted or untracked changes afterwards
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: repin
+provenance:
+  compiled_from_task: Sort out the nested checkout so it matches what upstream expects.
+    Check the nested repository out at the commit upstream now pins.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Sort out the nested checkout so it matches what upstream expects. Check
+    the nested repository out at the commit upstream now pins./seed-2-submodule_moved-29977
+  fault: submodule_moved
+status: admitted

@@ -1,0 +1,96 @@
+id: dirty_tree-occ4-ff-dirty-branch-keep-untracked-aside
+intent: Fast-forward a branch that is behind upstream while keeping the local working-tree
+  changes, moving untracked files that collide with upstream's versions aside as <name>.local
+  before the fast-forward.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: behind_upstream
+  description: HEAD is strictly behind the upstream branch, so updating requires a
+    fast-forward.
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: no_commits_ahead
+  description: HEAD has no commits that upstream lacks, so the update is a pure fast-forward.
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^0$
+- name: dirty_tracked_changes
+  description: the working tree has modifications to tracked files that must survive.
+  probe: test -n "$(git diff --name-only HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_changes_do_not_overlap_upstream
+  description: No locally modified tracked file is also modified upstream, so the
+    fast-forward leaves the local edits untouched.
+  probe: |-
+    ! comm -12 \
+      <(git diff --name-only -z HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: untracked_collides_with_upstream
+  description: At least one untracked file has the same path as a file the upstream
+    branch adds, so it must be moved aside before the fast-forward.
+  probe: |-
+    comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git ls-tree -r --name-only -z {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  collisions=$(mktemp)
+  comm -12 \
+    <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+    <(git ls-tree -r --name-only -z {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) > "$collisions"
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    mv -- "$p" "$p.local"
+  done < "$collisions"
+  rm -f -- "$collisions"
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: the branch is now at upstream's commit.
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_tracked_changes_survive
+  description: the working tree still carries the local modifications.
+  probe: test -n "$(git diff --name-only HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: untracked_collision_saved_aside
+  description: At least one untracked *.local sibling exists whose original path HEAD
+    now tracks, so the unsaved file sits beside upstream's version.
+  probe: |-
+    found=0
+    while IFS= read -r p; do
+      case "$p" in
+        *.local)
+          if git cat-file -e "HEAD:${p%.local}" 2>/dev/null; then
+            found=1
+            break
+          fi
+          ;;
+      esac
+    done < <(git ls-files --others --exclude-standard -z | tr '\0' '\n')
+    test "$found" -eq 1
+  expect_exit: 0
+  expect_pattern: null
+variant: aside
+provenance:
+  compiled_from_task: My working tree has changes and the branch is behind upstream.
+    Fix that and keep my changes. Keep my unsaved file beside upstream's version,
+    as `<name>.local`, and update.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: My working tree has changes and the branch is behind upstream. Fix that
+    and keep my changes. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update./seed-7-dirty_tree-19837
+  fault: dirty_tree
+status: admitted

@@ -1,0 +1,63 @@
+id: submodule_moved-occ3-submodule-moved-occ3-init-submodule-checkout
+intent: initialise the nested repository (submodule) and check it out at the recorded
+  commit
+parameters:
+- submodule_path
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: submodule_declared_and_uninitialised
+  description: the path is a gitlink recorded in HEAD, declared in .gitmodules, and
+    not yet checked out
+  probe: |-
+    test -f .gitmodules &&
+    git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | cut -d' ' -f2- | grep -Fxq -- "{submodule_path}" &&
+    test "$(git ls-tree HEAD -- "{submodule_path}" | awk '{print $1}')" = "160000" &&
+    git submodule status -- "{submodule_path}" | grep -q '^-'
+  expect_exit: 0
+  expect_pattern: null
+- name: pinned_commit_matches_upstream
+  description: the gitlink commit recorded in HEAD equals the one on the upstream
+    branch
+  probe: test "$(git ls-tree HEAD -- "{submodule_path}" | awk '{print $3}')" = "$(git
+    ls-tree "{upstream_remote}/{upstream_branch}" -- "{submodule_path}" | awk '{print
+    $3}')"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_index_entries
+  description: the index carries no conflict stages, i.e. no merge conflict is recorded
+  probe: '! git ls-files -u | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: no merge, rebase, or cherry-pick operation is underway
+  probe: gd=$(git rev-parse --git-dir); test ! -e "$gd/MERGE_HEAD" && test ! -d "$gd/rebase-merge"
+    && test ! -d "$gd/rebase-apply" && test ! -e "$gd/CHERRY_PICK_HEAD"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git submodule sync --recursive -- "{submodule_path}"
+  git submodule update --init --recursive -- "{submodule_path}"
+steps: null
+postconditions:
+- name: submodule_checked_out_at_pin
+  description: the submodule's HEAD is the commit recorded in the parent repository
+  probe: test "$(git -C "{submodule_path}" rev-parse HEAD)" = "$(git ls-tree HEAD
+    -- "{submodule_path}" | awk '{print $3}')"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_status_clean
+  description: the submodule status no longer reports the path as uninitialised
+  probe: git submodule status -- "{submodule_path}" | grep -q '^ '
+  expect_exit: 0
+  expect_pattern: null
+variant: init
+provenance:
+  compiled_from_task: A nested repository in this project needs bringing into line.
+    Initialise the nested repository and check it out.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: A nested repository in this project needs bringing into line. Initialise
+    the nested repository and check it out./seed-4-submodule_moved-3956
+  fault: submodule_moved
+status: candidate

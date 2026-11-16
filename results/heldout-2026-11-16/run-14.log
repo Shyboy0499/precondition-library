@@ -1,0 +1,16 @@
+Held-out stage (issue #263): 80 labelled pairs, faults lockfile_conflict, seeds 3000-3039 (40)
+  distinct instances built: lockfile_conflict 37 -- the number an independence claim is read at, not the seed count
+  library results/replicates-2026-11-15/run-14/library-two-sided (16 admitted of 19 programs), hash b8b512c81a2bddf0c9a5c5b3058a36ff876d330606c8a7ab2b1e113c3ff998fc
+  arm 2 scorer: lexical
+  arm 3: fires 31, wrong 0
+  arm 2 (threshold 0.1366906474820144) mismatches 26/30 at arm 3's coverage, coverage gap -0.013, mismatch difference (arm 2 - arm 3) +0.8667
+  smallest detectable mismatch difference at a 50% base rate with these fire counts: 0.359
+  wording: no held-out floor is measured, so this stage may not say precondition dispatch beats text similarity; it reports the held-out coverage, the mis-fire counts and the comparison
+
+Primary metric, uninformed regime, 80 labelled pairs (spec §7 item 1, ADR-0008)
+  arm 3 (pre-registered coverage point): coverage 31/80, mismatch 0/31
+  arm 2 curve: 35 operating point(s), each with a 95% Wilson interval in figure1.csv
+  at matched coverage arm 2 (threshold 0.1366906474820144) has mismatch 26/30; coverage gap -0.013; mismatch difference (arm 2 - arm 3) +0.8667
+  power (item 3): with 30 and 31 fires, alpha 0.05 two-sided and power 0.8, the smallest detectable mismatch difference is 0.359 at a 50% base rate and 0.355 at the observed 0.426
+  baseline arm 2b (soft vote): curve, 2 operating point(s) -- context, not part of the claim
+  baseline arm 2c (intent key): point, 1 operating point(s) -- context, not part of the claim

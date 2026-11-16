@@ -1,0 +1,83 @@
+id: dirty_tree-occ1-sync-upstream-stash-wip
+intent: Update the current branch from upstream while preserving all uncommitted work
+  by stashing it, fast-forwarding, and restoring it.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_exists
+  description: the upstream remote is configured
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: has_uncommitted_changes
+  description: the working tree or index has changes, including untracked files, to
+    preserve
+  probe: '[ -n "$(git status --porcelain)" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ahead_and_fast_forwardable
+  description: the current branch is behind the upstream-tracking branch and can be
+    fast-forwarded to it
+  probe: |-
+    [ "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0 ] && \
+    git merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: no_overlap_with_incoming_upstream_changes
+  description: the paths changed locally, including untracked files, do not intersect
+    the paths changed by upstream
+  probe: |-
+    ! comm -12 \
+      <( { git diff --name-only -z HEAD; git ls-files --others --exclude-standard -z; } | tr '\0' '\n' | sed '/^$/d' | sort -u ) \
+      <( git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sed '/^$/d' | sort -u ) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_or_rebase_in_progress
+  description: no merge or rebase is already in progress
+  probe: |-
+    [ ! -e "$(git rev-parse --git-path MERGE_HEAD)" ] && \
+    [ ! -d "$(git rev-parse --git-path rebase-merge)" ] && \
+    [ ! -d "$(git rev-parse --git-path rebase-apply)" ]
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch {upstream_remote}
+  git merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch}
+  git stash push -u -m "wip-pre-upstream-sync"
+  if git merge --ff-only {upstream_remote}/{upstream_branch}; then
+    git stash pop
+  else
+    git stash pop
+    exit 1
+  fi
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is the upstream-tracking commit
+  probe: '[ "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+    ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: uncommitted_changes_restored
+  description: the working tree has uncommitted changes again
+  probe: '[ -n "$(git status --porcelain)" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: sync_stash_was_popped
+  description: the temporary stash created for the sync is no longer present
+  probe: '! git stash list | grep -q ''wip-pre-upstream-sync'''
+  expect_exit: 0
+  expect_pattern: null
+variant: stash
+provenance:
+  compiled_from_task: Get the latest from upstream here, and keep every change I have
+    not saved yet. Stash my uncommitted work, update the branch, then put my work
+    back.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get the latest from upstream here, and keep every change I have not
+    saved yet. Stash my uncommitted work, update the branch, then put my work back./seed-5-dirty_tree-17967
+  fault: dirty_tree
+status: admitted

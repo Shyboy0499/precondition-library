@@ -1,0 +1,181 @@
+id: config_renamed-occ3-config-renamed-occ3-config-drop-renamed-key
+intent: Remove obsolete old-name key lines from config files where the renamed replacement
+  key is already set, then commit the cleanup.
+parameters: []
+preconditions:
+- name: renames_file_present
+  description: config/renames.conf is tracked and readable
+  probe: git ls-files --error-unmatch config/renames.conf >/dev/null 2>&1
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: no staged, unstaged, or untracked changes are present
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_renamed_key_present
+  description: at least one tracked config file defines both an old key from renames.conf
+    and its new replacement
+  probe: |-
+    found=0
+    while IFS= read -r line; do
+      case "$line" in
+        ''|'#'*) continue ;;
+      esac
+      old=${line%%=*}
+      new=${line#*=}
+      old=$(printf '%s' "$old" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+      new=$(printf '%s' "$new" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+      [ -n "$old" ] && [ -n "$new" ] || continue
+      while IFS= read -r -d '' path; do
+        if awk -v old="$old" -v new="$new" '
+          {
+            line=$0
+            sub(/^[[:space:]]*/, "", line)
+            eq=index(line, "=")
+            if (eq==0) next
+            key=substr(line, 1, eq-1)
+            sub(/[[:space:]]*$/, "", key)
+            if (key==old) ho=1
+            if (key==new) hn=1
+          }
+          END { exit !(ho && hn) }
+        ' "$path"; then
+          found=1
+          break 2
+        fi
+      done < <(git ls-files -z -- config)
+    done < config/renames.conf
+    exit $(( ! found ))
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+  changed=0
+  tmp=$(mktemp)
+  trap 'rm -f "$tmp"' EXIT
+  while IFS= read -r line; do
+    case "$line" in
+      ''|'#'*) continue ;;
+    esac
+    old=${line%%=*}
+    new=${line#*=}
+    old=$(printf '%s' "$old" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    new=$(printf '%s' "$new" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    [ -n "$old" ] && [ -n "$new" ] || continue
+    while IFS= read -r -d '' path; do
+      if awk -v old="$old" -v new="$new" '
+        {
+          line=$0
+          sub(/^[[:space:]]*/, "", line)
+          eq=index(line, "=")
+          if (eq==0) next
+          key=substr(line, 1, eq-1)
+          sub(/[[:space:]]*$/, "", key)
+          if (key==old) ho=1
+          if (key==new) hn=1
+        }
+        END { exit !(ho && hn) }
+      ' "$path"; then
+        awk -v old="$old" '
+          {
+            line=$0
+            sub(/^[[:space:]]*/, "", line)
+            eq=index(line, "=")
+            key=""
+            if (eq>0) {
+              key=substr(line, 1, eq-1)
+              sub(/[[:space:]]*$/, "", key)
+            }
+            if (key==old) next
+            print
+          }
+        ' "$path" > "$tmp"
+        cat "$tmp" > "$path"
+        changed=1
+      fi
+    done < <(git ls-files -z -- config)
+  done < config/renames.conf
+  if [ "$changed" -eq 1 ]; then
+    git add -u -- config
+    if ! git diff --cached --quiet; then
+      GIT_AUTHOR_NAME="config-maintenance" \
+      GIT_AUTHOR_EMAIL="config-maintenance@example.invalid" \
+      GIT_COMMITTER_NAME="config-maintenance" \
+      GIT_COMMITTER_EMAIL="config-maintenance@example.invalid" \
+      git commit -m "config: drop obsolete keys renamed upstream"
+    fi
+  fi
+steps: null
+postconditions:
+- name: obsolete_key_removed
+  description: no tracked config file still defines both an old key from renames.conf
+    and its new replacement
+  probe: |-
+    found=0
+    while IFS= read -r line; do
+      case "$line" in
+        ''|'#'*) continue ;;
+      esac
+      old=${line%%=*}
+      new=${line#*=}
+      old=$(printf '%s' "$old" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+      new=$(printf '%s' "$new" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+      [ -n "$old" ] && [ -n "$new" ] || continue
+      while IFS= read -r -d '' path; do
+        if awk -v old="$old" -v new="$new" '
+          {
+            line=$0
+            sub(/^[[:space:]]*/, "", line)
+            eq=index(line, "=")
+            if (eq==0) next
+            key=substr(line, 1, eq-1)
+            sub(/[[:space:]]*$/, "", key)
+            if (key==old) ho=1
+            if (key==new) hn=1
+          }
+          END { exit !(ho && hn) }
+        ' "$path"; then
+          found=1
+          break 2
+        fi
+      done < <(git ls-files -z -- config)
+    done < config/renames.conf
+    [ "$found" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the cleanup is committed and the working tree has no changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: new_key_not_removed
+  description: the cleanup commit deleted no line that defines a new key from renames.conf
+  probe: |-
+    git rev-parse --verify -q HEAD^ >/dev/null 2>&1 || exit 0
+    while IFS= read -r line; do
+      case "$line" in
+        ''|'#'*) continue ;;
+      esac
+      new=${line#*=}
+      new=$(printf '%s' "$new" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+      [ -n "$new" ] || continue
+      if git diff --unified=0 HEAD^ HEAD -- config | grep -qE "^-.*${new}[[:space:]]*="; then
+        exit 1
+      fi
+    done < config/renames.conf
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+variant: drop_old
+provenance:
+  compiled_from_task: Some setting in my config has been renamed upstream. Sort the
+    config out. The new name is already set too, so delete the old key's line and
+    keep the new one.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Some setting in my config has been renamed upstream. Sort the config
+    out. The new name is already set too, so delete the old key's line and keep the
+    new one./seed-31-config_renamed-25586
+  fault: config_renamed
+status: admitted

@@ -1,0 +1,71 @@
+id: dirty_tree-occ3-commit-then-merge-upstream
+intent: Save every uncommitted change as a commit, then fetch upstream and merge it
+  into the current branch so the local work and the upstream work are both preserved.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_exists
+  description: the configured upstream remote name is present in this repository
+  probe: git remote | grep -qx '{upstream_remote}'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_known
+  description: the upstream remote-tracking branch already has a fetched ref
+  probe: git rev-parse --verify --quiet '{upstream_remote}/{upstream_branch}'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ahead
+  description: upstream has commits that the current branch does not contain
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: worktree_dirty
+  description: there is uncommitted work (modified, staged or untracked files) to
+    save
+  probe: test -n "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_entries
+  description: the index has no unresolved conflict stages
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+- name: on_a_branch
+  description: HEAD is a symbolic ref to a branch rather than detached
+  probe: git symbolic-ref --quiet HEAD
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git add -A
+  git commit -m 'wip: save local work in progress'
+  git fetch {upstream_remote}
+  git merge --no-edit {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: wip_commit_in_history
+  description: the local work was recorded as a commit reachable from HEAD
+  probe: 'git log --format=%s | grep -qx ''wip: save local work in progress'''
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: the upstream tip is contained in HEAD after the merge
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: no uncommitted or conflicted files remain
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: commit
+provenance:
+  compiled_from_task: Get the latest from upstream here, and keep every change I have
+    not saved yet. Commit my uncommitted work first, then bring the branch up to date.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get the latest from upstream here, and keep every change I have not
+    saved yet. Commit my uncommitted work first, then bring the branch up to date./seed-1-dirty_tree-12454
+  fault: dirty_tree
+status: admitted

@@ -1,0 +1,116 @@
+id: dirty_tree-occ3-sync-upstream-keep-untracked-local
+intent: Fast-forward the current branch to upstream while preserving local work in
+  progress and saving untracked files that upstream now tracks as <name>.local beside
+  the upstream version.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ahead_fast_forwardable
+  description: the upstream remote-tracking branch exists, is ahead of HEAD, and HEAD
+    has no commits missing upstream
+  probe: |-
+    git rev-parse --verify --quiet "{upstream_remote}/{upstream_branch}" >/dev/null &&
+    behind=$(git rev-list --count "HEAD..{upstream_remote}/{upstream_branch}") &&
+    ahead=$(git rev-list --count "{upstream_remote}/{upstream_branch}..HEAD") &&
+    [ "$behind" -ge 1 ] && [ "$ahead" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: index_clean
+  description: no staged changes are present
+  probe: git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+- name: no_tracked_collisions_with_upstream
+  description: no locally modified tracked file is also changed by upstream
+  probe: |-
+    ! comm -12 \
+      <(git diff --name-only -z HEAD -- | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD "{upstream_remote}/{upstream_branch}" -- | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: untracked_collision_exists
+  description: at least one untracked file has the same path as a file tracked upstream
+  probe: |-
+    found=0
+    while IFS= read -r -d '' p; do
+      if git cat-file -e "{upstream_remote}/{upstream_branch}:$p" 2>/dev/null; then
+        found=1
+        break
+      fi
+    done < <(git ls-files --others --exclude-standard -z)
+    [ "$found" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: no_existing_local_copy
+  description: the .local destination for every colliding untracked file is free
+  probe: |-
+    ok=1
+    while IFS= read -r -d '' p; do
+      if git cat-file -e "{upstream_remote}/{upstream_branch}:$p" 2>/dev/null; then
+        if [ -e "$p.local" ]; then
+          ok=0
+          break
+        fi
+      fi
+    done < <(git ls-files --others --exclude-standard -z)
+    [ "$ok" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: no merge is already in progress
+  probe: '! git rev-parse -q --verify MERGE_HEAD'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch {upstream_remote} {upstream_branch}
+  while IFS= read -r -d '' p; do
+    if git cat-file -e "{upstream_remote}/{upstream_branch}:$p" 2>/dev/null; then
+      cp -- "$p" "$p.local"
+      rm -f -- "$p"
+    fi
+  done < <(git ls-files --others --exclude-standard -z)
+  git merge --ff-only "{upstream_remote}/{upstream_branch}"
+steps: null
+postconditions:
+- name: head_equals_upstream
+  description: HEAD is now the upstream commit
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse "{upstream_remote}/{upstream_branch}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_entries
+  description: the index has no unresolved merge entries
+  probe: '! git ls-files -u | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: local_copy_exists
+  description: at least one .local copy exists beside a path now tracked upstream
+  probe: |-
+    found=0
+    while IFS= read -r -d '' p; do
+      case "$p" in
+        *.local)
+          base=${p%.local}
+          if git cat-file -e "HEAD:$base" 2>/dev/null; then
+            found=1
+            break
+          fi
+          ;;
+      esac
+    done < <(git ls-files --others --exclude-standard -z)
+    [ "$found" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+variant: aside
+provenance:
+  compiled_from_task: Bring this branch up to date with upstream, but my work in progress
+    must survive. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Bring this branch up to date with upstream, but my work in progress
+    must survive. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update./seed-2-dirty_tree-27083
+  fault: dirty_tree
+status: admitted

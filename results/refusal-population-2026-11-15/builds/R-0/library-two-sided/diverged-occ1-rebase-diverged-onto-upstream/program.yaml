@@ -1,0 +1,118 @@
+id: diverged-occ1-rebase-diverged-onto-upstream
+intent: Replay the local commits on top of the advanced upstream branch so the history
+  stays linear, but only when the two sides changed disjoint files and the upstream
+  branch is the one the local branch is named for.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_exists
+  description: the upstream remote-tracking branch is present locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}^{commit}
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: there are no modified, staged, conflicted or untracked files
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_or_rebase_state
+  description: no merge, cherry-pick, revert or rebase operation is in progress
+  probe: |-
+    test ! -e "$(git rev-parse --git-path MERGE_HEAD)" &&
+    test ! -e "$(git rev-parse --git-path CHERRY_PICK_HEAD)" &&
+    test ! -e "$(git rev-parse --git-path REVERT_HEAD)" &&
+    test ! -d "$(git rev-parse --git-path rebase-merge)" &&
+    test ! -d "$(git rev-parse --git-path rebase-apply)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: the index holds no unmerged (conflicted) entries
+  probe: '! git ls-files --unmerged | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: share_history
+  description: the local branch and the upstream branch have a common ancestor
+  probe: git merge-base {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: histories_diverged
+  description: the local branch has commits upstream lacks and upstream has commits
+    the local branch lacks
+  probe: |-
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0 &&
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: no_overlapping_changes
+  description: the files changed locally and the files changed upstream are disjoint,
+    so replaying cannot conflict
+  probe: |-
+    ! comm -12 \
+      <(git diff --name-only -z "$(git merge-base HEAD {upstream_remote}/{upstream_branch})" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$(git merge-base HEAD {upstream_remote}/{upstream_branch})" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: local_branch_named_like_upstream
+  description: the checked-out branch carries the same name as the upstream branch
+    it is replayed onto
+  probe: test "$(git symbolic-ref --quiet --short HEAD)" = "{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_head_is_that_branch
+  description: when the upstream remote advertises a default branch, it is the branch
+    being replayed onto
+  probe: |-
+    out=$(git ls-remote --symref {upstream_remote} HEAD 2>/dev/null) || exit 0
+    printf '%s\n' "$out" | grep -q '^ref:' || exit 0
+    printf '%s\n' "$out" | grep -qE "^ref:[[:space:]]+refs/heads/{upstream_branch}[[:space:]]"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git rebase {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: upstream_is_ancestor
+  description: HEAD descends from the upstream branch
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: history_is_linear
+  description: no merge commits were introduced above upstream
+  probe: test -z "$(git rev-list --merges {upstream_remote}/{upstream_branch}..HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_replayed
+  description: the replayed local commits remain ahead of upstream
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after
+  description: the rebase completed without leaving changes behind
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflicts_after
+  description: no unmerged paths are left in the index
+  probe: '! git ls-files --unmerged | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_rebase_state_after
+  description: no rebase operation is still in progress
+  probe: |-
+    test ! -d "$(git rev-parse --git-path rebase-merge)" &&
+    test ! -d "$(git rev-parse --git-path rebase-apply)"
+  expect_exit: 0
+  expect_pattern: null
+variant: rebase
+provenance:
+  compiled_from_task: Upstream moved ahead of me. Get me back in line with it. Replay
+    my local commits on top of upstream so the history stays linear.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Upstream moved ahead of me. Get me back in line with it. Replay my local
+    commits on top of upstream so the history stays linear./seed-2-diverged-28615
+  fault: diverged
+status: admitted

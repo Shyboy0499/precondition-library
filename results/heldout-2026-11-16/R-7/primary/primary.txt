@@ -1,0 +1,7 @@
+Primary metric, uninformed regime, 80 labelled pairs (spec §7 item 1, ADR-0008)
+  arm 3 (pre-registered coverage point): coverage 0/80, mismatch 0/0
+  arm 2 curve: 30 operating point(s), each with a 95% Wilson interval in figure1.csv
+  at matched coverage arm 2 (threshold 0.1566265060240964) has mismatch 5/5; coverage gap +0.062; mismatch difference (arm 2 - arm 3) undefined
+  power (item 3): with 5 and 0 fires, alpha 0.05 two-sided and power 0.8, the smallest detectable mismatch difference is undefined at a 50% base rate
+  baseline arm 2b (soft vote): curve, 1 operating point(s) -- context, not part of the claim
+  baseline arm 2c (intent key): point, 1 operating point(s) -- context, not part of the claim

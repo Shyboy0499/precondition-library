@@ -1,0 +1,92 @@
+id: dirty_tree-occ1-ff-upstream-keep-local-aside
+intent: Fast-forward a dirty branch to upstream while keeping the user's local changes,
+  saving each untracked file that upstream adds at the same path as a sibling named
+  <name>.local beside upstream's version.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: worktree_has_tracked_changes
+  description: The working tree or index differs from HEAD so there is local work
+    to preserve.
+  probe: '! git diff --quiet HEAD'
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_behind_upstream_and_fast_forwardable
+  description: HEAD is an ancestor of the upstream tip and strictly behind it.
+  probe: git merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch} &&
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: untracked_file_collides_with_upstream_addition
+  description: At least one untracked file sits at a path that upstream adds, so it
+    must be moved aside before the fast-forward.
+  probe: |-
+    comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z --diff-filter=A HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_changes_do_not_overlap_upstream
+  description: No locally modified tracked file is also changed by upstream, so a
+    fast-forward cannot clobber local work.
+  probe: |-
+    ! comm -12 \
+      <(git diff --name-only -z HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch {upstream_remote} || true
+  target=$(git rev-parse {upstream_remote}/{upstream_branch})
+  while IFS= read -r f; do
+    if [ -n "$f" ]; then
+      cp -p -- "$f" "$f.local"
+      rm -f -- "$f"
+    fi
+  done < <(comm -12 \
+    <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+    <(git diff --name-only -z --diff-filter=A HEAD "$target" | tr '\0' '\n' | sort))
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is the upstream tip after the fast-forward.
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_changes_preserved
+  description: The pre-existing tracked local modifications are still present in the
+    working tree.
+  probe: '! git diff --quiet HEAD'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_file_shadows_upstream
+  description: No untracked file remains at a path that is tracked at HEAD.
+  probe: |-
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git ls-tree -r --name-only -z HEAD | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: saved_copy_sits_beside_upstream_version
+  description: A saved .local sibling exists next to a file that HEAD now tracks.
+  probe: |-
+    comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sed -n 's/\.local$//p' | sort) \
+      <(git ls-tree -r --name-only -z HEAD | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+variant: aside
+provenance:
+  compiled_from_task: My working tree has changes and the branch is behind upstream.
+    Fix that and keep my changes. Keep my unsaved file beside upstream's version,
+    as `<name>.local`, and update.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: My working tree has changes and the branch is behind upstream. Fix that
+    and keep my changes. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update./seed-7-dirty_tree-4812
+  fault: dirty_tree
+status: admitted

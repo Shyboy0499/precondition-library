@@ -1,0 +1,66 @@
+id: submodule_moved-occ1-init-submodule-checkout
+intent: Initialise the repository's nested submodule and check it out at the commit
+  recorded by the superproject.
+parameters:
+- submodule_path
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: submodule_declared_in_gitmodules
+  description: .gitmodules declares a submodule at the requested path
+  probe: |-
+    git config -f .gitmodules --get-regexp '^submodule\..*\.path$' \
+      | cut -d' ' -f2- \
+      | grep -qxF -- '{submodule_path}'
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_not_checked_out
+  description: git submodule status reports the submodule with a leading dash, meaning
+    it is not checked out
+  probe: git submodule status -- '{submodule_path}' | grep -q '^-'
+  expect_exit: 0
+  expect_pattern: null
+- name: head_pin_matches_upstream
+  description: the superproject records the same submodule gitlink locally and on
+    the upstream branch
+  probe: |-
+    test "$(git ls-tree HEAD -- '{submodule_path}' | cut -d' ' -f1)" = 160000 &&
+    test "$(git ls-tree '{upstream_remote}/{upstream_branch}' -- '{submodule_path}' | cut -d' ' -f1)" = 160000 &&
+    test "$(git rev-parse --verify 'HEAD:{submodule_path}')" = \
+         "$(git rev-parse --verify '{upstream_remote}/{upstream_branch}:{submodule_path}')"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git submodule init -- '{submodule_path}'
+  git submodule update -- '{submodule_path}'
+steps: null
+postconditions:
+- name: submodule_initialised
+  description: the submodule working tree has its own git metadata
+  probe: test -e '{submodule_path}/.git'
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_checked_out_at_pin
+  description: the submodule HEAD equals the gitlink recorded in the superproject
+  probe: |-
+    test "$(git -C '{submodule_path}' rev-parse HEAD)" = \
+         "$(git rev-parse 'HEAD:{submodule_path}')"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_status_matches_index
+  description: git submodule status reports the submodule as checked out at the recorded
+    commit
+  probe: git submodule status -- '{submodule_path}' | grep -q '^ '
+  expect_exit: 0
+  expect_pattern: null
+variant: init
+provenance:
+  compiled_from_task: A nested repository in this project needs bringing into line.
+    Initialise the nested repository and check it out.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: A nested repository in this project needs bringing into line. Initialise
+    the nested repository and check it out./seed-4-submodule_moved-25586
+  fault: submodule_moved
+status: admitted

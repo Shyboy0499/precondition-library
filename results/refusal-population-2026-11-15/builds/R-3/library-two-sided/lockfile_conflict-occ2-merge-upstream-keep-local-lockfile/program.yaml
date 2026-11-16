@@ -1,0 +1,262 @@
+id: lockfile_conflict-occ2-merge-upstream-keep-local-lockfile
+intent: Merge the upstream branch into the current branch and resolve the dependency/lock
+  file conflict so the local file's decisions win (entries the local side removed
+  stay removed) while entries upstream added are included, then commit the resolved
+  merge.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_configured
+  description: a git remote with the upstream remote's name is configured
+  probe: git config --get remote.{upstream_remote}.url
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_exists
+  description: the upstream branch is already present as a remote-tracking ref
+  probe: git rev-parse --verify --quiet refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_diverged
+  description: the local branch and the upstream branch each have commits the other
+    lacks
+  probe: |-
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0 &&
+      test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: the repository is not already in the middle of a merge
+  probe: test ! -e "$(git rev-parse --git-dir)/MERGE_HEAD"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: nothing staged, unstaged or untracked that could block the merge
+  probe: |-
+    git diff --quiet && git diff --cached --quiet &&
+      test -z "$(git ls-files --others --exclude-standard -z | tr '\0' '\n')"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_divergence_limited_to_shared_files
+  description: at least one file is changed on both sides, and every file the local
+    branch changed is also changed upstream (so the divergence is a shared-file conflict,
+    not an unrelated local edit)
+  probe: |-
+    export LC_ALL=C
+    mb=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    ldiff=$(git diff --name-only -z "$mb" HEAD | tr '\0' '\n' | sed '/^$/d' | sort -u)
+    udiff=$(git diff --name-only -z "$mb" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sed '/^$/d' | sort -u)
+    comm -12 <(printf '%s\n' "$ldiff") <(printf '%s\n' "$udiff") | grep -q . || exit 1
+    test -z "$(comm -23 <(printf '%s\n' "$ldiff") <(printf '%s\n' "$udiff"))"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_side_dropped_lines
+  description: the local branch deleted at least one line (with no replacement sharing
+    its key) from a file upstream also changed, so there are local removals worth
+    preserving
+  probe: |-
+    export LC_ALL=C
+    mb=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    found=0
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      git cat-file -e "$mb:$f" 2>/dev/null || continue
+      git cat-file -e "HEAD:$f" 2>/dev/null || continue
+      if awk '
+        function key(s,   p, q, r) {
+          p = index(s, "=")
+          if (p > 1) {
+            r = substr(s, 1, p - 1)
+            sub(/^[ \t]+/, "", r)
+            sub(/[ \t]+$/, "", r)
+            if (r != "") return "K:" r
+          }
+          q = index(s, "\"")
+          if (q > 0) {
+            r = substr(s, q + 1)
+            p = index(r, "\"")
+            if (p > 1) {
+              r = substr(r, 1, p - 1)
+              sub(/[ \t].*$/, "", r)
+              if (r != "") return "Q:" r
+            }
+          }
+          return ""
+        }
+        FNR == 1 { file++ }
+        file == 1 { base[$0] = 1; next }
+        file == 2 { oset[$0] = 1; okset[key($0)] = 1; next }
+        END {
+          dropped = 0
+          for (s in base) {
+            if (s in oset) continue
+            k = key(s)
+            if (k != "" && (k in okset)) continue
+            dropped = 1
+          }
+          exit dropped ? 0 : 1
+        }
+      ' <(git show "$mb:$f") <(git show "HEAD:$f"); then
+        found=1
+        break
+      fi
+    done < <(git diff --name-only -z "$mb" HEAD | tr '\0' '\n' | sed '/^$/d' | sort -u)
+    test "$found" -eq 1
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch --quiet {upstream_remote} || true
+  git merge --no-edit {upstream_remote}/{upstream_branch} || true
+  if git ls-files -u | grep -q .; then
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+    mb=$(git merge-base HEAD MERGE_HEAD)
+    git diff --name-only --diff-filter=U -z | tr '\0' '\n' > "$tmp/conflicted"
+    cat > "$tmp/merge.awk" <<'AWK'
+  function key(s,   p, q, r) {
+    p = index(s, "=")
+    if (p > 1) {
+      r = substr(s, 1, p - 1)
+      sub(/^[ \t]+/, "", r)
+      sub(/[ \t]+$/, "", r)
+      if (r != "") return "K:" r
+    }
+    q = index(s, "\"")
+    if (q > 0) {
+      r = substr(s, q + 1)
+      p = index(r, "\"")
+      if (p > 1) {
+        r = substr(r, 1, p - 1)
+        sub(/[ \t].*$/, "", r)
+        if (r != "") return "Q:" r
+      }
+    }
+    return ""
+  }
+  FNR == 1 { file++ }
+  file == 1 { base[$0] = 1; bk[key($0)] = 1; next }
+  file == 2 { n++; ours[n] = $0; ok[n] = key($0); oset[$0] = 1; next }
+  file == 3 { m++; th[m] = $0; next }
+  END {
+    for (i = 1; i <= m; i++) {
+      s = th[i]
+      if (s in base) continue
+      if (s in oset) continue
+      k = key(s)
+      repl = 0
+      if (k != "") {
+        for (j = 1; j <= n; j++) {
+          if (ok[j] == k) {
+            ours[j] = s
+            oset[s] = 1
+            repl = 1
+            break
+          }
+        }
+      }
+      if (repl) continue
+      if (k != "" && (k in bk)) continue
+      anchor = 0
+      for (p = i + 1; p <= m && anchor == 0; p++) {
+        if (th[p] in oset) {
+          for (j = 1; j <= n; j++) {
+            if (ours[j] == th[p]) {
+              anchor = j
+              break
+            }
+          }
+        }
+      }
+      if (anchor > 0) {
+        if (anchor in ins) {
+          ins[anchor] = ins[anchor] SUBSEP s
+        } else {
+          ins[anchor] = s
+        }
+      } else {
+        if (tail == "") {
+          tail = s
+        } else {
+          tail = tail SUBSEP s
+        }
+      }
+    }
+    for (j = 1; j <= n; j++) {
+      if (j in ins) {
+        c = split(ins[j], a, SUBSEP)
+        for (x = 1; x <= c; x++) print a[x]
+      }
+      print ours[j]
+    }
+    if (tail != "") {
+      c = split(tail, a, SUBSEP)
+      for (x = 1; x <= c; x++) print a[x]
+    }
+  }
+  AWK
+    while IFS= read -r f; do
+      if [ -z "$f" ]; then
+        continue
+      fi
+      if ! git show "HEAD:$f" > "$tmp/ours" 2>/dev/null; then
+        git rm -q -f -- "$f" >/dev/null 2>&1 || true
+        continue
+      fi
+      if ! git show "MERGE_HEAD:$f" > "$tmp/theirs" 2>/dev/null; then
+        cp "$tmp/ours" "$f"
+        git add -- "$f"
+        continue
+      fi
+      if ! git show "$mb:$f" > "$tmp/base" 2>/dev/null; then
+        : > "$tmp/base"
+      fi
+      if [ ! -s "$tmp/base" ]; then
+        printf '\001\n' > "$tmp/base"
+      fi
+      awk -f "$tmp/merge.awk" "$tmp/base" "$tmp/ours" "$tmp/theirs" > "$f"
+      git add -- "$f"
+    done < "$tmp/conflicted"
+    git commit --no-edit
+  fi
+steps: null
+postconditions:
+- name: no_unmerged_entries
+  description: the index has no unmerged (conflicted) entries left
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: the upstream branch is now contained in HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_commit_created
+  description: HEAD is a merge commit whose second parent is the upstream tip
+  probe: git rev-parse --verify --quiet HEAD^2
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: no conflict markers remain in the committed tree
+  probe: '! git grep -q -e ''^<<<<<<<'' HEAD'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_merge
+  description: nothing staged, unstaged or untracked remains after the merge commit
+  probe: |-
+    git diff --quiet && git diff --cached --quiet &&
+      test -z "$(git ls-files --others --exclude-standard -z | tr '\0' '\n')"
+  expect_exit: 0
+  expect_pattern: null
+variant: keep_local
+provenance:
+  compiled_from_task: Update this branch from upstream and make sure the dependency
+    list still makes sense. Keep my dependency file, with what I removed still removed,
+    and add what upstream added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Update this branch from upstream and make sure the dependency list still
+    makes sense. Keep my dependency file, with what I removed still removed, and add
+    what upstream added./seed-2-lockfile_conflict-212
+  fault: lockfile_conflict
+status: admitted

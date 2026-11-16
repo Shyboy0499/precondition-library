@@ -1,0 +1,99 @@
+id: dirty_tree-occ2-dirty-tree-occ2-stash-update-pop
+intent: Stash uncommitted work, fast-forward the current branch to upstream, and restore
+  the stashed work.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_tracking_ref_exists
+  description: the upstream remote-tracking ref exists locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}^{commit}
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_is_behind_upstream
+  description: HEAD is strictly behind the upstream ref, so an update is needed
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: no_local_commits_ahead
+  description: HEAD has no commits that upstream lacks, so the update can fast-forward
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -eq 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_has_uncommitted_changes
+  description: there are tracked or untracked changes to stash
+  probe: test -n "$(git status --porcelain -uall)"
+  expect_exit: 0
+  expect_pattern: null
+- name: index_has_no_conflicts
+  description: the index has no unmerged entries that would block stashing or fast-forwarding
+  probe: '! git ls-files -u | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_collision_with_upstream
+  description: no untracked file occupies a path that the incoming upstream commits
+    also touch, so a plain stash/update/pop is safe and the file need not be moved
+    aside
+  probe: |-
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} \
+        | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: no_autostash_with_programmatic_message
+  description: no existing stash already uses the marker message this program will
+    create
+  probe: '! git stash list | grep -q ''wip: autostash before fast-forward (programmatic)'''
+  expect_exit: 0
+  expect_pattern: null
+- name: on_a_branch
+  description: HEAD is on a branch, not detached
+  probe: git symbolic-ref --quiet --short HEAD
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  stash_msg='wip: autostash before fast-forward (programmatic)'
+  git stash push --include-untracked -m "$stash_msg"
+  if ! git merge --ff-only {upstream_remote}/{upstream_branch}; then
+    git stash pop
+    exit 1
+  fi
+  git stash pop
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is at the upstream commit after the fast-forward
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_dirty_restored
+  description: the uncommitted changes are back in the worktree
+  probe: test -n "$(git status --porcelain -uall)"
+  expect_exit: 0
+  expect_pattern: null
+- name: index_has_no_conflicts_after_restore
+  description: restoring the stash left no unmerged entries
+  probe: '! git ls-files -u | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: autostash_removed
+  description: the program's auto-stash no longer appears in the stash list
+  probe: '! git stash list | grep -q ''wip: autostash before fast-forward (programmatic)'''
+  expect_exit: 0
+  expect_pattern: null
+variant: stash
+provenance:
+  compiled_from_task: I am in the middle of something and upstream moved on. Sort
+    it out without losing my edits. Stash my uncommitted work, update the branch,
+    then put my work back.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: I am in the middle of something and upstream moved on. Sort it out without
+    losing my edits. Stash my uncommitted work, update the branch, then put my work
+    back./seed-10-dirty_tree-212
+  fault: dirty_tree
+status: admitted

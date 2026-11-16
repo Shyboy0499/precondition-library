@@ -1,0 +1,201 @@
+id: config_renamed-occ1-drop-deprecated-config-key
+intent: Delete the line of an old config setting name when its replacement name is
+  already set in the same file, keep the new setting untouched, and commit the cleanup.
+parameters: []
+preconditions:
+- name: rename_map_present
+  description: a tracked renames.conf declares at least one old = new key mapping
+  probe: |-
+    f=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1 || true)
+    [ -n "$f" ] || exit 1
+    awk -F= '
+      /^[[:space:]]*#/ { next }
+      {
+        k = $1; v = $2
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+        if (k != "" && v != "") found = 1
+      }
+      END { exit found ? 0 : 1 }
+    ' "$f"
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_key_duplicated_by_new_name
+  description: a tracked config file sets an old key whose replacement key is already
+    set in the same file
+  probe: |-
+    ren=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1 || true)
+    [ -n "$ren" ] || exit 1
+    while IFS= read -r f; do
+      [ -z "$f" ] && continue
+      [ "$f" = "$ren" ] && continue
+      case "$f" in
+        */config/*|config/*|*.conf) ;;
+        *) continue ;;
+      esac
+      awk -v mapfile="$ren" '
+        function keyof(s,   i, k) {
+          i = index(s, "="); if (i == 0) return ""
+          k = substr(s, 1, i-1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", k); return k
+        }
+        BEGIN {
+          while ((getline l < mapfile) > 0) {
+            if (l ~ /^[[:space:]]*#/) continue
+            i = index(l, "="); if (i == 0) continue
+            o = substr(l, 1, i-1); n = substr(l, i+1)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", o); gsub(/^[[:space:]]+|[[:space:]]+$/, "", n)
+            if (o != "" && n != "") { old[o] = n; newk[n] = 1 }
+          }
+          close(mapfile)
+        }
+        FNR == NR { k = keyof($0); if (k in newk) has[k] = 1; next }
+        { k = keyof($0); if (k in old && (old[k] in has)) stale = 1 }
+        END { exit stale ? 0 : 1 }
+      ' "$f" "$f" && exit 0
+    done <<< "$(git ls-files -z | tr '\0' '\n')"
+    exit 1
+  expect_exit: 0
+  expect_pattern: null
+- name: no_uncommitted_tracked_changes
+  description: the tracked worktree and index are clean so the cleanup can be committed
+    on its own
+  probe: git diff --quiet && git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+  ren=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1 || true)
+  [ -n "$ren" ] || ren=config/renames.conf
+  changed=()
+  while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    [ "$f" = "$ren" ] && continue
+    case "$f" in
+      */config/*|config/*|*.conf) ;;
+      *) continue ;;
+    esac
+    tmp=$(mktemp)
+    awk -v mapfile="$ren" '
+      function keyof(s,   i, k) {
+        i = index(s, "="); if (i == 0) return ""
+        k = substr(s, 1, i-1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", k); return k
+      }
+      BEGIN {
+        while ((getline l < mapfile) > 0) {
+          if (l ~ /^[[:space:]]*#/) continue
+          i = index(l, "="); if (i == 0) continue
+          o = substr(l, 1, i-1); n = substr(l, i+1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", o); gsub(/^[[:space:]]+|[[:space:]]+$/, "", n)
+          if (o != "" && n != "") { old[o] = n; newk[n] = 1 }
+        }
+        close(mapfile)
+      }
+      FNR == NR { k = keyof($0); if (k in newk) has[k] = 1; next }
+      { k = keyof($0); if (k in old && (old[k] in has)) next; print }
+    ' "$f" "$f" > "$tmp"
+    if ! cmp -s "$f" "$tmp"; then
+      cat "$tmp" > "$f"
+      changed+=("$f")
+    fi
+    rm -f "$tmp"
+  done <<< "$(git ls-files -z | tr '\0' '\n')"
+  if [ ${#changed[@]} -gt 0 ]; then
+    git add -- "${changed[@]}"
+    git commit -m "config: drop deprecated keys that duplicate their new names"
+  fi
+steps: null
+postconditions:
+- name: no_stale_duplicate_keys
+  description: no tracked config file still sets an old key whose replacement key
+    is set in the same file
+  probe: |-
+    ren=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1 || true)
+    [ -n "$ren" ] || exit 1
+    while IFS= read -r f; do
+      [ -z "$f" ] && continue
+      [ "$f" = "$ren" ] && continue
+      case "$f" in
+        */config/*|config/*|*.conf) ;;
+        *) continue ;;
+      esac
+      awk -v mapfile="$ren" '
+        function keyof(s,   i, k) {
+          i = index(s, "="); if (i == 0) return ""
+          k = substr(s, 1, i-1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", k); return k
+        }
+        BEGIN {
+          while ((getline l < mapfile) > 0) {
+            if (l ~ /^[[:space:]]*#/) continue
+            i = index(l, "="); if (i == 0) continue
+            o = substr(l, 1, i-1); n = substr(l, i+1)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", o); gsub(/^[[:space:]]+|[[:space:]]+$/, "", n)
+            if (o != "" && n != "") { old[o] = n; newk[n] = 1 }
+          }
+          close(mapfile)
+        }
+        FNR == NR { k = keyof($0); if (k in newk) has[k] = 1; next }
+        { k = keyof($0); if (k in old && (old[k] in has)) stale = 1 }
+        END { exit stale ? 1 : 0 }
+      ' "$f" "$f" || exit 1
+    done <<< "$(git ls-files -z | tr '\0' '\n')"
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: replacement_keys_still_set
+  description: every replacement key named in the renames map is still set in a tracked
+    config file
+  probe: |-
+    ren=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1 || true)
+    [ -n "$ren" ] || exit 1
+    awk -F= '
+      /^[[:space:]]*#/ { next }
+      {
+        k = $1; v = $2
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+        if (k != "" && v != "") print v
+      }
+    ' "$ren" | while IFS= read -r nk; do
+      [ -z "$nk" ] && continue
+      found=0
+      while IFS= read -r f; do
+        [ -z "$f" ] && continue
+        [ "$f" = "$ren" ] && continue
+        case "$f" in
+          */config/*|config/*|*.conf) ;;
+          *) continue ;;
+        esac
+        if awk -v key="$nk" '
+          function keyof(s,   i, k) {
+            i = index(s, "="); if (i == 0) return ""
+            k = substr(s, 1, i-1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", k); return k
+          }
+          { if (keyof($0) == key) { found = 1; exit } }
+          END { exit found ? 0 : 1 }
+        ' "$f"; then
+          found=1
+          break
+        fi
+      done <<< "$(git ls-files -z | tr '\0' '\n')"
+      [ "$found" = 1 ] || exit 1
+    done
+  expect_exit: 0
+  expect_pattern: null
+- name: change_is_committed
+  description: the config cleanup is committed and no tracked change is left uncommitted
+  probe: git diff --quiet && git diff --cached --quiet && git log -1 --format=%s |
+    grep -q '^config:'
+  expect_exit: 0
+  expect_pattern: null
+variant: drop_old
+provenance:
+  compiled_from_task: The app keeps warning that my config uses old setting names.
+    Make the warning go away without changing what the settings do. The new name is
+    already set too, so delete the old key's line and keep the new one.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: The app keeps warning that my config uses old setting names. Make the
+    warning go away without changing what the settings do. The new name is already
+    set too, so delete the old key's line and keep the new one./seed-23-config_renamed-29979
+  fault: config_renamed
+status: admitted

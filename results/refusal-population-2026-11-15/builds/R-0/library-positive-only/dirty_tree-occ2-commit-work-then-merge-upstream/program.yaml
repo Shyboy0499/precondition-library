@@ -1,0 +1,58 @@
+id: dirty_tree-occ2-commit-work-then-merge-upstream
+intent: Commit uncommitted working-tree changes, then bring the branch up to date
+  with upstream while keeping those changes.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: worktree_dirty
+  description: the working tree has uncommitted changes that must be preserved
+  probe: test -n "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_behind_upstream
+  description: HEAD is behind the upstream-tracking branch
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflicts_in_index
+  description: the index has no unmerged entries
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git add -A
+  git commit -m "Commit local work before merging {upstream_remote}/{upstream_branch}"
+  git merge {upstream_remote}/{upstream_branch} --no-edit
+steps: null
+postconditions:
+- name: worktree_clean
+  description: no uncommitted changes remain
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: the upstream tip has been merged into HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commit_present
+  description: HEAD is ahead of upstream, so the local work is committed
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+variant: commit
+provenance:
+  compiled_from_task: My working tree has changes and the branch is behind upstream.
+    Fix that and keep my changes. Commit my uncommitted work first, then bring the
+    branch up to date.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: My working tree has changes and the branch is behind upstream. Fix that
+    and keep my changes. Commit my uncommitted work first, then bring the branch up
+    to date./seed-0-dirty_tree-28615
+  fault: dirty_tree
+status: admitted

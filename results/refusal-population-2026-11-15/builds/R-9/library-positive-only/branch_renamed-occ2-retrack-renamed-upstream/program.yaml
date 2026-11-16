@@ -1,0 +1,98 @@
+id: branch_renamed-occ2-retrack-renamed-upstream
+intent: Retarget the current branch's upstream tracking to upstream's renamed default
+  branch and merge that branch into the local commits.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: current_branch_tracks_remote
+  description: the checked-out branch is configured to track the given upstream remote
+  probe: |-
+    branch=$(git symbolic-ref --short HEAD)
+    test "$(git config --get "branch.$branch.remote")" = "{upstream_remote}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_default_is_new_branch
+  description: the upstream remote default branch is the branch to track
+  probe: test "$(git symbolic-ref "refs/remotes/{upstream_remote}/HEAD")" = "refs/remotes/{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: remote_tracking_branch_exists
+  description: the remote-tracking ref for the new upstream branch is present
+  probe: git rev-parse --verify --quiet "refs/remotes/{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: tracking_needs_retarget
+  description: the branch currently merges a different ref than the new upstream branch
+  probe: |-
+    branch=$(git symbolic-ref --short HEAD)
+    current=$(git config --get "branch.$branch.merge")
+    test -n "$current" && test "$current" != "refs/heads/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_tracked_local_changes
+  description: the index and working tree have no tracked modifications and no unresolved
+    conflict
+  probe: git diff --quiet && git diff --cached --quiet && test -z "$(git ls-files
+    -u)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_collision_with_upstream
+  description: no untracked file would be overwritten by the incoming upstream changes
+  probe: |-
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | LC_ALL=C sort) \
+      <(git diff --name-only -z HEAD "refs/remotes/{upstream_remote}/{upstream_branch}" | tr '\0' '\n' | LC_ALL=C sort) \
+      | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch {upstream_remote} --prune
+  branch=$(git symbolic-ref --short HEAD)
+  git config "branch.$branch.remote" "{upstream_remote}"
+  git config "branch.$branch.merge" "refs/heads/{upstream_branch}"
+  git merge "{upstream_remote}/{upstream_branch}" --no-edit
+steps: null
+postconditions:
+- name: branch_remote_is_upstream
+  description: the branch remote is the given upstream remote
+  probe: |-
+    branch=$(git symbolic-ref --short HEAD)
+    test "$(git config --get "branch.$branch.remote")" = "{upstream_remote}"
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_merge_is_new_branch
+  description: the branch merge ref is the new upstream branch
+  probe: |-
+    branch=$(git symbolic-ref --short HEAD)
+    test "$(git config --get "branch.$branch.merge")" = "refs/heads/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: tracks_new_upstream_branch
+  description: the branch upstream resolves to the new upstream branch
+  probe: test "$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}')" =
+    "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: the new upstream branch is fully merged into HEAD
+  probe: git merge-base --is-ancestor "refs/remotes/{upstream_remote}/{upstream_branch}"
+    HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: the merge left no unresolved paths
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+variant: retrack
+provenance:
+  compiled_from_task: Make this branch follow upstream's current main line again,
+    and catch it up. Track upstream's new branch and merge it into my own commits.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Make this branch follow upstream's current main line again, and catch
+    it up. Track upstream's new branch and merge it into my own commits./seed-1-branch_renamed-12721
+  fault: branch_renamed
+status: admitted

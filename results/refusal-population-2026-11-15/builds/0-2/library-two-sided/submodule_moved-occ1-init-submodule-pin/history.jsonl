@@ -1,0 +1,2 @@
+{"episode_id": "Get this repo's nested dependency consistent with upstream. Initialise the nested repository and check it out./seed-5-submodule_moved-27083", "from": null, "program_id": "submodule_moved-occ1-init-submodule-pin", "to": "candidate"}
+{"episode_id": "submodule_moved/seed-5/occurrence-1", "from": "candidate", "program_id": "submodule_moved-occ1-init-submodule-pin", "to": "admitted"}

@@ -1,0 +1,2 @@
+{"episode_id": "Get this fork back in sync with upstream without losing my commits. My local commits can go: make my branch match upstream exactly./seed-1-diverged-4812", "from": null, "program_id": "diverged-occ2-sync-fork-discard", "to": "candidate"}
+{"episode_id": "Get this fork back in sync with upstream without losing my commits. My local commits can go: make my branch match upstream exactly./seed-1-diverged-4812", "from": "candidate", "program_id": "diverged-occ2-sync-fork-discard", "to": "admitted"}

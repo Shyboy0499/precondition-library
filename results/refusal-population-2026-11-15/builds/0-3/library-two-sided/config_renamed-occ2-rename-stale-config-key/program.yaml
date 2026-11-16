@@ -1,0 +1,204 @@
+id: config_renamed-occ2-rename-stale-config-key
+intent: Rename stale configuration keys in config/settings.conf according to config/renames.conf,
+  preserving their values and committing the change.
+parameters: []
+preconditions:
+- name: has_renames_map
+  description: config/renames.conf exists and maps at least one old key to a new key
+  probe: |-
+    test -f config/renames.conf || exit 1
+    awk '
+      {
+        line=$0
+        sub(/^[[:space:]]*/, "", line)
+        sub(/[[:space:]]*$/, "", line)
+        if (line == "" || line ~ /^#/) next
+        eq=index(line, "=")
+        if (eq > 1) {
+          old=substr(line,1,eq-1)
+          new=substr(line,eq+1)
+          sub(/[[:space:]]*$/, "", old)
+          sub(/^[[:space:]]*/, "", new)
+          if (old != "" && new != "") found=1
+        }
+      }
+      END { exit found ? 0 : 1 }
+    ' config/renames.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: settings_tracked
+  description: HEAD and config/settings.conf are available in the repository history
+  probe: |-
+    git rev-parse --verify HEAD >/dev/null 2>&1 || exit 1
+    git rev-parse --verify HEAD^ >/dev/null 2>&1 || exit 1
+    git ls-files --error-unmatch config/settings.conf >/dev/null 2>&1
+  expect_exit: 0
+  expect_pattern: null
+- name: settings_file_clean
+  description: config/settings.conf has no staged or unstaged changes
+  probe: |-
+    git diff --quiet -- config/settings.conf || exit 1
+    git diff --cached --quiet -- config/settings.conf || exit 1
+  expect_exit: 0
+  expect_pattern: null
+- name: index_clean
+  description: the index has no staged changes
+  probe: git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_key_safe_to_rename
+  description: settings.conf contains at least one old key from renames.conf and none
+    of those old keys has its new key already present
+  probe: |-
+    test -f config/renames.conf || exit 1
+    test -f config/settings.conf || exit 1
+    declare -A present
+    while IFS= read -r line || [ -n "$line" ]; do
+      trimmed="${line#"${line%%[![:space:]]*}"}"
+      trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+      [ -z "$trimmed" ] && continue
+      [[ "$trimmed" == '#'* ]] && continue
+      [[ "$trimmed" == *=* ]] || continue
+      key="${trimmed%%=*}"
+      key="${key#"${key%%[![:space:]]*}"}"
+      key="${key%"${key##*[![:space:]]}"}"
+      [ -n "$key" ] && present["$key"]=1
+    done < config/settings.conf
+
+    found=0
+    while IFS= read -r line || [ -n "$line" ]; do
+      trimmed="${line#"${line%%[![:space:]]*}"}"
+      trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+      [ -z "$trimmed" ] && continue
+      [[ "$trimmed" == '#'* ]] && continue
+      [[ "$trimmed" == *=* ]] || continue
+      old="${trimmed%%=*}"
+      new="${trimmed#*=}"
+      old="${old#"${old%%[![:space:]]*}"}"; old="${old%"${old##*[![:space:]]}"}"
+      new="${new#"${new%%[![:space:]]*}"}"; new="${new%"${new##*[![:space:]]}"}"
+      [ -n "$old" ] && [ -n "$new" ] || continue
+      if [[ -n "${present[$old]+x}" ]]; then
+        if [[ -n "${present[$new]+x}" ]]; then
+          exit 1
+        fi
+        found=1
+      fi
+    done < config/renames.conf
+    [ "$found" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  set -e
+  declare -A rename_map
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"
+    trimmed="${line#"${line%%[![:space:]]*}"}"
+    trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+    [ -z "$trimmed" ] && continue
+    [[ "$trimmed" == '#'* ]] && continue
+    [[ "$trimmed" == *=* ]] || continue
+    old="${trimmed%%=*}"
+    new="${trimmed#*=}"
+    old="${old#"${old%%[![:space:]]*}"}"; old="${old%"${old##*[![:space:]]}"}"
+    new="${new#"${new%%[![:space:]]*}"}"; new="${new%"${new##*[![:space:]]}"}"
+    [ -n "$old" ] && [ -n "$new" ] && rename_map["$old"]="$new"
+  done < config/renames.conf
+
+  tmp=$(mktemp)
+  trap 'rm -f "$tmp"' EXIT
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [[ "$line" =~ ^([[:space:]]*)([^[:space:]=]+)([[:space:]]*=)(.*)$ ]]; then
+      lead="${BASH_REMATCH[1]}"
+      key="${BASH_REMATCH[2]}"
+      mid="${BASH_REMATCH[3]}"
+      rest="${BASH_REMATCH[4]}"
+      if [[ -n "${rename_map[$key]+x}" ]]; then
+        line="${lead}${rename_map[$key]}${mid}${rest}"
+      fi
+    fi
+    printf '%s\n' "$line" >> "$tmp"
+  done < config/settings.conf
+  cat "$tmp" > config/settings.conf
+  git add config/settings.conf
+  if ! git diff --cached --quiet; then
+    git commit -m "fix(config): rename stale config keys" -- config/settings.conf
+  fi
+steps: null
+postconditions:
+- name: renamed_keys_preserve_values
+  description: each old key that was present before the commit is gone and its value
+    moved to the new key
+  probe: |-
+    extract_value() {
+      local key="$1"
+      awk -v key="$key" '
+        {
+          line=$0
+          sub(/^[[:space:]]*/, "", line)
+          if (line == "" || line ~ /^#/) next
+          eq=index(line, "=")
+          if (eq == 0) next
+          k=substr(line, 1, eq-1)
+          v=substr(line, eq+1)
+          sub(/[[:space:]]+$/, "", k)
+          sub(/^[[:space:]]+/, "", v)
+          sub(/[[:space:]]+$/, "", v)
+          if (k == key) { print "1:" v; exit }
+        }
+      '
+    }
+
+    test -f config/renames.conf || exit 1
+    test -f config/settings.conf || exit 1
+    git rev-parse --verify HEAD^ >/dev/null 2>&1 || exit 1
+
+    while IFS= read -r line || [ -n "$line" ]; do
+      trimmed="${line#"${line%%[![:space:]]*}"}"
+      trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+      [ -z "$trimmed" ] && continue
+      [[ "$trimmed" == '#'* ]] && continue
+      [[ "$trimmed" == *=* ]] || continue
+      old="${trimmed%%=*}"
+      new="${trimmed#*=}"
+      old="${old#"${old%%[![:space:]]*}"}"; old="${old%"${old##*[![:space:]]}"}"
+      new="${new#"${new%%[![:space:]]*}"}"; new="${new%"${new##*[![:space:]]}"}"
+      [ -n "$old" ] && [ -n "$new" ] || continue
+
+      oldrec=$(git show HEAD^:config/settings.conf | extract_value "$old")
+      if [ -n "$oldrec" ]; then
+        oldval="${oldrec#1:}"
+        newrec=$(extract_value "$new" < config/settings.conf)
+        if [ -z "$newrec" ]; then
+          exit 1
+        fi
+        newval="${newrec#1:}"
+        if [ "$oldval" != "$newval" ]; then
+          exit 1
+        fi
+        oldnow=$(extract_value "$old" < config/settings.conf)
+        if [ -n "$oldnow" ]; then
+          exit 1
+        fi
+      fi
+    done < config/renames.conf
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: settings_change_committed
+  description: config/settings.conf is committed and matches the index and worktree
+  probe: |-
+    git diff --quiet HEAD -- config/settings.conf || exit 1
+    git diff --cached --quiet HEAD -- config/settings.conf || exit 1
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: Fix the stale config entry the app is warning about, without
+    losing any setting. Rename the old key in the project's settings and keep its
+    value.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Fix the stale config entry the app is warning about, without losing
+    any setting. Rename the old key in the project's settings and keep its value./seed-8-config_renamed-28874
+  fault: config_renamed
+status: admitted

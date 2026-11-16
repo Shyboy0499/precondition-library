@@ -1,0 +1,180 @@
+id: config_renamed-occ1-config-drop-old-key
+intent: Delete the line for the old name of a renamed config key when both the old
+  and new names are set, keeping the new key.
+parameters: []
+preconditions:
+- name: clean_worktree
+  description: the working tree has no uncommitted changes
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: has_rename_map
+  description: config/renames.conf exists and contains at least one key mapping
+  probe: '[ -f config/renames.conf ] && grep -Eq ''^[[:space:]]*[^#[:space:]]+[[:space:]]*=''
+    config/renames.conf'
+  expect_exit: 0
+  expect_pattern: null
+- name: has_duplicate_keys
+  description: at least one tracked config file has both the old and new name of a
+    renamed key set
+  probe: |-
+    map=config/renames.conf
+    [ -f "$map" ] || exit 1
+    while IFS=$'\t' read -r old new; do
+      [ -n "$old" ] && [ -n "$new" ] || continue
+      while IFS= read -r f; do
+        [ "$f" = "$map" ] && continue
+        if awk -v o="$old" -v n="$new" '
+          function trim(s){sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s}
+          {
+            line=$0
+            eq=index(line,"=")
+            if(eq>0){
+              k=trim(substr(line,1,eq-1))
+              if(k==o) haso=1
+              if(k==n) hasn=1
+            }
+          }
+          END{exit !(haso && hasn)}
+        ' "$f"; then
+          exit 0
+        fi
+      done < <(git ls-files -z | tr '\0' '\n')
+    done < <(awk '
+      /^[ \t]*#/ {next}
+      /^[ \t]*$/ {next}
+      {
+        eq=index($0,"=")
+        if(eq>0){
+          old=substr($0,1,eq-1); new=substr($0,eq+1)
+          sub(/^[ \t]+/, "", old); sub(/[ \t]+$/, "", old)
+          sub(/^[ \t]+/, "", new); sub(/[ \t]+$/, "", new)
+          if(old!="" && new!="") print old "\t" new
+        }
+      }
+    ' "$map")
+    exit 1
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+  map=config/renames.conf
+  test -f "$map"
+
+  changed=0
+  while IFS=$'\t' read -r old new; do
+    [ -n "$old" ] && [ -n "$new" ] || continue
+    while IFS= read -r f; do
+      [ "$f" = "$map" ] && continue
+      if awk -v o="$old" -v n="$new" '
+        function trim(s){sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s}
+        {
+          line=$0
+          eq=index(line,"=")
+          if(eq>0){
+            k=trim(substr(line,1,eq-1))
+            if(k==o) haso=1
+            if(k==n) hasn=1
+          }
+        }
+        END{exit !(haso && hasn)}
+      ' "$f"; then
+        awk -v o="$old" '
+          function trim(s){sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s}
+          {
+            line=$0
+            eq=index(line,"=")
+            if(eq>0){
+              k=trim(substr(line,1,eq-1))
+              if(k==o) next
+            }
+            print
+          }
+        ' "$f" > "$f.tmp"
+        mv "$f.tmp" "$f"
+        changed=1
+      fi
+    done < <(git ls-files -z | tr '\0' '\n')
+  done < <(awk '
+    /^[ \t]*#/ {next}
+    /^[ \t]*$/ {next}
+    {
+      eq=index($0,"=")
+      if(eq>0){
+        old=substr($0,1,eq-1); new=substr($0,eq+1)
+        sub(/^[ \t]+/, "", old); sub(/[ \t]+$/, "", old)
+        sub(/^[ \t]+/, "", new); sub(/[ \t]+$/, "", new)
+        if(old!="" && new!="") print old "\t" new
+      }
+    }
+  ' "$map")
+
+  if [ "$changed" -eq 1 ]; then
+    git commit -am "Drop renamed legacy config keys"
+  fi
+steps: null
+postconditions:
+- name: no_duplicate_keys
+  description: no tracked config file has both the old and new name of a renamed key
+    set
+  probe: |-
+    map=config/renames.conf
+    [ -f "$map" ] || exit 0
+    while IFS=$'\t' read -r old new; do
+      [ -n "$old" ] && [ -n "$new" ] || continue
+      while IFS= read -r f; do
+        [ "$f" = "$map" ] && continue
+        if awk -v o="$old" -v n="$new" '
+          function trim(s){sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s}
+          {
+            line=$0
+            eq=index(line,"=")
+            if(eq>0){
+              k=trim(substr(line,1,eq-1))
+              if(k==o) haso=1
+              if(k==n) hasn=1
+            }
+          }
+          END{exit !(haso && hasn)}
+        ' "$f"; then
+          exit 1
+        fi
+      done < <(git ls-files -z | tr '\0' '\n')
+    done < <(awk '
+      /^[ \t]*#/ {next}
+      /^[ \t]*$/ {next}
+      {
+        eq=index($0,"=")
+        if(eq>0){
+          old=substr($0,1,eq-1); new=substr($0,eq+1)
+          sub(/^[ \t]+/, "", old); sub(/[ \t]+$/, "", old)
+          sub(/^[ \t]+/, "", new); sub(/[ \t]+$/, "", new)
+          if(old!="" && new!="") print old "\t" new
+        }
+      }
+    ' "$map")
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree_after
+  description: the change was committed and the working tree is clean
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: commit_only_deletions
+  description: the last commit only removes lines, leaving the new key lines intact
+  probe: '! git diff HEAD^ HEAD | grep -Eq ''^\+[^+]'''
+  expect_exit: 0
+  expect_pattern: null
+variant: drop_old
+provenance:
+  compiled_from_task: Some setting in my config has been renamed upstream. Sort the
+    config out. The new name is already set too, so delete the old key's line and
+    keep the new one.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Some setting in my config has been renamed upstream. Sort the config
+    out. The new name is already set too, so delete the old key's line and keep the
+    new one./seed-31-config_renamed-25587
+  fault: config_renamed
+status: admitted

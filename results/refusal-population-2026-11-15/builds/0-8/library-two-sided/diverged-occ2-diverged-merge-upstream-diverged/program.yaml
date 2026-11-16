@@ -1,0 +1,84 @@
+id: diverged-occ2-diverged-merge-upstream-diverged
+intent: Merge the upstream branch into the diverged local branch, preserving both
+  histories.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_tracking_ref_present
+  description: the upstream remote-tracking branch already exists locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: local_and_upstream_diverged
+  description: HEAD has local-only commits and upstream has commits not in HEAD
+  probe: |-
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0 &&
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: no staged, unstaged, or untracked changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: no merge is currently in progress
+  probe: test ! -e "$(git rev-parse --git-path MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: on_a_branch
+  description: HEAD points at a branch rather than a detached commit
+  probe: git symbolic-ref --quiet HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: remote_head_agrees_with_merge_target
+  description: when the upstream remote advertises a default branch, it is the branch
+    this program merges
+  probe: |-
+    head=$(git symbolic-ref -q "refs/remotes/{upstream_remote}/HEAD" || true)
+    if [ -n "$head" ]; then
+      test "$head" = "refs/remotes/{upstream_remote}/{upstream_branch}"
+    else
+      remote=$(git ls-remote --symref "{upstream_remote}" HEAD 2>/dev/null | awk '$1 == "ref:" && $3 == "HEAD" { sub("refs/heads/", "", $2); print $2; exit }')
+      test -z "$remote" || test "$remote" = "{upstream_branch}"
+    fi
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_merges_without_conflicts
+  description: a three-way merge of the upstream tip into HEAD produces no content
+    conflicts
+  probe: '! git merge-tree "$(git merge-base HEAD {upstream_remote}/{upstream_branch})"
+    HEAD {upstream_remote}/{upstream_branch} | grep -q ''<<<<<<< \.our'''
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git merge --no-edit --no-ff {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: upstream_contained
+  description: the upstream tip is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_commit_has_two_parents
+  description: HEAD is a merge commit with exactly two parents
+  probe: test "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 3
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_after_merge
+  description: the merge left no uncommitted changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: This branch and upstream have both changed. Bring it back into
+    line. Merge upstream into my branch and keep both histories.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: This branch and upstream have both changed. Bring it back into line.
+    Merge upstream into my branch and keep both histories./seed-0-diverged-29979
+  fault: diverged
+status: candidate

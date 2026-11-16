@@ -1,0 +1,80 @@
+id: dirty_tree-occ2-commit-local-then-merge-upstream
+intent: Commit the uncommitted working-tree changes, then bring the current branch
+  up to date with upstream while keeping those changes.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_a_branch
+  description: HEAD points at a local branch, so the pending work can be committed
+    onto it
+  probe: git symbolic-ref -q HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: has_uncommitted_changes
+  description: the working tree has uncommitted changes (tracked modifications or
+    untracked files)
+  probe: git status --porcelain | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_behind_upstream
+  description: the upstream branch has at least one commit that HEAD does not contain
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -ge 1
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: the repository is not already in the middle of an unfinished merge
+  probe: '! git rev-parse -q --verify MERGE_HEAD'
+  expect_exit: 0
+  expect_pattern: null
+- name: untracked_files_do_not_collide_with_upstream
+  description: no untracked file is a path that upstream also changes
+  probe: |-
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_would_apply_cleanly
+  description: merging the upstream branch into HEAD would not produce conflicts
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+    ! git merge-tree "$base" HEAD {upstream_remote}/{upstream_branch} | grep -q '<<<<<<<'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git add -A
+  git commit -m "wip: save local changes before merging {upstream_remote}/{upstream_branch}"
+  git fetch {upstream_remote}
+  git merge --no-ff -m "Merge {upstream_remote}/{upstream_branch} into the local branch" {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: worktree_clean
+  description: no tracked file remains modified or staged
+  probe: '! git status --porcelain --untracked-files=no | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor_of_head
+  description: HEAD contains the upstream tip, so the branch is no longer behind
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_merged_as_second_parent
+  description: HEAD is a merge commit whose second parent is the upstream tip and
+    whose first parent carries the local work
+  probe: test "$(git rev-parse HEAD^2)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+variant: commit
+provenance:
+  compiled_from_task: My working tree has changes and the branch is behind upstream.
+    Fix that and keep my changes. Commit my uncommitted work first, then bring the
+    branch up to date.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: My working tree has changes and the branch is behind upstream. Fix that
+    and keep my changes. Commit my uncommitted work first, then bring the branch up
+    to date./seed-0-dirty_tree-4812
+  fault: dirty_tree
+status: admitted

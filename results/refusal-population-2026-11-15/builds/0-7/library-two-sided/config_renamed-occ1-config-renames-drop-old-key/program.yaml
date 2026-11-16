@@ -1,0 +1,267 @@
+id: config_renamed-occ1-config-renames-drop-old-key
+intent: remove legacy configuration key lines whose new name is already set in the
+  same file, keeping the new setting and committing the deletion
+parameters:
+- work_dir
+preconditions:
+- name: worktree_clean
+  description: the tracked working tree has no uncommitted changes
+  probe: |-
+    cd "{work_dir}"
+    test -z "$(git status --porcelain -uno)"
+  expect_exit: 0
+  expect_pattern: null
+- name: has_renames_mapping
+  description: a tracked renames.conf declares at least one old -> new key mapping
+  probe: |-
+    cd "{work_dir}"
+    git ls-files -z | tr '\0' '\n' | while IFS= read -r r; do
+      case "$r" in
+        *renames.conf) git show ":$r" ;;
+      esac
+    done | awk -F= '
+      /^[[:space:]]*#/ { next }
+      {
+        o=$1; n=$2
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", o)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", n)
+        if (o != "" && n != "") print o "=" n
+      }' | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: has_stale_key_with_new_key_set
+  description: a tracked file other than renames.conf assigns both an old key and
+    its new name
+  probe: |-
+    cd "{work_dir}"
+    maps=$(git ls-files -z | tr '\0' '\n' | while IFS= read -r r; do
+      case "$r" in
+        *renames.conf) git show ":$r" ;;
+      esac
+    done | awk -F= '
+      /^[[:space:]]*#/ { next }
+      {
+        o=$1; n=$2
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", o)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", n)
+        if (o != "" && n != "") print o "=" n
+      }')
+    [ -n "$maps" ] || exit 1
+    while IFS= read -r f; do
+      case "$f" in
+        *renames.conf) continue ;;
+      esac
+      [ -f "$f" ] || continue
+      if awk -v maps="$maps" '
+        BEGIN {
+          cnt = split(maps, lines, "\n")
+          for (i = 1; i <= cnt; i++) {
+            p = lines[i]
+            if (p == "") continue
+            e = index(p, "=")
+            if (e == 0) continue
+            nm++
+            O[nm] = substr(p, 1, e - 1)
+            N[nm] = substr(p, e + 1)
+          }
+        }
+        {
+          l = $0
+          if (l ~ /^[[:space:]]*#/ || index(l, "=") == 0) next
+          eq = index(l, "=")
+          k = substr(l, 1, eq - 1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+          K[k] = 1
+        }
+        END {
+          for (j = 1; j <= nm; j++) {
+            if ((O[j] in K) && (N[j] in K)) exit 0
+          }
+          exit 1
+        }' "$f"; then
+        echo "$f"
+        exit 0
+      fi
+    done < <(git ls-files -z | tr '\0' '\n')
+    exit 1
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  cd "{work_dir}"
+  set -euo pipefail
+
+  maps=$(git ls-files -z | tr '\0' '\n' | while IFS= read -r r; do
+    case "$r" in
+      *renames.conf) git show ":$r" ;;
+    esac
+  done | awk -F= '
+    /^[[:space:]]*#/ { next }
+    {
+      o=$1; n=$2
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", o)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", n)
+      if (o != "" && n != "") print o "=" n
+    }')
+
+  if [ -z "$maps" ]; then
+    echo "no renames mappings found" >&2
+    exit 1
+  fi
+
+  changed=()
+  while IFS= read -r f; do
+    case "$f" in
+      *renames.conf) continue ;;
+    esac
+    [ -f "$f" ] || continue
+    tmp=$(mktemp)
+    awk -v maps="$maps" '
+      BEGIN {
+        nm = 0
+        cnt = split(maps, lines, "\n")
+        for (i = 1; i <= cnt; i++) {
+          p = lines[i]
+          if (p == "") continue
+          e = index(p, "=")
+          if (e == 0) continue
+          nm++
+          O[nm] = substr(p, 1, e - 1)
+          N[nm] = substr(p, e + 1)
+        }
+      }
+      { buf[NR] = $0 }
+      END {
+        for (i = 1; i <= NR; i++) {
+          l = buf[i]
+          if (l ~ /^[[:space:]]*#/) continue
+          if (index(l, "=") == 0) continue
+          eq = index(l, "=")
+          k = substr(l, 1, eq - 1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+          key[i] = k
+          has[i] = 1
+        }
+        for (i = 1; i <= NR; i++) {
+          if (!(i in has)) continue
+          for (j = 1; j <= nm; j++) {
+            if (key[i] == N[j]) present[j] = 1
+          }
+        }
+        for (i = 1; i <= NR; i++) {
+          if (i in has) {
+            drop = 0
+            for (j = 1; j <= nm; j++) {
+              if (key[i] == O[j] && present[j]) drop = 1
+            }
+            if (drop) continue
+          }
+          print buf[i]
+        }
+      }' "$f" > "$tmp"
+    if cmp -s "$f" "$tmp"; then
+      rm -f "$tmp"
+    else
+      mv "$tmp" "$f"
+      changed+=("$f")
+    fi
+  done < <(git ls-files -z | tr '\0' '\n')
+
+  if [ "${#changed[@]}" -eq 0 ]; then
+    echo "no stale keys found to remove" >&2
+    exit 1
+  fi
+
+  git add -- "${changed[@]}"
+  git commit -m "config: drop legacy setting keys" -- "${changed[@]}"
+steps: null
+postconditions:
+- name: no_stale_key_pairs
+  description: no tracked file other than renames.conf still assigns both an old key
+    and its new name
+  probe: |-
+    cd "{work_dir}"
+    maps=$(git ls-files -z | tr '\0' '\n' | while IFS= read -r r; do
+      case "$r" in
+        *renames.conf) git show ":$r" ;;
+      esac
+    done | awk -F= '
+      /^[[:space:]]*#/ { next }
+      {
+        o=$1; n=$2
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", o)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", n)
+        if (o != "" && n != "") print o "=" n
+      }')
+    [ -n "$maps" ] || exit 1
+    while IFS= read -r f; do
+      case "$f" in
+        *renames.conf) continue ;;
+      esac
+      [ -f "$f" ] || continue
+      if awk -v maps="$maps" '
+        BEGIN {
+          cnt = split(maps, lines, "\n")
+          for (i = 1; i <= cnt; i++) {
+            p = lines[i]
+            if (p == "") continue
+            e = index(p, "=")
+            if (e == 0) continue
+            nm++
+            O[nm] = substr(p, 1, e - 1)
+            N[nm] = substr(p, e + 1)
+          }
+        }
+        {
+          l = $0
+          if (l ~ /^[[:space:]]*#/ || index(l, "=") == 0) next
+          eq = index(l, "=")
+          k = substr(l, 1, eq - 1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+          K[k] = 1
+        }
+        END {
+          for (j = 1; j <= nm; j++) {
+            if ((O[j] in K) && (N[j] in K)) exit 0
+          }
+          exit 1
+        }' "$f"; then
+        echo "stale pair remains in $f" >&2
+        exit 1
+      fi
+    done < <(git ls-files -z | tr '\0' '\n')
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: only_deletions_committed
+  description: the new commit deletes at least one line and adds none
+  probe: |-
+    cd "{work_dir}"
+    git rev-parse --verify HEAD^ >/dev/null 2>&1 || exit 1
+    git diff --numstat HEAD^ HEAD | awk '
+      NF >= 2 {
+        if ($1 == "-" || $2 == "-") bad = 1
+        added += $1 + 0
+        deleted += $2 + 0
+      }
+      END { exit (bad || added != 0 || deleted == 0) ? 1 : 0 }'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after
+  description: the commit leaves the tracked working tree clean
+  probe: |-
+    cd "{work_dir}"
+    test -z "$(git status --porcelain -uno)"
+  expect_exit: 0
+  expect_pattern: null
+variant: drop_old
+provenance:
+  compiled_from_task: The app keeps warning that my config uses old setting names.
+    Make the warning go away without changing what the settings do. The new name is
+    already set too, so delete the old key's line and keep the new one.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: The app keeps warning that my config uses old setting names. Make the
+    warning go away without changing what the settings do. The new name is already
+    set too, so delete the old key's line and keep the new one./seed-23-config_renamed-12454
+  fault: config_renamed
+status: admitted

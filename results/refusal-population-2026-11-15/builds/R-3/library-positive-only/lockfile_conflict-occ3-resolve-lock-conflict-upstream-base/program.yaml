@@ -1,0 +1,199 @@
+id: lockfile_conflict-occ3-resolve-lock-conflict-upstream-base
+intent: Resolve a conflicting sync with upstream by merging, then rebuilding each
+  conflicted file from upstream's version and re-adding the lines the local branch
+  added, and finally committing the merge.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_present
+  description: the upstream remote-tracking branch exists locally
+  probe: git rev-parse -q --verify {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_have_diverged
+  description: both HEAD and the upstream branch have commits the other lacks
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0 && test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: both_sides_touched_a_common_path
+  description: at least one path was modified on both sides since the merge base
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+    comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_head_is_upstream_or_absent
+  description: no merge is in progress, or the in-progress merge is with the upstream
+    branch
+  probe: test -z "$(git rev-parse -q --verify MERGE_HEAD)" || test "$(git rev-parse
+    MERGE_HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  upstream_remote='{upstream_remote}'
+  upstream_branch='{upstream_branch}'
+  upstream="$upstream_remote/$upstream_branch"
+  if [ "$(git rev-parse -q --verify MERGE_HEAD)" != "$(git rev-parse -q --verify "$upstream")" ]; then
+    git merge --no-edit "$upstream" || true
+  fi
+  python3 - "$upstream_remote" "$upstream_branch" <<'PY'
+  import subprocess, sys, re
+
+  remote = sys.argv[1]
+  branch = sys.argv[2]
+  upstream = remote + "/" + branch
+
+  def git_out(args):
+      return subprocess.run(["git"] + list(args), capture_output=True)
+
+  def show(ref, path):
+      r = git_out(["show", ref + ":" + path])
+      if r.returncode != 0:
+          return ""
+      return r.stdout.decode()
+
+  r = git_out(["merge-base", "HEAD", upstream])
+  base = r.stdout.decode().strip()
+  r = git_out(["diff", "--name-only", "--diff-filter=U", "-z"])
+  paths = [p for p in r.stdout.decode().split("\0") if p]
+
+  for path in paths:
+      up_lines = show(upstream, path).splitlines()
+      loc_lines = show("HEAD", path).splitlines()
+      added = []
+      r = git_out(["diff", "--no-color", "-U0", base, "HEAD", "--", path])
+      dl = r.stdout.decode().splitlines()
+      i = 0
+      while i < len(dl):
+          ln = dl[i]
+          if ln.startswith("@@"):
+              plusside = ""
+              for part in ln.split(" "):
+                  if part.startswith("+"):
+                      plusside = part[1:]
+              start = 0
+              try:
+                  start = int(plusside.split(",")[0])
+              except ValueError:
+                  start = 0
+              off = 0
+              i = i + 1
+              while i < len(dl) and not dl[i].startswith("@@"):
+                  dln = dl[i]
+                  if dln.startswith("+"):
+                      added.append((start - 1 + off, dln[1:]))
+                      off = off + 1
+                  i = i + 1
+              continue
+          i = i + 1
+      inserts = []
+      for item in added:
+          idx = item[0]
+          line = item[1]
+          stripped = line.strip()
+          if stripped == "":
+              continue
+          if line in up_lines:
+              continue
+          m = re.match(r'^([A-Za-z_][A-Za-z0-9_.-]*)\s*=', stripped)
+          if m:
+              key = m.group(1)
+              dup = False
+              for ul in up_lines:
+                  if re.match(r'^\s*' + re.escape(key) + r'\s*=', ul):
+                      dup = True
+                      break
+              if dup:
+                  continue
+          anchor = None
+          anchor_pos = -1
+          k = idx - 1
+          while k >= 0 and anchor is None:
+              cand = loc_lines[k]
+              p = 0
+              while p < len(up_lines):
+                  if up_lines[p] == cand:
+                      anchor = cand
+                      anchor_pos = p
+                      break
+                  p = p + 1
+              k = k - 1
+          inserts.append([anchor, anchor_pos, line])
+      groups = []
+      for ins in inserts:
+          anchor = ins[0]
+          anchor_pos = ins[1]
+          line = ins[2]
+          found = None
+          for g in groups:
+              if g[0] == anchor and g[1] == anchor_pos:
+                  found = g
+                  break
+          if found is None:
+              groups.append([anchor, anchor_pos, [line]])
+          else:
+              found[2].append(line)
+      groups.sort(key=lambda g: g[1], reverse=True)
+      result = list(up_lines)
+      for g in groups:
+          anchor = g[0]
+          anchor_pos = g[1]
+          lines = g[2]
+          pos = -1
+          if anchor_pos >= 0:
+              p = 0
+              while p < len(result):
+                  if result[p] == anchor:
+                      pos = p
+                      break
+                  p = p + 1
+          if pos >= 0:
+              result[pos+1:pos+1] = lines
+          else:
+              result.extend(lines)
+      with open(path, "w") as f:
+          f.write("\n".join(result) + "\n")
+  PY
+  git add -A
+  if [ -n "$(git rev-parse -q --verify MERGE_HEAD)" ] || ! git diff --cached --quiet; then
+    git commit --no-edit
+  fi
+steps: null
+postconditions:
+- name: no_unmerged_paths
+  description: the index no longer records any conflicted path
+  probe: '! git ls-files -u | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_commit_includes_upstream
+  description: HEAD is a merge commit whose second parent is the upstream branch tip
+  probe: test "$(git rev-parse -q --verify HEAD^2)" = "$(git rev-parse -q --verify
+    {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: no tracked file still contains conflict marker lines
+  probe: '! git grep -q -I -e ''^<<<<<<< '' -e ''^>>>>>>> '''
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the working tree and index match the new merge commit
+  probe: git diff --quiet && git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: The sync conflicts. Resolve it the way this project expects.
+    Start from upstream's dependency file and add back what I added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: The sync conflicts. Resolve it the way this project expects. Start from
+    upstream's dependency file and add back what I added./seed-6-lockfile_conflict-212
+  fault: lockfile_conflict
+status: admitted

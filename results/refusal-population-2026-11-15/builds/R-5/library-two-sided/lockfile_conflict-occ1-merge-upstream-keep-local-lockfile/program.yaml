@@ -1,0 +1,198 @@
+id: lockfile_conflict-occ1-merge-upstream-keep-local-lockfile
+intent: Merge upstream into the fork while keeping the local dependency file, preserving
+  the lines the local side removed and adding the entries upstream added.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_present
+  description: the upstream remote-tracking branch exists locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the working tree and index have no pending changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_diverged
+  description: local HEAD and upstream each have commits the other does not
+  probe: |-
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0 &&
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: common_changed_paths
+  description: at least one path changed on both local and upstream sides since their
+    merge base
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+    comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | LC_ALL=C sort) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | LC_ALL=C sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch {upstream_remote}
+  if ! git -c merge.conflictStyle=diff3 merge --no-commit --no-ff {upstream_remote}/{upstream_branch}; then
+    test -e "$(git rev-parse --git-path MERGE_HEAD)"
+  fi
+  python3 - <<'PY'
+  import subprocess, sys, os, difflib
+
+
+  def run(args, check=True):
+      p = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+      if check and p.returncode != 0:
+          sys.stderr.buffer.write(p.stderr)
+          raise SystemExit(p.returncode)
+      return p
+
+
+  def blob(rev, path):
+      p = run(['git', 'show', rev + ':' + path], check=False)
+      if p.returncode != 0:
+          return None
+      return p.stdout
+
+
+  def map_position(pos, base, ours):
+      sm = difflib.SequenceMatcher(None, base, ours, autojunk=False)
+      blocks = sm.get_matching_blocks()
+      for a, b, size in blocks:
+          if size == 0:
+              continue
+          if a <= pos < a + size:
+              return b + (pos - a)
+          if a == pos:
+              return b
+      for a, b, size in blocks:
+          if size and a > pos:
+              return b
+      return len(ours)
+
+
+  def apply_upstream_insertions(base, ours, theirs):
+      sm = difflib.SequenceMatcher(None, base, theirs, autojunk=False)
+      insertions = []
+      for tag, i1, i2, j1, j2 in sm.get_opcodes():
+          if tag != 'insert':
+              continue
+          new = [line for line in theirs[j1:j2] if line not in ours]
+          if new:
+              insertions.append((map_position(i1, base, ours), new))
+      result = list(ours)
+      for pos, new in sorted(insertions, key=lambda item: item[0], reverse=True):
+          result[pos:pos] = new
+      return b''.join(result)
+
+
+  def resolve_markers(data):
+      lines = data.splitlines(keepends=True)
+      out = []
+      i = 0
+      while i < len(lines):
+          if lines[i].startswith(b'<<<<<<<'):
+              i += 1
+              ours = []
+              while i < len(lines) and not lines[i].startswith(b'|||||||') and not lines[i].startswith(b'======='):
+                  ours.append(lines[i])
+                  i += 1
+              base = []
+              if i < len(lines) and lines[i].startswith(b'|||||||'):
+                  i += 1
+                  while i < len(lines) and not lines[i].startswith(b'======='):
+                      base.append(lines[i])
+                      i += 1
+              if i < len(lines) and lines[i].startswith(b'======='):
+                  i += 1
+              theirs = []
+              while i < len(lines) and not lines[i].startswith(b'>>>>>>>'):
+                  theirs.append(lines[i])
+                  i += 1
+              if i < len(lines) and lines[i].startswith(b'>>>>>>>'):
+                  i += 1
+              out.append(apply_upstream_insertions(base, ours, theirs))
+          else:
+              out.append(lines[i])
+              i += 1
+      return b''.join(out)
+
+
+  def write_file(path, data):
+      directory = os.path.dirname(path)
+      if directory:
+          os.makedirs(directory, exist_ok=True)
+      with open(path, 'wb') as f:
+          f.write(data)
+
+
+  conflicts = run(['git', 'diff', '--name-only', '--diff-filter=U', '-z']).stdout.split(b'\0')
+  for raw_path in conflicts:
+      if not raw_path:
+          continue
+      path = os.fsdecode(raw_path)
+      ours = blob('HEAD', path)
+      theirs = blob('MERGE_HEAD', path)
+      if ours is None:
+          run(['git', 'rm', '-f', '--', path], check=False)
+          continue
+      if theirs is None:
+          write_file(path, ours)
+          run(['git', 'add', '--', path])
+          continue
+      if b'\0' in ours or b'\0' in theirs:
+          write_file(path, ours)
+          run(['git', 'add', '--', path])
+          continue
+      run(['git', 'checkout', '--conflict=diff3', '--', path], check=False)
+      if os.path.exists(path):
+          with open(path, 'rb') as f:
+              conflicted = f.read()
+          resolved = resolve_markers(conflicted)
+      else:
+          resolved = ours
+      write_file(path, resolved)
+      run(['git', 'add', '--', path])
+  PY
+  git commit --no-edit
+steps: null
+postconditions:
+- name: upstream_merged
+  description: the upstream branch is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: no conflict is left unresolved
+  probe: '! git diff --name-only --diff-filter=U | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: no file committed at HEAD still carries merge conflict markers
+  probe: '! git grep -q -e ''^<<<<<<< '' HEAD -- .'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the merge is committed and no tracked change is pending
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_commit_created
+  description: HEAD is a merge commit with two parents
+  probe: test "$(git log -1 --pretty=%P | wc -w)" -eq 2
+  expect_exit: 0
+  expect_pattern: null
+variant: keep_local
+provenance:
+  compiled_from_task: Get my fork current with upstream; our dependency changes collided.
+    Keep my dependency file, with what I removed still removed, and add what upstream
+    added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get my fork current with upstream; our dependency changes collided.
+    Keep my dependency file, with what I removed still removed, and add what upstream
+    added./seed-3-lockfile_conflict-7516
+  fault: lockfile_conflict
+status: candidate

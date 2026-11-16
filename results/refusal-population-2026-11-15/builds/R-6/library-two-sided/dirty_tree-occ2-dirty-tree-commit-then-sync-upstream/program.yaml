@@ -1,0 +1,58 @@
+id: dirty_tree-occ2-dirty-tree-commit-then-sync-upstream
+intent: Commit the uncommitted working-tree changes, then rebase the branch onto upstream
+  so it is up to date while the user's work survives.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: worktree_dirty
+  description: the working tree has uncommitted changes that must be preserved
+  probe: test -n "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: behind_upstream
+  description: the upstream-tracking ref exists and carries at least one commit that
+    HEAD does not, i.e. the branch is behind upstream
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*
+- name: committer_identity_configured
+  description: a committer email is configured, so the commit the body creates can
+    actually be made without overriding config
+  probe: git config user.email
+  expect_exit: 0
+  expect_pattern: '[^[:space:]]'
+body: |
+  git add -A
+  git commit -m "wip: save local changes"
+  git rebase {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: worktree_clean
+  description: no uncommitted changes remain in the working tree
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_merged
+  description: the upstream branch is an ancestor of HEAD, so the branch is up to
+    date
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_work_preserved
+  description: the user's work now sits as at least one local commit on top of upstream
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*
+variant: commit
+provenance:
+  compiled_from_task: My working tree has changes and the branch is behind upstream.
+    Fix that and keep my changes. Commit my uncommitted work first, then bring the
+    branch up to date.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: My working tree has changes and the branch is behind upstream. Fix that
+    and keep my changes. Commit my uncommitted work first, then bring the branch up
+    to date./seed-0-dirty_tree-17967
+  fault: dirty_tree
+status: candidate

@@ -1,0 +1,305 @@
+id: config_renamed-occ2-rename-stale-config-keys
+intent: Rename stale keys in the project's configuration files according to the app's
+  renames mapping, preserving their values and committing the change.
+parameters: []
+preconditions:
+- name: has_head_commit
+  description: the repository has at least one commit
+  probe: git rev-parse --verify HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_config_clean
+  description: tracked .conf files have no staged or unstaged changes
+  probe: git diff --quiet -- '*.conf' && git diff --cached --quiet -- '*.conf'
+  expect_exit: 0
+  expect_pattern: null
+- name: has_renames_file
+  description: a tracked renames.conf mapping file exists
+  probe: git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$'
+  expect_exit: 0
+  expect_pattern: null
+- name: has_stale_key
+  description: at least one tracked .conf file contains an old key that the renames
+    mapping says must be renamed
+  probe: |-
+    renames=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1)
+    [ -n "$renames" ] || exit 1
+    while IFS= read -r -d '' f; do
+      case "$f" in
+        *.conf) ;;
+        *) continue ;;
+      esac
+      [ "$f" = "$renames" ] && continue
+      if awk '
+        FNR==NR {
+          line=$0
+          sub(/^[[:space:]]+/, "", line)
+          sub(/[[:space:]]+$/, "", line)
+          if (line == "" || line ~ /^#/) next
+          eq=index(line, "=")
+          if (eq == 0) next
+          o=substr(line, 1, eq-1)
+          n=substr(line, eq+1)
+          sub(/^[[:space:]]+/, "", o); sub(/[[:space:]]+$/, "", o)
+          sub(/^[[:space:]]+/, "", n); sub(/[[:space:]]+$/, "", n)
+          sub(/[[:space:]]+#.*$/, "", n)
+          if (o != "" && n != "") map[o]=n
+          next
+        }
+        {
+          eq=index($0, "=")
+          if (eq == 0) next
+          key=substr($0, 1, eq-1)
+          sub(/^[[:space:]]+/, "", key); sub(/[[:space:]]+$/, "", key)
+          if (key in map) { print FILENAME ":" key; exit 0 }
+        }
+      ' "$renames" "$f" | grep -q .; then
+        exit 0
+      fi
+    done < <(git ls-files -z)
+    exit 1
+  expect_exit: 0
+  expect_pattern: null
+- name: rename_would_not_duplicate
+  description: for every stale old key, the target new key is not already present
+    in the same file
+  probe: |-
+    renames=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1)
+    [ -n "$renames" ] || exit 1
+    while IFS= read -r -d '' f; do
+      case "$f" in
+        *.conf) ;;
+        *) continue ;;
+      esac
+      [ "$f" = "$renames" ] && continue
+      awk '
+        FNR==NR {
+          line=$0
+          sub(/^[[:space:]]+/, "", line)
+          sub(/[[:space:]]+$/, "", line)
+          if (line == "" || line ~ /^#/) next
+          eq=index(line, "=")
+          if (eq == 0) next
+          o=substr(line, 1, eq-1)
+          n=substr(line, eq+1)
+          sub(/^[[:space:]]+/, "", o); sub(/[[:space:]]+$/, "", o)
+          sub(/^[[:space:]]+/, "", n); sub(/[[:space:]]+$/, "", n)
+          sub(/[[:space:]]+#.*$/, "", n)
+          if (o != "" && n != "") map[o]=n
+          next
+        }
+        {
+          eq=index($0, "=")
+          if (eq == 0) next
+          key=substr($0, 1, eq-1)
+          sub(/^[[:space:]]+/, "", key); sub(/[[:space:]]+$/, "", key)
+          present[key]=1
+          if (key in map) stale[key]=1
+        }
+        END {
+          for (o in stale) if (map[o] in present) exit 1
+          exit 0
+        }
+      ' "$renames" "$f" || exit 1
+    done < <(git ls-files -z)
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  set -euo pipefail
+  renames=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1)
+  [ -n "$renames" ]
+  changed_files=()
+  while IFS= read -r -d '' f; do
+    case "$f" in
+      *.conf) ;;
+      *) continue ;;
+    esac
+    [ "$f" = "$renames" ] && continue
+    tmp=$(mktemp)
+    awk '
+      FNR==NR {
+        line=$0
+        sub(/^[[:space:]]+/, "", line)
+        sub(/[[:space:]]+$/, "", line)
+        if (line == "" || line ~ /^#/) next
+        eq = index(line, "=")
+        if (eq == 0) next
+        o = substr(line, 1, eq-1)
+        n = substr(line, eq+1)
+        sub(/^[[:space:]]+/, "", o); sub(/[[:space:]]+$/, "", o)
+        sub(/^[[:space:]]+/, "", n); sub(/[[:space:]]+$/, "", n)
+        sub(/[[:space:]]+#.*$/, "", n)
+        if (o != "" && n != "") map[o] = n
+        next
+      }
+      {
+        line=$0
+        eq = index(line, "=")
+        if (eq == 0) { print line; next }
+        left = substr(line, 1, eq-1)
+        right = substr(line, eq)
+        match(left, /^[[:space:]]*/)
+        lead = substr(left, 1, RLENGTH)
+        rest = substr(left, RLENGTH+1)
+        key = rest
+        sub(/[[:space:]]+$/, "", key)
+        if (key in map) {
+          trailing = substr(rest, length(key)+1)
+          print lead map[key] trailing right
+        } else {
+          print line
+        }
+      }
+    ' "$renames" "$f" > "$tmp"
+    if ! cmp -s "$f" "$tmp"; then
+      cat "$tmp" > "$f"
+      rm -f "$tmp"
+      git add -- "$f"
+      changed_files+=("$f")
+    else
+      rm -f "$tmp"
+    fi
+  done < <(git ls-files -z)
+  if [ ${#changed_files[@]} -eq 0 ]; then
+    echo "no stale keys found" >&2
+    exit 1
+  fi
+  git commit -m "fix: rename stale config keys in settings" -- "${changed_files[@]}"
+steps: null
+postconditions:
+- name: no_stale_keys_after
+  description: no tracked .conf file still contains an old key from the renames mapping
+  probe: |-
+    renames=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1)
+    [ -n "$renames" ] || exit 1
+    while IFS= read -r -d '' f; do
+      case "$f" in
+        *.conf) ;;
+        *) continue ;;
+      esac
+      [ "$f" = "$renames" ] && continue
+      if awk '
+        FNR==NR {
+          line=$0
+          sub(/^[[:space:]]+/, "", line)
+          sub(/[[:space:]]+$/, "", line)
+          if (line == "" || line ~ /^#/) next
+          eq=index(line, "=")
+          if (eq == 0) next
+          o=substr(line, 1, eq-1)
+          n=substr(line, eq+1)
+          sub(/^[[:space:]]+/, "", o); sub(/[[:space:]]+$/, "", o)
+          sub(/^[[:space:]]+/, "", n); sub(/[[:space:]]+$/, "", n)
+          sub(/[[:space:]]+#.*$/, "", n)
+          if (o != "" && n != "") map[o]=n
+          next
+        }
+        {
+          eq=index($0, "=")
+          if (eq == 0) next
+          key=substr($0, 1, eq-1)
+          sub(/^[[:space:]]+/, "", key); sub(/[[:space:]]+$/, "", key)
+          if (key in map) { print FILENAME ":" key; exit 0 }
+        }
+      ' "$renames" "$f" | grep -q .; then
+        exit 1
+      fi
+    done < <(git ls-files -z)
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: values_preserved
+  description: every old key present before the change now appears under its new name
+    with the same value, and no old key remains
+  probe: |-
+    renames=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1)
+    [ -n "$renames" ] || exit 1
+    changed=0
+    while IFS= read -r -d '' f; do
+      case "$f" in
+        *.conf) ;;
+        *) continue ;;
+      esac
+      [ "$f" = "$renames" ] && continue
+      git cat-file -e "HEAD^:$f" 2>/dev/null || continue
+      if ! git diff --quiet HEAD^ HEAD -- "$f"; then
+        changed=1
+        awk '
+          FNR==NR {
+            line=$0
+            sub(/^[[:space:]]+/, "", line)
+            sub(/[[:space:]]+$/, "", line)
+            if (line == "" || line ~ /^#/) next
+            eq=index(line, "=")
+            if (eq == 0) next
+            o=substr(line, 1, eq-1)
+            n=substr(line, eq+1)
+            sub(/^[[:space:]]+/, "", o); sub(/[[:space:]]+$/, "", o)
+            sub(/^[[:space:]]+/, "", n); sub(/[[:space:]]+$/, "", n)
+            sub(/[[:space:]]+#.*$/, "", n)
+            if (o != "" && n != "") map[o]=n
+            next
+          }
+          FNR==1 { pass++ }
+          pass==1 {
+            eq=index($0, "=")
+            if (eq == 0) next
+            left=substr($0, 1, eq-1)
+            right=substr($0, eq+1)
+            key=left
+            sub(/^[[:space:]]+/, "", key); sub(/[[:space:]]+$/, "", key)
+            if (key in map) {
+              val=right
+              sub(/^[[:space:]]+/, "", val); sub(/[[:space:]]+$/, "", val)
+              old_seen[key]=1
+              old_val[key]=val
+            }
+            next
+          }
+          pass==2 {
+            eq=index($0, "=")
+            if (eq == 0) next
+            left=substr($0, 1, eq-1)
+            right=substr($0, eq+1)
+            key=left
+            sub(/^[[:space:]]+/, "", key); sub(/[[:space:]]+$/, "", key)
+            if (key in map) old_remaining=1
+            val=right
+            sub(/^[[:space:]]+/, "", val); sub(/[[:space:]]+$/, "", val)
+            new_seen[key]=1
+            new_val[key]=val
+            next
+          }
+          END {
+            if (old_remaining) exit 1
+            for (o in old_seen) {
+              n=map[o]
+              if (!(n in new_seen)) exit 1
+              if (old_val[o] != new_val[n]) exit 1
+            }
+            exit 0
+          }
+        ' "$renames" <(git show "HEAD^:$f") <(git show "HEAD:$f") || exit 1
+      fi
+    done < <(git ls-files -z)
+    [ "$changed" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: config_changes_committed
+  description: the touched .conf files are committed and the working tree has no uncommitted
+    changes to tracked .conf files
+  probe: git diff --quiet -- '*.conf' && git diff --cached --quiet -- '*.conf'
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: Fix the stale config entry the app is warning about, without
+    losing any setting. Rename the old key in the project's settings and keep its
+    value.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Fix the stale config entry the app is warning about, without losing
+    any setting. Rename the old key in the project's settings and keep its value./seed-8-config_renamed-17967
+  fault: config_renamed
+status: admitted

@@ -1,0 +1,213 @@
+id: lockfile_conflict-occ3-lockfile-conflict-occ3-sync-lockfile-take-upstream
+intent: sync with upstream, resolve the dependency-file conflict by starting from
+  upstream's version and re-adding the lines the local side added
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_exists
+  description: the configured upstream remote exists
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_branch_exists
+  description: the upstream remote-tracking branch exists
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_diverged
+  description: local and upstream each have commits the other lacks
+  probe: git rev-list --left-right --count HEAD...{upstream_remote}/{upstream_branch}
+    | awk '$1 > 0 && $2 > 0 { found = 1 } END { exit !found }'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: there are no uncommitted changes before starting the sync
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: a merge is not already in progress
+  probe: test -z "$(git rev-parse --verify --quiet MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: one_common_changed_file
+  description: exactly one file was changed by both sides since the merge base, and
+    it exists on both sides
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    files=$(comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort))
+    [ "$(printf '%s\n' "$files" | grep -c .)" -eq 1 ] || exit 1
+    path=$(printf '%s\n' "$files" | head -n 1)
+    git cat-file -e "HEAD:$path"
+    git cat-file -e "{upstream_remote}/{upstream_branch}:$path"
+  expect_exit: 0
+  expect_pattern: null
+- name: common_changed_file_is_dependency_lock
+  description: the single file both sides changed is a dependency lockfile, not ordinary
+    source, so the lockfile resolution (not a plain merge) is the right one
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    path=$(comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | sed -n '1p')
+    [ -n "$path" ] || exit 1
+    printf '%s\n' "$path" | grep -Eiq '(^|/)([^/]*lock[^/]*|[^/]*\.sum)$'
+  expect_exit: 0
+  expect_pattern: null
+- name: local_lock_change_is_additive
+  description: the local side only added dependency entries to the lockfile and removed
+    none, so upstream's file plus local's additions is the intended resolution (a
+    local removal would have to be preserved instead)
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    path=$(comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | sed -n '1p')
+    [ -n "$path" ] || exit 1
+    ! git diff --no-color -U0 "$base" HEAD -- "$path" | grep -qE '^-[[:space:]]*"'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  upstream_ref="{upstream_remote}/{upstream_branch}"
+  base=$(git merge-base HEAD "$upstream_ref")
+
+  # Start the merge without committing; conflicts are expected.
+  git merge --no-commit --no-ff "$upstream_ref" || true
+
+  tmpdir=$(mktemp -d)
+  trap 'rm -rf "$tmpdir"' EXIT
+
+  # Resolve each conflicted path by taking upstream's version as the base and
+  # re-applying only the lines the local side added relative to the merge base.
+  while IFS= read -r -d '' path; do
+    git checkout --theirs -- "$path" 2>/dev/null || git show "$upstream_ref:$path" > "$path"
+
+    git diff --no-color -U0 "$base" HEAD -- "$path" | awk '
+      /^@@/ {
+        if (want) for (i = 1; i <= n; i++) print plus[i]
+        delete plus; n = 0; want = 1; next
+      }
+      /^---/ || /^\+\+\+/ { next }
+      /^-/ { want = 0; next }
+      /^\+/ { plus[++n] = substr($0, 2); next }
+      END { if (want) for (i = 1; i <= n; i++) print plus[i] }
+    ' > "$tmpdir/additions"
+
+    if [ -s "$tmpdir/additions" ]; then
+      awk -v addfile="$tmpdir/additions" '
+        BEGIN {
+          while ((getline a < addfile) > 0) {
+            if (a != "") adds[++na] = a
+          }
+          close(addfile)
+        }
+        { lines[NR] = $0 }
+        END {
+          start = 0; end = 0
+          for (i = 1; i <= NR; i++) {
+            if (lines[i] ~ /^[[:space:]]*packages[[:space:]]*=[[:space:]]*\[[[:space:]]*$/) {
+              start = i
+            }
+            if (start && lines[i] ~ /^[[:space:]]*\][[:space:]]*$/) {
+              end = i
+              break
+            }
+          }
+          if (start && end) {
+            for (i = 1; i < start; i++) print lines[i]
+            print lines[start]
+            delete inner; ni = 0
+            for (i = start + 1; i < end; i++) inner[++ni] = lines[i]
+            for (j = 1; j <= na; j++) {
+              a = adds[j]
+              found = 0
+              for (i = 1; i <= ni; i++) if (inner[i] == a) { found = 1; break }
+              if (!found) inner[++ni] = a
+            }
+            for (i = 2; i <= ni; i++) {
+              key = inner[i]; j = i - 1
+              while (j > 0 && inner[j] > key) { inner[j + 1] = inner[j]; j-- }
+              inner[j + 1] = key
+            }
+            for (i = 1; i <= ni; i++) print inner[i]
+            print lines[end]
+            for (i = end + 1; i <= NR; i++) print lines[i]
+          } else {
+            for (i = 1; i <= NR; i++) print lines[i]
+            for (j = 1; j <= na; j++) print adds[j]
+          }
+        }
+      ' "$path" > "$tmpdir/resolved"
+      mv "$tmpdir/resolved" "$path"
+    fi
+    git add -- "$path"
+  done < <(git diff --name-only --diff-filter=U -z)
+
+  if git rev-parse --verify --quiet MERGE_HEAD >/dev/null; then
+    git commit --no-edit
+  fi
+steps: null
+postconditions:
+- name: no_unmerged_paths
+  description: the merge left no unmerged paths
+  probe: test -z "$(git diff --name-only --diff-filter=U)"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_merge
+  description: the resolution is committed and the worktree is clean
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_commit_has_two_parents
+  description: HEAD is a merge commit
+  probe: test "$(git cat-file -p HEAD | grep -c '^parent ')" -eq 2
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: upstream's commit is now an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: no conflict markers remain in the tree
+  probe: '! git grep -n -E ''^(<<<<<<<|>>>>>>>) '' -- .'
+  expect_exit: 0
+  expect_pattern: null
+- name: local_additions_preserved
+  description: every line the local side added relative to the merge base is still
+    present
+  probe: |-
+    git rev-parse --verify --quiet HEAD^2 >/dev/null || exit 1
+    base=$(git merge-base HEAD^1 HEAD^2) || exit 1
+    while IFS= read -r -d '' path; do
+      added=$(git diff --no-color -U0 "$base" HEAD^1 -- "$path" | awk '
+        /^@@/ {
+          if (want) for (i = 1; i <= n; i++) print plus[i]
+          delete plus; n = 0; want = 1; next
+        }
+        /^---/ || /^\+\+\+/ { next }
+        /^-/ { want = 0; next }
+        /^\+/ { plus[++n] = substr($0, 2); next }
+        END { if (want) for (i = 1; i <= n; i++) print plus[i] }
+      ')
+      [ -z "$added" ] && continue
+      while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        git show "HEAD:$path" | grep -Fqx -- "$line" || exit 1
+      done <<< "$added"
+    done < <(git diff --name-only -z "$base" HEAD^1)
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: The sync conflicts. Resolve it the way this project expects.
+    Start from upstream's dependency file and add back what I added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: The sync conflicts. Resolve it the way this project expects. Start from
+    upstream's dependency file and add back what I added./seed-6-lockfile_conflict-213
+  fault: lockfile_conflict
+status: admitted

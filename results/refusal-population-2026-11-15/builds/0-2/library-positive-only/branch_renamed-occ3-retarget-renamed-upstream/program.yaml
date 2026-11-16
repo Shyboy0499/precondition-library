@@ -1,0 +1,85 @@
+id: branch_renamed-occ3-retarget-renamed-upstream
+intent: Retarget the current local branch from an upstream branch that no longer exists
+  to the upstream's current branch, preserving the local branch name and fast-forwarding
+  to the new upstream tip.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_a_branch
+  description: HEAD is attached to a local branch
+  probe: git symbolic-ref --quiet --short HEAD
+  expect_exit: 0
+  expect_pattern: ^\S+$
+- name: upstream_remote_exists
+  description: the configured upstream remote exists
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_branch_is_stale
+  description: the current branch tracks a different branch of the upstream remote
+  probe: |-
+    br=$(git symbolic-ref --quiet --short HEAD) || exit 1
+    remote=$(git config --get "branch.$br.remote") || exit 1
+    [ "$remote" = "{upstream_remote}" ] || exit 1
+    merge=$(git config --get "branch.$br.merge") || exit 1
+    [ "$merge" != "refs/heads/{upstream_branch}" ] || exit 1
+    case "$merge" in
+      refs/heads/*) exit 0 ;;
+      *) exit 1 ;;
+    esac
+  expect_exit: 0
+  expect_pattern: null
+- name: new_upstream_ref_exists
+  description: the new upstream branch is already present as a remote-tracking ref
+  probe: git rev-parse --verify --quiet "{upstream_remote}/{upstream_branch}^{commit}"
+  expect_exit: 0
+  expect_pattern: null
+- name: fast_forward_possible
+  description: HEAD is an ancestor of the new upstream branch
+  probe: git merge-base --is-ancestor HEAD "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: needs_catch_up
+  description: the new upstream branch has at least one commit not in HEAD
+  probe: '! git merge-base --is-ancestor "{upstream_remote}/{upstream_branch}" HEAD'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: no tracked or untracked changes would obstruct the fast-forward
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch --prune {upstream_remote}
+  git branch --set-upstream-to={upstream_remote}/{upstream_branch}
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: tracking_updated
+  description: the current branch tracks the new upstream branch
+  probe: git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}'
+  expect_exit: 0
+  expect_pattern: ^{upstream_remote}/{upstream_branch}$
+- name: head_matches_new_upstream
+  description: HEAD is exactly the new upstream branch tip
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the working tree has no tracked or untracked changes
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: My branch seems to follow something upstream no longer has.
+    Point it at whatever upstream uses now, and keep my work. Keep my branch's name,
+    point its tracking at upstream's new branch and catch up.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: My branch seems to follow something upstream no longer has. Point it
+    at whatever upstream uses now, and keep my work. Keep my branch's name, point
+    its tracking at upstream's new branch and catch up./seed-10-branch_renamed-27083
+  fault: branch_renamed
+status: admitted

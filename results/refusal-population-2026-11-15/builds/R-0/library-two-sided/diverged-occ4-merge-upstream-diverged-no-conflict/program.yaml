@@ -1,0 +1,122 @@
+id: diverged-occ4-merge-upstream-diverged-no-conflict
+intent: Merge upstream into the current branch, preserving both histories, when the
+  branches have diverged and the merge is conflict-free.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_exists
+  description: the named upstream remote is configured
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: current_branch_tracks_upstream
+  description: the current branch's configured upstream is the requested remote branch
+  probe: git for-each-ref --format='%(upstream:short)' "refs/heads/$(git symbolic-ref
+    --short HEAD)"
+  expect_exit: 0
+  expect_pattern: ^{upstream_remote}/{upstream_branch}$
+- name: local_ahead_of_upstream
+  description: the current branch has at least one commit not in upstream
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ahead_of_local
+  description: upstream has at least one commit not in the current branch
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: there are no staged, unstaged, or untracked changes
+  probe: test -z "$(git diff --name-only -z HEAD | tr '\0' '\n')" && test -z "$(git
+    ls-files --others --exclude-standard -z | tr '\0' '\n')"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_operation_in_progress
+  description: no merge, rebase, or cherry-pick is already in progress
+  probe: test ! -e "$(git rev-parse --git-path MERGE_HEAD)" && test ! -d "$(git rev-parse
+    --git-path rebase-merge)" && test ! -d "$(git rev-parse --git-path rebase-apply)"
+    && test ! -e "$(git rev-parse --git-path CHERRY_PICK_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_would_not_conflict
+  description: for every file both sides changed, the changed line ranges in the merge
+    base do not overlap, so no conflict arises
+  probe: |-
+    mb=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    conflict=0
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      if ! { git diff -U0 --no-color --no-ext-diff "$mb" HEAD -- "$f"
+             echo "@@SIDE@@"
+             git diff -U0 --no-color --no-ext-diff "$mb" {upstream_remote}/{upstream_branch} -- "$f"; } |
+        awk '
+          /^@@SIDE@@$/ { side = 1; next }
+          /^@@ / {
+            if (match($0, /-[0-9]+(,[0-9]+)?/) == 0) next
+            s = substr($0, RSTART + 1, RLENGTH - 1)
+            n = split(s, p, ",")
+            st = p[1] + 0
+            c = (n >= 2) ? p[2] + 0 : 1
+            lo = st
+            hi = (c == 0) ? st : st + c - 1
+            if (side == 0) { no++; a[no] = lo; b[no] = hi }
+            else { nt++; u[nt] = lo; v[nt] = hi }
+          }
+          END {
+            for (i = 1; i <= no; i++)
+              for (j = 1; j <= nt; j++)
+                if (a[i] <= v[j] && u[j] <= b[i]) exit 1
+            exit 0
+          }'
+      then
+        conflict=1
+      fi
+    done < <(comm -12 <(git diff --name-only -z "$mb" HEAD | tr '\0' '\n' | sort) <(git diff --name-only -z "$mb" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort))
+    test "$conflict" -eq 0
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch {upstream_remote}
+  git merge --no-ff --no-edit {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: head_is_a_merge_commit
+  description: HEAD has at least two parents
+  probe: test "$(git rev-list --parents -n 1 HEAD | wc -w)" -ge 3
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_commit_is_in_history
+  description: upstream's tip is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_second_parent
+  description: the merge commit records upstream as its second parent
+  probe: test "$(git rev-parse HEAD^2)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_entries
+  description: the index has no conflict entries
+  probe: test -z "$(git ls-files -u -z | tr '\0' '\n')"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_merge
+  description: no staged, unstaged, or untracked changes remain
+  probe: test -z "$(git diff --name-only -z HEAD | tr '\0' '\n')" && test -z "$(git
+    ls-files --others --exclude-standard -z | tr '\0' '\n')"
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: This branch and upstream have both changed. Bring it back into
+    line. Merge upstream into my branch and keep both histories.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: This branch and upstream have both changed. Bring it back into line.
+    Merge upstream into my branch and keep both histories./seed-0-diverged-213
+  fault: diverged
+status: candidate

@@ -1,0 +1,167 @@
+id: config_renamed-occ3-config-rename-ignored-override
+intent: A config key was renamed upstream and the rename is recorded in the tracked
+  renames map; rewrite the stale old key to its new name inside the user's git-ignored
+  local override file, preserving values and leaving that file untracked and ignored.
+parameters: []
+preconditions:
+- name: has_renames_map
+  description: a tracked renames.conf map exists describing old = new key names
+  probe: git ls-files -z | tr '\0' '\n' | grep -qE '(^|/)renames\.conf$'
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_worktree_clean
+  description: no tracked or staged changes are pending, so only ignored files may
+    change
+  probe: test -z "$(git status --porcelain -uno)"
+  expect_exit: 0
+  expect_pattern: null
+- name: has_ignored_config_override
+  description: at least one config file exists that is untracked and git-ignored
+  probe: git ls-files --others --ignored --exclude-standard -z | tr '\0' '\n' | grep
+    -qE '\.conf$'
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_renamed_key_in_override
+  description: an ignored config file still uses an old key that the renames map has
+    renamed
+  probe: |-
+    renames=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n1)
+    [ -n "$renames" ] || exit 1
+    status=1
+    while IFS= read -r -d '' f; do
+      case "$f" in
+        *.conf) ;;
+        *) continue ;;
+      esac
+      while IFS= read -r line; do
+        old=${line%%=*}
+        old=$(printf '%s' "$old" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        [ -n "$old" ] || continue
+        if awk -v k="$old" '{ l=$0; sub(/^[[:space:]]*/, "", l); if (index(l, k) == 1) { r = substr(l, length(k) + 1); if (r ~ /^[[:space:]]*=/) found = 1 } } END { exit(found ? 0 : 1) }' "$f"; then
+          status=0
+        fi
+      done < <(grep -v -E '^[[:space:]]*(#|$)' "$renames")
+    done < <(git ls-files --others --ignored --exclude-standard -z)
+    exit "$status"
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  renames=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n1)
+  [ -n "$renames" ] || exit 1
+  while IFS= read -r -d '' f; do
+    case "$f" in
+      *.conf) ;;
+      *) continue ;;
+    esac
+    tmp="$f.rename.$$"
+    awk -v mapfile="$renames" '
+      BEGIN {
+        while ((getline line < mapfile) > 0) {
+          if (line ~ /^[[:space:]]*(#|$)/) continue
+          eq = index(line, "=")
+          if (eq == 0) continue
+          old = substr(line, 1, eq - 1)
+          new = substr(line, eq + 1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+          if (old != "" && new != "") ren[old] = new
+        }
+        close(mapfile)
+      }
+      {
+        if (match($0, /^[[:space:]]*[^[:space:]=]+[[:space:]]*=/)) {
+          eq = index($0, "=")
+          k = substr($0, 1, eq - 1)
+          v = substr($0, eq)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+          if (k in ren) {
+            print ren[k] " " v
+            next
+          }
+        }
+        print
+      }
+    ' "$f" > "$tmp" || { rm -f "$tmp"; exit 1; }
+    if cmp -s "$f" "$tmp"; then
+      rm -f "$tmp"
+    else
+      mv "$tmp" "$f"
+    fi
+  done < <(git ls-files --others --ignored --exclude-standard -z)
+steps: null
+postconditions:
+- name: no_stale_renamed_keys
+  description: no ignored config file still contains an old key listed in the renames
+    map
+  probe: |-
+    renames=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n1)
+    [ -n "$renames" ] || exit 1
+    while IFS= read -r -d '' f; do
+      case "$f" in
+        *.conf) ;;
+        *) continue ;;
+      esac
+      while IFS= read -r line; do
+        old=${line%%=*}
+        old=$(printf '%s' "$old" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        [ -n "$old" ] || continue
+        if awk -v k="$old" '{ l=$0; sub(/^[[:space:]]*/, "", l); if (index(l, k) == 1) { r = substr(l, length(k) + 1); if (r ~ /^[[:space:]]*=/) found = 1 } } END { exit(found ? 0 : 1) }' "$f"; then
+          exit 1
+        fi
+      done < <(grep -v -E '^[[:space:]]*(#|$)' "$renames")
+    done < <(git ls-files --others --ignored --exclude-standard -z)
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: renamed_key_present
+  description: an ignored config file now carries a new key from the renames map,
+    so the setting was renamed rather than removed
+  probe: |-
+    renames=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n1)
+    [ -n "$renames" ] || exit 1
+    status=1
+    while IFS= read -r -d '' f; do
+      case "$f" in
+        *.conf) ;;
+        *) continue ;;
+      esac
+      while IFS= read -r line; do
+        new=${line#*=}
+        new=$(printf '%s' "$new" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        [ -n "$new" ] || continue
+        if awk -v k="$new" '{ l=$0; sub(/^[[:space:]]*/, "", l); if (index(l, k) == 1) { r = substr(l, length(k) + 1); if (r ~ /^[[:space:]]*=/) found = 1 } } END { exit(found ? 0 : 1) }' "$f"; then
+          status=0
+        fi
+      done < <(grep -v -E '^[[:space:]]*(#|$)' "$renames")
+    done < <(git ls-files --others --ignored --exclude-standard -z)
+    exit "$status"
+  expect_exit: 0
+  expect_pattern: null
+- name: override_still_ignored
+  description: the local override file still exists and is still untracked and git-ignored
+  probe: git ls-files --others --ignored --exclude-standard -z | tr '\0' '\n' | grep
+    -qE '\.conf$'
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_worktree_unchanged
+  description: no tracked or staged file was modified by the rewrite
+  probe: test -z "$(git status --porcelain -uno)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_leftover_or_staged_files
+  description: nothing was staged and no temporary rename file was left behind
+  probe: test -z "$(git diff --cached --name-only)" && test -z "$(git ls-files --others
+    --exclude-standard | grep -E '\.rename\.')"
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: Some setting in my config has been renamed upstream. Sort the
+    config out. Rename the old key in my own override file, and keep that file out
+    of git.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Some setting in my config has been renamed upstream. Sort the config
+    out. Rename the old key in my own override file, and keep that file out of git./seed-12-config_renamed-12721
+  fault: config_renamed
+status: admitted

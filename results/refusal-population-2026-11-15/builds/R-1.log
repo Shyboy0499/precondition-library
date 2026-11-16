@@ -1,0 +1,51 @@
+model: deepseek-flash
+compiled 22; admitted two-sided 15, positive-only 20
+library hash: 8c1882e111773051b868e2dc10b9cd93270a4cda936a21ad82d541b4a1052517
+
+build episodes:
+  branch_renamed seed 1: fallback, 13 tool calls, checker ok, admitted True
+  branch_renamed seed 10: fallback, 10 tool calls, checker ok, admitted True
+  branch_renamed seed 4: fallback, 11 tool calls, checker not ok, admitted True
+  config_renamed seed 31: fallback, 8 tool calls, checker ok, admitted True
+  config_renamed seed 12: fallback, 16 tool calls, checker ok, admitted True
+  config_renamed seed 0: fallback, 11 tool calls, checker ok, admitted False -- negative side failed: preconditions accepted 1 of 2 same-intent states (config_renamed seed 1 resolves to 'drop_old', which accepts ['drop_old'], but the program implements 'rename'); firing where a sibling resolution is correct is the mismatch this gate exists to refuse
+  config_renamed seed 8: fallback, 13 tool calls, checker ok, admitted True
+  dirty_tree seed 2: fallback, 16 tool calls, checker ok, admitted True
+  dirty_tree seed 5: fallback, 13 tool calls, checker ok, admitted True
+  dirty_tree seed 1: fallback, 13 tool calls, checker ok, admitted True
+  diverged seed 2: fallback, 9 tool calls, checker ok, admitted False -- negative side failed: preconditions accepted 1 of 15 unrelated states (branch_renamed seed 1 resolves to 'merge'); a precondition set that accepts unrelated states is a defect
+  diverged seed 5: fallback, 13 tool calls, checker ok, admitted True
+  diverged seed 1: fallback, 10 tool calls, checker ok, admitted False -- refusal side failed: preconditions accepted 35 of 35 real conflicts no resolution can express (refusal-tested admission, configuration R): matomo-org/matomo@3ac997619c17, matomo-org/matomo@0e48dd9887cd, matomo-org/matomo@524565eb40d8, matomo-org/matomo@8d1e15a49d05, matomo-org/matomo@1cd924d0371a, saleor/saleor@a78b116c8d56, saleor/saleor@f1f268d21153, saleor/saleor@b5efc1343e14, saleor/saleor@e3c62ad985ed, saleor/saleor@ad2c9ccff7d9, saleor/saleor@1fef436c133c, saleor/saleor@4fb40d636d2b, saleor/saleor@a17dacfeda98, saleor/saleor@0e0efbc30033, saleor/saleor@9221056ea321, openfoodfoundation/openfoodnetwork@df0c98d013c6, openfoodfoundation/openfoodnetwork@db809923264a, openfoodfoundation/openfoodnetwork@983bed3c4e8c, openfoodfoundation/openfoodnetwork@cce26cb45334, openfoodfoundation/openfoodnetwork@c9a7a6e89704, openfoodfoundation/openfoodnetwork@f34f6936203b, openfoodfoundation/openfoodnetwork@19da0ba969e6, openfoodfoundation/openfoodnetwork@839b373b5cd1, openfoodfoundation/openfoodnetwork@384ca310a34d, openfoodfoundation/openfoodnetwork@1c628fac5824, RocketChat/Rocket.Chat@80834855d9f9, RocketChat/Rocket.Chat@8c3125b42215, RocketChat/Rocket.Chat@7b858dafdbac, RocketChat/Rocket.Chat@10300a25dcc6, RocketChat/Rocket.Chat@dd60cf8aefe6, RocketChat/Rocket.Chat@828565d5a12f, RocketChat/Rocket.Chat@4d9c8735bd2f, RocketChat/Rocket.Chat@6cd73b0fe9d4, RocketChat/Rocket.Chat@3340757b7582, RocketChat/Rocket.Chat@fec3c9f0bab0
+  diverged seed 3: fallback, 7 tool calls, checker ok, admitted True
+  diverged seed 4: fallback, 11 tool calls, checker ok, admitted False -- refusal side failed: preconditions accepted 1 of 35 real conflicts no resolution can express (refusal-tested admission, configuration R): saleor/saleor@1fef436c133c
+  diverged seed 0: fallback, 12 tool calls, checker ok, admitted False -- refusal side failed: preconditions accepted 1 of 35 real conflicts no resolution can express (refusal-tested admission, configuration R): saleor/saleor@1fef436c133c
+  lockfile_conflict seed 3: fallback, 18 tool calls, checker ok, admitted True
+  lockfile_conflict seed 5: fallback, 13 tool calls, checker ok, admitted False -- positive side failed on lockfile_conflict seed 5: postconditions failed: lock_entries_match_upstream_plus_local_additions: exit=1 (expected 0); stdout='' stderr=''
+  lockfile_conflict seed 6: fallback, 19 tool calls, checker ok, admitted False -- negative side failed: preconditions accepted 1 of 15 unrelated states (diverged seed 0 resolves to 'merge'); a precondition set that accepts unrelated states is a defect. It also accepted 1 more state(s) it must refuse: preconditions accepted 1 of 1 same-intent states (lockfile_conflict seed 2 resolves to 'keep_local', which accepts ['keep_local'], but the program implements 'take_upstream'); firing where a sibling resolution is correct is the mismatch this gate exists to refuse
+  submodule_moved seed 5: fallback, 16 tool calls, checker ok, admitted True
+  submodule_moved seed 8: fallback, 19 tool calls, checker ok, admitted True
+  submodule_moved seed 1: fallback, 21 tool calls, checker ok, admitted True
+
+2b threshold (tune seeds): 0.875
+claim 2: at matched dispatch coverage, executable-precondition dispatch mis-fires less often than text-similarity dispatch (at arm 3's coverage the soft vote's matched point is the hard rule itself (threshold >= 1.0), so it makes arm 3's decisions and cannot show that requiring every probe adds nothing; the registered claim keeps its wording)
+
+Primary metric, uninformed regime, 480 labelled pairs (spec §7 item 1, ADR-0008)
+  arm 3 (pre-registered coverage point): coverage 204/480, mismatch 0/204
+  arm 2 curve: 92 operating point(s), each with a 95% Wilson interval in figure1.csv
+  at matched coverage arm 2 (threshold 0.15789473684210525) has mismatch 171/204; coverage gap +0.000; mismatch difference (arm 2 - arm 3) +0.8382
+  power (item 3): with 204 and 204 fires, alpha 0.05 two-sided and power 0.8, the smallest detectable mismatch difference is 0.139 at a 50% base rate and 0.137 at the observed 0.419
+  baseline arm 2b (soft vote): curve, 3 operating point(s) -- context, not part of the claim
+  baseline arm 2c (intent key): point, 1 operating point(s) -- context, not part of the claim
+
+
+arm 2 baseline floor (spec §7 item 11): not measurable, so not usable: an intent needs two or more candidate resolutions for arm 2 to choose between, and the library's admitted programs give sync_through_a_conflicting_lockfile has ['keep_local']
+  arm 2 is not a usable baseline (spec §7 item 11), so this run may not say that precondition dispatch beats text similarity; the comparison is reported, not claimed
+
+episode stages skipped (--primary-only): no frozen benchmark
+
+artifacts:
+  build_ledger: build.jsonl
+  build_transcripts: build.transcripts.jsonl
+  library_two_sided: library-two-sided
+  library_positive_only: library-positive-only
+  primary: primary

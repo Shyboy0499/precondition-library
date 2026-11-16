@@ -1,0 +1,181 @@
+id: config_renamed-occ3-drop-deprecated-config-key
+intent: Make the app's old-setting-name warning go away by deleting the deprecated
+  key's line from a tracked config file when the renamed key is already set in that
+  same file, leaving the new key and every other setting untouched, and commit the
+  change.
+parameters: []
+preconditions:
+- name: renames_map_present
+  description: a tracked rename map lists old and new setting names
+  probe: |-
+    set -e
+    ren=$(git ls-files -z | tr '\0' '\n' | grep -iE '(^|/)renames[^/]*\.conf$' | head -n1)
+    [ -n "$ren" ]
+    grep -qE '^[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*=[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*$' "$ren"
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_key_also_new_key
+  description: a tracked config file sets an old key and its replacement at the same
+    time
+  probe: |-
+    set -e
+    ren=$(git ls-files -z | tr '\0' '\n' | grep -iE '(^|/)renames[^/]*\.conf$' | head -n1)
+    [ -n "$ren" ]
+    while IFS= read -r line; do
+      case "$line" in
+        ''|\#*) continue ;;
+      esac
+      case "$line" in
+        *=*) ;;
+        *) continue ;;
+      esac
+      old=${line%%=*}
+      new=${line#*=}
+      old=$(printf '%s' "$old" | tr -d '[:space:]')
+      new=$(printf '%s' "$new" | tr -d '[:space:]')
+      [ -n "$old" ] || continue
+      [ -n "$new" ] || continue
+      [ "$old" = "$new" ] && continue
+      while IFS= read -r f; do
+        [ "$f" = "$ren" ] && continue
+        if grep -qE "^[[:space:]]*$old[[:space:]]*=" "$f" && grep -qE "^[[:space:]]*$new[[:space:]]*=" "$f"; then
+          exit 0
+        fi
+      done < <(git ls-files -z | tr '\0' '\n' | grep -E '\.(conf|ini|cfg|properties|en[v]|toml)$' || true)
+    done < "$ren"
+    exit 1
+  expect_exit: 0
+  expect_pattern: null
+- name: config_files_clean
+  description: tracked config files have no uncommitted modifications
+  probe: '! git status --porcelain -- ''*.conf'' ''*.ini'' ''*.cfg'' ''*.properties''
+    ''*.en?'' ''*.toml'' | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  pairs=$(mktemp)
+  changed=$(mktemp)
+  tmpf=""
+  trap 'rm -f "$pairs" "$changed" ${tmpf:+"$tmpf"}' EXIT
+  while IFS= read -r ren; do
+    [ -n "$ren" ] || continue
+    [ -f "$ren" ] || continue
+    while IFS= read -r line; do
+      case "$line" in
+        ''|\#*) continue ;;
+      esac
+      case "$line" in
+        *=*) ;;
+        *) continue ;;
+      esac
+      old=${line%%=*}
+      new=${line#*=}
+      old=$(printf '%s' "$old" | tr -d '[:space:]')
+      new=$(printf '%s' "$new" | tr -d '[:space:]')
+      [ -n "$old" ] || continue
+      [ -n "$new" ] || continue
+      [ "$old" = "$new" ] && continue
+      printf '%s\t%s\n' "$old" "$new" >> "$pairs"
+    done < "$ren"
+  done < <(git ls-files -z | tr '\0' '\n' | grep -iE '(^|/)renames[^/]*\.conf$' || true)
+  if [ -s "$pairs" ]; then
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      [ -f "$f" ] || continue
+      case "$f" in
+        */renames*.conf|renames*.conf) continue ;;
+      esac
+      pat=""
+      while IFS=$'\t' read -r old new; do
+        [ -n "$old" ] || continue
+        if grep -qE "^[[:space:]]*$old[[:space:]]*=" "$f" && grep -qE "^[[:space:]]*$new[[:space:]]*=" "$f"; then
+          if [ -z "$pat" ]; then
+            pat="^[[:space:]]*$old[[:space:]]*="
+          else
+            pat="$pat|^[[:space:]]*$old[[:space:]]*="
+          fi
+        fi
+      done < "$pairs"
+      [ -n "$pat" ] || continue
+      tmpf=$(mktemp)
+      grep -vE "$pat" "$f" > "$tmpf" || true
+      if cmp -s "$f" "$tmpf"; then
+        rm -f "$tmpf"
+        tmpf=""
+      else
+        cat "$tmpf" > "$f"
+        rm -f "$tmpf"
+        tmpf=""
+        printf '%s\0' "$f" >> "$changed"
+      fi
+    done < <(git ls-files -z | tr '\0' '\n' | grep -E '\.(conf|ini|cfg|properties|en[v]|toml)$' || true)
+  fi
+  if [ -s "$changed" ]; then
+    paths=()
+    while IFS= read -r -d '' p; do
+      paths+=("$p")
+    done < "$changed"
+    git add -- "${paths[@]}"
+    git commit -m "config: drop deprecated setting names" --no-verify -- "${paths[@]}"
+  fi
+steps: null
+postconditions:
+- name: no_old_and_new_duplicates
+  description: no tracked config file sets an old key together with its replacement
+  probe: |-
+    set -e
+    ren=$(git ls-files -z | tr '\0' '\n' | grep -iE '(^|/)renames[^/]*\.conf$' | head -n1)
+    [ -n "$ren" ]
+    while IFS= read -r line; do
+      case "$line" in
+        ''|\#*) continue ;;
+      esac
+      case "$line" in
+        *=*) ;;
+        *) continue ;;
+      esac
+      old=${line%%=*}
+      new=${line#*=}
+      old=$(printf '%s' "$old" | tr -d '[:space:]')
+      new=$(printf '%s' "$new" | tr -d '[:space:]')
+      [ -n "$old" ] || continue
+      [ -n "$new" ] || continue
+      [ "$old" = "$new" ] && continue
+      while IFS= read -r f; do
+        [ "$f" = "$ren" ] && continue
+        if grep -qE "^[[:space:]]*$old[[:space:]]*=" "$f" && grep -qE "^[[:space:]]*$new[[:space:]]*=" "$f"; then
+          exit 1
+        fi
+      done < <(git ls-files -z | tr '\0' '\n' | grep -E '\.(conf|ini|cfg|properties|en[v]|toml)$' || true)
+    done < "$ren"
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: renames_map_untouched
+  description: the rename map was not modified by the config commit
+  probe: |-
+    set -e
+    msg=$(git log -1 --pretty=%s 2>/dev/null || echo "")
+    [ "$msg" = "config: drop deprecated setting names" ] || exit 0
+    ! git show --name-only --format= HEAD | grep -iE '(^|/)renames[^/]*\.conf$' | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: config_changes_committed
+  description: no uncommitted changes remain in tracked config files
+  probe: '! git status --porcelain -- ''*.conf'' ''*.ini'' ''*.cfg'' ''*.properties''
+    ''*.en?'' ''*.toml'' | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+variant: drop_old
+provenance:
+  compiled_from_task: The app keeps warning that my config uses old setting names.
+    Make the warning go away without changing what the settings do. The new name is
+    already set too, so delete the old key's line and keep the new one.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: The app keeps warning that my config uses old setting names. Make the
+    warning go away without changing what the settings do. The new name is already
+    set too, so delete the old key's line and keep the new one./seed-23-config_renamed-212
+  fault: config_renamed
+status: admitted

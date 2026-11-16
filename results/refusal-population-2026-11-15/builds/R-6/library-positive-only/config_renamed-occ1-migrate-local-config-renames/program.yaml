@@ -1,0 +1,245 @@
+id: config_renamed-occ1-migrate-local-config-renames
+intent: Rename obsolete configuration keys in git-ignored local override files according
+  to the repository's rename mapping, leaving those files untracked and ignored.
+parameters:
+- work_dir
+preconditions:
+- name: work_dir_is_repository
+  description: The supplied work directory is a Git repository root.
+  probe: test -d "{work_dir}/.git"
+  expect_exit: 0
+  expect_pattern: null
+- name: renames_mapping_exists
+  description: The tracked renames mapping file exists and defines at least one old
+    = new key pair.
+  probe: |-
+    test -f config/renames.conf && awk '
+      {
+        line=$0
+        sub(/^[[:space:]]*/, "", line)
+        if (line == "" || line ~ /^#/) next
+        eq=index(line, "=")
+        if (eq == 0) next
+        old=substr(line,1,eq-1)
+        new=substr(line,eq+1)
+        sub(/[[:space:]]*#.*$/, "", new)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+        if (old != "" && new != "") found=1
+      }
+      END { exit found ? 0 : 1 }
+    ' config/renames.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: ignored_override_has_stale_key
+  description: At least one git-ignored file contains an assignment for an old key
+    listed in the rename mapping.
+  probe: |-
+    test -f config/renames.conf || exit 1
+    found=0
+    while IFS= read -r f; do
+      [ -n "$f" ] && [ -f "$f" ] || continue
+      grep -Iq . "$f" || continue
+      if awk '
+        NR==FNR {
+          line=$0
+          sub(/^[[:space:]]*/, "", line)
+          if (line == "" || line ~ /^#/) next
+          eq=index(line, "=")
+          if (eq == 0) next
+          old=substr(line,1,eq-1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+          if (old != "") map[old]=1
+          next
+        }
+        {
+          line=$0
+          sub(/^[[:space:]]*/, "", line)
+          eq=index(line, "=")
+          if (eq == 0) next
+          key=substr(line,1,eq-1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+          if (key in map) found=1
+        }
+        END { exit found ? 0 : 1 }
+      ' config/renames.conf "$f"; then
+        found=1
+        break
+      fi
+    done < <(git ls-files --others --ignored --exclude-standard -z | tr '\0' '\n')
+    [ "$found" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  set -euo pipefail
+  cd "{work_dir}"
+  renames=config/renames.conf
+  [ -f "$renames" ] || exit 1
+
+  # Rename obsolete keys only in ignored, untracked local override files.
+  while IFS= read -r f; do
+    [ -n "$f" ] && [ -f "$f" ] || continue
+    grep -Iq . "$f" || continue
+
+    pass=0
+    while [ "$pass" -lt 10 ]; do
+      if ! awk '
+        NR==FNR {
+          line=$0
+          sub(/^[[:space:]]*/, "", line)
+          if (line == "" || line ~ /^#/) next
+          eq=index(line, "=")
+          if (eq == 0) next
+          old=substr(line,1,eq-1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+          if (old != "") map[old]=1
+          next
+        }
+        {
+          line=$0
+          sub(/^[[:space:]]*/, "", line)
+          eq=index(line, "=")
+          if (eq == 0) next
+          key=substr(line,1,eq-1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+          if (key in map) found=1
+        }
+        END { exit found ? 0 : 1 }
+      ' "$renames" "$f"; then
+        break
+      fi
+
+      tmp="$f.tmp.$$"
+      awk '
+        NR==FNR {
+          line=$0
+          sub(/^[[:space:]]*/, "", line)
+          if (line == "" || line ~ /^#/) next
+          eq=index(line, "=")
+          if (eq == 0) next
+          old=substr(line,1,eq-1)
+          new=substr(line,eq+1)
+          sub(/[[:space:]]*#.*$/, "", new)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+          if (old != "" && new != "") map[old]=new
+          next
+        }
+        {
+          line=$0
+          if (match(line, /^[[:space:]]*[^=[:space:]]+[[:space:]]*=/)) {
+            pre=substr(line,1,RLENGTH)
+            key=pre
+            sub(/^[[:space:]]*/, "", key)
+            sub(/[[:space:]]*=.*$/, "", key)
+            if (key in map) {
+              match(line, /^[[:space:]]*/)
+              lead=substr(line,1,RLENGTH)
+              rest=substr(line, RSTART+RLENGTH+length(key))
+              line=lead map[key] rest
+            }
+          }
+          print line
+        }
+      ' "$renames" "$f" > "$tmp"
+
+      if cmp -s "$f" "$tmp"; then
+        rm -f "$tmp"
+        break
+      fi
+      mv "$tmp" "$f"
+      pass=$((pass + 1))
+    done
+  done < <(git ls-files --others --ignored --exclude-standard -z | tr '\0' '\n')
+steps: null
+postconditions:
+- name: no_stale_keys_in_ignored_files
+  description: No git-ignored file still contains an assignment for any old key from
+    the rename mapping.
+  probe: |-
+    test -f config/renames.conf || exit 1
+    stale=0
+    while IFS= read -r f; do
+      [ -n "$f" ] && [ -f "$f" ] || continue
+      grep -Iq . "$f" || continue
+      if awk '
+        NR==FNR {
+          line=$0
+          sub(/^[[:space:]]*/, "", line)
+          if (line == "" || line ~ /^#/) next
+          eq=index(line, "=")
+          if (eq == 0) next
+          old=substr(line,1,eq-1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+          if (old != "") map[old]=1
+          next
+        }
+        {
+          line=$0
+          sub(/^[[:space:]]*/, "", line)
+          eq=index(line, "=")
+          if (eq == 0) next
+          key=substr(line,1,eq-1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+          if (key in map) found=1
+        }
+        END { exit found ? 0 : 1 }
+      ' config/renames.conf "$f"; then
+        stale=1
+        break
+      fi
+    done < <(git ls-files --others --ignored --exclude-standard -z | tr '\0' '\n')
+    [ "$stale" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: renamed_key_present_in_ignored_file
+  description: At least one git-ignored file contains an assignment for a new key
+    from the rename mapping.
+  probe: |-
+    test -f config/renames.conf || exit 1
+    fresh=0
+    while IFS= read -r f; do
+      [ -n "$f" ] && [ -f "$f" ] || continue
+      grep -Iq . "$f" || continue
+      if awk '
+        NR==FNR {
+          line=$0
+          sub(/^[[:space:]]*/, "", line)
+          if (line == "" || line ~ /^#/) next
+          eq=index(line, "=")
+          if (eq == 0) next
+          new=substr(line,eq+1)
+          sub(/[[:space:]]*#.*$/, "", new)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+          if (new != "") map[new]=1
+          next
+        }
+        {
+          line=$0
+          sub(/^[[:space:]]*/, "", line)
+          eq=index(line, "=")
+          if (eq == 0) next
+          key=substr(line,1,eq-1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+          if (key in map) found=1
+        }
+        END { exit found ? 0 : 1 }
+      ' config/renames.conf "$f"; then
+        fresh=1
+        break
+      fi
+    done < <(git ls-files --others --ignored --exclude-standard -z | tr '\0' '\n')
+    [ "$fresh" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+variant: migrate_local
+provenance:
+  compiled_from_task: Some setting in my config has been renamed upstream. Sort the
+    config out. Rename the old key in my own override file, and keep that file out
+    of git.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Some setting in my config has been renamed upstream. Sort the config
+    out. Rename the old key in my own override file, and keep that file out of git./seed-12-config_renamed-17967
+  fault: config_renamed
+status: admitted

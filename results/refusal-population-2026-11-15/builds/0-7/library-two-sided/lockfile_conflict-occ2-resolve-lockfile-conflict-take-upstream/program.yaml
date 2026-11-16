@@ -1,0 +1,205 @@
+id: lockfile_conflict-occ2-resolve-lockfile-conflict-take-upstream
+intent: Resolve a conflicted sync of the generated dependency lock file by starting
+  from upstream's version of deps.lock, re-adding the line blocks the local branch
+  contributed, and committing the merge.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_exists
+  description: the upstream remote-tracking branch is present locally
+  probe: git rev-parse --verify --quiet refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_not_yet_merged
+  description: upstream is not already an ancestor of HEAD, so the sync is still pending
+  probe: '! git merge-base --is-ancestor refs/remotes/{upstream_remote}/{upstream_branch}
+    HEAD'
+  expect_exit: 0
+  expect_pattern: null
+- name: both_sides_changed_dependency_file
+  description: local HEAD and upstream both modified deps.lock relative to their merge
+    base
+  probe: |-
+    base=$(git merge-base HEAD refs/remotes/{upstream_remote}/{upstream_branch}) || exit 1
+    git cat-file -e "HEAD:deps.lock" || exit 1
+    git cat-file -e "refs/remotes/{upstream_remote}/{upstream_branch}:deps.lock" || exit 1
+    git diff --quiet "$base" HEAD -- deps.lock && exit 1
+    git diff --quiet "$base" refs/remotes/{upstream_remote}/{upstream_branch} -- deps.lock && exit 1
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: local_added_lines
+  description: local HEAD adds at least one line block (a hunk with additions only)
+    to deps.lock that must be carried over
+  probe: |-
+    base=$(git merge-base HEAD refs/remotes/{upstream_remote}/{upstream_branch}) || exit 1
+    git diff -U0 "$base" HEAD -- deps.lock | awk '
+    /^@@/ {
+      if (h == 1 && m == 0 && n > 0) { found = 1 }
+      h = 1
+      m = 0
+      n = 0
+      next
+    }
+    {
+      if (h != 1) next
+      c = substr($0, 1, 1)
+      if (c == "-") { m = 1 }
+      else if (c == "+") { n = n + 1 }
+    }
+    END {
+      if (h == 1 && m == 0 && n > 0) { found = 1 }
+      if (found == 1) print "ADD"
+    }
+    ' | grep -q ADD
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -eu
+  remote={upstream_remote}
+  branch={upstream_branch}
+  file=deps.lock
+  tmp=$(mktemp -d)
+  trap 'rm -rf "$tmp"' EXIT
+  if ! git rev-parse -q --verify MERGE_HEAD; then
+    git merge --no-ff --no-commit "$remote/$branch" || true
+  fi
+  git rev-parse -q --verify MERGE_HEAD
+  local_rev=$(git rev-parse HEAD)
+  base=$(git merge-base "$local_rev" "$remote/$branch")
+  git show "$local_rev:$file" > "$tmp/local.lock"
+  git show "$base:$file" > "$tmp/base.lock"
+  git show "$remote/$branch:$file" > "$tmp/upstream.lock"
+  git diff -U0 "$base" "$local_rev" -- "$file" > "$tmp/local.diff"
+  cat > "$tmp/add.awk" <<'AWK'
+  function flush_hunk() {
+    if (h == 1 && m == 0 && n > 0) {
+      NH = NH + 1
+      BS[NH] = start
+      BN[NH] = n
+      for (j = 1; j <= n; j = j + 1) {
+        BL[NH, j] = A[j]
+      }
+    }
+    h = 0
+    m = 0
+    n = 0
+  }
+  BEGIN {
+    NH = 0
+    nloc = 0
+    nup = 0
+    while ((getline l < loc) > 0) {
+      nloc = nloc + 1
+      L[nloc] = l
+    }
+    close(loc)
+    while ((getline l < up) > 0) {
+      nup = nup + 1
+      U[nup] = l
+    }
+    close(up)
+    h = 0
+    m = 0
+    n = 0
+    start = 0
+  }
+  /^@@ / {
+    flush_hunk()
+    h = 1
+    m = 0
+    n = 0
+    s = $0
+    sub(/^@@ -[^ ]+ /, "", s)
+    sub(/^[+]/, "", s)
+    sub(/,.*/, "", s)
+    start = s + 0
+    next
+  }
+  {
+    if (h != 1) next
+    c = substr($0, 1, 1)
+    if (c == "-") { m = 1 }
+    else if (c == "+") { n = n + 1; A[n] = substr($0, 2) }
+  }
+  END {
+    flush_hunk()
+    for (k = 1; k <= NH; k = k + 1) {
+      pos = 0
+      anchor = ""
+      ai = BS[k] + BN[k]
+      if (ai <= nloc) anchor = L[ai]
+      if (anchor != "") {
+        for (i = 1; i <= nup; i = i + 1) {
+          if (U[i] == anchor) { pos = i; break }
+        }
+      }
+      if (pos == 0 && BS[k] > 1) {
+        anchor = L[BS[k] - 1]
+        for (i = 1; i <= nup; i = i + 1) {
+          if (U[i] == anchor) { pos = i + 1; break }
+        }
+      }
+      if (pos == 0) pos = nup + 1
+      for (i = nup; i >= pos; i = i - 1) {
+        U[i + BN[k]] = U[i]
+      }
+      for (j = 1; j <= BN[k]; j = j + 1) {
+        U[pos + j - 1] = BL[k, j]
+      }
+      nup = nup + BN[k]
+    }
+    for (i = 1; i <= nup; i = i + 1) {
+      print U[i]
+    }
+  }
+  AWK
+  awk -v loc="$tmp/local.lock" -v up="$tmp/upstream.lock" -f "$tmp/add.awk" "$tmp/local.diff" > "$tmp/resolved.lock"
+  cp "$tmp/resolved.lock" "$file"
+  git add "$file"
+  GIT_EDITOR=true git commit --no-edit
+steps: null
+postconditions:
+- name: merge_finished
+  description: no merge is left in progress
+  probe: '! git rev-parse -q --verify MERGE_HEAD'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: the dependency file on disk carries no conflict markers
+  probe: '! grep -qE ''^(<<<<<<<|=======|>>>>>>>)'' deps.lock'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_entries
+  description: the index holds no unmerged entries for the dependency file
+  probe: '! git ls-files -u | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_lines_kept
+  description: every line of upstream's dependency file survives in the committed
+    resolution
+  probe: '! comm -23 <(git show refs/remotes/{upstream_remote}/{upstream_branch}:deps.lock
+    | sort -u) <(git show HEAD:deps.lock | sort -u) | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: merged_upstream_commit
+  description: HEAD is a merge whose second parent is the upstream branch
+  probe: test "$(git rev-parse --verify HEAD^2)" = "$(git rev-parse --verify refs/remotes/{upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_matches_head
+  description: the dependency file on disk matches the committed resolution
+  probe: git diff --quiet HEAD -- deps.lock
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: The sync conflicts. Resolve it the way this project expects.
+    Start from upstream's dependency file and add back what I added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: The sync conflicts. Resolve it the way this project expects. Start from
+    upstream's dependency file and add back what I added./seed-6-lockfile_conflict-29977
+  fault: lockfile_conflict
+status: candidate

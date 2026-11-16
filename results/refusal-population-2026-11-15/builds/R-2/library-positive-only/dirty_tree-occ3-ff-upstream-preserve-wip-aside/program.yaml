@@ -1,0 +1,100 @@
+id: dirty_tree-occ3-ff-upstream-preserve-wip-aside
+intent: Fast-forward the current branch to upstream while preserving work in progress,
+  moving each untracked file that upstream now tracks aside as `<name>.local`.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_tracking_ref_exists
+  description: the upstream remote-tracking branch is present locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: head_is_ancestor_of_upstream
+  description: the local branch can be fast-forwarded to upstream
+  probe: git merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_behind_upstream
+  description: upstream has at least one commit the local branch lacks
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: untracked_collides_with_upstream
+  description: an untracked file occupies a path that upstream now tracks
+  probe: |-
+    comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git ls-tree -r --name-only -z {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) \
+      | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_has_tracked_changes
+  description: there is tracked work in progress that must survive
+  probe: '! git diff HEAD --quiet'
+  expect_exit: 0
+  expect_pattern: null
+- name: local_changes_do_not_overlap_upstream
+  description: no locally modified tracked path is also changed between HEAD and upstream
+  probe: |-
+    ! comm -12 \
+      <(git diff --name-only -z HEAD | tr '\0' '\n' | sort -u) \
+      <(git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort -u) \
+      | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  collisions=$(comm -12 \
+    <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+    <(git ls-tree -r --name-only -z {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort))
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    cp -- "$p" "$p.local"
+    rm -f -- "$p"
+  done <<< "$collisions"
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: head_equals_upstream
+  description: the local branch now points at upstream's commit
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: work_in_progress_survives
+  description: the tracked work-in-progress edit is still in the working tree
+  probe: '! git diff HEAD --quiet'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_upstream_collision
+  description: no untracked file remains at a path the updated tree tracks
+  probe: |-
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git ls-tree -r --name-only -z HEAD | tr '\0' '\n' | sort) \
+      | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: local_copies_beside_upstream
+  description: every untracked .local copy sits beside a path the updated tree tracks
+  probe: |-
+    n=0
+    while IFS= read -r -d '' p; do
+      case "$p" in
+        *.local) n=$((n + 1)); git cat-file -e "HEAD:${p%.local}" || exit 1 ;;
+      esac
+    done < <(git ls-files --others --exclude-standard -z)
+    [ "$n" -gt 0 ]
+  expect_exit: 0
+  expect_pattern: null
+variant: aside
+provenance:
+  compiled_from_task: Bring this branch up to date with upstream, but my work in progress
+    must survive. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Bring this branch up to date with upstream, but my work in progress
+    must survive. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update./seed-2-dirty_tree-211
+  fault: dirty_tree
+status: admitted

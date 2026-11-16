@@ -1,0 +1,346 @@
+id: lockfile_conflict-occ2-merge-upstream-keep-local-lockfile
+intent: Merge upstream into the current branch and resolve the dependency lock file
+  conflict by keeping locally removed dependencies removed, retaining local additions,
+  and adding dependencies upstream added.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_exists
+  description: the configured upstream remote is present
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_branch_exists
+  description: the upstream remote-tracking branch exists
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_diverged
+  description: HEAD and upstream each have commits the other lacks
+  probe: |-
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0 &&
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: dependency_file_changed_on_both_sides
+  description: deps.lock is present in the merge base and was modified by both sides
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+    git cat-file -e "$base:deps.lock" &&
+    git cat-file -e "HEAD:deps.lock" &&
+    git cat-file -e "{upstream_remote}/{upstream_branch}:deps.lock" &&
+    test -n "$(git diff --name-only "$base" HEAD -- deps.lock)" &&
+    test -n "$(git diff --name-only "$base" {upstream_remote}/{upstream_branch} -- deps.lock)"
+  expect_exit: 0
+  expect_pattern: null
+- name: dependency_file_has_package_list
+  description: deps.lock declares a packages list in the base, local and upstream
+    versions
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    for rev in "$base" HEAD {upstream_remote}/{upstream_branch}; do
+      git show "$rev:deps.lock" | grep -qE '^[[:space:]]*"?packages"?[[:space:]]*[:=]' || exit 1
+    done
+  expect_exit: 0
+  expect_pattern: null
+- name: repository_ready_for_merge
+  description: the worktree has no tracked edits unless an upstream merge is already
+    in progress
+  probe: |-
+    if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+      test "$(git rev-parse MERGE_HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+    else
+      test -z "$(git status --porcelain=v1 --untracked-files=no)"
+    fi
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch {upstream_remote}
+  if ! git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+    if ! git merge --no-ff --no-commit {upstream_remote}/{upstream_branch}; then
+      if ! git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+        echo "merge failed to start" >&2
+        exit 1
+      fi
+    fi
+  fi
+  other_conflicts=$(git diff --name-only --diff-filter=U | grep -v -x 'deps.lock' || true)
+  if [ -n "$other_conflicts" ]; then
+    echo "unexpected conflicts: $other_conflicts" >&2
+    exit 1
+  fi
+  python3 - <<'PY'
+  import re
+  import subprocess
+
+  PAIRS = {"[": "]", "{": "}", "(": ")"}
+  KEY_RE = re.compile(r'^[ \t]*["\']?([A-Za-z0-9_.\-]+)["\']?[ \t]*[:=]')
+  BLOCK_RE = re.compile(r'(?m)^[ \t]*["\']?packages["\']?[ \t]*[:=][ \t]*([\[{(])')
+
+  def git(*args):
+      return subprocess.run(["git", *args], check=True,
+                            stdout=subprocess.PIPE).stdout.decode("utf-8", "surrogateescape")
+
+  def show(rev):
+      return git("show", rev + ":deps.lock")
+
+  def parse_block(text):
+      m = BLOCK_RE.search(text)
+      if not m:
+          return None
+      op = m.group(1)
+      cl = PAIRS[op]
+      start = m.end() - 1
+      depth = 0
+      for i in range(start, len(text)):
+          c = text[i]
+          if c == op:
+              depth += 1
+          elif c == cl:
+              depth -= 1
+              if depth == 0:
+                  return start, i
+      return None
+
+  def entry_name(raw):
+      s = raw.strip()
+      if not s or s.startswith("#") or s.startswith("//"):
+          return None
+      m = re.match(r'^["\']([^"\']+)["\']', s)
+      if m:
+          return m.group(1).split()[0]
+      if s[0] in "]})":
+          return None
+      tok = s.split()[0].rstrip(",")
+      return tok or None
+
+  def entry_names(inner):
+      out = set()
+      for raw in inner.split(","):
+          name = entry_name(raw)
+          if name is not None:
+              out.add(name)
+      return out
+
+  def header_keys(head):
+      d = {}
+      for line in head.splitlines(keepends=True):
+          m = KEY_RE.match(line)
+          if m:
+              d.setdefault(m.group(1), line)
+      return d
+
+  def merge_header(ours, theirs, base):
+      tk = header_keys(theirs)
+      bk = header_keys(base)
+      out = []
+      for line in ours.splitlines(keepends=True):
+          m = KEY_RE.match(line)
+          if m:
+              k = m.group(1)
+              if k != "packages" and k in tk and k in bk and tk[k] != bk[k]:
+                  line = tk[k]
+          out.append(line)
+      return "".join(out)
+
+  def merge_inner(inner, added):
+      if not added:
+          return inner
+      if "\n" not in inner:
+          parts = [p.strip().rstrip(",") for p in inner.split(",") if p.strip()]
+          for raw in added:
+              s = raw.strip().rstrip(",")
+              if s:
+                  parts.append(s)
+          return ", ".join(parts)
+      lines = inner.splitlines()
+      indent = "    "
+      for line in reversed(lines):
+          if line.strip():
+              indent = re.match(r'^[ \t]*', line).group(0)
+              break
+      out = []
+      for line in lines:
+          s = line.strip()
+          if s and not s.startswith("#") and not s.endswith(","):
+              line = line.rstrip() + ","
+          out.append(line)
+      for raw in added:
+          s = raw.strip().rstrip(",")
+          if s:
+              out.append(indent + s + ",")
+      return "\n".join(out) + "\n"
+
+  base_rev = git("merge-base", "HEAD", "MERGE_HEAD").strip()
+  base = show(base_rev)
+  ours = show("HEAD")
+  theirs = show("MERGE_HEAD")
+
+  ob = parse_block(ours)
+  tb = parse_block(theirs)
+  bb = parse_block(base)
+  if ob is None or tb is None:
+      raise SystemExit("cannot find packages block in deps.lock")
+
+  o_start, o_end = ob
+  t_start, _t_end = tb
+  ours_inner = ours[o_start + 1:o_end]
+  theirs_inner = theirs[t_start + 1:_t_end]
+  base_inner = base[bb[0] + 1:bb[1]] if bb else ""
+
+  have = entry_names(ours_inner)
+  known = entry_names(base_inner)
+  added = []
+  for raw in theirs_inner.split(","):
+      name = entry_name(raw)
+      if name is None or name in have or name in known:
+          continue
+      added.append(raw)
+
+  new_inner = merge_inner(ours_inner, added)
+  head = merge_header(ours[:o_start], theirs[:t_start], base[:bb[0]] if bb else "")
+  final = head + ours[o_start] + new_inner + ours[o_end:]
+
+  with open("deps.lock", "w", encoding="utf-8", errors="surrogateescape", newline="") as f:
+      f.write(final)
+  PY
+  git add -- deps.lock
+  if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+    git commit --no-edit
+  fi
+steps: null
+postconditions:
+- name: merge_commit_created
+  description: HEAD is a merge commit with an upstream parent
+  probe: git rev-parse --verify --quiet HEAD^2
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: the upstream branch is contained in HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: the index has no unmerged entries
+  probe: test -z "$(git diff --name-only --diff-filter=U)"
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_worktree_clean
+  description: no tracked files are modified or staged after the merge
+  probe: test -z "$(git status --porcelain=v1 --untracked-files=no)"
+  expect_exit: 0
+  expect_pattern: null
+- name: dependency_file_merged_correctly
+  description: locally removed packages stay removed, local and upstream additions
+    are present, and version metadata follows upstream when upstream changed it
+  probe: |-
+    python3 - <<'PY'
+    import re
+    import subprocess
+
+    PAIRS = {"[": "]", "{": "}", "(": ")"}
+    BLOCK_RE = re.compile(r'(?m)^[ \t]*["\']?packages["\']?[ \t]*[:=][ \t]*([\[{(])')
+    VER_RE = re.compile(r'(?m)^[ \t]*["\']?version["\']?[ \t]*[:=][ \t]*["\']?([^"\'\s,#]+)')
+
+    def git(*args):
+        return subprocess.run(["git", *args], check=True,
+                              stdout=subprocess.PIPE).stdout.decode("utf-8", "surrogateescape")
+
+    def show(rev):
+        return git("show", rev + ":deps.lock")
+
+    def parse_block(text):
+        m = BLOCK_RE.search(text)
+        if not m:
+            return None
+        op = m.group(1)
+        cl = PAIRS[op]
+        start = m.end() - 1
+        depth = 0
+        for i in range(start, len(text)):
+            c = text[i]
+            if c == op:
+                depth += 1
+            elif c == cl:
+                depth -= 1
+                if depth == 0:
+                    return start, i
+        return None
+
+    def names(text):
+        pb = parse_block(text)
+        if pb is None:
+            return None
+        start, end = pb
+        out = set()
+        for raw in text[start + 1:end].split(","):
+            s = raw.strip()
+            if not s or s.startswith("#"):
+                continue
+            m = re.match(r'^["\']([^"\']+)["\']', s)
+            if m:
+                out.add(m.group(1).split()[0])
+                continue
+            if s[0] in "]})":
+                continue
+            out.add(s.split()[0].rstrip(","))
+        return out
+
+    def version(text):
+        m = VER_RE.search(text)
+        return m.group(1) if m else None
+
+    final = show("HEAD")
+    local = show("HEAD^1")
+    upstream = show("HEAD^2")
+    base = show(git("merge-base", "HEAD^1", "HEAD^2").strip())
+
+    for text in (final, local, upstream, base):
+        for line in text.splitlines():
+            if line.startswith("<<<<<<<") or line.startswith(">>>>>>>"):
+                raise SystemExit("conflict markers remain")
+
+    fn = names(final)
+    ln = names(local)
+    un = names(upstream)
+    bn = names(base)
+    if fn is None or ln is None or un is None or bn is None:
+        raise SystemExit("packages block missing from deps.lock")
+
+    removed = bn - ln
+    up_add = un - bn
+    bad = removed & fn
+    if bad:
+        raise SystemExit("locally removed package re-added: " + ", ".join(sorted(bad)))
+    if not ln <= fn:
+        raise SystemExit("local package entry lost: " + ", ".join(sorted(ln - fn)))
+    if not up_add <= fn:
+        raise SystemExit("upstream package addition missing: " + ", ".join(sorted(up_add - fn)))
+    if fn != (ln | up_add):
+        raise SystemExit("unexpected package entries: " + ", ".join(sorted(fn - (ln | up_add))))
+
+    bv = version(base)
+    lv = version(local)
+    uv = version(upstream)
+    fv = version(final)
+    if bv is not None and lv is not None and uv is not None:
+        expected = uv if uv != bv else lv
+        if fv != expected:
+            raise SystemExit("version metadata mismatch: %r != %r" % (fv, expected))
+    PY
+  expect_exit: 0
+  expect_pattern: null
+variant: keep_local
+provenance:
+  compiled_from_task: Update this branch from upstream and make sure the dependency
+    list still makes sense. Keep my dependency file, with what I removed still removed,
+    and add what upstream added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Update this branch from upstream and make sure the dependency list still
+    makes sense. Keep my dependency file, with what I removed still removed, and add
+    what upstream added./seed-2-lockfile_conflict-29016
+  fault: lockfile_conflict
+status: candidate

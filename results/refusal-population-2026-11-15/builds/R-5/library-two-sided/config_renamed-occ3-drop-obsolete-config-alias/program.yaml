@@ -1,0 +1,215 @@
+id: config_renamed-occ3-drop-obsolete-config-alias
+intent: Remove obsolete config setting aliases when the new key is already set, without
+  changing the effective settings.
+parameters: []
+preconditions:
+- name: single_renames_conf
+  description: exactly one tracked renames.conf file lists old-to-new setting names
+  probe: '[ "$(git ls-files -z | tr ''\0'' ''\n'' | grep -Ec ''(^|/)renames\.conf$'')"
+    -eq 1 ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: has_stale_key_pair
+  description: a config file next to renames.conf contains both an old key and its
+    new key
+  probe: |-
+    renames=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n1)
+    [ -n "$renames" ] || exit 1
+    dir=$(dirname "$renames")
+
+    has_key() {
+      awk -v key="$1" '
+        {
+          line=$0
+          sub(/^[[:space:]]*/, "", line)
+          if (index(line, key) == 1) {
+            rest = substr(line, length(key)+1)
+            if (rest ~ /^[[:space:]]*=/) { found=1; exit }
+          }
+        }
+        END { exit !found }
+      ' "$2"
+    }
+
+    while IFS='=' read -r old new; do
+      old=$(printf '%s' "$old" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+      new=$(printf '%s' "$new" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+      if [ -z "$old" ]; then continue; fi
+      case "$old" in \#*) continue;; esac
+      if [ -z "$new" ]; then continue; fi
+      while IFS= read -r f; do
+        if [ ! -f "$f" ]; then continue; fi
+        if [ "$f" = "$renames" ]; then continue; fi
+        if [ "$(dirname "$f")" != "$dir" ]; then continue; fi
+        if has_key "$old" "$f" && has_key "$new" "$f"; then
+          exit 0
+        fi
+      done < <(git ls-files -z | tr '\0' '\n')
+    done < "$renames"
+    exit 1
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_tracked_worktree
+  description: no unstaged or staged changes are present
+  probe: git diff --quiet && git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  set -e
+  renames=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n1)
+  if [ -z "$renames" ]; then echo "no renames.conf" >&2; exit 1; fi
+  dir=$(dirname "$renames")
+
+  has_key() {
+    awk -v key="$1" '
+      {
+        line=$0
+        sub(/^[[:space:]]*/, "", line)
+        if (index(line, key) == 1) {
+          rest = substr(line, length(key)+1)
+          if (rest ~ /^[[:space:]]*=/) { found=1; exit }
+        }
+      }
+      END { exit !found }
+    ' "$2"
+  }
+
+  remove_key() {
+    awk -v key="$1" '
+      {
+        line=$0
+        sub(/^[[:space:]]*/, "", line)
+        if (index(line, key) == 1) {
+          rest = substr(line, length(key)+1)
+          if (rest ~ /^[[:space:]]*=/) next
+        }
+        print
+      }
+    ' "$2"
+  }
+
+  while IFS='=' read -r old new; do
+    old=$(printf '%s' "$old" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    new=$(printf '%s' "$new" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    if [ -z "$old" ]; then continue; fi
+    case "$old" in \#*) continue;; esac
+    if [ -z "$new" ]; then continue; fi
+    while IFS= read -r f; do
+      if [ ! -f "$f" ]; then continue; fi
+      if [ "$f" = "$renames" ]; then continue; fi
+      if [ "$(dirname "$f")" != "$dir" ]; then continue; fi
+      if has_key "$old" "$f" && has_key "$new" "$f"; then
+        tmp="$f.tmp.$$"
+        remove_key "$old" "$f" > "$tmp"
+        cat "$tmp" > "$f"
+        rm -f "$tmp"
+      fi
+    done < <(git ls-files -z | tr '\0' '\n')
+  done < "$renames"
+
+  git add -u
+  git commit -m "Remove obsolete config setting aliases"
+steps: null
+postconditions:
+- name: no_stale_key_pair
+  description: no config file next to renames.conf still contains both an old key
+    and its new key
+  probe: |-
+    renames=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n1)
+    [ -n "$renames" ] || exit 1
+    dir=$(dirname "$renames")
+
+    has_key() {
+      awk -v key="$1" '
+        {
+          line=$0
+          sub(/^[[:space:]]*/, "", line)
+          if (index(line, key) == 1) {
+            rest = substr(line, length(key)+1)
+            if (rest ~ /^[[:space:]]*=/) { found=1; exit }
+          }
+        }
+        END { exit !found }
+      ' "$2"
+    }
+
+    found=0
+    while IFS='=' read -r old new; do
+      old=$(printf '%s' "$old" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+      new=$(printf '%s' "$new" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+      if [ -z "$old" ]; then continue; fi
+      case "$old" in \#*) continue;; esac
+      if [ -z "$new" ]; then continue; fi
+      while IFS= read -r f; do
+        if [ ! -f "$f" ]; then continue; fi
+        if [ "$f" = "$renames" ]; then continue; fi
+        if [ "$(dirname "$f")" != "$dir" ]; then continue; fi
+        if has_key "$old" "$f" && has_key "$new" "$f"; then
+          found=1
+          break 2
+        fi
+      done < <(git ls-files -z | tr '\0' '\n')
+    done < "$renames"
+    [ "$found" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: only_old_keys_removed
+  description: the last commit only removes old-key lines and adds no lines
+  probe: |-
+    renames=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n1)
+    [ -n "$renames" ] || exit 1
+    git diff HEAD^ HEAD -- | awk -v renames="$renames" '
+      BEGIN {
+        while ((getline line < renames) > 0) {
+          eq = index(line, "=")
+          if (eq == 0) continue
+          old = substr(line, 1, eq-1)
+          new = substr(line, eq+1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+          if (old == "" || new == "" || old ~ /^#/) continue
+          oldkeys[old] = 1
+          newkeys[new] = 1
+        }
+      }
+      /^\+/ && !/^\+\+\+/ { bad = 1; exit }
+      /^-/ && !/^---/ {
+        line = substr($0, 2)
+        sub(/^[[:space:]]*/, "", line)
+        isold = 0
+        for (k in oldkeys) {
+          if (index(line, k) == 1) {
+            rest = substr(line, length(k)+1)
+            if (rest ~ /^[[:space:]]*=/) { isold = 1; break }
+          }
+        }
+        if (!isold) { bad = 1; exit }
+        for (k in newkeys) {
+          if (index(line, k) == 1) {
+            rest = substr(line, length(k)+1)
+            if (rest ~ /^[[:space:]]*=/) { bad = 1; exit }
+          }
+        }
+      }
+      END { exit bad ? 1 : 0 }
+    '
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree_with_commit
+  description: the change is committed and the tracked worktree is clean
+  probe: git diff --quiet && git diff --cached --quiet && git log -1 --format=%s |
+    grep -q 'Remove obsolete'
+  expect_exit: 0
+  expect_pattern: null
+variant: drop_old
+provenance:
+  compiled_from_task: The app keeps warning that my config uses old setting names.
+    Make the warning go away without changing what the settings do. The new name is
+    already set too, so delete the old key's line and keep the new one.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: The app keeps warning that my config uses old setting names. Make the
+    warning go away without changing what the settings do. The new name is already
+    set too, so delete the old key's line and keep the new one./seed-23-config_renamed-7516
+  fault: config_renamed
+status: admitted

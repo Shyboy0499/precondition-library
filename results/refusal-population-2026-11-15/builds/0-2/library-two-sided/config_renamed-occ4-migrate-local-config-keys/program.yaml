@@ -1,0 +1,236 @@
+id: config_renamed-occ4-migrate-local-config-keys
+intent: Rename the outdated setting names used in the user's own override config file
+  to the current names declared by the repository's rename table, preserving the values
+  and every other line, and leave that file untracked and ignored by git.
+parameters: []
+preconditions:
+- name: renames_table_present
+  description: config/renames.conf is tracked and declares at least one old = new
+    key mapping
+  probe: |-
+    test -f config/renames.conf &&
+    git ls-files --error-unmatch -- config/renames.conf >/dev/null 2>&1 &&
+    awk -F'=' '
+      /^[[:space:]]*#/ { next }
+      /^[[:space:]]*$/ { next }
+      {
+        o = $1
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", o)
+        if (o != "") n++
+      }
+      END { exit (n > 0 ? 0 : 1) }
+    ' config/renames.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: local_override_has_stale_key
+  description: at least one ignored untracked file still assigns an old key name from
+    the rename table
+  probe: |-
+    while IFS= read -r -d '' f; do
+      if awk -F'=' '
+        NR == FNR {
+          if ($0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*$/) next
+          o = $1
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", o)
+          if (o != "") old[o] = 1
+          next
+        }
+        {
+          line = $0
+          sub(/^[[:space:]]+/, "", line)
+          if (line == "" || substr(line, 1, 1) == "#") next
+          eq = index(line, "=")
+          if (eq == 0) next
+          k = substr(line, 1, eq - 1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+          if (k in old) found = 1
+        }
+        END { exit (found ? 0 : 1) }
+      ' config/renames.conf "$f"; then
+        echo "$f"
+        exit 0
+      fi
+    done < <(git ls-files --others --ignored --exclude-standard -z)
+    exit 1
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_tree_clean
+  description: no tracked file has unstaged or staged modifications
+  probe: git diff --quiet && git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -eu
+  renames=config/renames.conf
+
+  tmpd=$(mktemp -d)
+  trap 'rm -rf "$tmpd"' EXIT
+
+  awk -F'=' '
+    /^[[:space:]]*#/ { next }
+    /^[[:space:]]*$/ { next }
+    {
+      o = $1
+      nw = $2
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", o)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", nw)
+      if (o != "" && nw != "") print o "\t" nw
+    }
+  ' "$renames" > "$tmpd/map"
+
+  if [ ! -s "$tmpd/map" ]; then
+    exit 0
+  fi
+
+  while IFS= read -r -d '' f; do
+    [ -f "$f" ] || continue
+    if ! awk -F'=' '
+      NR == FNR {
+        if ($0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*$/) next
+        o = $1
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", o)
+        if (o != "") old[o] = 1
+        next
+      }
+      {
+        line = $0
+        sub(/^[[:space:]]+/, "", line)
+        if (line == "" || substr(line, 1, 1) == "#") next
+        eq = index(line, "=")
+        if (eq == 0) next
+        k = substr(line, 1, eq - 1)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+        if (k in old) found = 1
+      }
+      END { exit (found ? 0 : 1) }
+    ' "$renames" "$f"; then
+      continue
+    fi
+
+    awk -F'=' '
+      /^[[:space:]]*#/ { next }
+      /^[[:space:]]*$/ { next }
+      {
+        k = $1
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+        if (k != "") print k
+      }
+    ' "$f" > "$tmpd/keys"
+
+    awk '
+      NR == FNR {
+        split($0, a, "\t")
+        if (a[1] != "") target[a[1]] = a[2]
+        next
+      }
+      FILENAME == ARGV[2] {
+        have[$0] = 1
+        next
+      }
+      {
+        line = $0
+        t = line
+        sub(/^[[:space:]]+/, "", t)
+        if (t == "" || substr(t, 1, 1) == "#") { print line; next }
+        eq = index(line, "=")
+        if (eq == 0) { print line; next }
+        k = substr(line, 1, eq - 1)
+        v = substr(line, eq + 1)
+        kk = k
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", kk)
+        if (kk in target) {
+          if (target[kk] in have) next
+          print target[kk] " =" v
+          have[target[kk]] = 1
+          next
+        }
+        print line
+      }
+    ' "$tmpd/map" "$tmpd/keys" "$f" > "$tmpd/out"
+
+    if ! cmp -s "$tmpd/out" "$f"; then
+      cat "$tmpd/out" > "$f"
+    fi
+  done < <(git ls-files --others --ignored --exclude-standard -z)
+steps: null
+postconditions:
+- name: no_stale_keys_in_ignored_files
+  description: no ignored untracked file still assigns an old key name from the rename
+    table
+  probe: |-
+    status=0
+    while IFS= read -r -d '' f; do
+      if awk -F'=' '
+        NR == FNR {
+          if ($0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*$/) next
+          o = $1
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", o)
+          if (o != "") old[o] = 1
+          next
+        }
+        {
+          line = $0
+          sub(/^[[:space:]]+/, "", line)
+          if (line == "" || substr(line, 1, 1) == "#") next
+          eq = index(line, "=")
+          if (eq == 0) next
+          k = substr(line, 1, eq - 1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+          if (k in old) found = 1
+        }
+        END { exit (found ? 0 : 1) }
+      ' config/renames.conf "$f"; then
+        echo "stale key in $f"
+        status=1
+      fi
+    done < <(git ls-files --others --ignored --exclude-standard -z)
+    exit $status
+  expect_exit: 0
+  expect_pattern: null
+- name: new_key_present_in_local_override
+  description: at least one ignored untracked file now assigns a current key name
+    from the rename table
+  probe: |-
+    while IFS= read -r -d '' f; do
+      if awk -F'=' '
+        NR == FNR {
+          if ($0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*$/) next
+          nw = $2
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", nw)
+          if (nw != "") target[nw] = 1
+          next
+        }
+        {
+          line = $0
+          sub(/^[[:space:]]+/, "", line)
+          if (line == "" || substr(line, 1, 1) == "#") next
+          eq = index(line, "=")
+          if (eq == 0) next
+          k = substr(line, 1, eq - 1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+          if (k in target) found = 1
+        }
+        END { exit (found ? 0 : 1) }
+      ' config/renames.conf "$f"; then
+        exit 0
+      fi
+    done < <(git ls-files --others --ignored --exclude-standard -z)
+    exit 1
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_tree_unchanged
+  description: the rename touched no tracked file, so the override stays out of git
+  probe: git diff --quiet && git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+variant: migrate_local
+provenance:
+  compiled_from_task: Bring my configuration up to date with the setting names the
+    app uses now. Rename the old key in my own override file, and keep that file out
+    of git.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Bring my configuration up to date with the setting names the app uses
+    now. Rename the old key in my own override file, and keep that file out of git./seed-2-config_renamed-27083
+  fault: config_renamed
+status: admitted

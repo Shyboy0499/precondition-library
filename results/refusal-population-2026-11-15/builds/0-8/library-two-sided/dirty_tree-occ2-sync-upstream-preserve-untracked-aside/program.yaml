@@ -1,0 +1,125 @@
+id: dirty_tree-occ2-sync-upstream-preserve-untracked-aside
+intent: Bring the current branch up to date with upstream while preserving local work
+  in progress; relocate untracked files that collide with upstream paths to <name>.local
+  before fast-forwarding.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_present
+  description: the upstream remote-tracking branch exists as a commit
+  probe: git rev-parse --verify --quiet '{upstream_remote}/{upstream_branch}^{commit}'
+    >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_can_fast_forward
+  description: HEAD is strictly behind the upstream branch, so a fast-forward is possible
+  probe: |-
+    git merge-base --is-ancestor HEAD '{upstream_remote}/{upstream_branch}' &&
+    test "$(git rev-parse HEAD)" != "$(git rev-parse '{upstream_remote}/{upstream_branch}')"
+  expect_exit: 0
+  expect_pattern: null
+- name: untracked_upstream_collision
+  description: at least one untracked file sits at a path tracked by upstream
+  probe: |-
+    comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git ls-tree -r --name-only -z '{upstream_remote}/{upstream_branch}' | tr '\0' '\n' | sort) |
+    grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: no_existing_local_copy
+  description: no colliding untracked file already has a .local sibling that would
+    be overwritten
+  probe: |-
+    while IFS= read -r p; do
+      if [ -e "$p.local" ] || [ -L "$p.local" ]; then
+        exit 1
+      fi
+    done < <(comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git ls-tree -r --name-only -z '{upstream_remote}/{upstream_branch}' | tr '\0' '\n' | sort))
+  expect_exit: 0
+  expect_pattern: null
+- name: local_copy_paths_not_upstream
+  description: the .local sibling path for each colliding untracked file is not itself
+    tracked by upstream
+  probe: |-
+    while IFS= read -r p; do
+      if git cat-file -e "{upstream_remote}/{upstream_branch}:$p.local" 2>/dev/null; then
+        exit 1
+      fi
+    done < <(comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git ls-tree -r --name-only -z '{upstream_remote}/{upstream_branch}' | tr '\0' '\n' | sort))
+  expect_exit: 0
+  expect_pattern: null
+- name: no_overlapping_tracked_changes
+  description: locally modified tracked paths do not overlap with paths changed by
+    upstream
+  probe: |-
+    ! comm -12 \
+      <(git diff --name-only -z HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD '{upstream_remote}/{upstream_branch}' | tr '\0' '\n' | sort) |
+    grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  set -e
+  while IFS= read -r p; do
+    if [ -e "$p.local" ] || [ -L "$p.local" ]; then
+      echo "refusing to overwrite $p.local" >&2
+      exit 1
+    fi
+    mv -- "$p" "$p.local"
+  done < <(comm -12 \
+    <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+    <(git ls-tree -r --name-only -z '{upstream_remote}/{upstream_branch}' | tr '\0' '\n' | sort))
+  git merge --ff-only '{upstream_remote}/{upstream_branch}'
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is exactly the upstream commit after the fast-forward
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse '{upstream_remote}/{upstream_branch}')"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_upstream_collisions
+  description: no untracked file remains at a path tracked by upstream
+  probe: |-
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git ls-tree -r --name-only -z '{upstream_remote}/{upstream_branch}' | tr '\0' '\n' | sort) |
+    grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: local_copy_present
+  description: at least one untracked .local sibling exists for a path now tracked
+    by upstream
+  probe: |-
+    found=0
+    while IFS= read -r p; do
+      case "$p" in
+        *.local)
+          base=${p%.local}
+          if git cat-file -e "HEAD:$base" 2>/dev/null; then
+            found=1
+            break
+          fi
+          ;;
+      esac
+    done < <(git ls-files --others -z | tr '\0' '\n' | sort)
+    [ "$found" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+variant: aside
+provenance:
+  compiled_from_task: Bring this branch up to date with upstream, but my work in progress
+    must survive. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Bring this branch up to date with upstream, but my work in progress
+    must survive. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update./seed-2-dirty_tree-29979
+  fault: dirty_tree
+status: admitted

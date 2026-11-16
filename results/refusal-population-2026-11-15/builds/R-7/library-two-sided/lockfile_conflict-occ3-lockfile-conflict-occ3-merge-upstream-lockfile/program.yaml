@@ -1,0 +1,196 @@
+id: lockfile_conflict-occ3-lockfile-conflict-occ3-merge-upstream-lockfile
+intent: Catch up with upstream by merging it into the current branch, resolving each
+  conflicted file by starting from upstream's version of that file and adding back
+  the lines the local side added, so nothing added on either side is lost and nothing
+  either side removed is revived.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_present
+  description: the upstream remote-tracking ref resolves to a commit
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[0-9a-f]+$
+- name: local_has_own_commits
+  description: HEAD has at least one commit that upstream does not have
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: upstream_has_new_commits
+  description: upstream has at least one commit that HEAD does not have
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: both_sides_touched_the_same_file
+  description: at least one path changed on both sides since the merge base
+  probe: |-
+    mb=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+    comm -12 \
+      <(git diff --name-only -z "$mb" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$mb" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) \
+      | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_ready_for_merge
+  description: the worktree is clean, or a merge is already in progress
+  probe: |-
+    test -z "$(git status --porcelain --untracked-files=no)" ||
+    test -f "$(git rev-parse --git-path MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git merge --no-edit {upstream_remote}/{upstream_branch} || true
+  conflicts=$(git diff --name-only --diff-filter=U -z | tr '\0' '\n')
+  if test -n "$conflicts"; then
+    tmpd=$(mktemp -d)
+    printf '%s\n' "$conflicts" | while IFS= read -r path; do
+      test -n "$path" || continue
+      git show ":1:$path" > "$tmpd/base" 2>/dev/null || : > "$tmpd/base"
+      git show ":2:$path" > "$tmpd/local" 2>/dev/null || : > "$tmpd/local"
+      git show ":3:$path" > "$tmpd/up" 2>/dev/null || : > "$tmpd/up"
+      if test -s "$tmpd/up"; then
+        awk -v base="$tmpd/base" -v local="$tmpd/local" -v up="$tmpd/up" 'BEGIN {
+          nb = 0
+          while ((getline line < base) > 0) {
+            nb++
+            B[nb] = line
+          }
+          close(base)
+          nl = 0
+          while ((getline line < local) > 0) {
+            nl++
+            L[nl] = line
+          }
+          close(local)
+          nu = 0
+          while ((getline line < up) > 0) {
+            nu++
+            U[nu] = line
+          }
+          close(up)
+          for (i = 1; i <= nb; i++) {
+            cnt[B[i]]++
+          }
+          for (i = 1; i <= nl; i++) {
+            if (cnt[L[i]] > 0) {
+              cnt[L[i]]--
+              added[i] = 0
+            } else {
+              added[i] = 1
+            }
+          }
+          for (i = 1; i <= nb; i++) {
+            if (cnt[B[i]] > 0) {
+              rem[B[i]] = cnt[B[i]]
+              cnt[B[i]] = 0
+            }
+          }
+          for (i = 1; i <= nl; i++) {
+            if (added[i] != 1) continue
+            p = L[i]
+            sub(/[^ \t]+[ \t]*$/, "", p)
+            if (p ~ /[^ \t]/) {
+              for (j = 1; j <= nb; j++) {
+                if (rem[B[j]] > 0) {
+                  q = B[j]
+                  sub(/[^ \t]+[ \t]*$/, "", q)
+                  if (q == p) {
+                    rem[B[j]]--
+                    added[i] = 2
+                    break
+                  }
+                }
+              }
+            }
+          }
+          for (i = 1; i <= nu; i++) {
+            if (!(U[i] in upidx)) upidx[U[i]] = i
+          }
+          for (i = 1; i <= nl; i++) {
+            if (added[i] != 1) continue
+            a = 0
+            for (j = i - 1; j >= 1; j--) {
+              if (added[j] != 0) continue
+              if (L[j] in upidx) {
+                a = upidx[L[j]]
+                break
+              }
+            }
+            if (a > 0) {
+              post[a] = post[a] L[i] "\n"
+              continue
+            }
+            for (j = i + 1; j <= nl; j++) {
+              if (added[j] != 0) continue
+              if (L[j] in upidx) {
+                a = upidx[L[j]]
+                break
+              }
+            }
+            if (a > 0) {
+              pre[a] = pre[a] L[i] "\n"
+              continue
+            }
+            tail = tail L[i] "\n"
+          }
+          for (i = 1; i <= nu; i++) {
+            if (i in pre) printf "%s", pre[i]
+            if (rem[U[i]] > 0) {
+              rem[U[i]]--
+            } else {
+              printf "%s\n", U[i]
+            }
+            if (i in post) printf "%s", post[i]
+          }
+          printf "%s", tail
+          exit
+        }' < /dev/null > "$tmpd/out"
+        cat "$tmpd/out" > "$path"
+      fi
+      git add -- "$path"
+    done
+    rm -rf "$tmpd"
+  fi
+  if test -f "$(git rev-parse --git-path MERGE_HEAD)"; then
+    git commit --no-edit
+  fi
+steps: null
+postconditions:
+- name: no_unmerged_paths
+  description: the index has no remaining unmerged entries
+  probe: test -z "$(git diff --name-only --diff-filter=U -z | tr '\0' '\n')"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_merged
+  description: the upstream tip is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: head_is_a_merge_commit
+  description: HEAD has more than one parent, so the divergence was integrated
+  probe: git rev-list --parents -n 1 HEAD
+  expect_exit: 0
+  expect_pattern: ^[0-9a-f]+ [0-9a-f]+ [0-9a-f]+
+- name: worktree_clean
+  description: nothing is left modified or untracked
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: no tracked file still contains conflict markers
+  probe: '! git grep -q -E ''^(<<<<<<<|>>>>>>>)'' -- .'
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: Catch up with upstream without losing what either side added,
+    or reviving what either side removed. Start from upstream's dependency file and
+    add back what I added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Catch up with upstream without losing what either side added, or reviving
+    what either side removed. Start from upstream's dependency file and add back what
+    I added./seed-5-lockfile_conflict-10981
+  fault: lockfile_conflict
+status: candidate

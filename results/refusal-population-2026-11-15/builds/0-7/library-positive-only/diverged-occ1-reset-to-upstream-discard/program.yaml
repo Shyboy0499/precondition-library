@@ -1,0 +1,101 @@
+id: diverged-occ1-reset-to-upstream-discard
+intent: Get the current branch back in line with upstream, discarding local commits
+  so the branch matches upstream exactly.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: is_work_tree
+  description: the command runs inside a Git working tree
+  probe: git rev-parse --is-inside-work-tree
+  expect_exit: 0
+  expect_pattern: ^true$
+- name: on_a_branch
+  description: HEAD is attached to a branch rather than detached
+  probe: git symbolic-ref --quiet --short HEAD
+  expect_exit: 0
+  expect_pattern: .+
+- name: branch_tracks_requested_upstream
+  description: the current branch's configured upstream is the requested remote branch
+  probe: test "$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}')" = "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_exists
+  description: the remote-tracking branch for the requested upstream exists locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_would_be_discarded
+  description: the current branch has at least one commit not in the upstream branch
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_has_new_commits
+  description: the upstream branch has at least one commit not in the current branch
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_worktree_clean
+  description: there are no staged or unstaged changes to tracked files
+  probe: test -z "$(git status --porcelain --untracked-files=no)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_collisions
+  description: no untracked file would be overwritten by the reset
+  probe: |-
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: no_operation_in_progress
+  description: no merge, rebase, cherry-pick, or revert is in progress
+  probe: |-
+    test ! -e "$(git rev-parse --git-path MERGE_HEAD)" && \
+    test ! -d "$(git rev-parse --git-path rebase-merge)" && \
+    test ! -d "$(git rev-parse --git-path rebase-apply)" && \
+    test ! -e "$(git rev-parse --git-path CHERRY_PICK_HEAD)" && \
+    test ! -e "$(git rev-parse --git-path REVERT_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  set -e
+  git fetch {upstream_remote}
+  git reset --hard {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is exactly the upstream branch's commit
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_local_commits_ahead
+  description: the current branch has no commits that upstream lacks
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -eq 0
+  expect_exit: 0
+  expect_pattern: null
+- name: no_upstream_commits_behind
+  description: the current branch contains every commit on the upstream branch
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -eq 0
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_worktree_clean
+  description: tracked files match the checked-out commit with no staged or unstaged
+    changes
+  probe: test -z "$(git status --porcelain --untracked-files=no)"
+  expect_exit: 0
+  expect_pattern: null
+variant: discard
+provenance:
+  compiled_from_task: 'Upstream moved ahead of me. Get me back in line with it. My
+    local commits can go: make my branch match upstream exactly.'
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: 'Upstream moved ahead of me. Get me back in line with it. My local commits
+    can go: make my branch match upstream exactly./seed-3-diverged-12454'
+  fault: diverged
+status: admitted

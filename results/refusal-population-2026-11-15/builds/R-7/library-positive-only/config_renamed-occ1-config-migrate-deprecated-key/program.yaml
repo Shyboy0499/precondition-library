@@ -1,0 +1,217 @@
+id: config_renamed-occ1-config-migrate-deprecated-key
+intent: Remove deprecated configuration key lines while preserving each setting's
+  effective value by transferring that value to the already-set replacement key, then
+  commit the change.
+parameters: []
+preconditions:
+- name: renames_mapping_file
+  description: config/renames.conf exists and declares at least one old-to-new key
+    mapping
+  probe: |-
+    test -f config/renames.conf &&
+    grep -qE '^[[:space:]]*[^#[:space:]][^=]*=' config/renames.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_key_in_config
+  description: a tracked file under config/ assigns both a deprecated key and its
+    replacement
+  probe: |-
+    set -e
+    hit=1
+    files=$(git ls-files -z | tr '\0' '\n')
+    pairs=$(grep -vE '^[[:space:]]*(#|$)' config/renames.conf | sed -E 's/[[:space:]]*=[[:space:]]*/ /' || true)
+    while IFS= read -r pair; do
+      if [ -z "$pair" ]; then
+        continue
+      fi
+      old=${pair%% *}
+      new=${pair#* }
+      if [ -z "$old" ] || [ -z "$new" ] || [ "$old" = "$new" ]; then
+        continue
+      fi
+      while IFS= read -r f; do
+        if [ -z "$f" ]; then
+          continue
+        fi
+        case "$f" in
+          config/*) ;;
+          *) continue ;;
+        esac
+        if [ "$f" = config/renames.conf ]; then
+          continue
+        fi
+        if grep -IqE "^[[:space:]]*${old}[[:space:]]*=" "$f" && grep -IqE "^[[:space:]]*${new}[[:space:]]*=" "$f"; then
+          hit=0
+          break
+        fi
+      done <<< "$files"
+      if [ "$hit" -eq 0 ]; then
+        break
+      fi
+    done <<< "$pairs"
+    [ "$hit" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: the repository has no staged, unstaged, or untracked changes before
+    migration
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  set -euo pipefail
+
+  renames=config/renames.conf
+  tmpd=$(mktemp -d)
+  trap 'rm -rf "$tmpd"' EXIT
+
+  grep -vE '^[[:space:]]*(#|$)' "$renames" | sed -E 's/[[:space:]]*=[[:space:]]*/ /' > "$tmpd/pairs" || true
+  git ls-files -z | tr '\0' '\n' > "$tmpd/files"
+
+  while IFS= read -r pair; do
+    if [ -z "$pair" ]; then
+      continue
+    fi
+    old=${pair%% *}
+    new=${pair#* }
+    if [ -z "$old" ] || [ -z "$new" ] || [ "$old" = "$new" ]; then
+      continue
+    fi
+    while IFS= read -r f; do
+      if [ -z "$f" ]; then
+        continue
+      fi
+      case "$f" in
+        config/*) ;;
+        *) continue ;;
+      esac
+      if [ "$f" = "$renames" ]; then
+        continue
+      fi
+      if grep -IqE "^[[:space:]]*${old}[[:space:]]*=" "$f" && grep -IqE "^[[:space:]]*${new}[[:space:]]*=" "$f"; then
+        awk -v old="$old" -v new="$new" '
+          {
+            lines[NR]=$0
+            if ($0 ~ ("^[[:space:]]*" old "[[:space:]]*=")) {
+              last_old=NR
+              oldval=$0
+              sub(/^[^=]*=[[:space:]]*/, "", oldval)
+            }
+            if ($0 ~ ("^[[:space:]]*" new "[[:space:]]*=")) {
+              last_new=NR
+            }
+          }
+          END {
+            if (last_old > last_new) {
+              l=lines[last_new]
+              sub(/=.*/, "", l)
+              lines[last_new]=l "= " oldval
+            }
+            for (i=1; i<=NR; i++) {
+              if (lines[i] ~ ("^[[:space:]]*" old "[[:space:]]*=")) {
+                continue
+              }
+              print lines[i]
+            }
+          }
+        ' "$f" > "$tmpd/out"
+        cat "$tmpd/out" > "$f"
+      fi
+    done < "$tmpd/files"
+  done < "$tmpd/pairs"
+
+  git add -u
+  if ! git diff --cached --quiet; then
+    git commit -m "config: migrate deprecated keys to their new names"
+  fi
+steps: null
+postconditions:
+- name: stale_pair_removed
+  description: no tracked config file under config/ still assigns both a deprecated
+    key and its replacement
+  probe: |-
+    set -e
+    files=$(git ls-files -z | tr '\0' '\n')
+    pairs=$(grep -vE '^[[:space:]]*(#|$)' config/renames.conf | sed -E 's/[[:space:]]*=[[:space:]]*/ /' || true)
+    while IFS= read -r pair; do
+      if [ -z "$pair" ]; then
+        continue
+      fi
+      old=${pair%% *}
+      new=${pair#* }
+      if [ -z "$old" ] || [ -z "$new" ] || [ "$old" = "$new" ]; then
+        continue
+      fi
+      while IFS= read -r f; do
+        if [ -z "$f" ]; then
+          continue
+        fi
+        case "$f" in
+          config/*) ;;
+          *) continue ;;
+        esac
+        if [ "$f" = config/renames.conf ]; then
+          continue
+        fi
+        if grep -IqE "^[[:space:]]*${old}[[:space:]]*=" "$f" && grep -IqE "^[[:space:]]*${new}[[:space:]]*=" "$f"; then
+          exit 1
+        fi
+      done <<< "$files"
+    done <<< "$pairs"
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: effective_values_preserved
+  description: the effective value of every renamed setting matches the parent commit's
+    effective value
+  probe: |-
+    set -e
+    files=$(git ls-files -z | tr '\0' '\n')
+    pairs=$(grep -vE '^[[:space:]]*(#|$)' config/renames.conf | sed -E 's/[[:space:]]*=[[:space:]]*/ /' || true)
+    while IFS= read -r pair; do
+      if [ -z "$pair" ]; then
+        continue
+      fi
+      old=${pair%% *}
+      new=${pair#* }
+      if [ -z "$old" ] || [ -z "$new" ] || [ "$old" = "$new" ]; then
+        continue
+      fi
+      while IFS= read -r f; do
+        if [ -z "$f" ]; then
+          continue
+        fi
+        case "$f" in
+          config/*) ;;
+          *) continue ;;
+        esac
+        if [ "$f" = config/renames.conf ]; then
+          continue
+        fi
+        before=$(git show "HEAD~1:$f" 2>/dev/null | grep -E "^[[:space:]]*(${old}|${new})[[:space:]]*=" | tail -n 1 | sed -E 's/^[^=]*=[[:space:]]*//' || true)
+        after=$(grep -E "^[[:space:]]*(${old}|${new})[[:space:]]*=" "$f" | tail -n 1 | sed -E 's/^[^=]*=[[:space:]]*//' || true)
+        if [ "$before" != "$after" ]; then
+          exit 1
+        fi
+      done <<< "$files"
+    done <<< "$pairs"
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after
+  description: the migration is committed and leaves no pending changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: migrate_local
+provenance:
+  compiled_from_task: The app keeps warning that my config uses old setting names.
+    Make the warning go away without changing what the settings do. The new name is
+    already set too, so delete the old key's line and keep the new one.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: The app keeps warning that my config uses old setting names. Make the
+    warning go away without changing what the settings do. The new name is already
+    set too, so delete the old key's line and keep the new one./seed-23-config_renamed-10981
+  fault: config_renamed
+status: admitted

@@ -1,0 +1,172 @@
+id: config_renamed-occ3-drop-old-config-keys
+intent: Remove deprecated config keys only from files where the replacement key is
+  already set, preserving the new key and committing the deletion.
+parameters: []
+preconditions:
+- name: has_config_rename_map
+  description: config/renames.conf exists and contains at least one old = new mapping
+  probe: test -f config/renames.conf && awk -F= '!/^[[:space:]]*#/ { old=$1; new=$2;
+    gsub(/^[[:space:]]+|[[:space:]]+$/, "", old); gsub(/^[[:space:]]+|[[:space:]]+$/,
+    "", new); if (old != "" && new != "") found=1 } END { exit found?0:1 }' config/renames.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: has_duplicate_old_and_new_key
+  description: a tracked config file sets both an old key and its replacement new
+    key
+  probe: |-
+    set -e
+    base=$(dirname config/renames.conf)
+    found=0
+    has_key() {
+      awk -v key="$1" '
+        {
+          line=$0
+          eq=index(line, "=")
+          if (eq>0) {
+            k=substr(line,1,eq-1)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+            if (k==key) { found=1; exit }
+          }
+        }
+        END { exit found?0:1 }
+      ' "$2"
+    }
+    while IFS=$'\t' read -r old new; do
+      [ -n "$old" ] || continue
+      while IFS= read -r -d '' f; do
+        [ "$f" = "config/renames.conf" ] && continue
+        [ -f "$f" ] && [ ! -L "$f" ] || continue
+        if has_key "$new" "$f" && has_key "$old" "$f"; then
+          found=1
+          break 2
+        fi
+      done < <(git ls-files -z -- "$base")
+    done < <(awk -F'=' '!/^[[:space:]]*#/ { old=$1; new=$2; gsub(/^[[:space:]]+|[[:space:]]+$/, "", old); gsub(/^[[:space:]]+|[[:space:]]+$/, "", new); if (old != "" && new != "") print old "\t" new }' config/renames.conf)
+    [ "$found" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: the repository has no staged, unstaged, or untracked changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+  renames=config/renames.conf
+  base=$(dirname "$renames")
+  mapfile -t mappings < <(awk -F'=' '!/^[[:space:]]*#/ { old=$1; new=$2; gsub(/^[[:space:]]+|[[:space:]]+$/, "", old); gsub(/^[[:space:]]+|[[:space:]]+$/, "", new); if (old != "" && new != "") print old "\t" new }' "$renames")
+
+  has_key() {
+    awk -v key="$1" '
+      {
+        line=$0
+        eq=index(line, "=")
+        if (eq>0) {
+          k=substr(line,1,eq-1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+          if (k==key) { found=1; exit }
+        }
+      }
+      END { exit found?0:1 }
+    ' "$2"
+  }
+
+  changed_files=()
+  while IFS= read -r -d '' f; do
+    [ "$f" = "$renames" ] && continue
+    [ -f "$f" ] && [ ! -L "$f" ] || continue
+    file_changed=0
+    for mapping in "${mappings[@]}"; do
+      old=${mapping%%$'\t'*}
+      new=${mapping#*$'\t'}
+      if has_key "$new" "$f" && has_key "$old" "$f"; then
+        tmp=$(mktemp)
+        awk -v old="$old" '
+          {
+            line=$0
+            eq=index(line, "=")
+            if (eq>0) {
+              k=substr(line,1,eq-1)
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+              if (k==old) next
+            }
+            print
+          }
+        ' "$f" > "$tmp"
+        cat "$tmp" > "$f"
+        rm -f "$tmp"
+        file_changed=1
+      fi
+    done
+    if [ "$file_changed" -eq 1 ]; then
+      changed_files+=("$f")
+    fi
+  done < <(git ls-files -z -- "$base")
+
+  if [ "${#changed_files[@]}" -eq 0 ]; then
+    echo "no stale duplicate config keys found" >&2
+    exit 1
+  fi
+
+  git add -- "${changed_files[@]}"
+  git commit -m "fix(config): remove deprecated setting names"
+steps: null
+postconditions:
+- name: no_duplicate_old_and_new_keys
+  description: no tracked config file still sets both an old key and its replacement
+    new key
+  probe: |-
+    set -e
+    base=$(dirname config/renames.conf)
+    bad=0
+    has_key() {
+      awk -v key="$1" '
+        {
+          line=$0
+          eq=index(line, "=")
+          if (eq>0) {
+            k=substr(line,1,eq-1)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+            if (k==key) { found=1; exit }
+          }
+        }
+        END { exit found?0:1 }
+      ' "$2"
+    }
+    while IFS=$'\t' read -r old new; do
+      [ -n "$old" ] || continue
+      while IFS= read -r -d '' f; do
+        [ "$f" = "config/renames.conf" ] && continue
+        [ -f "$f" ] && [ ! -L "$f" ] || continue
+        if has_key "$new" "$f" && has_key "$old" "$f"; then
+          bad=1
+          break 2
+        fi
+      done < <(git ls-files -z -- "$base")
+    done < <(awk -F'=' '!/^[[:space:]]*#/ { old=$1; new=$2; gsub(/^[[:space:]]+|[[:space:]]+$/, "", old); gsub(/^[[:space:]]+|[[:space:]]+$/, "", new); if (old != "" && new != "") print old "\t" new }' config/renames.conf)
+    [ "$bad" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: change_is_deletion_only
+  description: the new commit removes lines and adds none, so existing values are
+    preserved
+  probe: '! git diff --unified=0 HEAD^ HEAD | grep -E ''^\+[^+]'''
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_commit
+  description: the removal is committed and the working tree is clean
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: drop_old
+provenance:
+  compiled_from_task: The app keeps warning that my config uses old setting names.
+    Make the warning go away without changing what the settings do. The new name is
+    already set too, so delete the old key's line and keep the new one.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: The app keeps warning that my config uses old setting names. Make the
+    warning go away without changing what the settings do. The new name is already
+    set too, so delete the old key's line and keep the new one./seed-23-config_renamed-19837
+  fault: config_renamed
+status: admitted

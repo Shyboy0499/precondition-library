@@ -1,0 +1,70 @@
+id: dirty_tree-occ2-sync-upstream-commit-local-work
+intent: Commit everything the user has not saved yet, then bring the current branch
+  up to date with upstream by merging, preserving both the local and upstream changes.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: has_dirty_worktree
+  description: The working tree has uncommitted changes (tracked modifications or
+    untracked files) that the user wants kept.
+  probe: test -n "$(git status --porcelain -z | tr '\0' '\n')"
+  expect_exit: 0
+  expect_pattern: null
+- name: on_a_branch
+  description: HEAD is attached to a local branch, so committing and merging advance
+    a branch rather than leaving a detached commit.
+  probe: git symbolic-ref -q HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_remote_configured
+  description: The named upstream remote exists in this repository.
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_has_new_commits
+  description: The remote-tracking ref for the upstream branch has commits the current
+    branch does not contain, so bringing it up to date is meaningful.
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: no_merge_in_progress
+  description: No conflicted merge or unfinished rebase is already in progress, so
+    a fresh commit followed by a merge is the right move.
+  probe: '! git rev-parse -q --verify MERGE_HEAD && test ! -d "$(git rev-parse --git-path
+    rebase-merge)" && test ! -d "$(git rev-parse --git-path rebase-apply)"'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git add -A
+  git commit -m "chore: save in-progress work"
+  git fetch {upstream_remote}
+  git merge {upstream_remote}/{upstream_branch} --no-edit
+steps: null
+postconditions:
+- name: worktree_clean
+  description: Everything that was uncommitted is now recorded in a commit.
+  probe: test -z "$(git status --porcelain -z | tr '\0' '\n')"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_contained
+  description: HEAD contains upstream's tip after the merge.
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_work_preserved
+  description: HEAD is ahead of upstream, so the commit holding the user's unsaved
+    work survived the merge in history.
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+variant: commit
+provenance:
+  compiled_from_task: Get the latest from upstream here, and keep every change I have
+    not saved yet. Commit my uncommitted work first, then bring the branch up to date.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get the latest from upstream here, and keep every change I have not
+    saved yet. Commit my uncommitted work first, then bring the branch up to date./seed-1-dirty_tree-29980
+  fault: dirty_tree
+status: admitted

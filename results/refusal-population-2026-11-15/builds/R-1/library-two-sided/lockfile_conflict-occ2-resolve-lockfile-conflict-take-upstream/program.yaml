@@ -1,0 +1,191 @@
+id: lockfile_conflict-occ2-resolve-lockfile-conflict-take-upstream
+intent: Catch up with the upstream branch by merging it into the current branch, and
+  resolve the resulting conflict in the dependency lock file by starting from upstream's
+  version of that file (so every upstream addition survives and every upstream removal
+  stays removed) and re-adding the package entries the local side added, then committing
+  the merge. The program only fires when the conflict is confined to lock-shaped dependency
+  files, when the local side removed no entry that upstream still lists (otherwise
+  the keep-local resolution is the correct one), and when upstream did remove an entry
+  that the local side still lists, so that taking upstream's file is the meaningful
+  direction.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_exists
+  description: the upstream remote-tracking branch resolves to a commit
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}^{commit}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ahead_of_local
+  description: upstream has at least one commit the current branch lacks
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: local_ahead_of_upstream
+  description: the current branch has at least one commit upstream lacks
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: worktree_clean
+  description: no staged, unstaged or untracked changes are present
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: no merge is already in progress
+  probe: test ! -e "$(git rev-parse --git-path MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: shared_changes_are_lock_shaped
+  description: at least one file changed on both sides since the merge base exists,
+    and every such shared file is a lock-shaped dependency file listing quoted package
+    entries, so this program's lock-file resolution rule applies
+  probe: |-
+    mb=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    up={upstream_remote}/{upstream_branch}
+    shared=$(comm -12 <(git diff --name-only -z "$mb" HEAD | tr '\0' '\n' | sort) <(git diff --name-only -z "$mb" "$up" | tr '\0' '\n' | sort))
+    [ -n "$shared" ] || exit 1
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      git show "$up:$f" 2>/dev/null | grep -Eq '^[[:space:]]*"[^"]+ [0-9]+\.[0-9]+' || exit 1
+    done <<< "$shared"
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: local_added_entry_and_upstream_removed_one
+  description: on the shared lock file the local side added a package entry that is
+    in neither the merge base nor upstream, and upstream removed a package entry that
+    the local side still lists, so upstream's file is the base to start from and the
+    local addition is what has to be added back
+  probe: |-
+    mb=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    up={upstream_remote}/{upstream_branch}
+    shared=$(comm -12 <(git diff --name-only -z "$mb" HEAD | tr '\0' '\n' | sort) <(git diff --name-only -z "$mb" "$up" | tr '\0' '\n' | sort))
+    [ -n "$shared" ] || exit 1
+    added=0
+    removed=0
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      base=$(git show "$mb:$f" 2>/dev/null | grep -E '^[[:space:]]*"[^"]+ [0-9]+\.[0-9]+' | sort -u)
+      loc=$(git show "HEAD:$f" 2>/dev/null | grep -E '^[[:space:]]*"[^"]+ [0-9]+\.[0-9]+' | sort -u)
+      upl=$(git show "$up:$f" 2>/dev/null | grep -E '^[[:space:]]*"[^"]+ [0-9]+\.[0-9]+' | sort -u)
+      if comm -23 <(printf '%s\n' "$loc") <(printf '%s\n' "$base") | comm -23 - <(printf '%s\n' "$upl") | grep -qv '^$'; then
+        added=1
+      fi
+      if comm -23 <(printf '%s\n' "$base") <(printf '%s\n' "$upl") | comm -12 - <(printf '%s\n' "$loc") | grep -qv '^$'; then
+        removed=1
+      fi
+    done <<< "$shared"
+    [ "$added" -eq 1 ] && [ "$removed" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: local_removes_no_upstream_entry
+  description: the local side did not drop any package entry that upstream still lists,
+    so starting from upstream's file revives nothing the local side removed
+  probe: |-
+    mb=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    up={upstream_remote}/{upstream_branch}
+    shared=$(comm -12 <(git diff --name-only -z "$mb" HEAD | tr '\0' '\n' | sort) <(git diff --name-only -z "$mb" "$up" | tr '\0' '\n' | sort))
+    [ -n "$shared" ] || exit 1
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      base=$(git show "$mb:$f" 2>/dev/null | grep -E '^[[:space:]]*"[^"]+ [0-9]+\.[0-9]+' | sort -u)
+      loc=$(git show "HEAD:$f" 2>/dev/null | grep -E '^[[:space:]]*"[^"]+ [0-9]+\.[0-9]+' | sort -u)
+      upl=$(git show "$up:$f" 2>/dev/null | grep -E '^[[:space:]]*"[^"]+ [0-9]+\.[0-9]+' | sort -u)
+      if comm -23 <(printf '%s\n' "$base") <(printf '%s\n' "$loc") | comm -12 - <(printf '%s\n' "$upl") | grep -qv '^$'; then
+        exit 1
+      fi
+    done <<< "$shared"
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  up="{upstream_remote}/{upstream_branch}"
+  tmp=$(mktemp -d) || exit 1
+  git merge --no-edit "$up" >/dev/null 2>&1 || true
+  git diff --name-only --diff-filter=U -z | tr '\0' '\n' > "$tmp/conflicted"
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    if git rev-parse -q --verify ":1:$f" >/dev/null 2>&1 \
+       && git rev-parse -q --verify ":2:$f" >/dev/null 2>&1 \
+       && git rev-parse -q --verify ":3:$f" >/dev/null 2>&1; then
+      git cat-file blob ":3:$f" > "$tmp/upstream"
+      git cat-file blob ":1:$f" > "$tmp/base"
+      git cat-file blob ":2:$f" > "$tmp/local"
+      git merge-file -p --ours "$tmp/upstream" "$tmp/base" "$tmp/local" > "$tmp/merged" 2>/dev/null || true
+      if [ -s "$tmp/merged" ]; then
+        cat "$tmp/merged" > "$f"
+        git add -- "$f"
+      else
+        git checkout --theirs -- "$f" >/dev/null 2>&1 && git add -- "$f"
+      fi
+    elif git rev-parse -q --verify ":3:$f" >/dev/null 2>&1; then
+      git checkout --theirs -- "$f" >/dev/null 2>&1 && git add -- "$f"
+    else
+      git rm -q -f -- "$f" >/dev/null 2>&1 || true
+    fi
+  done < "$tmp/conflicted"
+  rm -rf "$tmp"
+  if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+    git commit --no-edit >/dev/null
+  fi
+steps: null
+postconditions:
+- name: upstream_merged
+  description: upstream's tip is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_commit_recorded
+  description: HEAD is a merge commit with an upstream second parent
+  probe: git rev-parse -q --verify HEAD^2
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_entries
+  description: the index holds no unmerged paths
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: no leftover conflict marker remains in any tracked file
+  probe: '! git grep -q -e ''^<<<<<<< '' -e ''^>>>>>>> '' -- .'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after
+  description: no uncommitted changes remain after the merge commit
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: lock_entries_match_upstream_plus_local_additions
+  description: for every file changed on both sides, the merged entry set equals upstream's
+    entries plus the entries the local side added over the merge base, so nothing
+    upstream removed was revived and nothing either side added was lost
+  probe: |-
+    mb=$(git merge-base HEAD^1 HEAD^2) || exit 1
+    shared=$(comm -12 <(git diff --name-only -z "$mb" HEAD^1 | tr '\0' '\n' | sort) <(git diff --name-only -z "$mb" HEAD^2 | tr '\0' '\n' | sort))
+    [ -n "$shared" ] || exit 1
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      base=$(git show "$mb:$f" 2>/dev/null | grep -E '^[[:space:]]*"[^"]+ [0-9]+\.[0-9]+' | sort -u)
+      loc=$(git show "HEAD^1:$f" 2>/dev/null | grep -E '^[[:space:]]*"[^"]+ [0-9]+\.[0-9]+' | sort -u)
+      upl=$(git show "HEAD^2:$f" 2>/dev/null | grep -E '^[[:space:]]*"[^"]+ [0-9]+\.[0-9]+' | sort -u)
+      got=$(git show "HEAD:$f" 2>/dev/null | grep -E '^[[:space:]]*"[^"]+ [0-9]+\.[0-9]+' | sort -u)
+      want=$( { printf '%s\n' "$upl"; comm -23 <(printf '%s\n' "$loc") <(printf '%s\n' "$base"); } | grep -v '^$' | sort -u )
+      [ "$want" = "$got" ] || exit 1
+    done <<< "$shared"
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: Catch up with upstream without losing what either side added,
+    or reviving what either side removed. Start from upstream's dependency file and
+    add back what I added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Catch up with upstream without losing what either side added, or reviving
+    what either side removed. Start from upstream's dependency file and add back what
+    I added./seed-5-lockfile_conflict-214
+  fault: lockfile_conflict
+status: candidate

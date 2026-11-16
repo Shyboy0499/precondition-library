@@ -1,0 +1,204 @@
+id: lockfile_conflict-occ1-merge-upstream-keep-lock-removals
+intent: Update the current branch from upstream, resolving dependency-file conflicts
+  by keeping local removals and local additions while adding upstream's additions.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: clean_worktree
+  description: the working tree and index are clean before the merge
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: on_attached_branch
+  description: HEAD is attached to a branch so the merge commit advances it
+  probe: git symbolic-ref -q HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: deps_lock_tracked
+  description: the dependency file exists in HEAD
+  probe: git cat-file -e HEAD:deps.lock
+  expect_exit: 0
+  expect_pattern: null
+- name: deps_lock_in_upstream
+  description: the dependency file exists in the upstream branch
+  probe: git cat-file -e {upstream_remote}/{upstream_branch}:deps.lock
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_remote_exists
+  description: the configured upstream remote exists
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_exists
+  description: the upstream remote-tracking branch is present
+  probe: git rev-parse --verify "refs/remotes/{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_diverged
+  description: local and upstream each have commits the other lacks
+  probe: |-
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0 &&
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: deps_lock_touched_on_both_sides
+  description: both local and upstream changed deps.lock since their merge base
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+    test -n "$base" &&
+    git diff --name-only -z "$base" HEAD | tr '\0' '\n' | grep -qx 'deps.lock' &&
+    git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | grep -qx 'deps.lock'
+  expect_exit: 0
+  expect_pattern: null
+- name: local_removal_and_upstream_addition_exist
+  description: local removed a dependency line that upstream still has, and upstream
+    added something
+  probe: |-
+    python3 - <<'PY'
+    import subprocess, sys
+    def lines(rev):
+        r = subprocess.run(['git', 'show', rev + ':deps.lock'], capture_output=True, text=True)
+        if r.returncode != 0:
+            sys.exit(1)
+        return r.stdout.splitlines()
+    mb = subprocess.run(['git', 'merge-base', 'HEAD', '{upstream_remote}/{upstream_branch}'], capture_output=True, text=True)
+    if mb.returncode != 0:
+        sys.exit(1)
+    base = lines(mb.stdout.strip())
+    local = lines('HEAD')
+    upstream = lines('{upstream_remote}/{upstream_branch}')
+    removed = set(base) - set(local)
+    if not removed:
+        sys.exit(1)
+    if not (removed & set(upstream)):
+        sys.exit(1)
+    if not (set(upstream) - set(base)):
+        sys.exit(1)
+    sys.exit(0)
+    PY
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: there is no existing merge to resolve
+  probe: '! git rev-parse -q --verify MERGE_HEAD'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git merge --no-commit --no-edit {upstream_remote}/{upstream_branch} || true
+  if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+    python3 - <<'PY'
+  import subprocess, difflib
+  path = 'deps.lock'
+  def show(stage):
+      r = subprocess.run(['git', 'show', ':' + str(stage) + ':' + path], capture_output=True, text=True)
+      if r.returncode != 0:
+          return None
+      return r.stdout.splitlines(keepends=True)
+  base = show(1) or []
+  ours = show(2) or []
+  theirs = show(3) or []
+  if not theirs:
+      raise SystemExit(0)
+  removed = set(base) - set(ours)
+  result = [line for line in theirs if line not in removed]
+  sm = difflib.SequenceMatcher(None, base, ours)
+  for tag, i1, i2, j1, j2 in sm.get_opcodes():
+      if tag == 'insert':
+          added = ours[j1:j2]
+          if i1 == 0:
+              pos = 0
+          else:
+              anchor = base[i1-1]
+              positions = [k for k, line in enumerate(result) if line == anchor]
+              pos = positions[-1] + 1 if positions else len(result)
+          result[pos:pos] = added
+      elif tag == 'replace':
+          old = base[i1:i2]
+          repl = ours[j1:j2]
+          if not old:
+              continue
+          pos = None
+          for k in range(len(result) - len(old) + 1):
+              if result[k:k+len(old)] == old:
+                  pos = k
+                  break
+          if pos is not None:
+              result[pos:pos+len(old)] = repl
+  with open(path, 'w', encoding='utf-8') as f:
+      f.write(''.join(result))
+  PY
+    git add deps.lock
+    git commit --no-edit -m "Merge {upstream_remote}/{upstream_branch} into $(git symbolic-ref --short HEAD); resolve deps.lock"
+  fi
+steps: null
+postconditions:
+- name: merge_commit_created
+  description: HEAD is a merge commit with two parents
+  probe: test "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 3
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_merge
+  description: the merge is committed and leaves no changes behind
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_entries
+  description: the index has no conflict stages left
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+- name: deps_lock_merge_preserves_local_and_upstream
+  description: local removals stay removed, local additions remain, and upstream additions
+    are present
+  probe: |-
+    python3 - <<'PY'
+    import subprocess, sys, difflib
+    def lines(rev):
+        r = subprocess.run(['git', 'show', rev + ':deps.lock'], capture_output=True, text=True)
+        if r.returncode != 0:
+            sys.exit(1)
+        return r.stdout.splitlines()
+    head = lines('HEAD')
+    local = lines('HEAD^1')
+    upstream = lines('HEAD^2')
+    mb = subprocess.run(['git', 'merge-base', 'HEAD^1', 'HEAD^2'], capture_output=True, text=True)
+    if mb.returncode != 0:
+        sys.exit(1)
+    base = lines(mb.stdout.strip())
+    head_set = set(head)
+    local_set = set(local)
+    up_set = set(upstream)
+    base_set = set(base)
+    if (base_set - local_set) & head_set:
+        sys.exit(1)
+    if not ((up_set - base_set) <= head_set):
+        sys.exit(1)
+    def pure_insertions(a, b):
+        out = set()
+        for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b).get_opcodes():
+            if tag == 'insert':
+                out.update(b[j1:j2])
+        return out
+    if not (pure_insertions(base, local) <= head_set):
+        sys.exit(1)
+    for line in head:
+        if line.startswith('<<<<<<<') or line.startswith('=======') or line.startswith('>>>>>>>'):
+            sys.exit(1)
+    sys.exit(0)
+    PY
+  expect_exit: 0
+  expect_pattern: null
+variant: keep_local
+provenance:
+  compiled_from_task: Update this branch from upstream and make sure the dependency
+    list still makes sense. Keep my dependency file, with what I removed still removed,
+    and add what upstream added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Update this branch from upstream and make sure the dependency list still
+    makes sense. Keep my dependency file, with what I removed still removed, and add
+    what upstream added./seed-2-lockfile_conflict-213
+  fault: lockfile_conflict
+status: admitted

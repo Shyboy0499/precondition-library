@@ -1,0 +1,99 @@
+id: diverged-occ3-diverged-sync-branch-discard-to-upstream
+intent: Make the current branch match the upstream branch exactly, discarding local-only
+  commits that change no tracked content
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_a_branch
+  description: HEAD is attached to a local branch, so resetting moves a branch rather
+    than a detached HEAD
+  probe: git symbolic-ref -q HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: remote_exists
+  description: the named upstream remote is configured in this repository
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_present
+  description: a remote-tracking ref for the upstream branch already exists locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_tracks_upstream
+  description: the current branch's configured upstream is exactly the named remote
+    branch
+  probe: git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}'
+  expect_exit: 0
+  expect_pattern: ^{upstream_remote}/{upstream_branch}$
+- name: upstream_default_branch_matches
+  description: the remote's advertised default branch, when advertised, is the branch
+    being synced and not a renamed branch
+  probe: '[ -z "$(git symbolic-ref -q --short refs/remotes/{upstream_remote}/HEAD)"
+    ] || [ "$(git symbolic-ref --short refs/remotes/{upstream_remote}/HEAD)" = "{upstream_remote}/{upstream_branch}"
+    ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_carry_no_content
+  description: the local-only commits change no tracked content relative to the merge
+    base, so discarding them yields the same tree that merging or rebasing would yield
+  probe: git diff --quiet "$(git merge-base HEAD {upstream_remote}/{upstream_branch})"
+    HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_to_discard
+  description: the current branch carries at least one commit that upstream does not
+    have
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: upstream_commits_to_take
+  description: the upstream branch has at least one commit that the current branch
+    does not have
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: worktree_clean
+  description: no tracked or untracked changes are present that a hard reset would
+    clobber
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  git fetch {upstream_remote}
+  git reset --hard {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is the same commit as the upstream branch tip
+  probe: '[ "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+    ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_local_commits_ahead
+  description: the branch has no commits that upstream lacks
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^0$
+- name: worktree_clean_after
+  description: the working tree is clean once the branch has been moved
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_still_tracks_upstream
+  description: the branch still resolves its configured upstream to the named remote
+    branch
+  probe: git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}'
+  expect_exit: 0
+  expect_pattern: ^{upstream_remote}/{upstream_branch}$
+variant: discard
+provenance:
+  compiled_from_task: 'Upstream moved ahead of me. Get me back in line with it. My
+    local commits can go: make my branch match upstream exactly.'
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: 'Upstream moved ahead of me. Get me back in line with it. My local commits
+    can go: make my branch match upstream exactly./seed-3-diverged-17967'
+  fault: diverged
+status: admitted

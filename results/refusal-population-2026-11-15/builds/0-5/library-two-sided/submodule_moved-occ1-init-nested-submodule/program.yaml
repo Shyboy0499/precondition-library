@@ -1,0 +1,48 @@
+id: submodule_moved-occ1-init-nested-submodule
+intent: Initialise the nested repository declared as a submodule and check it out
+  at the commit recorded by the parent repository.
+parameters:
+- submodule_path
+preconditions:
+- name: submodule_declared
+  description: .gitmodules declares the nested repository at submodule_path
+  probe: test "$(git config --file .gitmodules --get "submodule.{submodule_path}.path")"
+    = "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_is_uninitialised
+  description: git submodule status marks the nested repository as not yet checked
+    out
+  probe: test "$(git submodule status -- "{submodule_path}" | cut -c1)" = "-"
+  expect_exit: 0
+  expect_pattern: null
+- name: gitlink_present
+  description: HEAD records the nested path as a submodule commit
+  probe: test "$(git ls-tree HEAD -- "{submodule_path}" | cut -d' ' -f1)" = "160000"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git submodule update --init -- "{submodule_path}"
+steps: null
+postconditions:
+- name: submodule_initialised
+  description: git submodule status no longer marks the nested repository as uninitialised
+  probe: test "$(git submodule status -- "{submodule_path}" | cut -c1)" = " "
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_matches_gitlink
+  description: the nested repository HEAD equals the parent's recorded gitlink commit
+  probe: test "$(git -C "{submodule_path}" rev-parse HEAD)" = "$(git ls-tree HEAD
+    -- "{submodule_path}" | cut -d' ' -f3)"
+  expect_exit: 0
+  expect_pattern: null
+variant: init
+provenance:
+  compiled_from_task: A nested repository in this project needs bringing into line.
+    Initialise the nested repository and check it out.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: A nested repository in this project needs bringing into line. Initialise
+    the nested repository and check it out./seed-4-submodule_moved-19837
+  fault: submodule_moved
+status: candidate

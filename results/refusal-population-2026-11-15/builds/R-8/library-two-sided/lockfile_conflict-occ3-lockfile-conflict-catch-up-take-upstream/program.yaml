@@ -1,0 +1,206 @@
+id: lockfile_conflict-occ3-lockfile-conflict-catch-up-take-upstream
+intent: Catch up with upstream by starting from upstream's dependency file, without
+  losing what either side added or reviving what either side removed, then re-adding
+  the local additions and applying the local removals.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_exists
+  description: the upstream tracking ref exists
+  probe: git rev-parse --verify {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: local_ahead
+  description: the local branch has at least one commit not in upstream
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: upstream_ahead
+  description: upstream has at least one commit not in the local branch
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: clean_or_merge
+  description: the worktree is clean, or a merge is in progress whose only conflicted
+    file is deps.lock
+  probe: test -z "$(git status --porcelain)" || { test -e .git/MERGE_HEAD && test
+    -z "$(git diff --name-only --diff-filter=U | grep -v '^deps\.lock$')"; }
+  expect_exit: 0
+  expect_pattern: null
+- name: deps_lock_on_both_sides
+  description: deps.lock exists both on the local branch and on upstream
+  probe: git cat-file -e HEAD:deps.lock && git cat-file -e {upstream_remote}/{upstream_branch}:deps.lock
+  expect_exit: 0
+  expect_pattern: null
+- name: local_changed_deps_lock
+  description: the local side changed deps.lock relative to the merge base
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+    test -n "$(git diff --name-only "$base" HEAD -- deps.lock)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_changed_deps_lock
+  description: the upstream side changed deps.lock relative to the merge base
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+    test -n "$(git diff --name-only "$base" {upstream_remote}/{upstream_branch} -- deps.lock)"
+  expect_exit: 0
+  expect_pattern: null
+- name: only_deps_lock_overlap
+  description: deps.lock is the only file both sides changed
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+    test -z "$(comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) \
+      | grep -vx 'deps.lock')"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+
+  upstream_ref="{upstream_remote}/{upstream_branch}"
+  file=deps.lock
+
+  tmp=$(mktemp -d)
+  trap 'rm -rf "$tmp"' EXIT
+
+  git fetch {upstream_remote} >/dev/null 2>&1 || true
+
+  base=$(git merge-base HEAD "$upstream_ref")
+
+  git show "$base:$file" > "$tmp/base"
+  git show "HEAD:$file" > "$tmp/local"
+  git show "$upstream_ref:$file" > "$tmp/upstream"
+
+  git diff --no-index -U0 "$tmp/base" "$tmp/local" > "$tmp/local.diff" || true
+
+  awk '
+    /^@@ / { if (hunk != "" && !bad) printf "%s", hunk; hunk=""; bad=0; next }
+    /^\+/ && !/^\+\+\+/ { hunk = hunk substr($0,2) "\n"; next }
+    /^-/ && !/^---/ { bad=1; next }
+    END { if (hunk != "" && !bad) printf "%s", hunk }
+  ' "$tmp/local.diff" > "$tmp/adds"
+
+  awk '
+    /^@@ / { if (hunk != "" && plus == 0 && minus > 0) printf "%s", hunk; hunk=""; plus=0; minus=0; next }
+    /^\+/ && !/^\+\+\+/ { plus=1; next }
+    /^-/ && !/^---/ { hunk = hunk substr($0,2) "\n"; minus=1; next }
+    END { if (hunk != "" && plus == 0 && minus > 0) printf "%s", hunk }
+  ' "$tmp/local.diff" > "$tmp/dels"
+
+  awk -v adds="$tmp/adds" '
+    BEGIN { n=0; while ((getline l < adds) > 0) if (l != "") a[++n]=l }
+    {
+      line[NR]=$0
+      if ($0 ~ /^[[:space:]]*packages[[:space:]]*=/) start=NR
+      if (start && NR > start && $0 ~ /^[[:space:]]*\][[:space:]]*$/) end=NR
+    }
+    END {
+      for (i=1;i<=NR;i++) {
+        if (end && i==end) {
+          for (j=1;j<=n;j++) {
+            if (a[j]=="") continue
+            found=0
+            for (k=1;k<=NR;k++) if (line[k]==a[j]) { found=1; break }
+            if (!found) { print a[j]; a[j]="" }
+          }
+        }
+        print line[i]
+      }
+      if (!end) for (j=1;j<=n;j++) if (a[j]!="") print a[j]
+    }
+  ' "$tmp/upstream" > "$tmp/added"
+
+  grep -v '^$' "$tmp/dels" > "$tmp/dels.filtered" || true
+  if [ -s "$tmp/dels.filtered" ]; then
+    grep -F -x -v -f "$tmp/dels.filtered" "$tmp/added" > "$tmp/final" || true
+  else
+    cp "$tmp/added" "$tmp/final"
+  fi
+
+  if [ ! -e .git/MERGE_HEAD ]; then
+    git merge --no-commit --no-ff "$upstream_ref" >/dev/null 2>&1 || true
+  fi
+
+  cp "$tmp/final" "$file"
+  git add "$file"
+  git commit --no-edit
+steps: null
+postconditions:
+- name: upstream_merged
+  description: upstream is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: the worktree is clean after the merge commit
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: deps.lock contains no merge conflict markers
+  probe: '! grep -qE ''^(<<<<<<<|=======|>>>>>>>)'' deps.lock'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_lines_preserved
+  description: every line of upstream's deps.lock is present in the final file
+  probe: |-
+    test -z "$(comm -23 \
+      <(git show {upstream_remote}/{upstream_branch}:deps.lock | sort) \
+      <(sort deps.lock))"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_upstream_removals_revived
+  description: lines that upstream removed from deps.lock are absent from the final
+    file
+  probe: |-
+    base=$(git merge-base HEAD^1 HEAD^2)
+    test -z "$(comm -23 \
+      <(git show "$base:deps.lock" | sort) \
+      <(git show HEAD^2:deps.lock | sort) \
+      | grep -F -x -f - <(sort deps.lock))"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_additions_preserved
+  description: lines the local side added to deps.lock are present in the final file
+  probe: |-
+    base=$(git merge-base HEAD^1 HEAD^2)
+    test -z "$(comm -23 \
+      <(git diff -U0 "$base" HEAD^1 -- deps.lock | awk '
+        /^@@ / { if (hunk != "" && !bad) printf "%s", hunk; hunk=""; bad=0; next }
+        /^\+/ && !/^\+\+\+/ { hunk = hunk substr($0,2) "\n"; next }
+        /^-/ && !/^---/ { bad=1; next }
+        END { if (hunk != "" && !bad) printf "%s", hunk }
+      ' | sort -u) \
+      <(sort -u deps.lock))"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_deletions_preserved
+  description: lines the local side deleted from deps.lock are absent from the final
+    file
+  probe: |-
+    base=$(git merge-base HEAD^1 HEAD^2)
+    test -z "$(comm -12 \
+      <(git diff -U0 "$base" HEAD^1 -- deps.lock | awk '
+        /^@@ / { if (hunk != "" && plus == 0 && minus > 0) printf "%s", hunk; hunk=""; plus=0; minus=0; next }
+        /^\+/ && !/^\+\+\+/ { plus=1; next }
+        /^-/ && !/^---/ { hunk = hunk substr($0,2) "\n"; minus=1; next }
+        END { if (hunk != "" && plus == 0 && minus > 0) printf "%s", hunk }
+      ' | sort -u) \
+      <(sort -u deps.lock))"
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: Catch up with upstream without losing what either side added,
+    or reviving what either side removed. Start from upstream's dependency file and
+    add back what I added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Catch up with upstream without losing what either side added, or reviving
+    what either side removed. Start from upstream's dependency file and add back what
+    I added./seed-5-lockfile_conflict-3956
+  fault: lockfile_conflict
+status: candidate

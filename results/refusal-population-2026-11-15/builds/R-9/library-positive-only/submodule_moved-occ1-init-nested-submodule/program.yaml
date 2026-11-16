@@ -1,0 +1,62 @@
+id: submodule_moved-occ1-init-nested-submodule
+intent: Initialise the repository's declared nested dependency submodule and check
+  it out at the commit recorded in the superproject, which matches upstream.
+parameters:
+- submodule_path
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: submodule_declared
+  description: .gitmodules declares the supplied submodule path
+  probe: git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | sed 's/^[^
+    ]* //' | grep -Fxq -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_uninitialised
+  description: the submodule is declared but its worktree has not been initialised
+  probe: git submodule status -- "{submodule_path}" | grep -q '^-'
+  expect_exit: 0
+  expect_pattern: null
+- name: pin_matches_upstream
+  description: the superproject gitlink for the submodule equals the one on the upstream
+    branch
+  probe: test "$(git rev-parse --verify "HEAD:{submodule_path}")" = "$(git rev-parse
+    --verify "{upstream_remote}/{upstream_branch}:{submodule_path}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_superproject
+  description: the superproject has no staged, unstaged, or untracked changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git submodule update --init --recursive -- "{submodule_path}"
+steps: null
+postconditions:
+- name: submodule_initialised
+  description: git submodule status marks the submodule as present at the recorded
+    gitlink
+  probe: git submodule status -- "{submodule_path}" | grep -q '^ '
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_head_matches_gitlink
+  description: the submodule's checked-out HEAD equals the superproject's gitlink
+  probe: test "$(git rev-parse "HEAD:{submodule_path}")" = "$(git -C "{submodule_path}"
+    rev-parse HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: superproject_clean
+  description: initialising the submodule leaves the superproject working tree clean
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: init
+provenance:
+  compiled_from_task: Get this repo's nested dependency consistent with upstream.
+    Initialise the nested repository and check it out.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this repo's nested dependency consistent with upstream. Initialise
+    the nested repository and check it out./seed-5-submodule_moved-12721
+  fault: submodule_moved
+status: admitted

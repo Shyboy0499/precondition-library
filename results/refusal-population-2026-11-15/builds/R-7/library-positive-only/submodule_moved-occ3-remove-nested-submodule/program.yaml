@@ -1,0 +1,121 @@
+id: submodule_moved-occ3-remove-nested-submodule
+intent: remove a nested submodule checkout and its .gitmodules entry, matching upstream's
+  removal
+parameters:
+- submodule_path
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: submodule_gitlink_tracked
+  description: the index records a gitlink at the submodule path
+  probe: git ls-files -s -z -- "{submodule_path}" | tr '\0' '\n' | grep -q '^160000
+    '
+  expect_exit: 0
+  expect_pattern: null
+- name: gitmodules_lists_submodule
+  description: .gitmodules has an entry whose path is the submodule path
+  probe: |-
+    found=0
+    while IFS= read -r line; do
+      [[ "$line" == *" {submodule_path}" ]] && found=1
+    done < <(git config -f .gitmodules --get-regexp '^submodule\..*\.path$' 2>/dev/null)
+    [ "$found" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_exists
+  description: the upstream remote-tracking ref exists
+  probe: git rev-parse --verify --quiet "{upstream_remote}/{upstream_branch}^{commit}"
+    >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracks_no_submodule
+  description: upstream does not record a tree entry at the submodule path
+  probe: '! git ls-tree -r --name-only -z "{upstream_remote}/{upstream_branch}" --
+    "{submodule_path}" | tr ''\0'' ''\n'' | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_gitmodules_lists_no_submodule
+  description: upstream's .gitmodules has no entry whose path is the submodule path
+  probe: |-
+    found=0
+    while IFS= read -r line; do
+      [[ "$line" == *" {submodule_path}" ]] && found=1
+    done < <(git config --blob="{upstream_remote}/{upstream_branch}:.gitmodules" --get-regexp '^submodule\..*\.path$' 2>/dev/null)
+    [ "$found" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: there are no staged, unstaged, or untracked changes
+  probe: '! git status --porcelain -uall | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: gitmodules_tracked
+  description: .gitmodules is tracked so its edit can be committed
+  probe: git ls-files --error-unmatch .gitmodules >/dev/null 2>&1
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git rm -f -- "{submodule_path}"
+
+  sections=()
+  while IFS= read -r line; do
+    if [[ "$line" == *" {submodule_path}" ]]; then
+      section="${line%" {submodule_path}"}"
+      sections+=("${section%.path}")
+    fi
+  done < <(git config -f .gitmodules --get-regexp '^submodule\..*\.path$' 2>/dev/null)
+
+  for section in "${sections[@]}"; do
+    git config -f .gitmodules --remove-section "$section"
+  done
+
+  if git cat-file -e "{upstream_remote}/{upstream_branch}:.gitmodules" 2>/dev/null; then
+    git add -- .gitmodules
+  else
+    git rm -f -- .gitmodules
+  fi
+
+  msg=$(git log --diff-filter=D --format=%s -1 "{upstream_remote}/{upstream_branch}" -- "{submodule_path}")
+  if [ -z "$msg" ]; then
+    msg="Remove nested repository"
+  fi
+  git commit -m "$msg"
+steps: null
+postconditions:
+- name: submodule_not_tracked
+  description: the index no longer contains any entry at the submodule path
+  probe: '! git ls-files -s -z -- "{submodule_path}" | tr ''\0'' ''\n'' | grep -q
+    .'
+  expect_exit: 0
+  expect_pattern: null
+- name: gitmodules_has_no_entry
+  description: .gitmodules no longer has an entry whose path is the submodule path
+  probe: |-
+    found=0
+    while IFS= read -r line; do
+      [[ "$line" == *" {submodule_path}" ]] && found=1
+    done < <(git config -f .gitmodules --get-regexp '^submodule\..*\.path$' 2>/dev/null)
+    [ "$found" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_path_matches_upstream
+  description: HEAD and upstream both have no entry at the submodule path
+  probe: git diff --quiet "{upstream_remote}/{upstream_branch}" HEAD -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after
+  description: the removal was committed and the worktree is clean
+  probe: '! git status --porcelain -uall | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+variant: remove
+provenance:
+  compiled_from_task: A nested repository in this project needs bringing into line.
+    Remove the nested checkout, the way upstream did.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: A nested repository in this project needs bringing into line. Remove
+    the nested checkout, the way upstream did./seed-8-submodule_moved-10981
+  fault: submodule_moved
+status: admitted

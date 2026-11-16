@@ -1,0 +1,77 @@
+id: submodule_moved-occ1-remove-upstream-submodule
+intent: Remove a nested submodule checkout and fast-forward to upstream after upstream
+  dropped that submodule.
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: has_submodule_gitlink
+  description: the local index records a submodule at the configured path
+  probe: git ls-files -s -- "{submodule_path}" | grep -q '^160000 '
+  expect_exit: 0
+  expect_pattern: null
+- name: local_gitmodules_declares_submodule
+  description: the current .gitmodules declares the submodule path so deinit can clear
+    it
+  probe: git show HEAD:.gitmodules 2>/dev/null | grep -qF -- "path = {submodule_path}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_dropped_submodule
+  description: upstream's tree has no gitlink at the path and upstream's .gitmodules
+    no longer declares it
+  probe: |-
+    ! git ls-tree -r "{upstream_remote}/{upstream_branch}" -- "{submodule_path}" | grep -q '^160000 ' &&
+    ! git show "{upstream_remote}/{upstream_branch}:.gitmodules" 2>/dev/null | grep -qF -- "path = {submodule_path}"
+  expect_exit: 0
+  expect_pattern: null
+- name: can_fast_forward_to_upstream
+  description: HEAD is an ancestor of upstream and upstream is strictly ahead
+  probe: |-
+    git merge-base --is-ancestor HEAD "{upstream_remote}/{upstream_branch}" &&
+    test "$(git rev-list --count HEAD.."{upstream_remote}/{upstream_branch}")" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: no tracked or untracked changes are present in the working tree
+  probe: test -z "$(git --no-optional-locks status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch "{upstream_remote}"
+  if test -e "{submodule_path}/.git"; then
+    git submodule deinit -f -- "{submodule_path}"
+  fi
+  git merge --ff-only "{upstream_remote}/{upstream_branch}"
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is the upstream commit after the fast-forward
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse "{upstream_remote}/{upstream_branch}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_submodule_gitlink
+  description: the submodule path has no gitlink entry at HEAD
+  probe: '! git ls-tree -r HEAD -- "{submodule_path}" | grep -q ''^160000 '''
+  expect_exit: 0
+  expect_pattern: null
+- name: no_nested_checkout
+  description: the submodule working tree no longer contains a .git entry
+  probe: '! test -e "{submodule_path}/.git"'
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: the working tree is clean after the fast-forward
+  probe: test -z "$(git --no-optional-locks status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: remove
+provenance:
+  compiled_from_task: Get this repo's nested dependency consistent with upstream.
+    Remove the nested checkout, the way upstream did.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this repo's nested dependency consistent with upstream. Remove the
+    nested checkout, the way upstream did./seed-0-submodule_moved-28874
+  fault: submodule_moved
+status: admitted

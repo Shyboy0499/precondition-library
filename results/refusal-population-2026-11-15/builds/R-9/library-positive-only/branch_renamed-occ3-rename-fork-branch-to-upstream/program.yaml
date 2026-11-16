@@ -1,0 +1,94 @@
+id: branch_renamed-occ3-rename-fork-branch-to-upstream
+intent: Rename the checked-out local branch to upstream's renamed branch, retarget
+  it to track that upstream branch, and fast-forward it to upstream.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_local_branch
+  description: HEAD is attached to a local branch
+  probe: git symbolic-ref --quiet --short HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: there are no tracked changes or untracked files
+  probe: '[ -z "$(git status --porcelain)" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_remote_exists
+  description: the upstream remote is configured
+  probe: git remote get-url "{upstream_remote}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_has_renamed_branch
+  description: the upstream remote has the branch the local branch should adopt
+  probe: git ls-remote --exit-code --heads "{upstream_remote}" "{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: current_branch_uses_old_name
+  description: the checked-out branch does not already have upstream's new name
+  probe: '[ "$(git symbolic-ref --quiet --short HEAD)" != "{upstream_branch}" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: new_branch_name_is_free
+  description: no local branch already occupies upstream's new name
+  probe: '! git show-ref --verify --quiet "refs/heads/{upstream_branch}"'
+  expect_exit: 0
+  expect_pattern: null
+- name: currently_tracks_upstream_remote
+  description: the current branch is configured against the upstream remote, but not
+    on the new branch
+  probe: |-
+    cur=$(git symbolic-ref --quiet --short HEAD) &&
+    test "$(git config --get "branch.$cur.remote")" = "{upstream_remote}" &&
+    test "$(git config --get "branch.$cur.merge")" != "refs/heads/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: fast_forwardable
+  description: the local branch can be fast-forwarded to the renamed upstream branch
+  probe: |-
+    target="refs/remotes/{upstream_remote}/{upstream_branch}"
+    if git show-ref --verify --quiet "$target"; then
+      git merge-base --is-ancestor HEAD "$target"
+    else
+      tip=$(git ls-remote --heads "{upstream_remote}" "{upstream_branch}" | cut -f1)
+      [ -n "$tip" ] && git cat-file -e "$tip" && git merge-base --is-ancestor HEAD "$tip"
+    fi
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch "{upstream_remote}"
+  cur=$(git symbolic-ref --quiet --short HEAD)
+  git branch -m "$cur" "{upstream_branch}"
+  git branch --set-upstream-to="{upstream_remote}/{upstream_branch}" "{upstream_branch}"
+  git merge --ff-only "{upstream_remote}/{upstream_branch}"
+steps: null
+postconditions:
+- name: on_renamed_branch
+  description: HEAD is on the branch named after upstream's new branch
+  probe: '[ "$(git symbolic-ref --quiet --short HEAD)" = "{upstream_branch}" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: tracks_renamed_upstream
+  description: the checked-out branch tracks the renamed upstream branch
+  probe: '[ "$(git for-each-ref --format=''%(upstream)'' "refs/heads/{upstream_branch}")"
+    = "refs/remotes/{upstream_remote}/{upstream_branch}" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_matches_upstream
+  description: the local branch tip is the upstream branch tip
+  probe: '[ "$(git rev-parse HEAD)" = "$(git rev-parse "refs/remotes/{upstream_remote}/{upstream_branch}")"
+    ]'
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: I think upstream renamed things. Get this fork following it
+    again. Rename my branch to upstream's new name and track it.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: I think upstream renamed things. Get this fork following it again. Rename
+    my branch to upstream's new name and track it./seed-0-branch_renamed-12721
+  fault: branch_renamed
+status: admitted

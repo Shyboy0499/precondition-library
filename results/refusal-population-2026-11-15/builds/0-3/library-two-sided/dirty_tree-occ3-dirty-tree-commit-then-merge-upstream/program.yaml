@@ -1,0 +1,75 @@
+id: dirty_tree-occ3-dirty-tree-commit-then-merge-upstream
+intent: |
+  Commit the uncommitted changes in the working tree, then merge the upstream branch into the current branch so the branch is up to date and the user's work is preserved.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_present
+  description: the upstream remote-tracking branch exists locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[0-9a-f]+$
+- name: behind_upstream
+  description: HEAD is strictly behind the upstream remote-tracking branch
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: tracked_changes_present
+  description: the index or working tree has uncommitted changes to tracked files
+  probe: '! git diff --quiet HEAD'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: the index has no unresolved merge entries
+  probe: '! git ls-files -u | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: on_a_branch
+  description: HEAD is attached to a local branch
+  probe: git symbolic-ref --quiet --short HEAD
+  expect_exit: 0
+  expect_pattern: ^.+$
+body: |
+  git add -A
+  if [ -z "$(git config user.email)" ] || [ -z "$(git config user.name)" ]; then
+    git config user.email 'git-maintenance@example.invalid'
+    git config user.name 'git maintenance'
+  fi
+  git commit -m 'wip: commit uncommitted work'
+  git fetch {upstream_remote}
+  git merge --no-edit {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: worktree_clean
+  description: no changes remain in the index or working tree
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: the merge completed without unresolved index entries
+  probe: '! git ls-files -u | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_merged
+  description: the upstream branch is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commit_preserved
+  description: HEAD still carries local commits that are not on the upstream branch
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+variant: commit
+provenance:
+  compiled_from_task: My working tree has changes and the branch is behind upstream.
+    Fix that and keep my changes. Commit my uncommitted work first, then bring the
+    branch up to date.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: My working tree has changes and the branch is behind upstream. Fix that
+    and keep my changes. Commit my uncommitted work first, then bring the branch up
+    to date./seed-0-dirty_tree-28874
+  fault: dirty_tree
+status: candidate

@@ -1,0 +1,94 @@
+id: diverged-occ2-diverged-occ2-sync-fork-merge-upstream
+intent: bring a diverged fork back in sync with upstream by merging upstream into
+  the current branch, preserving both local and upstream histories
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_present
+  description: the remote-tracking ref for the upstream branch exists locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: local_has_own_commits
+  description: the current branch carries commits that upstream does not have
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: '[1-9]'
+- name: upstream_has_new_commits
+  description: upstream carries commits that the current branch does not have
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: '[1-9]'
+- name: worktree_clean
+  description: no staged, unstaged or untracked changes are present
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: the repository is not in the middle of an unfinished merge
+  probe: test ! -e "$(git rev-parse --git-path MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_would_apply_cleanly
+  description: a three-way merge of upstream into HEAD produces no conflict markers,
+    so the merge is a plain history join rather than a conflict-resolution task
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    ! git merge-tree "$base" HEAD {upstream_remote}/{upstream_branch} | grep -q '<<<<<<<'
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_tracks_the_upstream_branch
+  description: the current branch is configured to track exactly {upstream_remote}/{upstream_branch}
+    (no renamed/re-pointed upstream)
+  probe: git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}'
+  expect_exit: 0
+  expect_pattern: ^{upstream_remote}/{upstream_branch}$
+- name: upstream_default_branch_is_the_merged_branch
+  description: the remote's own default branch is {upstream_branch}; an upstream whose
+    default is a different, existing branch means the tracked name was renamed upstream
+    and this is a different task
+  probe: |-
+    def=$(git ls-remote --symref {upstream_remote} HEAD | sed -n '1s|^ref:[[:space:]]*refs/heads/\([^[:space:]]*\).*|\1|p')
+    if [ -n "$def" ] && [ "$def" != "{upstream_branch}" ] && git ls-remote --heads {upstream_remote} "refs/heads/$def" | grep -q .; then
+      exit 1
+    fi
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git merge --no-ff -m "Merge {upstream_remote}/{upstream_branch} into $(git rev-parse --abbrev-ref HEAD)" {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: merge_commit_created
+  description: HEAD is a merge commit with two parents
+  probe: git rev-list --parents -n 1 HEAD
+  expect_exit: 0
+  expect_pattern: ^[0-9a-f]{7,} [0-9a-f]{7,} [0-9a-f]{7,}$
+- name: upstream_is_ancestor
+  description: the upstream tip is now reachable from HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: no conflicted index entries remain
+  probe: '! git ls-files -u | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_finished
+  description: no merge is left in progress and the worktree is clean
+  probe: test ! -e "$(git rev-parse --git-path MERGE_HEAD)" && test -z "$(git status
+    --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: Get this fork back in sync with upstream without losing my commits.
+    Merge upstream into my branch and keep both histories.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this fork back in sync with upstream without losing my commits.
+    Merge upstream into my branch and keep both histories./seed-4-diverged-7516
+  fault: diverged
+status: candidate

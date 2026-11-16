@@ -1,0 +1,54 @@
+id: submodule_moved-occ2-submodule-init-checkout
+intent: initialise the nested submodule declared in this project and check it out
+  at the commit the parent tree records
+parameters:
+- submodule_path
+preconditions:
+- name: submodule_declared_in_gitmodules
+  description: .gitmodules lists the requested path as a submodule
+  probe: git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print
+    $2}' | grep -Fx -- '{submodule_path}'
+  expect_exit: 0
+  expect_pattern: null
+- name: gitlink_recorded_in_head
+  description: the parent tree records a gitlink (mode 160000) at the submodule path
+  probe: git ls-tree HEAD -- {submodule_path} | grep -q '^160000'
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_not_yet_initialised
+  description: the submodule working tree is not populated; status marks it with a
+    leading '-'
+  probe: git submodule status -- {submodule_path} | grep -q '^-'
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  git submodule sync --recursive
+  git submodule update --init --recursive -- {submodule_path}
+steps: null
+postconditions:
+- name: submodule_initialised
+  description: the submodule is no longer reported as uninitialised
+  probe: '! git submodule status -- {submodule_path} | grep -q ''^-'''
+  expect_exit: 0
+  expect_pattern: null
+- name: checked_out_at_recorded_commit
+  description: the submodule HEAD equals the gitlink commit recorded in the parent
+    HEAD
+  probe: test "$(git -C {submodule_path} rev-parse HEAD)" = "$(git rev-parse HEAD:{submodule_path})"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_worktree_clean
+  description: the initialised submodule has no local modifications
+  probe: test -z "$(git -C {submodule_path} status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: init
+provenance:
+  compiled_from_task: A nested repository in this project needs bringing into line.
+    Initialise the nested repository and check it out.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: A nested repository in this project needs bringing into line. Initialise
+    the nested repository and check it out./seed-4-submodule_moved-25587
+  fault: submodule_moved
+status: admitted

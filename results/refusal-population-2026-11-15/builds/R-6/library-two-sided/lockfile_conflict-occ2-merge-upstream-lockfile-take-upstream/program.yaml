@@ -1,0 +1,176 @@
+id: lockfile_conflict-occ2-merge-upstream-lockfile-take-upstream
+intent: Catch up with upstream by merging it, resolving shared dependency-file conflicts
+  by starting from upstream's version and re-adding the local additions, without reviving
+  lines either side removed.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: clean_worktree
+  description: the working tree and index are clean
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: no merge is already in progress
+  probe: '! test -e "$(git rev-parse --git-path MERGE_HEAD)"'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_branch_exists
+  description: the upstream remote-tracking branch resolves to a commit
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: diverged_from_upstream
+  description: local and upstream have each advanced at least one commit
+  probe: git rev-list --left-right --count HEAD...{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*[[:space:]]+[1-9][0-9]*$
+- name: shared_dependency_file_touched
+  description: both sides changed the same lock-like dependency file and no other
+    shared file is outside that family
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    common=$(comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort))
+    test -n "$common"
+    ! printf '%s\n' "$common" | grep -qv -E '(^|/)([^/]*(lock|deps|requirements)[^/]*)$'
+  expect_exit: 0
+  expect_pattern: null
+- name: local_dropped_nothing_upstream_kept
+  description: no line of a shared dependency file that upstream kept was dropped
+    on the local side, so starting from upstream's file is the resolution that revives
+    neither side's removals
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    common=$(comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort))
+    test -n "$common" || exit 1
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      up=$(git diff "$base" {upstream_remote}/{upstream_branch} -- "$f" | grep '^-' | grep -v -e '^--- a/' -e '^--- /dev/null' | sed 's/^-//' | grep -v '^$' | sort -u)
+      lo=$(git diff "$base" HEAD -- "$f" | grep '^-' | grep -v -e '^--- a/' -e '^--- /dev/null' | sed 's/^-//' | grep -v '^$' | sort -u)
+      only_lo=$(comm -23 <(printf '%s\n' "$lo") <(printf '%s\n' "$up") | grep -v '^$' | wc -l)
+      if [ "$only_lo" -ne 0 ]; then exit 1; fi
+    done <<< "$common"
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote} {upstream_branch}
+  git merge {upstream_remote}/{upstream_branch} --no-edit || true
+  if [ -n "$(git diff --name-only --diff-filter=U)" ]; then
+  python3 - <<'PY'
+  import subprocess
+  import difflib
+
+  def get_blob(stage, path):
+      try:
+          return subprocess.check_output([b'git', b'show', b':%d:%s' % (stage, path)], stderr=subprocess.DEVNULL)
+      except subprocess.CalledProcessError:
+          return None
+
+  def analyze(base, side):
+      base_lines = base.splitlines(keepends=True) if base is not None else []
+      side_lines = side.splitlines(keepends=True) if side is not None else []
+      actions = [None] * len(base_lines)
+      inserts = [[] for _ in range(len(base_lines) + 1)]
+      sm = difflib.SequenceMatcher(None, base_lines, side_lines, autojunk=False)
+      for tag, i1, i2, j1, j2 in sm.get_opcodes():
+          if tag == 'equal':
+              continue
+          if tag == 'replace':
+              blen = i2 - i1
+              slen = j2 - j1
+              m = min(blen, slen)
+              for k in range(m):
+                  actions[i1 + k] = ('replace', side_lines[j1 + k:j1 + k + 1])
+              for k in range(m, blen):
+                  actions[i1 + k] = ('delete', None)
+              if slen > m:
+                  inserts[i2].extend(side_lines[j1 + m:j2])
+          elif tag == 'delete':
+              for i in range(i1, i2):
+                  actions[i] = ('delete', None)
+          elif tag == 'insert':
+              inserts[i1].extend(side_lines[j1:j2])
+      return actions, inserts
+
+  out = subprocess.check_output([b'git', b'diff', b'--name-only', b'-z', b'--diff-filter=U'])
+  paths = [p for p in out.split(b'\0') if p]
+  for path in paths:
+      base = get_blob(1, path)
+      local = get_blob(2, path)
+      upstream = get_blob(3, path)
+      if local is None or upstream is None:
+          subprocess.check_call([b'git', b'rm', b'-f', b'--', path])
+          continue
+      la, li = analyze(base, local)
+      ua, ui = analyze(base, upstream)
+      base_lines = base.splitlines(keepends=True) if base is not None else []
+      result = []
+      for i in range(len(base_lines) + 1):
+          result.extend(li[i])
+          result.extend(ui[i])
+          if i == len(base_lines):
+              break
+          la_i = la[i]
+          ua_i = ua[i]
+          if la_i is not None and la_i[0] == 'delete':
+              continue
+          if ua_i is not None and ua_i[0] == 'delete':
+              continue
+          if ua_i is not None and ua_i[0] == 'replace':
+              result.extend(ua_i[1])
+          elif la_i is not None and la_i[0] == 'replace':
+              result.extend(la_i[1])
+          else:
+              result.append(base_lines[i])
+      with open(path, 'wb') as f:
+          f.write(b''.join(result))
+      subprocess.check_call([b'git', b'add', b'--', path])
+  PY
+  git add -u
+  git commit --no-edit
+  fi
+steps: null
+postconditions:
+- name: no_unmerged_paths
+  description: every merge conflict has been resolved in the index
+  probe: '! git diff --name-only --diff-filter=U | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_after_merge
+  description: the working tree and index are clean after the merge commit
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: the upstream branch is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_commit_created
+  description: HEAD is a merge commit with upstream as its second parent
+  probe: git rev-parse --verify --quiet HEAD^2
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: no tracked file contains merge conflict markers
+  probe: '! git grep -q -E ''^(<<<<<<< |=======$|>>>>>>> )'' -- .'
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: Catch up with upstream without losing what either side added,
+    or reviving what either side removed. Start from upstream's dependency file and
+    add back what I added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Catch up with upstream without losing what either side added, or reviving
+    what either side removed. Start from upstream's dependency file and add back what
+    I added./seed-5-lockfile_conflict-17967
+  fault: lockfile_conflict
+status: admitted

@@ -1,0 +1,87 @@
+id: dirty_tree-occ2-dirty-tree-occ2-dirty-worktree-commit-then-rebase
+intent: Preserve the user's uncommitted work by committing it, then bring the branch
+  up to date with its upstream by rebasing onto the upstream tracking branch.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: worktree_dirty
+  description: the repository has uncommitted changes or untracked files, so there
+    is local work that must be preserved before updating
+  probe: test -n "$(git status --porcelain -z | tr '\0' '\n')"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_present
+  description: the remote-tracking ref for the upstream branch already exists locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}^{commit}
+  expect_exit: 0
+  expect_pattern: null
+- name: behind_upstream
+  description: HEAD is strictly behind the upstream tracking branch (at least one
+    upstream commit is missing locally)
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: no_untracked_collision_with_upstream
+  description: no untracked local file occupies a path the upstream branch adds or
+    changes; such a collision cannot be committed and rebased cleanly and must instead
+    be moved aside
+  probe: |-
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_or_rebase_in_progress
+  description: no merge, rebase or cherry-pick is currently in progress, so the worktree
+    is in a state a plain commit can capture
+  probe: |-
+    test ! -d "$(git rev-parse --git-path rebase-merge)" \
+      && test ! -d "$(git rev-parse --git-path rebase-apply)" \
+      && test ! -e "$(git rev-parse --git-path MERGE_HEAD)" \
+      && test ! -e "$(git rev-parse --git-path CHERRY_PICK_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git add -A
+  git commit -m "wip: local changes before updating with {upstream_remote}/{upstream_branch}"
+  git rebase {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: clean_worktree
+  description: every local change has been committed, so the working tree is clean
+  probe: test -z "$(git status --porcelain -z | tr '\0' '\n')"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor_of_head
+  description: the branch now contains the upstream tip, i.e. it is up to date
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_work_sits_on_top
+  description: the preserved local commit is still present on top of the upstream
+    tip
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: no_rebase_left_running
+  description: no rebase or merge was left in progress by the update
+  probe: |-
+    test ! -d "$(git rev-parse --git-path rebase-merge)" \
+      && test ! -d "$(git rev-parse --git-path rebase-apply)" \
+      && test ! -e "$(git rev-parse --git-path MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+variant: commit
+provenance:
+  compiled_from_task: My working tree has changes and the branch is behind upstream.
+    Fix that and keep my changes. Commit my uncommitted work first, then bring the
+    branch up to date.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: My working tree has changes and the branch is behind upstream. Fix that
+    and keep my changes. Commit my uncommitted work first, then bring the branch up
+    to date./seed-0-dirty_tree-27083
+  fault: dirty_tree
+status: admitted

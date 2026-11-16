@@ -1,0 +1,72 @@
+id: diverged-occ4-sync-fork-merge
+intent: Bring the fork back in sync with upstream by merging upstream into the current
+  branch, preserving both local and upstream history.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: clean_worktree
+  description: no staged, unstaged, or untracked changes that could block or taint
+    a merge
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_present
+  description: the upstream remote-tracking branch exists in the local repository
+  probe: git rev-parse --verify --quiet '{upstream_remote}/{upstream_branch}^{commit}'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: the repository is not already in the middle of a merge
+  probe: test ! -e "$(git rev-parse --git-dir)/MERGE_HEAD"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_has_commits
+  description: the current branch has at least one commit not yet in upstream
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ahead
+  description: upstream has at least one commit not yet in the current branch, so
+    it must be merged in
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git merge --no-ff --no-edit {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: head_is_merge_commit
+  description: HEAD is a merge commit with at least two parents, so both histories
+    were kept
+  probe: test "$(git rev-list --parents -n 1 HEAD | wc -w)" -ge 3
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_fully_merged
+  description: no upstream commit remains outside HEAD
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^0$
+- name: worktree_clean_after_merge
+  description: the merge left no unresolved or dirty state
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_state_finished
+  description: no merge is left in progress
+  probe: test ! -e "$(git rev-parse --git-dir)/MERGE_HEAD"
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: Get this fork back in sync with upstream without losing my commits.
+    Merge upstream into my branch and keep both histories.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this fork back in sync with upstream without losing my commits.
+    Merge upstream into my branch and keep both histories./seed-4-diverged-10981
+  fault: diverged
+status: admitted

@@ -1,0 +1,224 @@
+id: lockfile_conflict-occ4-resolve-dependency-conflict-take-upstream
+intent: Catch up with upstream without losing what either side added or reviving what
+  either side removed; start from upstream's dependency file and add back local additions.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: worktree_ready
+  description: the worktree is clean, or an in-progress merge has conflicts to resolve
+  probe: |-
+    if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+      test -n "$(git diff --name-only --diff-filter=U -z | tr '\0' '\n')"
+    else
+      test -z "$(git status --porcelain)"
+    fi
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_remote_and_branch_exist
+  description: the upstream remote and its remote-tracking branch are available
+  probe: |-
+    git remote get-url {upstream_remote} >/dev/null 2>&1 &&
+    git rev-parse --verify {upstream_remote}/{upstream_branch} >/dev/null 2>&1
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_diverged
+  description: HEAD and the upstream branch have both advanced since their merge base
+  probe: |-
+    counts=$(git rev-list --left-right --count HEAD...{upstream_remote}/{upstream_branch}) || exit 1
+    set -- $counts
+    test "$1" -gt 0 && test "$2" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: both_sides_touched_same_file
+  description: at least one file changed on both HEAD and the upstream branch since
+    their merge base
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  git fetch {upstream_remote}
+  if ! git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+    git merge --no-ff --no-commit {upstream_remote}/{upstream_branch} || true
+  fi
+  if ! git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+    echo "merge did not start" >&2
+    exit 1
+  fi
+  python3 - <<'PY'
+  import subprocess, re, sys
+
+  def git(*args):
+      args = [a if isinstance(a, bytes) else a.encode() for a in args]
+      p = subprocess.run([b'git'] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+      if p.returncode != 0:
+          sys.stderr.write(p.stderr.decode('utf-8', 'replace'))
+          sys.exit(p.returncode)
+      return p.stdout
+
+  def parse_hunks(data):
+      hunk_re = re.compile(rb'^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@')
+      hunks = []
+      cur = None
+      for line in data.splitlines():
+          m = hunk_re.match(line)
+          if m:
+              if cur is not None:
+                  hunks.append(cur)
+              cur = dict(old_start=int(m.group(1).decode()), minus=[], plus=[])
+          elif cur is not None:
+              if line.startswith(b'-') and not line.startswith(b'---'):
+                  cur['minus'].append(line[1:])
+              elif line.startswith(b'+') and not line.startswith(b'+++'):
+                  cur['plus'].append(line[1:])
+      if cur is not None:
+          hunks.append(cur)
+      return hunks
+
+  out = git('diff', '--name-only', '--diff-filter=U', '-z')
+  paths = [p for p in out.split(b'\0') if p]
+  for path in paths:
+      base_hash = git('rev-parse', b':1:' + path).strip()
+      ours_hash = git('rev-parse', b':2:' + path).strip()
+      theirs_hash = git('rev-parse', b':3:' + path).strip()
+      base_data = git('cat-file', 'blob', base_hash)
+      theirs_data = git('cat-file', 'blob', theirs_hash)
+      diff = git('diff', '-U0', '--no-color', base_hash, ours_hash)
+      hunks = parse_hunks(diff)
+      base_lines = base_data.decode('utf-8', 'surrogateescape').splitlines()
+      new_lines = theirs_data.decode('utf-8', 'surrogateescape').splitlines()
+      for h in hunks:
+          if h['minus'] and not h['plus']:
+              for line in h['minus']:
+                  try:
+                      new_lines.remove(line)
+                  except ValueError:
+                      pass
+      for h in hunks:
+          if h['plus'] and not h['minus']:
+              old_start = h['old_start']
+              if old_start == 0:
+                  insert_pos = 0
+              else:
+                  anchor = None
+                  idx = old_start - 1
+                  if 0 <= idx < len(base_lines):
+                      anchor = base_lines[idx]
+                  if anchor is not None and anchor in new_lines:
+                      insert_pos = new_lines.index(anchor) + 1
+                  else:
+                      last = new_lines[-1].strip() if new_lines else ''
+                      if last.endswith(']') or last.endswith(')'):
+                          insert_pos = len(new_lines) - 1
+                      else:
+                          insert_pos = len(new_lines)
+              for line in h['plus']:
+                  if line not in new_lines:
+                      new_lines.insert(insert_pos, line)
+                      insert_pos += 1
+      data = '\n'.join(new_lines).encode('utf-8', 'surrogateescape')
+      if theirs_data.endswith(b'\n'):
+          data += b'\n'
+      with open(path, 'wb') as f:
+          f.write(data)
+      subprocess.run([b'git', b'add', b'--', path], check=True)
+  PY
+  git commit --no-edit
+steps: null
+postconditions:
+- name: merge_commit_created
+  description: HEAD is a merge commit with an upstream parent
+  probe: git rev-parse --verify HEAD^2 >/dev/null 2>&1
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: no conflict markers remain in tracked working-tree files
+  probe: '! git grep -q -e ''^<<<<<<< '' -e ''^>>>>>>> '' -- .'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the merge is committed and no uncommitted changes remain
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: head_contains_upstream
+  description: the upstream branch tip is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_additions_and_removals_respected
+  description: local pure additions survive and upstream pure removals stay removed
+  probe: |-
+    python3 - <<'PY'
+    import subprocess, re, sys
+
+    def git(*args):
+        args = [a if isinstance(a, bytes) else a.encode() for a in args]
+        p = subprocess.run([b'git'] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if p.returncode != 0:
+            sys.stderr.write(p.stderr.decode('utf-8', 'replace'))
+            sys.exit(p.returncode)
+        return p.stdout
+
+    def parse_hunks(data):
+        hunk_re = re.compile(rb'^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@')
+        hunks = []
+        cur = None
+        for line in data.splitlines():
+            m = hunk_re.match(line)
+            if m:
+                if cur is not None:
+                    hunks.append(cur)
+                cur = dict(minus=[], plus=[])
+            elif cur is not None:
+                if line.startswith(b'-') and not line.startswith(b'---'):
+                    cur['minus'].append(line[1:])
+                elif line.startswith(b'+') and not line.startswith(b'+++'):
+                    cur['plus'].append(line[1:])
+        if cur is not None:
+            hunks.append(cur)
+        return hunks
+
+    base = git('merge-base', 'HEAD^1', 'HEAD^2').decode().strip()
+    local = 'HEAD^1'
+    upstream = 'HEAD^2'
+
+    def changed(rev):
+        out = git('diff', '--name-only', '-z', base, rev)
+        return [p for p in out.split(b'\0') if p]
+
+    files = changed(local) + changed(upstream)
+    for path in files:
+        final = git('show', b'HEAD:' + path)
+        final_lines = final.splitlines()
+        for h in parse_hunks(git('diff', '-U0', '--no-color', base, local, '--', path)):
+            if h['plus'] and not h['minus']:
+                for line in h['plus']:
+                    if line not in final_lines:
+                        sys.stderr.write('missing local addition: ' + line.decode('utf-8', 'replace') + '\n')
+                        sys.exit(1)
+        for h in parse_hunks(git('diff', '-U0', '--no-color', base, upstream, '--', path)):
+            if h['minus'] and not h['plus']:
+                for line in h['minus']:
+                    if line in final_lines:
+                        sys.stderr.write('revived upstream removal: ' + line.decode('utf-8', 'replace') + '\n')
+                        sys.exit(1)
+    PY
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: Catch up with upstream without losing what either side added,
+    or reviving what either side removed. Start from upstream's dependency file and
+    add back what I added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Catch up with upstream without losing what either side added, or reviving
+    what either side removed. Start from upstream's dependency file and add back what
+    I added./seed-5-lockfile_conflict-212
+  fault: lockfile_conflict
+status: candidate

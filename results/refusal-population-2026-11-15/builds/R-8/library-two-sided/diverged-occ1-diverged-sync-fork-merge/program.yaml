@@ -1,0 +1,123 @@
+id: diverged-occ1-diverged-sync-fork-merge
+intent: Get the fork back in sync with upstream by merging the upstream branch into
+  the current branch and preserving both histories.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_configured
+  description: The named upstream remote is configured in this repository.
+  probe: git config --get remote.{upstream_remote}.url
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_exists
+  description: The upstream remote-tracking branch resolves to a commit.
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}^{commit}
+  expect_exit: 0
+  expect_pattern: null
+- name: on_a_branch
+  description: HEAD is attached to a local branch rather than detached.
+  probe: git symbolic-ref -q HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_branch_matches_upstream_branch
+  description: The checked-out branch carries the same name as the upstream branch
+    being merged, so the fork has not been renamed away from the upstream branch it
+    is supposed to track.
+  probe: test "$(git symbolic-ref -q --short HEAD)" = "{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_head_not_renamed
+  description: If the upstream remote records a default branch, it is the branch this
+    program merges; a renamed upstream default branch is a different state.
+  probe: |-
+    head_ref=$(git symbolic-ref -q refs/remotes/{upstream_remote}/HEAD) || exit 0
+    test "$(basename "$head_ref")" = "{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_and_index_clean
+  description: There are no tracked or untracked changes that the merge could disturb.
+  probe: test -z "$(git status --porcelain -z | tr -d '\0')"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: No merge is in progress and the index has no unmerged entries.
+  probe: test -z "$(git rev-parse -q --verify MERGE_HEAD)" && test -z "$(git ls-files
+    -u -z | tr -d '\0')"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_not_in_upstream
+  description: The current branch has at least one commit that upstream does not have.
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_commits_not_local
+  description: Upstream has at least one commit that the current branch does not have.
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_would_be_clean
+  description: A three-way merge of upstream into HEAD would not produce conflict
+    markers.
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    merged=$(git merge-tree "$base" HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    ! printf '%s\n' "$merged" | grep -q '<<<<<<<'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git merge --no-edit {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: merge_commit_created
+  description: HEAD is a merge commit with a second parent.
+  probe: git rev-parse -q --verify HEAD^2
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tip_is_second_parent
+  description: The merge commit records upstream's tip as its second parent.
+  probe: test "$(git rev-parse HEAD^2)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: Upstream's tip is now reachable from HEAD.
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_preserved
+  description: The first-parent side still contains commits not present upstream.
+  probe: test "$(git rev-list --count HEAD^2..HEAD^1)" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_merge
+  description: The merge left no tracked or untracked changes behind.
+  probe: test -z "$(git status --porcelain -z | tr -d '\0')"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_entries
+  description: The index has no unmerged entries after the merge.
+  probe: test -z "$(git ls-files -u -z | tr -d '\0')"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress_after
+  description: The merge completed rather than stopping for conflicts.
+  probe: test -z "$(git rev-parse -q --verify MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: still_on_a_branch
+  description: HEAD remains attached to a local branch after the merge.
+  probe: git symbolic-ref -q HEAD
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: Get this fork back in sync with upstream without losing my commits.
+    Merge upstream into my branch and keep both histories.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this fork back in sync with upstream without losing my commits.
+    Merge upstream into my branch and keep both histories./seed-4-diverged-3956
+  fault: diverged
+status: candidate

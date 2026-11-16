@@ -1,0 +1,76 @@
+id: branch_renamed-occ1-retrack-upstream-renamed-branch
+intent: Keep the current local branch name, retarget its upstream tracking to the
+  branch upstream now uses, and fast-forward it to that upstream branch.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_local_branch
+  description: HEAD is attached to a local branch so the branch name can be preserved
+  probe: git symbolic-ref --quiet --short HEAD
+  expect_exit: 0
+  expect_pattern: ^.+$
+- name: clean_worktree
+  description: there are no tracked or untracked working-tree changes to lose
+  probe: '[ -z "$(git status --porcelain)" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: target_remote_branch_exists
+  description: the upstream branch to track is already available as a remote-tracking
+    ref
+  probe: git rev-parse --verify --quiet 'refs/remotes/{upstream_remote}/{upstream_branch}'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_head_points_at_target
+  description: the upstream remote's default branch is the branch the local branch
+    should now follow
+  probe: test "$(git symbolic-ref --quiet refs/remotes/{upstream_remote}/HEAD)" =
+    "refs/remotes/{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: tracking_is_not_already_target
+  description: the current branch still tracks a different remote branch
+  probe: |-
+    cur=$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null) || exit 1
+    [ -n "$cur" ] || exit 1
+    [ "$cur" != "{upstream_remote}/{upstream_branch}" ]
+  expect_exit: 0
+  expect_pattern: null
+- name: fast_forward_possible
+  description: the current branch has no unique commits, so it can catch up by fast-forward
+  probe: git merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch --prune {upstream_remote}
+  git branch --set-upstream-to={upstream_remote}/{upstream_branch}
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: tracks_upstream_branch
+  description: the local branch now tracks the upstream branch
+  probe: git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}'
+  expect_exit: 0
+  expect_pattern: ^{upstream_remote}/{upstream_branch}$
+- name: caught_up_with_upstream
+  description: HEAD is at the upstream branch's commit
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse refs/remotes/{upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: still_on_local_branch
+  description: the branch is still attached to a local branch with its original name
+  probe: git symbolic-ref --quiet --short HEAD
+  expect_exit: 0
+  expect_pattern: ^.+$
+variant: retrack
+provenance:
+  compiled_from_task: My branch seems to follow something upstream no longer has.
+    Point it at whatever upstream uses now, and keep my work. Keep my branch's name,
+    point its tracking at upstream's new branch and catch up.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: My branch seems to follow something upstream no longer has. Point it
+    at whatever upstream uses now, and keep my work. Keep my branch's name, point
+    its tracking at upstream's new branch and catch up./seed-10-branch_renamed-10981
+  fault: branch_renamed
+status: admitted

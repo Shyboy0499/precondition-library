@@ -1,0 +1,95 @@
+id: diverged-occ2-diverged-empty-local-sync-discard
+intent: When the current branch has diverged from upstream but its own commits carry
+  no tracked content changes, fetch upstream and hard-reset the branch so it matches
+  upstream exactly
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: remote_configured
+  description: the upstream remote exists in this repository
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_present
+  description: the remote-tracking ref for the upstream branch is already known locally
+  probe: git rev-parse --verify --quiet '{upstream_remote}/{upstream_branch}^{commit}'
+  expect_exit: 0
+  expect_pattern: null
+- name: on_a_branch
+  description: HEAD is on a branch, not detached, so there is a local branch to move
+  probe: git symbolic-ref -q HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_branch_matches_upstream_default
+  description: when the remote's default branch is recorded locally it must be the
+    branch HEAD is on; a locally renamed branch is a merge job, not a discard
+  probe: d=$(git symbolic-ref -q --short 'refs/remotes/{upstream_remote}/HEAD' 2>/dev/null);
+    test -z "$d" || test "${d#*/}" = "$(git symbolic-ref -q --short HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: has_local_commits
+  description: the branch carries at least one commit that upstream does not have
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_has_new_commits
+  description: upstream carries at least one commit the branch does not have
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_carry_no_changes
+  description: the local commits change no tracked content relative to the merge base,
+    so nothing is lost by dropping them and merging or replaying them would add nothing
+  probe: git diff --quiet HEAD "$(git merge-base HEAD '{upstream_remote}/{upstream_branch}')"
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: no tracked file is modified or staged, so a hard reset loses no uncommitted
+    work
+  probe: '! git status --porcelain --untracked-files=no | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_collision
+  description: no untracked file sits on a path that upstream changed, so the reset
+    cannot clobber it
+  probe: |-
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} \
+        | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git reset --hard {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is the same commit as the upstream branch tip
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse '{upstream_remote}/{upstream_branch}')"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_local_commits_left
+  description: the branch has nothing that upstream does not have
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -eq 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: no tracked file is left modified or staged after the reset
+  probe: '! git status --porcelain --untracked-files=no | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+variant: discard
+provenance:
+  compiled_from_task: 'Upstream moved ahead of me. Get me back in line with it. My
+    local commits can go: make my branch match upstream exactly.'
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: 'Upstream moved ahead of me. Get me back in line with it. My local commits
+    can go: make my branch match upstream exactly./seed-3-diverged-19837'
+  fault: diverged
+status: admitted

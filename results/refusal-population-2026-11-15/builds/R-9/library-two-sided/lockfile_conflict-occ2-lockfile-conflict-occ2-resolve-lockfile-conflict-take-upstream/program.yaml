@@ -1,0 +1,220 @@
+id: lockfile_conflict-occ2-lockfile-conflict-occ2-resolve-lockfile-conflict-take-upstream
+intent: Resolve a lockfile merge conflict by taking upstream's dependency file and
+  re-adding the local dependency lines that are pure additions.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_exists
+  description: the upstream remote-tracking branch resolves to a commit
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch} >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_has_diverged
+  description: local HEAD and upstream have each advanced since their merge base
+  probe: |-
+    set -e
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+    test -n "$base"
+    test "$(git rev-list --count "$base"..HEAD)" -gt 0
+    test "$(git rev-list --count "$base"..{upstream_remote}/{upstream_branch})" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: common_lockfile_changed_on_both_sides
+  description: all paths changed on both sides are lock-like and exist in the merge
+    base and both tips
+  probe: |-
+    set -e
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+    common=$(comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort))
+    test -n "$common"
+    printf '%s\n' "$common" | grep -q 'lock'
+    ! printf '%s\n' "$common" | grep -v 'lock' | grep -q .
+    while IFS= read -r f; do
+      test -n "$f" || continue
+      git cat-file -e "$base:$f"
+      git cat-file -e "HEAD:$f"
+      git cat-file -e "{upstream_remote}/{upstream_branch}:$f"
+    done < <(printf '%s\n' "$common")
+  expect_exit: 0
+  expect_pattern: null
+- name: local_removals_already_absent_upstream
+  description: every quoted dependency line the local side removed relative to the
+    merge base is already gone from upstream's version of that file, so resolving
+    from upstream and re-adding local insertions loses nothing. A line the local side
+    dropped while upstream still carries it means the local file must win instead
+    (the keep-local resolution), so this program must not fire.
+  probe: |-
+    set -e
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+    test -n "$base"
+    found=0
+    while IFS= read -r -d '' f; do
+      case "$f" in
+        *lock*) ;;
+        *) continue ;;
+      esac
+      git cat-file -e "$base:$f" 2>/dev/null || continue
+      git cat-file -e "HEAD:$f" 2>/dev/null || continue
+      git cat-file -e "{upstream_remote}/{upstream_branch}:$f" 2>/dev/null || continue
+      found=1
+      removed=$(git diff -U0 --no-color "$base" HEAD -- "$f" \
+        | grep '^-' | grep -v '^---' | sed 's/^-//' \
+        | grep -E '^[[:space:]]*"' | sort -u)
+      test -n "$removed" || continue
+      if comm -23 \
+           <(printf '%s\n' "$removed") \
+           <(git show "{upstream_remote}/{upstream_branch}:$f" | sort -u) \
+         | grep -q .; then
+        exit 1
+      fi
+    done < <(git diff --name-only -z "$base" HEAD)
+    test "$found" = "1"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+
+  if ! git rev-parse --quiet --verify MERGE_HEAD >/dev/null; then
+    git merge --no-commit --no-ff {upstream_remote}/{upstream_branch} >/dev/null 2>&1 || true
+  fi
+
+  if ! git rev-parse --quiet --verify MERGE_HEAD >/dev/null; then
+    exit 1
+  fi
+
+  base=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+
+  tmpdir=$(mktemp -d)
+  trap 'rm -rf "$tmpdir"' EXIT
+
+  paths=()
+  while IFS= read -r -d '' f; do
+    case "$f" in
+      *lock*) paths+=("$f") ;;
+    esac
+  done < <(
+    comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) \
+      | tr '\n' '\0'
+  )
+
+  if [ ${#paths[@]} -eq 0 ]; then
+    exit 1
+  fi
+
+  for f in "${paths[@]}"; do
+    git show "$base:$f" > "$tmpdir/base"
+    git show "HEAD:$f" > "$tmpdir/local"
+    git show "{upstream_remote}/{upstream_branch}:$f" > "$tmpdir/upstream"
+
+    python3 - "$tmpdir/base" "$tmpdir/local" "$tmpdir/upstream" > "$tmpdir/merged" <<'PY'
+  import sys
+  from difflib import SequenceMatcher
+
+  def read_lines(path):
+      with open(path, 'r', encoding='utf-8', errors='surrogateescape', newline='') as fh:
+          return fh.readlines()
+
+  base = read_lines(sys.argv[1])
+  local = read_lines(sys.argv[2])
+  upstream = read_lines(sys.argv[3])
+
+  sm_bu = SequenceMatcher(None, base, upstream, autojunk=False)
+  opcodes = sm_bu.get_opcodes()
+
+  def map_pos(pos):
+      for tag, i1, i2, j1, j2 in opcodes:
+          if i1 <= pos <= i2:
+              if tag == 'equal':
+                  return j1 + (pos - i1)
+              if pos == i1:
+                  return j1
+              if pos == i2:
+                  return j2
+              return j1
+      return len(upstream)
+
+  sm_bl = SequenceMatcher(None, base, local, autojunk=False)
+  insertions = dict()
+  for tag, i1, i2, j1, j2 in sm_bl.get_opcodes():
+      if tag == 'insert':
+          pos = map_pos(i1)
+          insertions.setdefault(pos, []).extend(local[j1:j2])
+
+  seen = set(line.rstrip('\n') for line in upstream)
+  filtered = dict()
+  for pos, lines in insertions.items():
+      for line in lines:
+          key = line.rstrip('\n')
+          if key in seen:
+              continue
+          filtered.setdefault(pos, []).append(line)
+
+  out = []
+  for idx in range(len(upstream) + 1):
+      if idx in filtered:
+          out.extend(filtered[idx])
+      if idx < len(upstream):
+          out.append(upstream[idx])
+
+  sys.stdout.write(''.join(out))
+  PY
+
+    cat "$tmpdir/merged" > "$f"
+    git add -- "$f"
+  done
+
+  git commit --no-edit >/dev/null
+steps: null
+postconditions:
+- name: no_unmerged_paths
+  description: every conflicted path has been resolved
+  probe: '! git diff --name-only --diff-filter=U | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: the upstream branch is now contained in HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: lockfiles_keep_upstream_and_add_local_lines
+  description: every lock-like file that differs from upstream only adds lines and
+    keeps upstream's content
+  probe: |-
+    set -e
+    found=0
+    while IFS= read -r -d '' f; do
+      case "$f" in
+        *lock*)
+          found=1
+          stats=$(git diff --numstat {upstream_remote}/{upstream_branch} HEAD -- "$f")
+          adds=$(printf '%s\n' "$stats" | awk '{print $1}')
+          dels=$(printf '%s\n' "$stats" | awk '{print $2}')
+          test "$adds" != "-"
+          test "$dels" = "0"
+          test "$adds" -gt 0
+          ;;
+      esac
+    done < <(git diff --name-only -z {upstream_remote}/{upstream_branch} HEAD)
+    test "$found" = "1"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers_in_tracked_files
+  description: no unresolved conflict markers remain in tracked files
+  probe: '! git grep -n -E ''^(<<<<<<<|>>>>>>>)'' -- . >/dev/null'
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: The sync conflicts. Resolve it the way this project expects.
+    Start from upstream's dependency file and add back what I added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: The sync conflicts. Resolve it the way this project expects. Start from
+    upstream's dependency file and add back what I added./seed-6-lockfile_conflict-12721
+  fault: lockfile_conflict
+status: candidate

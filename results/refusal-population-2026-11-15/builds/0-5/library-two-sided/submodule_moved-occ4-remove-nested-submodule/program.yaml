@@ -1,0 +1,88 @@
+id: submodule_moved-occ4-remove-nested-submodule
+intent: 'Bring a project into line with upstream by removing the nested repository
+  (submodule) it still carries: delete the gitlink and its .gitmodules entry, clear
+  the local submodule config, remove the nested checkout''s git directory, and commit
+  the result.'
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: submodule_gitlink_present
+  description: the index records {submodule_path} as a submodule gitlink
+  probe: git ls-files -s -- {submodule_path}
+  expect_exit: 0
+  expect_pattern: '^160000 '
+- name: gitmodules_declares_submodule
+  description: .gitmodules still declares the submodule at {submodule_path}
+  probe: git config -f .gitmodules --get "submodule.{submodule_path}.path"
+  expect_exit: 0
+  expect_pattern: '{submodule_path}'
+- name: submodule_initialised
+  description: the nested checkout at {submodule_path} is populated on disk
+  probe: test -e "{submodule_path}/.git"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_present
+  description: the upstream remote-tracking ref {upstream_remote}/{upstream_branch}
+    exists locally
+  probe: git rev-parse --verify --quiet "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_dropped_submodule
+  description: upstream's tip no longer tracks anything at {submodule_path}
+  probe: '! git ls-tree {upstream_remote}/{upstream_branch} -- {submodule_path} |
+    grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: there are no uncommitted changes to disturb
+  probe: test -z "$(git status --porcelain -z | tr '\0' '\n')"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git rm -f -- {submodule_path}
+  if [ -f .gitmodules ]; then
+    git config -f .gitmodules --remove-section "submodule.{submodule_path}" || true
+    git add .gitmodules
+  fi
+  git config --local --remove-section "submodule.{submodule_path}" || true
+  rm -rf ".git/modules/{submodule_path}"
+  git commit -m "chore: drop nested library"
+steps: null
+postconditions:
+- name: gitlink_removed
+  description: '{submodule_path} is no longer a gitlink in the index'
+  probe: '! git ls-files -s -- {submodule_path} | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: gitmodules_entry_removed
+  description: .gitmodules no longer declares the submodule
+  probe: '! git config -f .gitmodules --get "submodule.{submodule_path}.path"'
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_config_cleared
+  description: the local config has no section for the submodule
+  probe: '! git config --local --get "submodule.{submodule_path}.url"'
+  expect_exit: 0
+  expect_pattern: null
+- name: nested_git_dir_removed
+  description: the nested checkout's git directory is gone
+  probe: '[ ! -e ".git/modules/{submodule_path}" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the removal is committed and nothing is left outstanding
+  probe: test -z "$(git status --porcelain -z | tr '\0' '\n')"
+  expect_exit: 0
+  expect_pattern: null
+variant: remove
+provenance:
+  compiled_from_task: A nested repository in this project needs bringing into line.
+    Remove the nested checkout, the way upstream did.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: A nested repository in this project needs bringing into line. Remove
+    the nested checkout, the way upstream did./seed-8-submodule_moved-19837
+  fault: submodule_moved
+status: admitted

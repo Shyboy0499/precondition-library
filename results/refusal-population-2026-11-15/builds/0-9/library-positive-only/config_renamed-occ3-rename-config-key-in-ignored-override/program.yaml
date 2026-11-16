@@ -1,0 +1,269 @@
+id: config_renamed-occ3-rename-config-key-in-ignored-override
+intent: Rename a stale key in a machine-local, git-ignored override config according
+  to the repository's tracked rename map, leaving the file untracked and ignored.
+parameters: []
+preconditions:
+- name: tracked_rename_map
+  description: a tracked file whose path contains "rename" declares at least one old
+    = new key mapping
+  probe: |-
+    map=
+    while IFS= read -r -d '' f; do
+      case "$f" in
+        *[Rr][Ee][Nn][Aa][Mm][Ee]*)
+          if grep -Eq '^[[:space:]]*[^#[:space:]=]+[[:space:]]*=[[:space:]]*[^#[:space:]=]+' "$f"; then
+            map=$f
+            break
+          fi
+          ;;
+      esac
+    done < <(git ls-files -z)
+    [ -n "$map" ]
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_key_in_ignored_override
+  description: at least one ignored, untracked override file contains an old key from
+    the rename map
+  probe: |-
+    map=
+    while IFS= read -r -d '' f; do
+      case "$f" in
+        *[Rr][Ee][Nn][Aa][Mm][Ee]*)
+          if grep -Eq '^[[:space:]]*[^#[:space:]=]+[[:space:]]*=[[:space:]]*[^#[:space:]=]+' "$f"; then
+            map=$f
+            break
+          fi
+          ;;
+      esac
+    done < <(git ls-files -z)
+    [ -n "$map" ] || exit 1
+    olds=$(awk '
+      {
+        line=$0
+        sub(/[[:space:]]*#.*$/, "", line)
+        if (line ~ /^[[:space:]]*$/) next
+        eq=index(line, "=")
+        if (eq == 0) next
+        old=substr(line,1,eq-1)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+        if (old != "") print old
+      }' "$map")
+    [ -n "$olds" ] || exit 1
+    found=0
+    while IFS= read -r -d '' f; do
+      while IFS= read -r old; do
+        if awk -v old="$old" '
+          {
+            eq=index($0,"=")
+            if (eq == 0) next
+            left=substr($0,1,eq-1)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", left)
+            if (left == old) { found=1; exit }
+          }
+          END { exit !found }
+        ' "$f"; then
+          found=1
+          break
+        fi
+      done <<< "$olds"
+      [ "$found" -eq 1 ] && break
+    done < <(git ls-files --others --ignored --exclude-standard -z)
+    [ "$found" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_worktree_clean
+  description: there are no staged or unstaged changes to tracked files, so the only
+    edit will be to an ignored override file
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  set -euo pipefail
+
+  map=
+  while IFS= read -r -d '' f; do
+    case "$f" in
+      *[Rr][Ee][Nn][Aa][Mm][Ee]*)
+        if grep -Eq '^[[:space:]]*[^#[:space:]=]+[[:space:]]*=[[:space:]]*[^#[:space:]=]+' "$f"; then
+          map=$f
+          break
+        fi
+        ;;
+    esac
+  done < <(git ls-files -z)
+  [ -n "$map" ] || { echo "no tracked rename map found" >&2; exit 1; }
+
+  pairs=$(awk '
+    {
+      line=$0
+      sub(/[[:space:]]*#.*$/, "", line)
+      if (line ~ /^[[:space:]]*$/) next
+      eq=index(line, "=")
+      if (eq == 0) next
+      old=substr(line,1,eq-1)
+      new=substr(line,eq+1)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+      if (old != "" && new != "") print old "=" new
+    }' "$map")
+  [ -n "$pairs" ] || { echo "rename map is empty" >&2; exit 1; }
+
+  while IFS= read -r -d '' file; do
+    if ! grep -Iq . "$file"; then
+      continue
+    fi
+
+    tmp=$(mktemp "${file}.XXXXXX")
+    awk -v pairs="$pairs" '
+      BEGIN {
+        n = split(pairs, lines, "\n")
+        for (i = 1; i <= n; i++) {
+          eq = index(lines[i], "=")
+          if (eq > 0) {
+            old = substr(lines[i], 1, eq-1)
+            new = substr(lines[i], eq+1)
+            repl[old] = new
+          }
+        }
+      }
+      {
+        eq = index($0, "=")
+        if (eq == 0) { print; next }
+        left = substr($0, 1, eq-1)
+        right = substr($0, eq+1)
+        key = left
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+        if (key in repl) {
+          pos = index(left, key)
+          if (pos > 0) {
+            left = substr(left, 1, pos-1) repl[key] substr(left, pos+length(key))
+          }
+        }
+        print left "=" right
+      }
+    ' "$file" > "$tmp"
+
+    if ! cmp -s "$file" "$tmp"; then
+      cat "$tmp" > "$file"
+    fi
+    rm -f "$tmp"
+  done < <(git ls-files --others --ignored --exclude-standard -z)
+steps: null
+postconditions:
+- name: no_stale_key_in_ignored_override
+  description: no ignored, untracked override file still contains an old key from
+    the rename map
+  probe: |-
+    map=
+    while IFS= read -r -d '' f; do
+      case "$f" in
+        *[Rr][Ee][Nn][Aa][Mm][Ee]*)
+          if grep -Eq '^[[:space:]]*[^#[:space:]=]+[[:space:]]*=[[:space:]]*[^#[:space:]=]+' "$f"; then
+            map=$f
+            break
+          fi
+          ;;
+      esac
+    done < <(git ls-files -z)
+    [ -n "$map" ] || exit 1
+    olds=$(awk '
+      {
+        line=$0
+        sub(/[[:space:]]*#.*$/, "", line)
+        if (line ~ /^[[:space:]]*$/) next
+        eq=index(line, "=")
+        if (eq == 0) next
+        old=substr(line,1,eq-1)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+        if (old != "") print old
+      }' "$map")
+    [ -n "$olds" ] || exit 1
+    found=0
+    while IFS= read -r -d '' f; do
+      while IFS= read -r old; do
+        if awk -v old="$old" '
+          {
+            eq=index($0,"=")
+            if (eq == 0) next
+            left=substr($0,1,eq-1)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", left)
+            if (left == old) { found=1; exit }
+          }
+          END { exit !found }
+        ' "$f"; then
+          found=1
+          break
+        fi
+      done <<< "$olds"
+      [ "$found" -eq 1 ] && break
+    done < <(git ls-files --others --ignored --exclude-standard -z)
+    [ "$found" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: new_key_present_in_ignored_override
+  description: at least one ignored, untracked override file now contains a new key
+    from the rename map
+  probe: |-
+    map=
+    while IFS= read -r -d '' f; do
+      case "$f" in
+        *[Rr][Ee][Nn][Aa][Mm][Ee]*)
+          if grep -Eq '^[[:space:]]*[^#[:space:]=]+[[:space:]]*=[[:space:]]*[^#[:space:]=]+' "$f"; then
+            map=$f
+            break
+          fi
+          ;;
+      esac
+    done < <(git ls-files -z)
+    [ -n "$map" ] || exit 1
+    news=$(awk '
+      {
+        line=$0
+        sub(/[[:space:]]*#.*$/, "", line)
+        if (line ~ /^[[:space:]]*$/) next
+        eq=index(line, "=")
+        if (eq == 0) next
+        new=substr(line,eq+1)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+        if (new != "") print new
+      }' "$map")
+    [ -n "$news" ] || exit 1
+    found=0
+    while IFS= read -r -d '' f; do
+      while IFS= read -r new; do
+        if awk -v new="$new" '
+          {
+            eq=index($0,"=")
+            if (eq == 0) next
+            left=substr($0,1,eq-1)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", left)
+            if (left == new) { found=1; exit }
+          }
+          END { exit !found }
+        ' "$f"; then
+          found=1
+          break
+        fi
+      done <<< "$news"
+      [ "$found" -eq 1 ] && break
+    done < <(git ls-files --others --ignored --exclude-standard -z)
+    [ "$found" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_worktree_still_clean
+  description: the ignored override file was not added to git; the tracked worktree
+    is still clean
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: Some setting in my config has been renamed upstream. Sort the
+    config out. Rename the old key in my own override file, and keep that file out
+    of git.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Some setting in my config has been renamed upstream. Sort the config
+    out. Rename the old key in my own override file, and keep that file out of git./seed-12-config_renamed-29980
+  fault: config_renamed
+status: admitted

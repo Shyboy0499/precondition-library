@@ -1,0 +1,100 @@
+id: branch_renamed-occ1-track-renamed-upstream-branch-and-merge
+intent: track upstream's renamed default branch from the current branch and merge
+  it into the local commits with a merge commit
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: inside_work_tree
+  description: the current directory is a Git work tree
+  probe: git rev-parse --is-inside-work-tree
+  expect_exit: 0
+  expect_pattern: ^true$
+- name: target_remote_branch_exists
+  description: the new upstream branch is already available as a remote-tracking ref
+  probe: git show-ref --verify --quiet "refs/remotes/{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: target_is_remote_default
+  description: the new upstream branch is the remote's default branch
+  probe: test "$(git symbolic-ref --short "refs/remotes/{upstream_remote}/HEAD" 2>/dev/null)"
+    = "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_before
+  description: there are no staged, unstaged or untracked changes before merging
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: tracks_other_branch_on_remote
+  description: the current branch is configured to track a different branch on the
+    upstream remote
+  probe: |-
+    current_branch=$(git symbolic-ref --short HEAD) || exit 1
+    tracked_remote=$(git config --get "branch.$current_branch.remote") || exit 1
+    tracked_merge=$(git config --get "branch.$current_branch.merge") || exit 1
+    test "$tracked_remote" = "{upstream_remote}"
+    test "$tracked_merge" != "refs/heads/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: diverged_from_target
+  description: both the local branch and the new upstream branch have unique commits,
+    so the local commits must be preserved by a merge
+  probe: |-
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0 &&
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflicting_changed_paths
+  description: the local and upstream sides do not change the same paths relative
+    to their merge base
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    ! comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch --prune {upstream_remote}
+  git branch --set-upstream-to={upstream_remote}/{upstream_branch}
+  git merge --no-edit {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: tracks_new_upstream
+  description: the current branch now tracks the new upstream branch
+  probe: git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}'
+  expect_exit: 0
+  expect_pattern: ^{upstream_remote}/{upstream_branch}$
+- name: target_remote_branch_available
+  description: the new upstream branch is available as a remote-tracking ref
+  probe: git show-ref --verify --quiet "refs/remotes/{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_merged
+  description: the new upstream branch is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: head_is_merge_commit
+  description: HEAD is a merge commit preserving the local commits and integrating
+    upstream
+  probe: test "$(git rev-list --parents -n 1 HEAD | wc -w)" -ge 3
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after
+  description: the merge left no staged, unstaged or untracked files
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: Upstream changed something about its branches and my checkout
+    is lost. Sort it out. Track upstream's new branch and merge it into my own commits.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Upstream changed something about its branches and my checkout is lost.
+    Sort it out. Track upstream's new branch and merge it into my own commits./seed-2-branch_renamed-19837
+  fault: branch_renamed
+status: admitted

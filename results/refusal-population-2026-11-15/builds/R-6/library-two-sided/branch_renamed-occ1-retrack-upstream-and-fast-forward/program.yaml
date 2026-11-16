@@ -1,0 +1,64 @@
+id: branch_renamed-occ1-retrack-upstream-and-fast-forward
+intent: Keep the current branch name, retarget its upstream tracking to the given
+  remote branch, and fast-forward it to that branch.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_local_branch
+  description: HEAD is attached to a local branch, so tracking can be changed for
+    the current branch.
+  probe: git symbolic-ref --quiet --short HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: The working tree is clean, so the catch-up cannot be blocked by local
+    changes.
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: target_remote_tracking_branch_exists
+  description: The target remote-tracking branch is already present locally.
+  probe: git rev-parse --verify --quiet refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: tracking_is_not_already_target
+  description: The current branch upstream is missing or points somewhere other than
+    the target.
+  probe: test "$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null)"
+    != '{upstream_remote}/{upstream_branch}'
+  expect_exit: 0
+  expect_pattern: null
+- name: fast_forward_possible
+  description: HEAD is an ancestor of the target branch, so it can be fast-forwarded.
+  probe: git merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote} --prune
+  git branch --set-upstream-to={upstream_remote}/{upstream_branch}
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: tracks_target
+  description: The current branch upstream is now the target remote-tracking branch.
+  probe: git rev-parse --abbrev-ref --symbolic-full-name '@{u}'
+  expect_exit: 0
+  expect_pattern: ^{upstream_remote}/{upstream_branch}$
+- name: caught_up_to_target
+  description: HEAD is exactly the target branch commit.
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+variant: retrack
+provenance:
+  compiled_from_task: Make this branch follow upstream's current main line again,
+    and catch it up. Keep my branch's name, point its tracking at upstream's new branch
+    and catch up.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Make this branch follow upstream's current main line again, and catch
+    it up. Keep my branch's name, point its tracking at upstream's new branch and
+    catch up./seed-6-branch_renamed-17967
+  fault: branch_renamed
+status: admitted

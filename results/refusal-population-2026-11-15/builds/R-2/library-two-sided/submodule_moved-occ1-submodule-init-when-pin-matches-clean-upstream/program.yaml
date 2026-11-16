@@ -1,0 +1,95 @@
+id: submodule_moved-occ1-submodule-init-when-pin-matches-clean-upstream
+intent: Initialise the declared nested submodule and check it out at the commit recorded
+  in the parent index, but only when that pin already matches upstream and the branch
+  is clean and identical to upstream (no merge conflict, no divergence to resolve).
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: submodule_gitlink_present
+  description: the parent index records a gitlink at the declared submodule path
+  probe: git ls-files -s -z -- "{submodule_path}" | tr '\0' '\n' | grep -q '^160000
+    '
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_gitlink_present
+  description: the upstream branch records a gitlink at the same submodule path
+  probe: git ls-tree -z "{upstream_remote}/{upstream_branch}" -- "{submodule_path}"
+    | tr '\0' '\n' | grep -q '^160000 commit '
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_pin_matches_upstream
+  description: the index gitlink equals the upstream commit for the submodule
+  probe: |-
+    local_pin=$(git ls-files -s -z -- "{submodule_path}" | tr '\0' '\n' | awk '{print $2}')
+    upstream_pin=$(git ls-tree -z "{upstream_remote}/{upstream_branch}" -- "{submodule_path}" | tr '\0' '\n' | awk '{print $3}')
+    test -n "$local_pin" && test "$local_pin" = "$upstream_pin"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_not_initialised
+  description: the submodule is recorded in the index but not yet initialised or checked
+    out
+  probe: git submodule status -- "{submodule_path}" | grep -q '^-'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the index and worktree have no staged, modified, deleted or untracked
+    entries
+  probe: test -z "$(git status --porcelain -z | tr '\0' '\n')"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_conflicts
+  description: no unmerged (conflicted) paths are present in the index
+  probe: test -z "$(git ls-files -u -z | tr '\0' '\n')"
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_matches_upstream
+  description: HEAD is neither ahead of nor behind the upstream branch tip
+  probe: |-
+    ahead=$(git rev-list --count "{upstream_remote}/{upstream_branch}..HEAD")
+    behind=$(git rev-list --count "HEAD..{upstream_remote}/{upstream_branch}")
+    test "$ahead" = 0 && test "$behind" = 0
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git submodule update --init -- "{submodule_path}"
+steps: null
+postconditions:
+- name: submodule_checked_out
+  description: the submodule status has no uninitialised or modified marker
+  probe: git submodule status -- "{submodule_path}" | grep -q '^ '
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_head_matches_recorded_pin
+  description: the submodule HEAD equals the commit recorded in the parent index
+  probe: |-
+    sub_pin=$(git -C "{submodule_path}" rev-parse HEAD 2>/dev/null)
+    recorded_pin=$(git ls-files -s -z -- "{submodule_path}" | tr '\0' '\n' | awk '{print $2}')
+    test -n "$sub_pin" && test "$sub_pin" = "$recorded_pin"
+  expect_exit: 0
+  expect_pattern: null
+- name: recorded_pin_still_matches_upstream
+  description: the parent index gitlink still equals the upstream commit
+  probe: |-
+    local_pin=$(git ls-files -s -z -- "{submodule_path}" | tr '\0' '\n' | awk '{print $2}')
+    upstream_pin=$(git ls-tree -z "{upstream_remote}/{upstream_branch}" -- "{submodule_path}" | tr '\0' '\n' | awk '{print $3}')
+    test -n "$local_pin" && test "$local_pin" = "$upstream_pin"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_still_clean
+  description: initialising the submodule left no staged, modified or untracked entries
+    behind
+  probe: test -z "$(git status --porcelain -z | tr '\0' '\n')"
+  expect_exit: 0
+  expect_pattern: null
+variant: init
+provenance:
+  compiled_from_task: Get this repo's nested dependency consistent with upstream.
+    Initialise the nested repository and check it out.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this repo's nested dependency consistent with upstream. Initialise
+    the nested repository and check it out./seed-5-submodule_moved-211
+  fault: submodule_moved
+status: admitted

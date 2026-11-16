@@ -1,0 +1,189 @@
+id: lockfile_conflict-occ1-merge-upstream-keep-local-deps
+intent: Merge the upstream branch into the current fork while resolving dependency-file
+  conflicts in favor of local content, preserving local removals and adding upstream-only
+  inserted lines.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: histories_share_base
+  description: local and upstream have a common ancestor
+  probe: git merge-base HEAD {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_exists
+  description: the upstream-tracking branch exists
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: there are no staged, unstaged, or untracked changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: the repository is not already in a merge
+  probe: test ! -e "$(git rev-parse --git-path MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_ahead_of_upstream
+  description: the current branch has commits not on upstream
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ahead_of_local
+  description: upstream has commits not on the current branch
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: common_touched_file
+  description: local and upstream both changed at least one same path
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+    comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+  upstream="{upstream_remote}/{upstream_branch}"
+  merge_failed=0
+  git merge --no-commit --no-ff "$upstream" || merge_failed=$?
+  merge_head="$(git rev-parse --git-path MERGE_HEAD)"
+  if [ "$merge_failed" -ne 0 ] && [ ! -f "$merge_head" ]; then
+    exit 1
+  fi
+  python3 - <<'PY'
+  import difflib
+  import subprocess
+
+
+  def git_bytes(*args):
+      return subprocess.run(("git",) + args, check=True, stdout=subprocess.PIPE).stdout
+
+
+  def decode(data):
+      return data.decode("utf-8", "surrogateescape")
+
+
+  paths = decode(git_bytes("diff", "--name-only", "--diff-filter=U", "-z")).split("\0")
+  for path in paths:
+      if not path:
+          continue
+      with open(path, "r", encoding="utf-8", errors="surrogateescape") as handle:
+          working = handle.read()
+      lines = working.splitlines(True)
+      ours = []
+      state = "normal"
+      for line in lines:
+          if state == "normal":
+              if line.startswith("<<<<<<< "):
+                  state = "ours"
+              else:
+                  ours.append(line)
+          elif state == "ours":
+              if line.startswith("||||||| "):
+                  state = "base"
+              elif line.startswith("======="):
+                  state = "theirs"
+              else:
+                  ours.append(line)
+          elif state == "base":
+              if line.startswith("======="):
+                  state = "theirs"
+          elif state == "theirs":
+              if line.startswith(">>>>>>> "):
+                  state = "normal"
+      base = decode(git_bytes("show", ":1:" + path)).splitlines(True)
+      theirs = decode(git_bytes("show", ":3:" + path)).splitlines(True)
+      inserts = []
+      matcher = difflib.SequenceMatcher(None, base, theirs, autojunk=False)
+      for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+          if tag == "insert":
+              before = base[i1 - 1] if i1 > 0 else None
+              after = base[i1] if i1 < len(base) else None
+              inserts.append((before, after, theirs[j1:j2]))
+      for before, after, new_lines in inserts:
+          already = False
+          width = len(new_lines)
+          if width:
+              for i in range(0, len(ours) - width + 1):
+                  if ours[i:i + width] == new_lines:
+                      already = True
+                      break
+          if already:
+              continue
+          index = None
+          if after is not None:
+              candidates = [i for i, line in enumerate(ours) if line == after]
+              if candidates:
+                  if before is not None:
+                      before_candidates = [i for i, line in enumerate(ours) if line == before]
+                      for pos in before_candidates:
+                          later = [i for i in candidates if i > pos]
+                          if later:
+                              index = later[0]
+                              break
+                  if index is None:
+                      index = candidates[0]
+          if index is None and before is not None:
+              candidates = [i for i, line in enumerate(ours) if line == before]
+              if candidates:
+                  index = candidates[-1] + 1
+          if index is None:
+              index = len(ours)
+              if ours and ours[-1].strip() in ("]", ")"):
+                  index = len(ours) - 1
+          ours[index:index] = new_lines
+      with open(path, "w", encoding="utf-8", errors="surrogateescape") as handle:
+          handle.writelines(ours)
+      subprocess.run(("git", "add", "--", path), check=True)
+  PY
+  git commit --no-edit
+steps: null
+postconditions:
+- name: merge_commit_created
+  description: HEAD is a merge commit with a second parent
+  probe: git rev-parse --verify HEAD^2
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_merged
+  description: HEAD's second parent is the upstream branch tip
+  probe: test "$(git rev-parse HEAD^2)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: the upstream branch is contained in HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: conflicts_resolved
+  description: the index has no unmerged entries
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_merge
+  description: no staged, unstaged, or untracked changes remain
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: tracked files contain no conflict markers
+  probe: '! git grep -Eq ''^(<<<<<<< |>>>>>>> )'' -- .'
+  expect_exit: 0
+  expect_pattern: null
+variant: keep_local
+provenance:
+  compiled_from_task: Get my fork current with upstream; our dependency changes collided.
+    Keep my dependency file, with what I removed still removed, and add what upstream
+    added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get my fork current with upstream; our dependency changes collided.
+    Keep my dependency file, with what I removed still removed, and add what upstream
+    added./seed-3-lockfile_conflict-19837
+  fault: lockfile_conflict
+status: admitted
