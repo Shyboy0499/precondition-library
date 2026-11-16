@@ -40,7 +40,7 @@ may still be amended.
    registered. The false-positive rates are reported, not corrected for.
 
 `bench.refusal_population.h4_outcome` and `decide` implement items 2 and 3, and
-`tests/test_refusal_population.py` tests each outcome.
+`tests/studies/test_refusal_population.py` tests each outcome.
 
 ## Consequences
 

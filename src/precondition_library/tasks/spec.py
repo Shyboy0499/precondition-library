@@ -83,7 +83,7 @@ class FaultSpec:
         admission's negative sandboxes. A fault whose story is a missing upstream branch
         (as `branch_renamed`'s is) leaves the stale remote-tracking ref in place -- what a
         non-pruning fetch leaves -- and carries the change in another field.
-        `tests/test_one_free_variable.py` builds every state admission builds and checks
+        `tests/experiment/test_one_free_variable.py` builds every state admission builds and checks
         the ref resolves."""
         raise NotImplementedError("implemented per plan: phase 1")
 

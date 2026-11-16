@@ -59,10 +59,10 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from ...sandbox import Sandbox, git_out, record_base, run_git, tip_contained
-from ...signatures import CARGO_LOCK, StateFingerprint
-from ..intent import IntentSpec, ResolutionVariant, sample_index
-from ..spec import HELD_OUT_SEED_BASE, FaultSpec, GroundTruth
+from precondition_library.sandbox import Sandbox, git_out, record_base, run_git, tip_contained
+from precondition_library.signatures import CARGO_LOCK, StateFingerprint
+from precondition_library.tasks.intent import IntentSpec, ResolutionVariant, sample_index
+from precondition_library.tasks.spec import HELD_OUT_SEED_BASE, FaultSpec, GroundTruth
 
 # The generated file the sandbox itself creates. Lock-shaped: a version field
 # and a package list, not the format of any real package manager.
@@ -147,7 +147,7 @@ def removable_dependency_for_seed(seed: int) -> str:
 # --- the intent (#191), registered in `tasks.registry` (ADR-0029) ---------------
 #
 # Its acceptable sets are pinned against `check` by replay
-# (`tests/test_lockfile_intent.py`).
+# (`tests/tasks/test_lockfile_intent.py`).
 
 STATE_VARIANT = {
     "additions_only": "take_upstream",

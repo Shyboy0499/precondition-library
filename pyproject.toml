@@ -53,6 +53,9 @@ select = ["E", "F", "I", "N", "W", "UP"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Test modules that others import helpers from (`from test_episode_runner import ...`) live in
+# these folders; listing them keeps those imports working wherever the importing test lives.
+pythonpath = ["tests/experiment", "tests/studies"]
 addopts = "-q"
 
 [tool.mypy]

@@ -42,10 +42,10 @@ import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 
-from ..program import GroundTruthResult, Program
-from ..sandbox import Sandbox, run_env
-from .confine import run_confined
-from .probes import bindings, evaluate_predicates
+from precondition_library.program import GroundTruthResult, Program
+from precondition_library.runtime.confine import run_confined
+from precondition_library.runtime.probes import bindings, evaluate_predicates
+from precondition_library.sandbox import Sandbox, run_env
 
 
 class TemplateError(ValueError):

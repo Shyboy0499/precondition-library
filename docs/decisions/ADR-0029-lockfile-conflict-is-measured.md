@@ -107,7 +107,7 @@ The conversion took three steps that each left every measured number unchanged:
 **New obligations:**
 - Every intent that syncs commits must refuse `sync_would_conflict` states, as
   `diverged` now does.
-- `tests/test_declared_state.py` expects an empty excluded set.
+- `tests/meta/test_declared_state.py` expects an empty excluded set.
 
 ## Alternatives rejected
 

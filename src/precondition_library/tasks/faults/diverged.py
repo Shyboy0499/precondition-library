@@ -22,10 +22,15 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from ...sandbox import Sandbox, git_out, record_base, run_git, tip_contained
-from ...signatures import StateFingerprint
-from ..intent import IntentSpec, ResolutionVariant, draw_index, sample_index
-from ..spec import HELD_OUT_SEED_BASE, FaultSpec, GroundTruth
+from precondition_library.sandbox import Sandbox, git_out, record_base, run_git, tip_contained
+from precondition_library.signatures import StateFingerprint
+from precondition_library.tasks.intent import (
+    IntentSpec,
+    ResolutionVariant,
+    draw_index,
+    sample_index,
+)
+from precondition_library.tasks.spec import HELD_OUT_SEED_BASE, FaultSpec, GroundTruth
 
 # The three live states, and the resolution each is the real-world equivalent of.
 # The order is part of the seed-to-state mapping, so appending to it would change
@@ -325,7 +330,7 @@ def _has_local_work_to_integrate(state: StateFingerprint) -> bool:
     Merge and rebase both satisfy this fault's checker in every such state -- upstream
     contained, local changes surviving -- including the one the label calls `discard`
     and each other's. Measured, not assumed: every gold body on every state over 60
-    seeds (issue #172), and pinned by `tests/test_acceptable_variants.py`. `discard` is
+    seeds (issue #172), and pinned by `tests/tasks/test_acceptable_variants.py`. `discard` is
     accepted only where it is the label, because elsewhere it destroys the local work.
     """
     return (

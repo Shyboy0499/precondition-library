@@ -38,13 +38,13 @@ from typing import Protocol
 
 import yaml
 
-from .intent_key import agreeing
-from .program import GroundTruthResult, Program, ProgramStatus
-from .sandbox import Sandbox
-from .signatures import TaskSignature
-from .similarity import Similarity, lexical_similarity, score_all
-from .tasks.intent import IntentSpec
-from .tasks.registry import INTENTS
+from precondition_library.intent_key import agreeing
+from precondition_library.program import GroundTruthResult, Program, ProgramStatus
+from precondition_library.sandbox import Sandbox
+from precondition_library.signatures import TaskSignature
+from precondition_library.similarity import Similarity, lexical_similarity, score_all
+from precondition_library.tasks.intent import IntentSpec
+from precondition_library.tasks.registry import INTENTS
 
 
 class _ProgramDumper(yaml.SafeDumper):

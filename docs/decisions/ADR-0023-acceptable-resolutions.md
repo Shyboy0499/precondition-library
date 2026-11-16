@@ -37,7 +37,7 @@ On `submodule_moved`, exactly one resolution passes in each state, and it is the
    the labelled states where a resolution is acceptable besides its own.
    `IntentSpec.acceptable_variants(state)` returns the label plus those. For an
    unlabelled state it returns `()`, so a negative stays a negative.
-2. **The declaration is held to the checker.** `tests/test_acceptable_variants.py`
+2. **The declaration is held to the checker.** `tests/tasks/test_acceptable_variants.py`
    replays every gold body on every injected state and requires the checker's verdict
    to equal membership in the declared set, in both directions.
 3. **One rule, everywhere.** `program.accepts(label, acceptable, fired)` decides

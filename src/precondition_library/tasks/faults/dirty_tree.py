@@ -47,10 +47,15 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from ...sandbox import Sandbox, git_out, record_base, run_git, tip_contained
-from ...signatures import StateFingerprint
-from ..intent import IntentSpec, ResolutionVariant, draw_index, sample_index
-from ..spec import HELD_OUT_SEED_BASE, FaultSpec, GroundTruth
+from precondition_library.sandbox import Sandbox, git_out, record_base, run_git, tip_contained
+from precondition_library.signatures import StateFingerprint
+from precondition_library.tasks.intent import (
+    IntentSpec,
+    ResolutionVariant,
+    draw_index,
+    sample_index,
+)
+from precondition_library.tasks.spec import HELD_OUT_SEED_BASE, FaultSpec, GroundTruth
 
 # The three live states a seed selects between, and the salt that chooses them.
 # Appending a state would change which state an existing seed injects, so add

@@ -93,7 +93,7 @@ gold mis-fire (gold preconditions holding where the state does not accept the re
   programs required `deps.lock`, so the sweep did not check that grader on held-out paths. ADR-0046
   closes the gap: they now find the file, and all 40 held-out lock-file states grade ok.
 
-`tests/test_gold_sweep.py` runs it in CI on sampled states: the held-out ones that exposed this
+`tests/audits/test_gold_sweep.py` runs it in CI on sampled states: the held-out ones that exposed this
 ADR's defects, eval ones, and a local repository standing in for a real host, which carries
 heading underlines, an ignored `vendor` and quoted names. With each fix reverted in turn, the
 sample caught the marker, `dirty_tree` and gold `aside` defects. The `-z` diff defect needed a

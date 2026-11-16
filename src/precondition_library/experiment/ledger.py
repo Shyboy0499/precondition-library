@@ -1,0 +1,450 @@
+"""The episode ledger: one JSONL line per episode, the raw material of the result.
+
+Every number in the write-up is a grouping over this file, so it records more
+than the headline metric. In particular `cached_tokens_in` is kept separate
+from `tokens_in` because provider-side prompt caching can make the ReAct
+baseline look cheaper than the work it performed, and that would quietly
+flatter whichever arm benefits most. Dispatch-tuning parameters are recorded
+per episode too, so a reviewer can tell a tuned comparison from an untuned one.
+
+Nothing in this module computes results; that is `bench.report`'s job.
+"""
+
+from __future__ import annotations
+
+import json
+from enum import StrEnum
+from pathlib import Path
+
+from pydantic import BaseModel, ValidationError
+
+from precondition_library.program import EpisodeOutcome, accepts
+
+
+class Arm(StrEnum):
+    """The conditions compared. In the online mode each builds its own library
+    from an empty start; a frozen run (ADR-0009) dispatches them all against one.
+
+    The first three are the experiment: ReAct with no reuse (arm 1), text
+    similarity (arm 2), and executable preconditions (arm 3). The rest are the
+    baselines issue #7 adds so an arm-3 win is attributable rather than a straw
+    man -- a zero-token oracle floor (`GOLD`), an intent-key lookup
+    (`INTENT_KEY`, arm 2c: the request string itself, ADR-0015), a soft vote over
+    arm 3's own probe features (`SOFT_VOTE`, arm 2b, ADR-0016), and ReAct with
+    a memory of its own past successes (`REACT_MEMORY`, arm 1b, ADR-0017).
+
+    `GOLD` is an **oracle**: it consults the state's ground-truth variant to pick
+    the hand-written resolution, which is exactly why it is a floor and why it is
+    excluded from the matched-coverage dispatch comparison (ADR-0014). Every other
+    arm is denied the checker until after it has stopped (`bench.run`)."""
+
+    REACT = "react"
+    SEMANTIC = "semantic"
+    PRECONDITION = "precondition"
+    GOLD = "gold"
+    INTENT_KEY = "intent_key"
+    SOFT_VOTE = "soft_vote"
+    REACT_MEMORY = "react_memory"
+
+
+class OccurrenceRole(StrEnum):
+    """What an occurrence is for, which is not how it turned out.
+
+    A **variant** occurrence is the first sight of an **instance** of its fault --
+    a resolution together with the injector's drawn Tier 1 axis values (ADR-0005):
+    nothing in the arm's library was admitted from that environment, so the
+    episode is an independent observation. A **replay** occurrence is a genuine
+    repeat of an instance already seen: the environment recurs, so a program
+    admitted earlier may answer the episode for nothing -- the amortization the
+    cost curve exists to show -- and the observation is therefore dependent on the
+    episode that admitted that program.
+
+    Declared by `bench.splits`, which owns the rule and the seed sets, and
+    written onto every row by `bench.run`. It lives here because it is a field's
+    value type, exactly as `Arm` does, and keeping it here means this module --
+    the raw record layer -- still imports nothing that could compute a result.
+    """
+
+    VARIANT = "variant"
+    REPLAY = "replay"
+
+
+class EpisodeRecord(BaseModel):
+    """One episode. Fields are flat on purpose: the ledger must stay greppable."""
+
+    arm: Arm
+    task_id: str
+    fault_type: str
+    occurrence_index: int
+    """1 for the first time this fault type is seen, 2 for the second, and so on.
+    Grouping by this field is what produces the cost-vs-repeat curve.
+
+    Occurrence order is not the same thing as independence, which is what
+    `occurrence_role` records."""
+    occurrence_role: OccurrenceRole
+    """Whether this occurrence is the first sight of its instance or a later one.
+
+    Required, with no default, because a missing role silently reads as a
+    variant and a variant is the role that may be counted as an independent
+    observation: a default would make the report claim independence the plan
+    does not provide, which is the one mistake this field exists to prevent.
+
+    **Why the distinction is here at all.** A fault's injector draws a small
+    environment per seed, and a program is admitted for the resolution of one of
+    them. The first occurrence of an instance therefore has no program that could
+    answer it -- its cost is the learning pass -- while a genuine repeat of the
+    same instance can be answered by that program for nothing. The two
+    occurrences are the same experiment only in appearance: the first is
+    independent, the second is a repeat that also *depends* on the first. A
+    reader who does not know this will compute the cost curve over the first
+    (where it cannot bend) or an interval over the second (which counts one
+    observation many times). `bench.report` groups by this field for exactly
+    that reason: the cost curve takes the replays, the mismatch comparison the
+    variants.
+
+    It records the plan's role, not what happened. A row labelled `replay` may
+    still have paid full price, because no program was admitted for its instance
+    or the one that fired was refused; `llm_calls`, `outcome` and `fired_variant`
+    are where what actually happened is recorded."""
+    seed: int
+    replicate: int = 1
+    """Which whole-run replicate the row belongs to (issue #6, ADR-0012). Replicates re-run
+    the same plan from scratch, so rows that share (arm, fault, seed) across replicates are
+    **repeats of one instance** -- a measure of the arm's run-to-run variation, never extra
+    independent observations. The analysis clusters on the instance for that reason
+    (`bench.report.cluster_bootstrap`)."""
+
+    tokens_in: int
+    tokens_out: int
+    embedding_tokens: int = 0
+    """Tokens arm 2's similarity seam spent, when it is an embedding model. **Its own
+    currency**: never added to `tokens_in` or `tokens_out`, because it is spent by one arm
+    and not the others, and folding it in would make arm 2's cost depend on a model the
+    other arms never call (issue #104).
+
+    Always 0 while the seam is lexical -- the shipped implementation spends nothing -- so a
+    non-zero value here is itself the signal that an embedding model is behind the seam.
+    An invalid row carries 0: it records the LLM spend it accrued, and the seam is not
+    reached.
+    """
+    embedding_calls: int = 0
+    """Calls the seam reports making **to its own provider**, so a reader can see whether
+    embeddings are recomputed per episode or reused. The token count says what it cost; this
+    says whether it had to pay again.
+
+    Deliberately not "how many times the seam was asked for a score". Those differ exactly
+    when an implementation batches or caches -- it can be asked for a hundred scores and make
+    one call -- and only the implementation knows which. The invocation count is also mostly
+    a property of the *dispatch loop* (how many admitted candidates it scores) rather than of
+    the embedding currency, so it would say little about arm 2's cost while looking like it
+    did. A reader who wants that number wants the library's size, which the ledger already
+    records per episode."""
+    uncached_tokens_in: int = 0
+    """Input tokens billed at the full input rate: the prompt minus what the cache
+    served. Metered separately from `cached_tokens_in` because a cache hit is billed at
+    a fraction of a miss, so one input number priced at one rate overstates any arm that
+    caches (issue #8). Defaults to 0 only so a record written before this field existed
+    still parses; a real row always carries it.
+    """
+    cache_write_tokens_in: int = 0
+    """Input tokens written to the prompt cache. Zero for DeepSeek, which bills no
+    separate write; present so the accounting is provider-complete (issue #8)."""
+    cached_tokens_in: int = 0
+    """The *cache-read* component: input tokens the provider served from cache.
+    `tokens_in` is the total of all three plus output-adjacent nothing, and is never a
+    billing basis."""
+    recorded_state_intact: bool | None = None
+    """Whether the resolution left the recorded state alone.
+
+    Named for the state rather than for the refs because refs are only the first thing it
+    covers: today it means the work repository was not re-cloned or wiped (every object
+    its refs named at the start is still there) and upstream's history was neither
+    deleted nor rewritten, and a minimal-diff check against a fault's
+    declared change surface joins it under the same fact (issue #96). One field and one
+    derived verdict, rather than a second boolean the report would have to conjoin.
+
+    `None` means not checked -- an invalid episode, or one predating the check. The
+    *fact*, not a verdict: spec-gaming is derived from it (a row that reached the
+    expected state while this is false), because a stored verdict could not sit beside
+    `ground_truth_ok` without the two disagreeing (issue #9).
+    """
+    change_surface: tuple[str, ...] | None = None
+    """The paths this episode's resolution was allowed to touch, **as applied** (issue #96).
+
+    The fault's declared surface is passed to `recorded_state_intact`, which checks the
+    committed diff from the recorded base against it, and the declaration that was actually
+    used is written here. Recorded per episode rather than read from the fault registry at
+    report time because the derived spec-gaming verdict rests on the surface that was
+    applied: regenerating a report from an older ledger while reading today's declaration
+    would print a surface that run never used, which is exactly the class of drift the
+    ledger exists to prevent.
+
+    `None` and `()` are different facts, and the difference is why the field is optional:
+
+    * `None` -- the check was **not applied**. The episode was invalid, or the fault's own
+      clause failed before the surface was reached (the check runs only once the fault
+      check passes, so a failing fault keeps its own reason instead), or the row predates
+      this field. A `None` row is not evidence about any declaration.
+    * `()` -- the check **was applied and the declaration was empty**. That is not a missing
+      value but the *strictest* one: for a fault like `branch_renamed` whose resolution is a
+      ref operation, it says committed content must not change at all. Collapsing it into
+      `None` would turn a deliberate "no path may change" into "nobody looked".
+
+    Mirrors `tasks.invariants.recorded_state_intact`'s `surface` argument, which uses the
+    same `None`-means-not-declared convention.
+    """
+    llm_calls: int
+    tool_calls: int = 0
+    """Tool calls the agent executed this episode, refused ones included (issue #160).
+
+    Recorded beside `llm_calls` because a model can batch several tool calls into one
+    turn, so the number of commands an episode ran is not a function of its calls to
+    the model. 0 for a replay, where no agent ran, and for a row written before the
+    field existed."""
+    wall_clock_s: float
+
+    outcome: EpisodeOutcome
+    """How the arm's mechanism completed. See `EpisodeOutcome`: this is not
+    whether the episode was correct, which is derived from the facts below."""
+
+    correct_variant: str | None
+    """Ground truth: the resolution this state requires, or None if it is benign.
+    Defined by the intent's decision rules, in separate code from the programs'
+    probe strings, so a wrong precondition cannot make its own program look right.
+
+    Required, with no default, because None is a meaningful answer ("this state
+    needs nothing done"). A defaulted field could be forgotten and silently read
+    as a benign state, which would turn a missing fact into a wrong one."""
+    acceptable_variants: list[str] | None = None
+    """Every resolution the checker accepts in this state, the label among them
+    (ADR-0023). `None` on a row written before the field existed, which reads as the
+    label alone, so an old ledger keeps the meaning it was written with."""
+    fired_variant: str | None = None
+    """The resolution the program that actually ran implements; None if none fired."""
+    ground_truth_ok: bool | None
+    """Whether the environment reached the expected state, checked by git alone.
+    None means it was not checked, which happens only for INVALID episodes.
+    Also required: "not checked" must be passed deliberately, never inherited."""
+
+    program_id: str | None = None
+    dispatch_score: float | None = None
+    """The score the arm selected with: arm 2's similarity, or arm 2b's soft-vote share
+    of preconditions holding (issue #7). None for arms with no score."""
+    similarity_threshold: float | None = None
+    """Arm 2's inclusive similarity floor as configured for this episode.
+
+    Recorded per row so an untuned run is distinguishable from a tuned one: the
+    pre-registration has the threshold calibrated on the held-out tune set, and a
+    reader can see from the ledger alone whether that calibration happened rather
+    than inferring it from the code's default."""
+
+    memory_recalled: int | None = None
+    """How many of arm 1b's stored trajectories were placed in this episode's prompt
+    (issue #7, ADR-0017). 0 is a 1b episode whose memory had nothing similar yet; `None`
+    on every other arm. Recorded so the cost curve can be read beside how much memory 1b
+    actually had to work with."""
+
+    soft_threshold: float | None = None
+    """Arm 2b's learned inclusive floor on its soft-vote score (issue #7, ADR-0016),
+    recorded on 2b's rows so the learned value is visible beside every decision it made.
+    `None` on every other arm."""
+
+    rerank_k: int | None = None
+    """How many first-stage candidates arm 2's reranker rescored, or `None` when the
+    library ran without one (ADR-0011). Recorded beside `similarity_threshold` because,
+    with a reranker, the threshold judges the reranker's score, so a row cannot be read
+    without knowing which stage the number came from."""
+    library_hash: str | None = None
+    """The digest of the arm's library as this episode found it (`Library.library_hash`).
+
+    In the online mode each arm grows its own library, so an arm-2-versus-arm-3
+    difference there is confounded with a library difference, and the digest makes
+    that visible. In the frozen mode (ADR-0009) every arm dispatches against one
+    library, and every row of the run carries the same digest (issue #4)."""
+
+    library_program_ids: list[str] | None = None
+    """Every program id in the library as this episode found it, sorted -- the programs
+    `library_hash` covers, named (issue #4). Every status is listed, not only `admitted`:
+    the digest covers them all, and a candidate or quarantined program is part of the
+    artifact even though it cannot fire. `None` on a row written before the field
+    existed."""
+    admission_gate: str | None = None
+    """The admission gate the dispatched library's programs passed -- the 2x2's admission
+    factor (issue #4, ADR-0010): `two_sided` or `positive_only`. The online mode always
+    admits two-sided; a frozen library states its gate in its build manifest, and a
+    frozen library without one records `None`, an unknown gate the factorial refuses.
+    `None` for arm 1, which has no library."""
+
+    admitted: bool | None = None
+    refusal_reason: str | None = None
+    """Why the guard refused the generated body. Set only when `outcome` is
+    `EpisodeOutcome.REFUSAL`; every other degradation has its own field below.
+
+    Kept apart from compile failures because `refusal` is a safety signal
+    (spec §7 reports the guard refusal rate as a secondary metric): a rate read
+    off this field alone must not pick up a malformed model reply that no guard
+    ever saw. Issue #60 found a merged-run row with `outcome: fallback` and a
+    `refusal_reason` holding "the reply was not a YAML mapping" -- a compile
+    failure wearing the safety metric's name."""
+    compile_failure_reason: str | None = None
+    """Why a compile or admission produced no usable program: a malformed reply,
+    a validation failure, a rejected gate, a duplicate id.
+
+    Set on a row where the arm had to solve and no program came out of it, and
+    never on a row whose only degradation is a guard refusal. It is a
+    compile-quality signal, not a safety one."""
+    compile_attempts: int | None = None
+    """How many compiles the solution took: 1, or 2 when admission refused the first
+    and the revision was tried (ADR-0030). `None` when nothing was compiled, and on
+    every row written before the revision existed."""
+    invalid_reason: str | None = None
+    """Why the episode could not be graded (a sandbox, checker or other
+    infrastructure failure). Set only when `outcome` is `EpisodeOutcome.INVALID`,
+    so the invalid rate is a grouping over that outcome rather than over a text
+    field shared with refusals."""
+    replay_failure_reason: str | None = None
+    """Why a program that fired could not be run at all (issue #76).
+
+    Today the one cause is a body naming a declared parameter this environment
+    cannot bind, so no command executed and there is no postcondition evidence.
+    Distinct from a body that ran and failed its postconditions, which leaves the
+    demotion and the postcondition results rather than this field, and distinct
+    from a guard refusal, which has `refusal_reason`. The guard refusal rate is a
+    grouping over that field alone, so a replay failure must not be written
+    there — the defect issue #60 fixed."""
+    timed_out: bool = False
+    """Set when a replay exceeded its timeout. Kept beside `outcome` rather than
+    folded into it, since a timeout is a failure mode of the runtime while
+    `outcome` describes how the episode ended."""
+
+    model: str
+    """Exact model identifier used for this episode. Provider-side model drift
+    mid-experiment silently invalidates a comparison, so it is recorded per
+    episode and a version change invalidates the affected run."""
+
+    temperature: float | None = None
+    """The sampling temperature the episode's model calls were sent with (issue #6),
+    read from the completions themselves rather than from run configuration, so it is
+    what the calls used. `None` when no call reported one: a replay, which consults no
+    model, or a provider that does not expose it. Defaulted so a ledger written before
+    the field existed still reads."""
+
+    @property
+    def misfired(self) -> bool:
+        """A program fired a resolution this state does not accept (ADR-0023).
+
+        Deliberately independent of final state, and of `outcome`: a wrong fire
+        often ends in a successful episode because the arm falls back to the agent.
+        That quadrant -- misfired and successful -- is the one the primary metric
+        exists to count, and a single `outcome` value could not express it.
+        """
+        if self.fired_variant is None:
+            return False
+        acceptable = tuple(self.acceptable_variants or ())
+        return not accepts(self.correct_variant, acceptable, self.fired_variant)
+
+    @property
+    def succeeded(self) -> bool:
+        """Whether the episode reached the expected state. Separate from `misfired`."""
+        return self.ground_truth_ok is True
+
+
+class LedgerCorruptError(ValueError):
+    """A ledger line could not be parsed back into an episode.
+
+    Dedicated so a caller can tell a corrupt ledger from a missing file: a
+    missing ledger raises `FileNotFoundError`, this raises for a ledger that
+    exists but has a line that is not a record. It is never raised for a *skip*;
+    the alternative -- dropping the line and returning the rest -- would remove
+    an episode from every denominator silently, which is the accounting this
+    module exists to keep intact.
+    """
+
+
+def append(path: Path, record: EpisodeRecord) -> None:
+    """Append one episode. Must be crash-safe: a killed run should still leave
+    every completed episode on disk, since episodes are expensive to reproduce.
+
+    Serialisation is pydantic's own (`model_dump_json`), so enums and `None`
+    round-trip and the line stays flat and greppable. The line is written and
+    flushed to the operating system before this returns: a write still sitting
+    in Python's buffer when the process dies would lose an episode that was
+    reported as recorded, which is the one failure this file cannot absorb.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(record.model_dump_json())
+        handle.write("\n")
+        handle.flush()
+
+
+def transcripts_path(ledger: Path) -> Path:
+    """Where the transcripts of `ledger`'s rows go: `<stem>.transcripts.jsonl` beside it."""
+    return ledger.with_name(f"{ledger.stem}.transcripts.jsonl")
+
+
+def append_transcript(
+    path: Path,
+    record: EpisodeRecord,
+    transcript: list[dict],
+    *,
+    unparsed: list[dict] | None = None,
+) -> None:
+    """Append one agent transcript, keyed the way its ledger row is (issue #171).
+
+    The ledger stores numbers, not what the agent did, so diagnosing #171 -- an agent
+    that fixed the repository and kept verifying -- needed a separate traced re-run.
+    This sidecar keeps every solve's transcript beside its row: one JSON line with the
+    row's identifying fields and the transcript as `solve` returned it. Written and
+    flushed like `append`, so a killed run keeps what it finished. Transcripts hold
+    the system prompt, the request, the commands and their output -- sandbox paths, no
+    credentials, since the provider's key never enters a transcript.
+
+    `unparsed`, when not empty, is written as `unparsed_compile_replies`: each compile
+    reply that was not a program, with its attempt and the reason.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    line = {
+        "arm": record.arm.value,
+        "task_id": record.task_id,
+        "fault_type": record.fault_type,
+        "seed": record.seed,
+        "occurrence_index": record.occurrence_index,
+        "replicate": record.replicate,
+        "outcome": record.outcome.value,
+        "transcript": transcript,
+    }
+    if unparsed:
+        line["unparsed_compile_replies"] = unparsed
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(line, default=str))
+        handle.write("\n")
+        handle.flush()
+
+
+def read(path: Path) -> list[EpisodeRecord]:
+    """Read the ledger back. Malformed trailing lines are reported, not skipped.
+
+    A missing file is left to raise `FileNotFoundError`. Any line that is not a
+    record raises `LedgerCorruptError`, naming the line number and its content:
+    the realistic cause is a crash mid-write, which tears only the last line and
+    leaves every complete record above it intact. The list is returned whole or
+    not at all -- a partial list would silently shrink the denominators.
+    """
+    lines = path.read_text(encoding="utf-8").split("\n")
+    if lines and lines[-1] == "":
+        # The file ends with a newline, so the final split element is the
+        # empty string after it, not a line.
+        lines.pop()
+    records: list[EpisodeRecord] = []
+    for number, line in enumerate(lines, start=1):
+        try:
+            records.append(EpisodeRecord.model_validate_json(line))
+        except (ValidationError, json.JSONDecodeError) as error:
+            raise LedgerCorruptError(
+                f"{path}: line {number} is not a valid episode record, so the ledger "
+                f"is torn at that point. This is what a crash mid-write leaves behind: "
+                f"the {number - 1} complete record(s) above it are intact and readable. "
+                f"Line content: {line!r}"
+            ) from error
+    return records

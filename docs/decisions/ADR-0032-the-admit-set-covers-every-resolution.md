@@ -45,7 +45,7 @@ detectable. The comparison exists; the rule that lets it be stated does not hold
    episode per declared resolution. That is 14 episodes, against 20 before, plus the
    fallbacks of decision 5.
 2. **Each episode's seed is a state labelled with its resolution**, and, where some state
-   accepts that resolution alone, such a state. `tests/test_admit_set.py` pins both by
+   accepts that resolution alone, such a state. `tests/experiment/test_admit_set.py` pins both by
    building every seed's sandbox.
 3. **Each episode's request asks for its resolution.** It is the fault's own phrasing for
    the seed, followed by a directive in a user's words, e.g. "Merge upstream into my

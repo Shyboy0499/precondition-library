@@ -18,10 +18,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..library import Library
-from ..program import Program
-from ..sandbox import Sandbox
-from ..signatures import TaskSignature
+from precondition_library.library import Library
+from precondition_library.program import Program
+from precondition_library.sandbox import Sandbox
+from precondition_library.signatures import TaskSignature
 
 
 @dataclass(frozen=True)

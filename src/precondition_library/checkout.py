@@ -41,8 +41,8 @@ import tempfile
 from dataclasses import replace
 from pathlib import Path
 
-from .runtime.probes import repository_bindings
-from .sandbox import CheckoutContext, Sandbox, run_git
+from precondition_library.runtime.probes import repository_bindings
+from precondition_library.sandbox import CheckoutContext, Sandbox, run_git
 
 MIRROR_NAME = "upstream-mirror.git"
 """The bare repository under the scratch root that stands in for the upstream remote."""

@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..similarity import lexical_similarity
+from precondition_library.similarity import lexical_similarity
 
 RECALL_K = 3
 """Entries recalled per episode. Small, because every recalled entry is re-sent on

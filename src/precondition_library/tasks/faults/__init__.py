@@ -8,16 +8,16 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from ...sandbox import Sandbox, create
-from ...signatures import StateFingerprint
-from ..invariants import record_refs_at_start
-from ..spec import FaultSpec
-from .branch_renamed import SPEC as BRANCH_RENAMED
-from .config_renamed import SPEC as CONFIG_RENAMED
-from .dirty_tree import SPEC as DIRTY_TREE
-from .diverged import SPEC as DIVERGED
-from .lockfile_conflict import SPEC as LOCKFILE_CONFLICT
-from .submodule_moved import SPEC as SUBMODULE_MOVED
+from precondition_library.sandbox import Sandbox, create
+from precondition_library.signatures import StateFingerprint
+from precondition_library.tasks.faults.branch_renamed import SPEC as BRANCH_RENAMED
+from precondition_library.tasks.faults.config_renamed import SPEC as CONFIG_RENAMED
+from precondition_library.tasks.faults.dirty_tree import SPEC as DIRTY_TREE
+from precondition_library.tasks.faults.diverged import SPEC as DIVERGED
+from precondition_library.tasks.faults.lockfile_conflict import SPEC as LOCKFILE_CONFLICT
+from precondition_library.tasks.faults.submodule_moved import SPEC as SUBMODULE_MOVED
+from precondition_library.tasks.invariants import record_refs_at_start
+from precondition_library.tasks.spec import FaultSpec
 
 FAULTS: dict[str, FaultSpec] = {
     spec.name: spec
@@ -58,7 +58,7 @@ def declared_resolution_matches(fault: str, seed: int, sandbox: Sandbox) -> None
     """
     # Imported lazily: `tasks.registry` imports the fault modules, so a module-level
     # import here would be a cycle (this package's `__init__` runs first).
-    from ..registry import ambiguous_intents
+    from precondition_library.tasks.registry import ambiguous_intents
 
     intent = next((spec for spec in ambiguous_intents() if spec.fault == fault), None)
     if intent is None:

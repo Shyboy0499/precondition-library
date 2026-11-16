@@ -69,7 +69,7 @@ rates the run will see are unknown, which is why the table has columns.
    nested commit's blob lines (`_gitlink_content`). No commit id enters
    `instance_signature`, and a gitlink that resolves nowhere is kept as a visible
    `unresolved` line rather than dropped.
-   `tests/test_instance_diversity.py::test_gitlinks_are_compared_by_the_content_they_name`
+   `tests/experiment/stages/test_instance_diversity.py::test_gitlinks_are_compared_by_the_content_they_name`
    pins this. The measured counts are unchanged by it.
 3. **The equivalence margin stays at ±10pp, α = 0.05.** §7 item 10 is not revised.
 4. **The power statement is made in the TOST's own terms.** Live text states the

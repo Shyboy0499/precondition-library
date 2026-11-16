@@ -31,8 +31,8 @@ So: the inventory is general and needs no maintenance beyond the moment of chang
 
 | File | Responsibility |
 | --- | --- |
-| `tests/test_declared_state.py` | **Create.** The `ast` collectors, the declared stub inventory, the declared skip inventory, and the claims table. One file: the declaration must sit next to the assertion that reads it, so it is visible in review and cheap to edit. |
-| `tests/test_checkers_against_gold.py` | **Modify.** Its skip reason still says "faults and gold solutions are stubs; implemented per plan, phase 1" — stale, and it must name the issue that will implement it, which Task 2 asserts for every skip. |
+| `tests/meta/test_declared_state.py` | **Create.** The `ast` collectors, the declared stub inventory, the declared skip inventory, and the claims table. One file: the declaration must sit next to the assertion that reads it, so it is visible in review and cheap to edit. |
+| `tests/tasks/test_checkers_against_gold.py` | **Modify.** Its skip reason still says "faults and gold solutions are stubs; implemented per plan, phase 1" — stale, and it must name the issue that will implement it, which Task 2 asserts for every skip. |
 | `CONTRIBUTING.md` | **Modify.** Rule: status lives in one place; other documents link rather than restate. States the limit of the mechanism. |
 | `docs/design/specs/2026-09-13-precondition-library-design.md` | **Modify.** §10 gains the automation and its limit. |
 | `CHANGELOG.md` | **Modify.** One `Added` line. |
@@ -42,11 +42,11 @@ So: the inventory is general and needs no maintenance beyond the moment of chang
 ### Task 1: The stub inventory
 
 **Files:**
-- Create: `tests/test_declared_state.py`
+- Create: `tests/meta/test_declared_state.py`
 
 - [ ] **Step 1: Write the collectors and a test with an empty declaration**
 
-Create `tests/test_declared_state.py`:
+Create `tests/meta/test_declared_state.py`:
 
 ```python
 """Status claims must not drift silently.
@@ -164,7 +164,7 @@ DECLARED_STUBS: dict[str, str] = {}
 
 - [ ] **Step 2: Run it, and read the failure as the inventory**
 
-Run: `uv run pytest tests/test_declared_state.py -v`
+Run: `uv run pytest tests/meta/test_declared_state.py -v`
 Expected: FAIL, listing every stub under `stubs in src/ that are not declared:` — **17** of them at the time of writing, because `src/` declares no stubs here yet.
 
 - [ ] **Step 3: Declare them**
@@ -207,7 +207,7 @@ If the printed set is larger than these, that is a finding: declare the extra na
 
 - [ ] **Step 4: Run it to verify it passes**
 
-Run: `uv run pytest tests/test_declared_state.py -v`
+Run: `uv run pytest tests/meta/test_declared_state.py -v`
 Expected: PASS, 1 test.
 
 - [ ] **Step 5: Verify the test can fail**
@@ -219,7 +219,7 @@ Then restore nothing, because you never touched the repo. Confirm `git status` i
 - [ ] **Step 6: Commit**
 
 ```bash
-git add tests/test_declared_state.py
+git add tests/meta/test_declared_state.py
 git commit -m "test(docs): declare every stub, so implementing one cannot go unnoticed"
 ```
 
@@ -228,12 +228,12 @@ git commit -m "test(docs): declare every stub, so implementing one cannot go unn
 ### Task 2: The skip inventory
 
 **Files:**
-- Modify: `tests/test_declared_state.py`
-- Modify: `tests/test_checkers_against_gold.py`
+- Modify: `tests/meta/test_declared_state.py`
+- Modify: `tests/tasks/test_checkers_against_gold.py`
 
 - [ ] **Step 1: Write the failing test**
 
-Append to `tests/test_declared_state.py`:
+Append to `tests/meta/test_declared_state.py`:
 
 ```python
 def _is_skip_decorator(decorator: ast.expr) -> bool:
@@ -294,12 +294,12 @@ DECLARED_SKIPS: dict[str, str] = {}
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `uv run pytest tests/test_declared_state.py -v -k skip_is_declared`
+Run: `uv run pytest tests/meta/test_declared_state.py -v -k skip_is_declared`
 Expected: FAIL listing two node ids.
 
 - [ ] **Step 3: Make the reasons actionable, then declare them**
 
-`tests/test_checkers_against_gold.py` carries two skip decorators whose reason reads "faults and gold solutions are stubs; implemented per plan, phase 1". That is stale twice over: gold solutions exist for the two intents, and a live sandbox exists, so the checkers *could* now be validated for those two — the reason no longer describes the world. Replace both reasons with one that names what is actually missing:
+`tests/tasks/test_checkers_against_gold.py` carries two skip decorators whose reason reads "faults and gold solutions are stubs; implemented per plan, phase 1". That is stale twice over: gold solutions exist for the two intents, and a live sandbox exists, so the checkers *could* now be validated for those two — the reason no longer describes the world. Replace both reasons with one that names what is actually missing:
 
 ```python
 @pytest.mark.skip(
@@ -320,7 +320,7 @@ DECLARED_SKIPS: dict[str, str] = {
 
 - [ ] **Step 4: Run it to verify it passes**
 
-Run: `uv run pytest tests/test_declared_state.py -v`
+Run: `uv run pytest tests/meta/test_declared_state.py -v`
 Expected: PASS, 2 tests.
 
 - [ ] **Step 5: Confirm the reason check is load-bearing**
@@ -330,7 +330,7 @@ Reasoning, not a repo edit: the assertion `"#" in reason` fails for any skip who
 - [ ] **Step 6: Commit**
 
 ```bash
-git add tests/test_declared_state.py tests/test_checkers_against_gold.py
+git add tests/meta/test_declared_state.py tests/tasks/test_checkers_against_gold.py
 git commit -m "test(docs): declare every skip and require its reason to name an issue"
 ```
 
@@ -339,7 +339,7 @@ git commit -m "test(docs): declare every skip and require its reason to name an 
 ### Task 3: The claims table
 
 **Files:**
-- Modify: `tests/test_declared_state.py`
+- Modify: `tests/meta/test_declared_state.py`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -424,7 +424,7 @@ def test_claims_are_still_true() -> None:
 
 - [ ] **Step 2: Run it to verify it fails for the right reason**
 
-Run: `uv run pytest tests/test_declared_state.py -v -k claims`
+Run: `uv run pytest tests/meta/test_declared_state.py -v -k claims`
 Expected: FAIL only if a quote is not verbatim in its document. If every row passes immediately, that is the correct outcome here — these four facts are true today — but you must then verify the mechanism by falsifying one row in a scratch copy: change `len(EXCLUDED_FROM_BENCHMARK) == 3` to `== 4` in a copy under `/tmp`, run the test, and confirm it fails naming that document. Report the evidence either way. Do not edit the repo to falsify.
 
 - [ ] **Step 3: Verify the quotes are verbatim**
@@ -440,13 +440,13 @@ Expected: each prints `1`. If any prints `0`, the quote drifted — fix the quot
 
 - [ ] **Step 4: Run the whole file**
 
-Run: `uv run pytest tests/test_declared_state.py -v`
+Run: `uv run pytest tests/meta/test_declared_state.py -v`
 Expected: PASS, 3 tests.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add tests/test_declared_state.py
+git add tests/meta/test_declared_state.py
 git commit -m "test(docs): pin the status claims that reduce to a mechanical fact"
 ```
 
@@ -467,7 +467,7 @@ In `CONTRIBUTING.md`, insert after rule 4 ("Stubs and skips are described as suc
 ### 5. Status lives in one place
 
 A document must not restate whether something is implemented. It either links to
-the declared inventory in `tests/test_declared_state.py` — which CI checks against
+the declared inventory in `tests/meta/test_declared_state.py` — which CI checks against
 the code — or states the claim in that file's claims table, where the fact behind it
 is asserted.
 
@@ -492,7 +492,7 @@ In §10, add to the code block:
 
 ```
 DECLARED STATE  every stub and every skipped test is declared in
-                tests/test_declared_state.py, and the declaration is asserted
+                tests/meta/test_declared_state.py, and the declaration is asserted
                 against the code, so implementing a stub or un-skipping a test
                 fails CI until the declaration -- and the prose that restated it --
                 is updated. A small claims table pins the status sentences that
@@ -505,7 +505,7 @@ DECLARED STATE  every stub and every skipped test is declared in
 Under `## Unreleased` → `### Added`:
 
 ```markdown
-- `tests/test_declared_state.py`: every stub and every skipped test is declared and
+- `tests/meta/test_declared_state.py`: every stub and every skipped test is declared and
   asserted against the code, so implementing one fails CI until the declaration and
   the prose that restated it are updated. Four status claims are pinned to the facts
   behind them. It deliberately does not attempt to detect a document contradicting

@@ -84,7 +84,7 @@ Read [Results graded outside this project](#results-graded-outside-this-project)
 > Per-module status is deliberately not restated below, because prose that
 > describes the code drifts the moment the code moves (CONTRIBUTING rule 5).
 > Every stub and every skipped test is declared and asserted against the code in
-> [`tests/test_declared_state.py`](tests/test_declared_state.py), and what is
+> [`tests/meta/test_declared_state.py`](tests/meta/test_declared_state.py), and what is
 > outstanding is in the [issue tracker](https://github.com/Shyboy0499/precondition-library/issues).
 > Those are the places to look for what is done.
 >
@@ -294,33 +294,41 @@ reports success while being wrong.
 ## Layout
 
 ```
-src/precondition_library/
-├── program.py       the artifact: intent, parameters, pre/postconditions, body
-├── provider.py      the only module allowed to talk to an LLM
-├── signatures.py    how a task and its environment state are described
-├── similarity.py    arm 2's seam: the text-similarity function it ranks with
-├── sandbox.py       disposable repos for episodes
-├── library.py       storage and both dispatch strategies; admission is in compile.py
-├── tasks/
-│   ├── spec.py      what a fault is: inject, task text, ground-truth checker
-│   ├── intent.py    intents with more than one correct resolution
-│   ├── registry.py  which task families have an experimental surface
-│   └── faults/      seeded fault injectors, one module each
-├── agents/
-│   ├── react.py     arm 1: the baseline
-│   ├── compile.py   solved task -> candidate program; the two-sided admission gate
-│   └── dispatch.py  arms 2 and 3 — the experiment
-├── runtime/
-│   ├── replay.py    runs programs; structurally cannot import provider
-│   ├── guard.py     screens model-authored code before it executes
-│   └── probes.py    evaluates one probe; shared by admission and arm 3
-└── bench/
-    ├── ledger.py    the episode record
-    ├── run.py       the episode runner and its repeat structure
-    ├── pairs.py     labelled (state, resolution) pairs
-    ├── splits.py    the pre-registered seed plan
-    ├── textcontrol.py  the text-only control
-    └── report.py    the ablation table and the two demo figures
+src/precondition_library/          the library itself
+├── program.py        the artifact: intent, parameters, pre/postconditions, body
+├── library.py        storage on disk and both dispatch strategies
+├── signatures.py     how a task and its environment state are described
+├── similarity.py     arm 2's seam: the text-similarity function it ranks with
+├── provider.py       the only module allowed to talk to an LLM
+├── sandbox.py        disposable repositories for episodes
+├── intent_key.py     arm 2c: dispatch by the request string itself
+├── checkout.py, dispatch.py, learn.py, __main__.py
+│                     the library on your own repository (`python -m precondition_library`)
+├── agents/           the arms: react.py (arm 1), compile.py (solution -> program, and the
+│                     two-sided admission gate), dispatch.py (arms 2 and 3), the agent's tools
+├── runtime/          replaying programs with no model: replay.py, probes.py, guard.py, confine.py
+└── tasks/            the task family: spec.py, intent.py, registry.py, faults/ (one injector each)
+
+src/precondition_library/          the measurements
+├── experiment/       the synthetic benchmark: build a library (build_library, live), run episodes
+│   │                 (run, ledger), label pairs (pairs, library_pairs, splits), Figure 1
+│   │                 (coverage, primary), rescore, and report/ (stats, tables, floor, render)
+│   ├── scorers/      arm 2's scorers and the dispatchers built on them: embedding, cross-encoder,
+│   │                 LLM judge, soft vote (2b), hybrid, and the floor probe
+│   └── stages/       further measurements on the same libraries: held-out and real-host states,
+│                     consequences of a fire, abstentions, instance diversity
+├── controls/         dispatchers that read the state without compiled preconditions
+├── studies/          the pre-registered studies on real merges (one module each, plus
+│                     preregistration.py, which refuses to run a study whose registration changed)
+├── audits/           checks on the instruments: grader mutation, gold sweep, human labels, injection
+└── bench/            old module paths, kept as aliases: frozen registrations and committed
+                      results quote `python -m precondition_library.bench.<module>`
+
+tests/                one folder per area above, plus meta/ for checks on the repository itself
+results/              every measurement, one dated folder each; results/README.md indexes them
+docs/                 decisions/ (ADRs), preregistration/, design/ (the spec), figures/
+paper/                the technical report
+library/, bench/gold/ committed programs, and the hand-written gold resolutions
 ```
 
 [`paper/`](paper/SUBMITTING.md) holds a technical report of the results so far, written for
@@ -332,8 +340,8 @@ demoted after it mis-fired stays visible in the history.
 `bench/gold/` holds the hand-written gold resolutions. What runs today for the two
 ambiguous intents is form validation only: `sync_fork_with_upstream.yaml` and
 `restore_submodule_state.yaml` must parse, be well-formed, cover every declared
-resolution, and have distinct bodies (`tests/test_gold_programs.py`). No gold
-checker has been executed against a sandbox — `tests/test_checkers_against_gold.py`
+resolution, and have distinct bodies (`tests/tasks/test_gold_programs.py`). No gold
+checker has been executed against a sandbox — `tests/tasks/test_checkers_against_gold.py`
 is skipped for every fault until the checker execution phase lands (issue #9),
 because a checker cannot be validated without a state to check. (Probes did run
 against sandboxes in the smoke pass below: admission's two-sided gate and arm 3's
@@ -368,7 +376,7 @@ last time a module moved, which is why it is gone. Status is recorded in two
 places, both checked:
 
 - **What the code is now.** Every stub and every skipped test is declared in
-  [`tests/test_declared_state.py`](tests/test_declared_state.py), alongside a small
+  [`tests/meta/test_declared_state.py`](tests/meta/test_declared_state.py), alongside a small
   claims table pinning the status sentences that reduce to a mechanical fact. CI
   fails when the declaration and the code disagree.
 - **What is outstanding.** The
@@ -433,11 +441,11 @@ did not make. This is the answer as of the studies below; each line links to whe
   hours.
 
   ```bash
-  python -m precondition_library.bench.real_merges --stage B           # study 1
-  python -m precondition_library.bench.lock_oracle --out <dir>          # study 3
-  python -m precondition_library.bench.ecosystem_unify --out <dir>      # study 4
-  python -m precondition_library.bench.divergence_gate --out <dir>      # study 5
-  python -m precondition_library.bench.tool_precondition --out <dir> --scratch <dir>  # study 6
+  python -m precondition_library.studies.real_merges --stage B           # study 1
+  python -m precondition_library.studies.lock_oracle --out <dir>          # study 3
+  python -m precondition_library.studies.ecosystem_unify --out <dir>      # study 4
+  python -m precondition_library.studies.divergence_gate --out <dir>      # study 5
+  python -m precondition_library.studies.tool_precondition --out <dir> --scratch <dir>  # study 6
   ```
 
   These commands pin each repository's tip on the day they run (`real_merges.pin`). So a run on a
@@ -937,7 +945,7 @@ fresh directory, with `summary.txt` and `summary.json` saying what ran and where
 artifact is:
 
 ```bash
-uv run python -m precondition_library.bench.live \
+uv run python -m precondition_library.experiment.live \
   --api-key-env DEEPSEEK_API_KEY --out ../live-run   # or --api-key-file PATH
 ```
 

@@ -29,7 +29,7 @@ checked it over the states admission actually builds.
    on `FaultSpec.inject`, the method every injector implements. A fault whose story
    is a missing upstream branch leaves the stale tracking ref, as `branch_renamed`
    does, and records the change in another fingerprint field.
-2. **It is enforced over admission's own universe.** `tests/test_one_free_variable.py`
+2. **It is enforced over admission's own universe.** `tests/experiment/test_one_free_variable.py`
    builds every state in `agents.compile.sampled_states()`: the clean sandbox plus
    one sandbox per distinct injected state of every fault, i.e. the states admission
    and the breadth cap use as negatives. For each one it asserts that the ref

@@ -39,18 +39,18 @@ from typing import Any, Protocol
 import yaml
 from pydantic import BaseModel, Field, ValidationError
 
-from .. import __version__
-from ..program import Program, ProgramStatus, Provenance, accepts
-from ..provider import Provider, TokenUsage
-from ..runtime.probes import evaluate_preconditions, placeholders
-from ..runtime.replay import replay
-from ..runtime.templates import step_parameters
-from ..sandbox import Sandbox
-from ..signatures import StateFingerprint, TaskSignature
-from ..tasks.faults import FAULTS, build_sandbox
-from ..tasks.intent import IntentSpec
-from ..tasks.registry import ambiguous_intents
-from ..tasks.spec import FaultSpec
+from precondition_library import __version__
+from precondition_library.program import Program, ProgramStatus, Provenance, accepts
+from precondition_library.provider import Provider, TokenUsage
+from precondition_library.runtime.probes import evaluate_preconditions, placeholders
+from precondition_library.runtime.replay import replay
+from precondition_library.runtime.templates import step_parameters
+from precondition_library.sandbox import Sandbox
+from precondition_library.signatures import StateFingerprint, TaskSignature
+from precondition_library.tasks.faults import FAULTS, build_sandbox
+from precondition_library.tasks.intent import IntentSpec
+from precondition_library.tasks.registry import ambiguous_intents
+from precondition_library.tasks.spec import FaultSpec
 
 SYSTEM_PROMPT = """\
 You compile a solved git maintenance task into a reusable program.

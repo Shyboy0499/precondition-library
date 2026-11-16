@@ -17,12 +17,18 @@ import argparse
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from .bench.live import read_api_key, read_api_key_env
-from .dispatch import DispatchReport, DryRun, render, render_dry_run, run_dispatch
-from .learn import SolveEffect, learn, render_effect
-from .learn import render as render_learned
-from .provider import DEFAULT_MODEL, DeepSeekProvider, Provider
-from .tasks.registry import ambiguous_intents
+from precondition_library.dispatch import (
+    DispatchReport,
+    DryRun,
+    render,
+    render_dry_run,
+    run_dispatch,
+)
+from precondition_library.experiment.live import read_api_key, read_api_key_env
+from precondition_library.learn import SolveEffect, learn, render_effect
+from precondition_library.learn import render as render_learned
+from precondition_library.provider import DEFAULT_MODEL, DeepSeekProvider, Provider
+from precondition_library.tasks.registry import ambiguous_intents
 
 MakeProvider = Callable[[str, str], Provider]
 """Builds the model provider from an API key and a model name."""

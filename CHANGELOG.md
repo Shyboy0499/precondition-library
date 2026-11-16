@@ -12,6 +12,14 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Changed
 
+- **The code is reorganised by what each part is (spec revision 162).**
+  - **Before:** one `bench/` folder held 47 modules: the benchmark, six studies, four controls and
+    the audits, with a 2,082-line `report.py`. Tests were 122 files in one folder.
+  - **Now:** `experiment/` (with `scorers/`, `stages/` and a `report/` package), `controls/`,
+    `studies/` and `audits/`; tests in one folder per area; `results/README.md` indexes every
+    result by the question it answers.
+  - **Nothing breaks:** every old `precondition_library.bench.<module>` path is an alias of the
+    moved module, for import and for `python -m`, because frozen registrations quote them.
 - **Study 2's evaluation resumes inside a repository (spec revision 161).** Each decided case is
   journaled as it finishes, and the repository's pinned tip is kept, so a restarted worker
   loses at most the cases in flight, not a repository's hours. Outputs are byte-identical.
@@ -780,7 +788,7 @@ and are kept as written.
   sandbox parameter binding moved there from `replay` for the same reason.
   `Program.applicable` was deleted rather than implemented: `program.py` declares
   itself data-only, and running a probe is I/O.
-- `tests/test_declared_state.py`: every stub and every skipped test is declared and
+- `tests/meta/test_declared_state.py`: every stub and every skipped test is declared and
   asserted against the code, so implementing one fails CI until the declaration and
   the prose that restated it are updated. Four status claims are pinned to the facts
   behind them, each failing with the document to update. It deliberately does not
@@ -805,7 +813,7 @@ and are kept as written.
   over every stored program's content, sorted by id, which issue #4 requires in
   every ledger row so a comparison can be shown to have run against one frozen
   library.
-- `tests/test_compile_and_admission.py`: the whole pipeline offline against real
+- `tests/agents/test_compile_and_admission.py`: the whole pipeline offline against real
   fault-injected sandboxes, including the gate's two rejection modes and its
   determinism.
 
@@ -833,7 +841,7 @@ and are kept as written.
 - `Program.variant`, so a wrong dispatch decision is definable at all.
 - Determinism tests over the task text, proving every declared phrasing is
   reachable and the same seed yields the same wording
-  (`tests/test_faults_deterministic.py`).
+  (`tests/tasks/test_faults_deterministic.py`).
 
 ### Changed
 
@@ -852,7 +860,7 @@ and are kept as written.
   figures, both CSVs and `report.txt` name the occurrences they used, and
   `report.txt` reports the count of each role so a reader can see what was
   excluded. The eval set's arithmetic is stated in spec §7 and pinned by
-  `tests/test_seed_splits.py`: each measurable fault declares three states, so
+  `tests/experiment/test_seed_splits.py`: each measurable fault declares three states, so
   40 eval seeds yield 3 variants and 37 replays per family, and the episode-level
   mismatch comparison has six independent observations rather than eighty.
   **This narrows a claim rather than adding one** — the pre-registration's
@@ -885,7 +893,7 @@ and are kept as written.
   replaced. Its status block now says the apparatus is implemented and the suite
   is green in CI while **no dispatch comparison and no episode has been run**, so
   no result is claimed; per-module status points at
-  `tests/test_declared_state.py` and the issue tracker instead of being restated
+  `tests/meta/test_declared_state.py` and the issue tracker instead of being restated
   (CONTRIBUTING rule 5); the module layout lists `similarity.py`, the
   `runtime/probes.py` evaluator, the full `bench/` (report and seed plan
   included) and the `tasks/` modules; the phase table is replaced by a "State of
@@ -925,7 +933,7 @@ and are kept as written.
   repository's hooks cannot run; Windows scratch variables and home path.
 - A Wilson interval always contains its point (#247); the discrimination probe measures
   the text a dispatcher scores, not the rationales (#116).
-- The README said the skipped gold checkers in `tests/test_checkers_against_gold.py`
+- The README said the skipped gold checkers in `tests/tasks/test_checkers_against_gold.py`
   wait on issue #4. Their own skip reason names issue #9, where the checker
   execution and its negative controls are tracked, so the reference is corrected.
   The README also stated that `library/`'s git history *records* programs being
@@ -1034,7 +1042,7 @@ artifact worth downloading and a released snapshot would mean something.
   (`docs/design/specs/2026-09-13-precondition-library-design.md`).
 - Repository skeleton: every stub names the invariant it must uphold and the plan
   phase that implements it; 30 tests skipped, each marked with its phase.
-- `tests/test_replay_isolated_from_provider.py` — a passing test that fails if
+- `tests/core/test_replay_isolated_from_provider.py` — a passing test that fails if
   `runtime.replay` can reach `provider`. The claim that a replay costs zero tokens
   depends on this, so the guardrail ships before the code it guards.
 - CI running ruff, `ruff format --check`, mypy, and pytest on Python 3.12 via uv.

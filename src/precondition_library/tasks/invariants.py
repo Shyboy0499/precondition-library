@@ -45,8 +45,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
-from ..sandbox import Sandbox, run_git
-from .spec import GroundTruth
+from precondition_library.sandbox import Sandbox, run_git
+from precondition_library.tasks.spec import GroundTruth
 
 RECORDED_REFS_AT_START = "refs-at-start"
 """The `Sandbox.recorded` key the post-injection ref snapshot is held under.

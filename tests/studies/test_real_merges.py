@@ -1,0 +1,574 @@
+"""Mining, labelling and building real lock-file merges (#296), on a repository built here.
+
+The fixture is a small history whose merges have known answers, so each step of
+`bench.real_merges` can be checked without the network:
+
+* a lock-file conflict the maintainer resolved by taking upstream's file;
+* one resolved as `take_upstream` produces -- upstream's lines plus the local additions -- where
+  the local side removed a line, so `keep_local` produces something else;
+* one resolved as `keep_local` produces;
+* one whose conflict also includes a file that is not a lock file;
+* a clean merge where both sides changed the lock file, the negative; and
+* a merge that conflicts only in the README, which is no case at all.
+"""
+
+from __future__ import annotations
+
+import itertools
+import os
+import re
+import shutil
+import subprocess
+from collections import Counter
+from pathlib import Path
+
+import pytest
+
+from precondition_library.sandbox import git_out, run_git
+from precondition_library.studies import preregistration
+from precondition_library.studies import real_merges as rm
+
+BASE = ["[[package]]", 'name = "alpha"', 'name = "beta"', 'version = "1"', "", "# end"]
+
+
+_CLOCK = itertools.count(1_700_000_000, 60)
+"""Each git call a minute after the last, so "most recent" is never a tie between commits."""
+
+
+def _git(repo: Path, *argv: str) -> str:
+    when = f"{next(_CLOCK)} +0000"
+    return subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", *argv],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when},
+    ).stdout.strip()
+
+
+def _write(repo: Path, lines: list[str], name: str = "Cargo.lock") -> None:
+    (repo / name).write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _commit(repo: Path, message: str) -> str:
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", message)
+    return _git(repo, "rev-parse", "HEAD")
+
+
+def _side(version: str, added: str, *, drop_beta: bool = False) -> list[str]:
+    lines = [line for line in BASE if not (drop_beta and line == 'name = "beta"')]
+    return [added if line == "[[package]]" else line for line in lines[:1]] + [
+        "[[package]]",
+        *[f'version = "{version}"' if line.startswith("version") else line for line in lines[1:]],
+    ]
+
+
+def _scenario(
+    repo: Path,
+    name: str,
+    local: list[str],
+    upstream: list[str],
+    resolved: list[str] | None,
+    *,
+    readme: tuple[str, str] | None = None,
+) -> dict[str, str]:
+    """Branch both sides from main, merge upstream into local as `resolved`, then fold into main."""
+    _reset(repo, name)
+    _git(repo, "checkout", "-q", "-b", f"{name}-up", "main")
+    _write(repo, upstream)
+    if readme:
+        _write(repo, [readme[1]], "README")
+    second = _commit(repo, f"{name}: upstream")
+    _git(repo, "checkout", "-q", "-b", f"{name}-local", "main")
+    _write(repo, local)
+    if readme:
+        _write(repo, [readme[0]], "README")
+    first = _commit(repo, f"{name}: local")
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", "merge", "-q", f"{name}-up"],
+        cwd=repo,
+        capture_output=True,
+    )
+    if resolved is not None:
+        _write(repo, resolved)
+    if readme:
+        _write(repo, ["resolved"], "README")
+    merge = _commit(repo, f"{name}: merge upstream")
+    _git(repo, "checkout", "-q", "main")
+    _git(repo, "merge", "-q", "--no-ff", "-m", f"{name}: fold", f"{name}-local")
+    return {"merge": merge, "first": first, "second": second}
+
+
+def _reset(repo: Path, name: str) -> None:
+    """Put main's files back to the base, so each scenario's sides diverge from the same file."""
+    _git(repo, "checkout", "-q", "main")
+    _write(repo, BASE)
+    _write(repo, ["readme"], "README")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", f"{name}: reset")
+
+
+def _multiset(lines: list[str]) -> Counter[str]:
+    return Counter(lines)
+
+
+@pytest.fixture(scope="module")
+def history(tmp_path_factory: pytest.TempPathFactory) -> dict[str, object]:
+    repo = tmp_path_factory.mktemp("history") / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _write(repo, BASE)
+    _write(repo, ["readme"], "README")
+    (repo / "LICENSE").write_text("MIT License\n\nCopyright\n", encoding="utf-8")
+    _commit(repo, "base")
+
+    local = _side("2", 'name = "xi"', drop_beta=True)
+    upstream = _side("3", 'name = "ypsilon"')
+    b, lo, up = _multiset(BASE), _multiset(local), _multiset(upstream)
+    take_upstream = list((up + (lo - b)).elements())
+    keep_local = list((lo + (up - b)).elements())
+    assert Counter(take_upstream) != Counter(keep_local), "the local removal separates the two"
+
+    merges = {
+        "took-upstream": _scenario(repo, "took-upstream", local, upstream, upstream),
+        "take-upstream": _scenario(repo, "take-upstream", local, upstream, take_upstream),
+        "keep-local": _scenario(repo, "keep-local", local, upstream, keep_local),
+        "also-readme": _scenario(
+            repo, "also-readme", local, upstream, take_upstream, readme=("left", "right")
+        ),
+    }
+    # A clean negative: the sides change the lock file far apart, so the merge auto-resolves.
+    _reset(repo, "clean")
+    _git(repo, "checkout", "-q", "-b", "clean-up", "main")
+    _write(repo, [*BASE[:-1], "# upstream end"])
+    _commit(repo, "clean: upstream")
+    _git(repo, "checkout", "-q", "-b", "clean-local", "main")
+    _write(repo, ["# local start", *BASE])
+    _commit(repo, "clean: local")
+    _git(repo, "merge", "-q", "-m", "clean: merge upstream", "clean-up")
+    merges["clean"] = {"merge": _git(repo, "rev-parse", "HEAD")}
+    _git(repo, "checkout", "-q", "main")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "clean: fold", "clean-local")
+    # A second clean merge, whose maintainer changed the lock file in the merge commit itself:
+    # the tree is not the one the clean merge writes.
+    _reset(repo, "evil")
+    _git(repo, "checkout", "-q", "-b", "evil-up", "main")
+    _write(repo, [*BASE[:-1], "# upstream end"])
+    _commit(repo, "evil: upstream")
+    _git(repo, "checkout", "-q", "-b", "evil-local", "main")
+    _write(repo, ["# local start", *BASE])
+    _commit(repo, "evil: local")
+    _git(repo, "merge", "-q", "--no-commit", "evil-up")
+    _write(repo, ["# local start", *BASE[:-1], "# upstream end", "# and the maintainer's own"])
+    merges["evil"] = {"merge": _commit(repo, "evil: merge upstream, and edit")}
+    _git(repo, "checkout", "-q", "main")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "evil: fold", "evil-local")
+    # No case: the conflict is only in the README.
+    merges["readme-only"] = _scenario(repo, "readme-only", BASE, BASE, None, readme=("one", "two"))
+
+    cache = repo.parent / "cache.git"
+    subprocess.run(["git", "clone", "-q", "--bare", str(repo), str(cache)], check=True)
+    tip = _git(repo, "rev-parse", "main")
+    summary, cases, excluded = rm.mine("example/repo", cache, "main", tip)
+    return {
+        "cache": cache,
+        "tip": tip,
+        "merges": merges,
+        "summary": summary,
+        "cases": cases,
+        "excluded": excluded,
+    }
+
+
+def _case(history: dict[str, object], name: str) -> rm.Case:
+    merges = history["merges"]
+    assert isinstance(merges, dict)
+    cases = history["cases"]
+    assert isinstance(cases, list)
+    return next(case for case in cases if case.merge == merges[name]["merge"])
+
+
+def test_mining_finds_the_positives_and_the_negative(history: dict[str, object]) -> None:
+    cases = history["cases"]
+    assert isinstance(cases, list)
+    kinds = Counter(case.kind for case in cases)
+    assert kinds == {"positive": 4, "negative": 2}
+    merges = history["merges"]
+    assert isinstance(merges, dict)
+    found = {case.merge for case in cases}
+    assert merges["readme-only"]["merge"] not in found, "a README-only conflict is no case"
+    positive = _case(history, "take-upstream")
+    assert (positive.first, positive.second) == (
+        merges["take-upstream"]["first"],
+        merges["take-upstream"]["second"],
+    )
+    assert positive.conflicted == ["Cargo.lock"]
+    assert _case(history, "also-readme").conflicted == ["Cargo.lock", "README"]
+    assert _case(history, "clean").kind == "negative"
+    assert history["excluded"] == []
+
+
+def test_the_repository_summary(history: dict[str, object]) -> None:
+    summary = history["summary"]
+    assert isinstance(summary, rm.Repository)
+    assert (summary.positives, summary.negatives, summary.exclusions) == (4, 2, 0)
+    assert summary.tip == history["tip"]
+    assert summary.licence == "LICENSE: MIT"
+
+
+def test_a_licence_directory_is_read_one_level_down(tmp_path: Path) -> None:
+    """nextcloud/server keeps REUSE's `LICENSES/`, a tree; reading it as a blob stopped stage B."""
+    repo = tmp_path / "repo"
+    (repo / "LICENSES" / "nested").mkdir(parents=True)
+    (repo / "LICENSES" / "AGPL-3.0-or-later.txt").write_text(
+        "GNU AFFERO GENERAL PUBLIC LICENSE\n", encoding="utf-8"
+    )
+    (repo / "LICENSES" / "MIT.txt").write_text("MIT License\n", encoding="utf-8")
+    (repo / "LICENSES" / "nested" / "deeper.txt").write_text("BSD\n", encoding="utf-8")
+    (repo / "COPYING").write_text("Apache License\n", encoding="utf-8")
+    (repo / "README").write_text("not a licence\n", encoding="utf-8")
+    run_git(("init", "-q"), cwd=repo)
+    run_git(("add", "-A"), cwd=repo)
+    run_git(("commit", "-q", "-m", "licences"), cwd=repo)
+    tip = git_out("rev-parse", "HEAD", cwd=repo)
+
+    assert rm.licence(repo, tip) == (
+        "COPYING: Apache; LICENSES/AGPL-3.0-or-later.txt: AGPL; LICENSES/MIT.txt: MIT"
+    )
+
+
+@pytest.mark.parametrize(
+    ("name", "acceptable", "descriptive"),
+    [
+        ("took-upstream", [], "took upstream"),
+        ("take-upstream", ["take_upstream"], "matches take_upstream"),
+        ("keep-local", ["keep_local"], "matches keep_local"),
+        ("also-readme", [], "matches take_upstream"),
+    ],
+)
+def test_the_maintainers_label(
+    history: dict[str, object], name: str, acceptable: list[str], descriptive: str
+) -> None:
+    cache = history["cache"]
+    assert isinstance(cache, Path)
+    got = rm.label(_case(history, name), cache)
+    assert got.acceptable == acceptable
+    assert got.descriptive == descriptive
+
+
+def test_a_clean_case_accepts_nothing_under_the_original_text(history: dict[str, object]) -> None:
+    cache = history["cache"]
+    assert isinstance(cache, Path)
+    got = rm.label(_case(history, "clean"), cache, amendment=0)
+    assert (got.acceptable, got.descriptive) == ([], None)
+
+
+@pytest.mark.parametrize(
+    ("name", "acceptable", "descriptive"),
+    [("clean", ["merge"], "clean merge reproduced"), ("evil", [], "clean merge changed")],
+)
+def test_amendment_1_labels_a_clean_case_by_the_maintainers_tree(
+    history: dict[str, object], name: str, acceptable: list[str], descriptive: str
+) -> None:
+    cache = history["cache"]
+    assert isinstance(cache, Path)
+    got = rm.label(_case(history, name), cache, amendment=1)
+    assert (got.acceptable, got.descriptive) == (acceptable, descriptive)
+
+
+def test_amendment_1_does_not_relabel_a_conflicted_case(history: dict[str, object]) -> None:
+    cache = history["cache"]
+    assert isinstance(cache, Path)
+    for name in ("took-upstream", "take-upstream", "keep-local", "also-readme"):
+        case = _case(history, name)
+        assert rm.label(case, cache, amendment=1) == rm.label(case, cache, amendment=0)
+
+
+def test_a_capped_repository_keeps_its_most_recent_cases_in_equal_number(
+    history: dict[str, object],
+) -> None:
+    cache = history["cache"]
+    cases = history["cases"]
+    assert isinstance(cache, Path) and isinstance(cases, list)
+    kept = rm._capped(cases, cache, 4)
+    assert Counter(case.kind for case in kept) == {"positive": 2, "negative": 2}
+    merges = history["merges"]
+    assert isinstance(merges, dict)
+    # The two most recent conflicted scenarios, and both clean ones.
+    assert {case.merge for case in kept if case.kind == "positive"} == {
+        merges["keep-local"]["merge"],
+        merges["also-readme"]["merge"],
+    }
+    assert rm._capped(cases, cache, 99) == cases
+
+
+def test_a_regenerated_file_is_told_apart() -> None:
+    base, local, upstream = Counter(["a", "v1"]), Counter(["a", "v2"]), Counter(["a", "v3"])
+    assert rm.produced("take_upstream", base, local, upstream) == Counter(["a", "v3", "v2"])
+    assert rm.produced("keep_local", base, local, upstream) == Counter(["a", "v2", "v3"])
+    with pytest.raises(ValueError, match="no such resolution"):
+        rm.produced("merge", base, local, upstream)
+
+
+def test_the_built_state_is_the_first_parent_tracking_the_second(
+    history: dict[str, object],
+) -> None:
+    cache = history["cache"]
+    assert isinstance(cache, Path)
+    case = _case(history, "take-upstream")
+    box = rm.build_state(case, cache, "main")
+    try:
+        assert _git(box.work, "rev-parse", "HEAD") == case.first
+        assert _git(box.work, "rev-parse", "upstream/main") == case.second
+        assert _git(box.work, "rev-parse", "--abbrev-ref", "HEAD") == "main"
+        assert _git(box.work, "rev-parse", "--abbrev-ref", "@{upstream}") == "upstream/main"
+        assert not (box.upstream / "objects" / "pack").exists() or not any(
+            (box.upstream / "objects" / "pack").iterdir()
+        ), "upstream borrows the cache's objects instead of copying them"
+        assert (box.work / ".git" / "objects" / "info" / "alternates").is_file(), (
+            "the checkout borrows them too"
+        )
+        state = rm.StateFingerprint.observe(box)
+        assert state.sync_would_conflict
+        assert state.merge_conflicted_files == ["Cargo.lock"]
+        assert state.local_dropped_lines == ['name = "beta"']
+        # The lock-shaped intent refuses a conflicted Cargo.lock (#306): its line unions never
+        # resolved a real one, and the real-format family decides it package by package.
+        assert rm.INTENT.correct_variant(state) is None
+    finally:
+        box.destroy()
+    assert not box.root.exists()
+
+
+def test_merge_tree_reads_a_clean_merge(history: dict[str, object]) -> None:
+    cache = history["cache"]
+    assert isinstance(cache, Path)
+    clean = _case(history, "clean")
+    tree = rm.merge_tree(cache, clean.first, clean.second)
+    assert (tree.clean, tree.conflicted, tree.submodule_or_binary) == (True, [], False)
+
+
+def _gitlink_conflict(repo: Path) -> None:
+    """Both sides move a submodule `vendor/s` (gitlinks only, to commits the repository lacks)
+    and change `Cargo.lock`: the shape that stopped stage B on wasmerio/wasmer."""
+    run_git(("init", "-q"), cwd=repo)
+
+    def commit(lock: str, gitlink: str, message: str) -> None:
+        (repo / "Cargo.lock").write_text(lock, encoding="utf-8")
+        run_git(("add", "Cargo.lock"), cwd=repo)
+        run_git(
+            ("update-index", "--add", "--cacheinfo", f"160000,{gitlink * 40},vendor/s"), cwd=repo
+        )
+        run_git(("commit", "-q", "-m", message), cwd=repo)
+
+    commit("base\n", "1", "base")
+    run_git(("branch", "base"), cwd=repo)
+    run_git(("checkout", "-q", "-b", "one"), cwd=repo)
+    commit("one\n", "2", "one")
+    run_git(("checkout", "-q", "-b", "two", "base"), cwd=repo)
+    commit("two\n", "3", "two")
+
+
+# What git 2.43 prints after the conflicted entries for `_gitlink_conflict`, recorded: the
+# structured messages, then free text outside their format. Later git (2.56 on CI) omits the
+# free text in -z mode, so the parser is tested against this recording, not the installed git.
+GIT_2_43_MESSAGES = (
+    "\0\0"
+    "1\0Cargo.lock\0Auto-merging\0Auto-merging Cargo.lock\n\0"
+    "1\0Cargo.lock\0CONFLICT (contents)\0CONFLICT (content): Merge conflict in Cargo.lock\n\0"
+    "1\0vendor/s\0CONFLICT (submodule not initialized)\0"
+    "Failed to merge submodule vendor/s (not checked out)\n\0"
+    "1\0vendor/s\0CONFLICT (contents)\0CONFLICT (submodule): Merge conflict in vendor/s\n\0"
+    "Recursive merging with submodules currently only supports trivial cases.\n"
+    "Please manually handle the merging of each conflicted submodule.\n"
+    "This can be accomplished with the following steps:\n"
+    " - come back to superproject and run:\n\n"
+    "      git add vendor/s\n\n"
+    "   to record the above merge or update\n"
+    " - resolve any other conflicts in the superproject\n"
+    " - commit the resulting index in the superproject\n"
+)
+
+
+def _messages_replaced(monkeypatch: pytest.MonkeyPatch, messages: str) -> None:
+    """Keep the installed git's tree and conflicted entries; replace what follows them."""
+    real = rm._git
+
+    def git(cache: Path, *argv: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+        result = real(cache, *argv, check=check)
+        if argv[:1] != ("merge-tree",):
+            return result
+        head = result.stdout.partition("\0\0")[0]
+        return subprocess.CompletedProcess(
+            result.args, result.returncode, head + messages, result.stderr
+        )
+
+    monkeypatch.setattr(rm, "_git", git)
+
+
+SUBMODULE_CONFLICT = (False, ["Cargo.lock", "vendor/s"], True)
+
+
+def test_merge_tree_reads_a_submodule_conflict(tmp_path: Path) -> None:
+    """With whatever git is installed, advice or none."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _gitlink_conflict(repo)
+    tree = rm.merge_tree(repo, "one", "two")
+    assert (tree.clean, tree.conflicted, tree.submodule_or_binary) == SUBMODULE_CONFLICT
+
+
+def test_merge_tree_reads_past_git_2_43s_submodule_advice(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The output that stopped stage B on wasmerio/wasmer (ValueError reading a count)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _gitlink_conflict(repo)
+    _messages_replaced(monkeypatch, GIT_2_43_MESSAGES)
+    tree = rm.merge_tree(repo, "one", "two")
+    assert (tree.clean, tree.conflicted, tree.submodule_or_binary) == SUBMODULE_CONFLICT
+
+
+def test_merge_tree_refuses_a_message_it_does_not_know(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _gitlink_conflict(repo)
+    unknown = GIT_2_43_MESSAGES.replace(
+        "Recursive merging with submodules", "Something git has not said before"
+    )
+    _messages_replaced(monkeypatch, unknown)
+    with pytest.raises(RuntimeError, match="unexpected message 'Something git has not said"):
+        rm.merge_tree(repo, "one", "two")
+
+
+def test_mining_refuses_without_the_registration(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(preregistration.REGISTRATIONS, rm.REGISTRATION, "0" * 64)
+    with pytest.raises(preregistration.UnregisteredError, match="differs"):
+        rm.mine_stage("A", rm.PILOT)
+    with pytest.raises(preregistration.UnregisteredError, match="differs"):
+        rm.run_pilot(Path("never-written"))
+    assert not Path("never-written").exists()
+
+
+def _registered_list(heading: str) -> list[str]:
+    text = preregistration.document(rm.REGISTRATION).read_text(encoding="utf-8")
+    section = text.split(heading, 1)[1].split("\n\n**", 1)[0].split("\n\nThe first", 1)[0]
+    return re.findall(r"^\d+\. \[`([^`]+)`\]", section, flags=re.MULTILINE)
+
+
+def test_the_repositories_are_the_registered_ones_in_order() -> None:
+    assert list(rm.PILOT) == _registered_list("**Pilot (stage A):**")
+    text = preregistration.document(rm.REGISTRATION).read_text(encoding="utf-8")
+    amended = text.split("**A5.", 1)[1].split("**A6.", 1)[0]
+    appended = re.findall(r"^\d+\. \[`([^`]+)`\]", amended, flags=re.MULTILINE)
+    assert len(appended) == 8
+    assert list(rm.CONFIRMATORY) == [
+        *_registered_list("**Confirmatory (stage B), in order:**"),
+        *appended,
+    ]
+
+
+def test_the_lock_files_are_the_registered_ones() -> None:
+    text = preregistration.document(rm.REGISTRATION).read_text(encoding="utf-8")
+    sentence = text.split("A **lock file** is a path whose final component is one of", 1)[1]
+    sentence = sentence.split(".\n", 1)[0] if "`.\n" not in sentence else sentence
+    named = re.findall(r"`([^`]+)`", sentence.split("\n\n", 1)[0])
+    assert tuple(named) == rm.LOCK_FILES
+
+
+def test_the_libraries_are_committed() -> None:
+    for path in rm.LIBRARIES:
+        assert (preregistration.REPOSITORY / path / "build.json").is_file(), path
+
+
+# --- recording a finished stage's observed states ---------------------------------------------
+
+
+class _StubControl:
+    """Fires `keep_local` on a state that would conflict, nothing otherwise: a function of the
+    observed state alone, as the registered control is."""
+
+    def decide(self, intent: object, state: object) -> tuple[str | None, float]:
+        return ("keep_local", 1.0) if state.sync_would_conflict else (None, 1.0)  # type: ignore[attr-defined]
+
+
+def _finished_stage(
+    history: dict[str, object], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, list[int]]:
+    """A stage directory as a run leaves it, whose fetches copy the fixture's cache."""
+    cases = [c.model_copy(update={"index": i}) for i, c in enumerate(history["cases"])]  # type: ignore[arg-type]
+    summary = history["summary"]
+    assert isinstance(summary, rm.Repository)
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    manifest = rm.Manifest(stage="B", repositories=[summary], cases=cases, exclusions=[])
+    (stage / "manifest.json").write_text(manifest.model_dump_json(), encoding="utf-8")
+    control = _StubControl()
+    rows = [
+        rm.Decisions(
+            index=c.index,
+            rule=None,
+            arm3=[],
+            arm2=[],
+            control=("keep_local", 1.0) if c.kind == "positive" else (None, 1.0),
+        )
+        for c in cases
+    ]
+    (stage / "decisions.jsonl").write_text(
+        "".join(r.model_dump_json() + "\n" for r in rows), encoding="utf-8"
+    )
+    fetched: list[int] = []
+
+    def fetch(host: object) -> Path:
+        fetched.append(1)
+        copy = tmp_path / f"cache-{len(fetched)}.git"
+        shutil.copytree(history["cache"], copy)  # type: ignore[arg-type]
+        return copy
+
+    monkeypatch.setattr(rm, "fetch_real_host", fetch)
+    monkeypatch.setattr(rm, "control_classifier", lambda: control)
+    return stage, fetched
+
+
+def test_every_case_is_rebuilt_and_its_state_recorded(
+    history: dict[str, object], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stage, fetched = _finished_stage(history, tmp_path, monkeypatch)
+    observed = rm.observe_states(stage)
+    cases = history["cases"]
+    assert isinstance(cases, list)
+    assert [row.index for row in observed] == list(range(len(cases)))
+    assert all(row.control_matches for row in observed), "each state rebuilt as it was"
+    for row, case in zip(observed, cases, strict=True):
+        assert row.state.sync_would_conflict == (case.kind == "positive")
+    lines = (stage / "states.jsonl").read_text(encoding="utf-8").splitlines()
+    assert [rm.ObservedState.model_validate_json(line) for line in lines] == observed
+    assert fetched == [1], "one fetch for the one repository"
+
+
+def test_a_state_that_rebuilds_differently_is_flagged(
+    history: dict[str, object], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stage, _ = _finished_stage(history, tmp_path, monkeypatch)
+    rows = (stage / "decisions.jsonl").read_text(encoding="utf-8").splitlines()
+    first = rm.Decisions.model_validate_json(rows[0])
+    rows[0] = first.model_copy(update={"control": ("take_upstream", 0.5)}).model_dump_json()
+    (stage / "decisions.jsonl").write_text("\n".join(rows) + "\n", encoding="utf-8")
+    observed = rm.observe_states(stage)
+    assert [row.control_matches for row in observed][0] is False
+    assert all(row.control_matches for row in observed[1:])
+
+
+def test_recording_resumes_without_fetching_again(
+    history: dict[str, object], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stage, fetched = _finished_stage(history, tmp_path, monkeypatch)
+    first = rm.observe_states(stage)
+    again = rm.observe_states(stage)
+    assert again == first and fetched == [1], "nothing left to rebuild, nothing fetched"
+    assert len((stage / "states.jsonl").read_text(encoding="utf-8").splitlines()) == len(first)

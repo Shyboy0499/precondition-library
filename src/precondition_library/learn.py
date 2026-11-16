@@ -31,18 +31,18 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from .agents.compile import admit, compile_program
-from .agents.react import executed_tool_calls, solve
-from .checkout import open_checkout, snapshot
-from .library import Library, ProgramIdCollisionError
-from .program import EpisodeOutcome, Program, ProgramStatus
-from .provider import Provider
-from .runtime.probes import evaluate_preconditions, sandbox_state
-from .runtime.replay import replay
-from .sandbox import Sandbox, git_out, run_git
-from .signatures import StateFingerprint, TaskSignature
-from .tasks.faults import FAULTS
-from .tasks.registry import ambiguous_intents
+from precondition_library.agents.compile import admit, compile_program
+from precondition_library.agents.react import executed_tool_calls, solve
+from precondition_library.checkout import open_checkout, snapshot
+from precondition_library.library import Library, ProgramIdCollisionError
+from precondition_library.program import EpisodeOutcome, Program, ProgramStatus
+from precondition_library.provider import Provider
+from precondition_library.runtime.probes import evaluate_preconditions, sandbox_state
+from precondition_library.runtime.replay import replay
+from precondition_library.sandbox import Sandbox, git_out, run_git
+from precondition_library.signatures import StateFingerprint, TaskSignature
+from precondition_library.tasks.faults import FAULTS
+from precondition_library.tasks.registry import ambiguous_intents
 
 SOLVE_COPY = "solve"
 """The scratch copy the agent solves in."""

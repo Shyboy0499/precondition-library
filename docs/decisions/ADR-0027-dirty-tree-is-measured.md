@@ -23,7 +23,7 @@ three steps, each of which left every measured number unchanged:
 
 The acceptable sets are measured, not asserted: every gold body is replayed on every
 state with its conditions stripped, and the checker's verdict must equal the declared
-set (`tests/test_dirty_tree_intent.py`). On `disjoint` and `same_file` all three
+set (`tests/tasks/test_dirty_tree_intent.py`). On `disjoint` and `same_file` all three
 resolutions pass; on `collision` only `aside` does, because a stash pop cannot restore
 an untracked file over a tracked one and a merge meets an add/add conflict.
 
@@ -89,7 +89,7 @@ owner.
   - an intent pinned by replay;
   - registration in a separate change, recorded here or in a successor.
 - Every document that counts measured or excluded faults is pinned by
-  `tests/test_declared_state.py`'s `EXCLUDED_FROM_BENCHMARK` claim, which now
+  `tests/meta/test_declared_state.py`'s `EXCLUDED_FROM_BENCHMARK` claim, which now
   expects two.
 
 ## Alternatives rejected

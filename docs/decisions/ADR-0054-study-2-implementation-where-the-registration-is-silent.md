@@ -56,7 +56,7 @@ evaluation set has been mined, and no build has run.
   configuration R is meant to have, and Control-R gets the same states.
 
 **Gained:** every choice above is fixed and reviewable before any data exists. Each is tested:
-`tests/test_refusal_admission.py`, `tests/test_refusal_set.py` and `tests/test_refusal_study.py`.
+`tests/studies/test_refusal_admission.py`, `tests/studies/test_refusal_set.py` and `tests/studies/test_refusal_study.py`.
 
 **New obligations:** the results report states the time R's checks took, the collision count, and
 any replacement build (indices 10, 11 and 12) with its reason.

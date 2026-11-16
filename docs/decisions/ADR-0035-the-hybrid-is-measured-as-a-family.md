@@ -51,7 +51,7 @@ away the accepted set and the rest of the ranking.
    records each environment's **accepted program ids** (in arm 3's own order) and each request's
    **complete text ranking** with scores. `score_all` computes every admitted program's score
    whether or not the caller trims the list, so the wider record costs nothing; the grid over it is
-   arithmetic. `tests/test_hybrid.py` pins the record against arm 3's own decisions in the same pass.
+   arithmetic. `tests/experiment/scorers/test_hybrid.py` pins the record against arm 3's own decisions in the same pass.
 3. **The grid is registered.** `k` in `(1, 2, 3, 5, 10, None)` (`None` = the whole ranking) crossed
    with every distinct retrieval score plus no floor -- ADR-0008's rule for a sweep: every achievable
    operating point and no interpolated one. Changing either the `k` grid or that rule is a
