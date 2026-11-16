@@ -39,7 +39,7 @@ jobs:
 
   # The suite, split three ways (PYTEST_SHARD, tests/conftest.py). Every test builds real
   # repositories, and one runner took 13-18 minutes for all of them; three take about a
-  # third each. The split is by a hash of each test's id, and `tests/test_ci_shards.py`
+  # third each. The split is by a hash of each test's id, and `tests/meta/test_ci_shards.py`
   # checks that the shards together run every test exactly once.
   tests:
     runs-on: ubuntu-latest
@@ -116,10 +116,10 @@ jobs:
       - name: Portability and sandbox tests
         run: >-
           uv run pytest -q -rs
-          tests/test_portability_assumptions.py
-          tests/test_sandbox_environment.py
-          tests/test_sandbox_diverged.py
-          tests/test_sandbox_submodule_moved.py
-          tests/test_read_only_probes.py
-          tests/test_process_confinement.py
-          tests/test_argv_templates.py
+          tests/meta/test_portability_assumptions.py
+          tests/core/test_sandbox_environment.py
+          tests/tasks/test_sandbox_diverged.py
+          tests/tasks/test_sandbox_submodule_moved.py
+          tests/runtime/test_read_only_probes.py
+          tests/runtime/test_process_confinement.py
+          tests/core/test_argv_templates.py
