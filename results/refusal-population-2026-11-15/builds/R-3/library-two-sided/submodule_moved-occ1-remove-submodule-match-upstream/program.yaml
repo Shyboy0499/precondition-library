@@ -1,0 +1,94 @@
+id: submodule_moved-occ1-remove-submodule-match-upstream
+intent: Remove the nested submodule checkout and fast-forward to the upstream commit
+  that drops it.
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: has_submodule_gitlink
+  description: the index records a gitlink at the nested dependency path
+  probe: git ls-files -s -- '{submodule_path}' | grep -q '^160000 '
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_declared
+  description: .gitmodules declares the nested dependency path
+  probe: |-
+    git config -f .gitmodules --get-regexp '^submodule\..*\.path$' \
+      | sed 's/^[^ ]* //' | grep -Fxq -- '{submodule_path}'
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_initialized
+  description: the nested checkout is initialised at the configured path
+  probe: git submodule status -- '{submodule_path}' | grep -q '^[+ ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_dropped_gitlink
+  description: upstream no longer records a gitlink at the nested dependency path
+  probe: |-
+    git rev-parse --verify --quiet '{upstream_remote}/{upstream_branch}^{commit}' >/dev/null &&
+    ! git ls-tree -z '{upstream_remote}/{upstream_branch}' -- '{submodule_path}' \
+      | tr '\0' '\n' | grep -q '^160000 '
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_no_submodule_declaration
+  description: upstream no longer declares the nested dependency path in .gitmodules
+  probe: |-
+    ! git config --blob '{upstream_remote}/{upstream_branch}:.gitmodules' --get-regexp '^submodule\..*\.path$' 2>/dev/null \
+      | sed 's/^[^ ]* //' | grep -Fxq -- '{submodule_path}'
+  expect_exit: 0
+  expect_pattern: null
+- name: fast_forward_available
+  description: HEAD is a strict ancestor of the upstream tip
+  probe: |-
+    git rev-parse --verify --quiet '{upstream_remote}/{upstream_branch}^{commit}' >/dev/null &&
+    git merge-base --is-ancestor HEAD '{upstream_remote}/{upstream_branch}' &&
+    test "$(git rev-parse HEAD)" != "$(git rev-parse '{upstream_remote}/{upstream_branch}')"
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: no staged, unstaged, or untracked changes would be discarded
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git submodule deinit -f -- '{submodule_path}'
+  git merge --ff-only '{upstream_remote}/{upstream_branch}'
+steps: null
+postconditions:
+- name: upstream_tip_checked_out
+  description: HEAD is exactly upstream's commit
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse '{upstream_remote}/{upstream_branch}')"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_gitlink_removed
+  description: the index no longer records a gitlink at the nested dependency path
+  probe: '! git ls-files -s -- ''{submodule_path}'' | grep -q ''^160000 '''
+  expect_exit: 0
+  expect_pattern: null
+- name: checkout_directory_removed
+  description: the nested dependency directory is absent
+  probe: test ! -e '{submodule_path}'
+  expect_exit: 0
+  expect_pattern: null
+- name: gitmodules_no_longer_declares_path
+  description: .gitmodules is absent or no longer declares the nested dependency path
+  probe: test ! -e .gitmodules || ! git config -f .gitmodules --get-regexp '^submodule\..*\.path$'
+    | sed 's/^[^ ]* //' | grep -Fxq -- '{submodule_path}'
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree_after
+  description: no staged, unstaged, or untracked changes remain
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: remove
+provenance:
+  compiled_from_task: Get this repo's nested dependency consistent with upstream.
+    Remove the nested checkout, the way upstream did.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this repo's nested dependency consistent with upstream. Remove the
+    nested checkout, the way upstream did./seed-0-submodule_moved-212
+  fault: submodule_moved
+status: admitted

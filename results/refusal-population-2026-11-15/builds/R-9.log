@@ -1,0 +1,48 @@
+model: deepseek-flash
+compiled 19; admitted two-sided 16, positive-only 18
+library hash: bb96279c7cf6972ce3408b054a5a0baad154013ffbe213ec02675d819b6add3e
+
+build episodes:
+  branch_renamed seed 6: fallback, 9 tool calls, checker ok, admitted True
+  branch_renamed seed 1: fallback, 17 tool calls, checker ok, admitted True
+  branch_renamed seed 0: fallback, 14 tool calls, checker ok, admitted True
+  config_renamed seed 31: fallback, 8 tool calls, checker ok, admitted True
+  config_renamed seed 8: fallback, 14 tool calls, checker ok, admitted True
+  config_renamed seed 12: fallback, 14 tool calls, checker ok, admitted True
+  dirty_tree seed 2: fallback, 16 tool calls, checker ok, admitted True
+  dirty_tree seed 1: fallback, 10 tool calls, checker ok, admitted True
+  dirty_tree seed 5: fallback, 13 tool calls, checker ok, admitted True
+  diverged seed 5: fallback, 12 tool calls, checker ok, admitted True
+  diverged seed 4: fallback, 12 tool calls, checker ok, admitted False -- refusal side failed: preconditions accepted 1 of 35 real conflicts no resolution can express (refusal-tested admission, configuration R): saleor/saleor@1fef436c133c
+  diverged seed 0: fallback, 13 tool calls, checker ok, admitted True
+  diverged seed 1: fallback, 8 tool calls, checker ok, admitted True
+  lockfile_conflict seed 3: fallback, 18 tool calls, checker ok, admitted True
+  lockfile_conflict seed 6: fallback, 18 tool calls, checker ok, admitted False -- negative side failed: preconditions accepted 1 of 1 same-intent states (lockfile_conflict seed 2 resolves to 'keep_local', which accepts ['keep_local'], but the program implements 'take_upstream'); firing where a sibling resolution is correct is the mismatch this gate exists to refuse
+  lockfile_conflict seed 5: fallback, 16 tool calls, checker ok, admitted False -- refusal side failed: preconditions accepted 4 of 35 real conflicts no resolution can express (refusal-tested admission, configuration R): saleor/saleor@e3c62ad985ed, saleor/saleor@ad2c9ccff7d9, saleor/saleor@4fb40d636d2b, saleor/saleor@a17dacfeda98
+  submodule_moved seed 5: fallback, 17 tool calls, checker ok, admitted True
+  submodule_moved seed 1: fallback, 17 tool calls, checker ok, admitted True
+  submodule_moved seed 0: fallback, 22 tool calls, checker ok, admitted True
+
+2b threshold (tune seeds): 1.0
+claim 2: at matched dispatch coverage, executable-precondition dispatch mis-fires less often than text-similarity dispatch (at arm 3's coverage the soft vote's matched point is the hard rule itself (threshold >= 1.0), so it makes arm 3's decisions and cannot show that requiring every probe adds nothing; the registered claim keeps its wording)
+
+Primary metric, uninformed regime, 480 labelled pairs (spec §7 item 1, ADR-0008)
+  arm 3 (pre-registered coverage point): coverage 213/480, mismatch 0/213
+  arm 2 curve: 107 operating point(s), each with a 95% Wilson interval in figure1.csv
+  at matched coverage arm 2 (threshold 0.144) has mismatch 171/202; coverage gap -0.023; mismatch difference (arm 2 - arm 3) +0.8465
+  power (item 3): with 202 and 213 fires, alpha 0.05 two-sided and power 0.8, the smallest detectable mismatch difference is 0.138 at a 50% base rate and 0.135 at the observed 0.412
+  baseline arm 2b (soft vote): curve, 2 operating point(s) -- context, not part of the claim
+  baseline arm 2c (intent key): point, 1 operating point(s) -- context, not part of the claim
+
+
+arm 2 baseline floor (spec §7 item 11): not measurable, so not usable: an intent needs two or more candidate resolutions for arm 2 to choose between, and the library's admitted programs give sync_through_a_conflicting_lockfile has ['keep_local']
+  arm 2 is not a usable baseline (spec §7 item 11), so this run may not say that precondition dispatch beats text similarity; the comparison is reported, not claimed
+
+episode stages skipped (--primary-only): no frozen benchmark
+
+artifacts:
+  build_ledger: build.jsonl
+  build_transcripts: build.transcripts.jsonl
+  library_two_sided: library-two-sided
+  library_positive_only: library-positive-only
+  primary: primary

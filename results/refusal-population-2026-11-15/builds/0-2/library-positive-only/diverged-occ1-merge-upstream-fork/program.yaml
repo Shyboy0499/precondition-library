@@ -1,0 +1,78 @@
+id: diverged-occ1-merge-upstream-fork
+intent: Merge upstream into the current fork branch while preserving both local and
+  upstream histories.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_a_branch
+  description: HEAD points at a local branch rather than a detached commit
+  probe: git symbolic-ref --quiet HEAD >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+- name: no_tracked_changes
+  description: there are no staged or unstaged changes to tracked files
+  probe: test -z "$(git status --porcelain --untracked-files=no)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_exists
+  description: the local remote-tracking ref for the upstream branch exists
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch} >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+- name: diverged_from_upstream
+  description: both the local branch and upstream have commits the other lacks
+  probe: |-
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0 &&
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_collisions
+  description: no untracked file would be overwritten by files changed upstream
+  probe: |-
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch {upstream_remote}
+  branch=$(git rev-parse --abbrev-ref HEAD)
+  if ! git merge --no-ff --no-edit -m "Merge {upstream_remote}/{upstream_branch} into $branch" {upstream_remote}/{upstream_branch}; then
+    git merge --abort || true
+    exit 1
+  fi
+steps: null
+postconditions:
+- name: upstream_is_ancestor
+  description: every upstream commit is contained in the merged history
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: head_is_merge_commit
+  description: HEAD is a merge commit with exactly two parents
+  probe: test "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 3
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: the index contains no unresolved merge entries
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_tracked_changes_after
+  description: there are no staged or unstaged changes to tracked files after the
+    merge
+  probe: test -z "$(git status --porcelain --untracked-files=no)"
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: Get this fork back in sync with upstream without losing my commits.
+    Merge upstream into my branch and keep both histories.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this fork back in sync with upstream without losing my commits.
+    Merge upstream into my branch and keep both histories./seed-4-diverged-27083
+  fault: diverged
+status: admitted

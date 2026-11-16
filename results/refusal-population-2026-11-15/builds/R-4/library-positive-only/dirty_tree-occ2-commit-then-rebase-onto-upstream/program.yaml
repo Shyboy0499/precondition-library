@@ -1,0 +1,64 @@
+id: dirty_tree-occ2-commit-then-rebase-onto-upstream
+intent: commit the uncommitted work on the current branch, then bring that branch
+  up to date with upstream while keeping the local changes
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: worktree_dirty
+  description: tracked files have uncommitted modifications that must be preserved
+  probe: git status --porcelain --untracked-files=no
+  expect_exit: 0
+  expect_pattern: '[^[:space:]]'
+- name: behind_upstream
+  description: HEAD is behind the upstream branch by at least one commit
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: '[1-9]'
+- name: no_operation_in_progress
+  description: no rebase or merge is already in progress
+  probe: |-
+    test ! -e "$(git rev-parse --git-path rebase-merge)" &&
+    test ! -e "$(git rev-parse --git-path rebase-apply)" &&
+    test ! -e "$(git rev-parse --git-path MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git config user.email >/dev/null 2>&1 || git config user.email "git-maintenance@example.invalid"
+  git config user.name >/dev/null 2>&1 || git config user.name "git maintenance"
+  git add -u
+  git commit -m "chore: commit local work before syncing with upstream"
+  git fetch {upstream_remote}
+  git rebase {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: worktree_clean
+  description: no uncommitted changes remain in tracked files
+  probe: '! git status --porcelain --untracked-files=no | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: the upstream branch is contained in HEAD, so the branch is up to date
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: no_operation_left_behind
+  description: the rebase finished and left no state directory or merge state
+  probe: |-
+    test ! -e "$(git rev-parse --git-path rebase-merge)" &&
+    test ! -e "$(git rev-parse --git-path rebase-apply)" &&
+    test ! -e "$(git rev-parse --git-path MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+variant: commit
+provenance:
+  compiled_from_task: My working tree has changes and the branch is behind upstream.
+    Fix that and keep my changes. Commit my uncommitted work first, then bring the
+    branch up to date.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: My working tree has changes and the branch is behind upstream. Fix that
+    and keep my changes. Commit my uncommitted work first, then bring the branch up
+    to date./seed-0-dirty_tree-29016
+  fault: dirty_tree
+status: admitted

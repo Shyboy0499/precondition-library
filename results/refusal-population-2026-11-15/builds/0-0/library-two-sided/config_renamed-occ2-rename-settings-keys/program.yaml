@@ -1,0 +1,290 @@
+id: config_renamed-occ2-rename-settings-keys
+intent: Rename stale settings keys to their current names according to config/renames.conf,
+  preserving values and committing the change.
+parameters: []
+preconditions:
+- name: has_renames_file
+  description: config/renames.conf exists and contains a key mapping
+  probe: |-
+    test -f config/renames.conf &&
+    git ls-files --error-unmatch config/renames.conf >/dev/null 2>&1 &&
+    grep -Eq '^[[:space:]]*[^#[:space:]][^=]*[[:space:]]*(=|->)[[:space:]]*[^#[:space:]]' config/renames.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: has_stale_key
+  description: a tracked file under config has an old key assignment
+  probe: |-
+    set -e
+    escape_re() { printf '%s' "$1" | sed 's/[].[\*^$()+?{}|]/\\&/g'; }
+    found_map=1
+    found_stale=1
+    while IFS= read -r line; do
+      line=$(printf '%s' "$line" | sed 's/^[[:space:]]*//')
+      case "$line" in
+        ''|'#'*) continue ;;
+      esac
+      if [[ "$line" == *'->'* ]]; then
+        old=${line%%->*}
+        new=${line#*->}
+      elif [[ "$line" == *=* ]]; then
+        old=${line%%=*}
+        new=${line#*=}
+      else
+        continue
+      fi
+      old=$(printf '%s' "$old" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]].*$//')
+      new=$(printf '%s' "$new" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]].*$//')
+      if [ -z "$old" ] || [ -z "$new" ] || [ "$old" = "$new" ]; then
+        continue
+      fi
+      found_map=0
+      old_re=$(escape_re "$old")
+      if git grep -q -I -E "^[[:space:]]*${old_re}[[:space:]]*=" -- config ':(exclude)config/renames.conf'; then
+        found_stale=0
+        break
+      fi
+    done < config/renames.conf
+    [ "$found_map" -eq 0 ] && [ "$found_stale" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: no_new_key_conflict
+  description: no file contains both the old and new spelling of a key
+  probe: |-
+    set -e
+    escape_re() { printf '%s' "$1" | sed 's/[].[\*^$()+?{}|]/\\&/g'; }
+    while IFS= read -r line; do
+      line=$(printf '%s' "$line" | sed 's/^[[:space:]]*//')
+      case "$line" in
+        ''|'#'*) continue ;;
+      esac
+      if [[ "$line" == *'->'* ]]; then
+        old=${line%%->*}
+        new=${line#*->}
+      elif [[ "$line" == *=* ]]; then
+        old=${line%%=*}
+        new=${line#*=}
+      else
+        continue
+      fi
+      old=$(printf '%s' "$old" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]].*$//')
+      new=$(printf '%s' "$new" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]].*$//')
+      if [ -z "$old" ] || [ -z "$new" ] || [ "$old" = "$new" ]; then
+        continue
+      fi
+      old_re=$(escape_re "$old")
+      new_re=$(escape_re "$new")
+      while IFS= read -r -d '' file; do
+        if grep -Iq -E "^[[:space:]]*${new_re}[[:space:]]*=" -- "$file"; then
+          exit 1
+        fi
+      done < <(git grep -l -z -I -E "^[[:space:]]*${old_re}[[:space:]]*=" -- config ':(exclude)config/renames.conf')
+    done < config/renames.conf
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_tracked_worktree
+  description: HEAD exists and tracked files are clean
+  probe: |-
+    git rev-parse --verify 'HEAD^{commit}' >/dev/null 2>&1 &&
+    git diff --quiet &&
+    git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  mapfile=config/renames.conf
+  config_dir=config
+  changed=()
+  while IFS= read -r -d '' file; do
+    case "$file" in
+      "$config_dir"/*) ;;
+      *) continue ;;
+    esac
+    if [ "$file" = "$mapfile" ]; then
+      continue
+    fi
+    if ! grep -Iq -E '^[[:space:]]*[^[:space:]=]+[[:space:]]*=' -- "$file"; then
+      continue
+    fi
+    tmp=$(mktemp)
+    awk -v mapfile="$mapfile" '
+      function trim(s) {
+        sub(/^[[:space:]]+/, "", s)
+        sub(/[[:space:]]+$/, "", s)
+        return s
+      }
+      BEGIN {
+        while ((getline line < mapfile) > 0) {
+          sub(/^[[:space:]]*#.*/, "", line)
+          if (line ~ /^[[:space:]]*$/) continue
+          p = index(line, "->")
+          if (p > 0) {
+            old = substr(line, 1, p - 1)
+            new = substr(line, p + 2)
+          } else {
+            p = index(line, "=")
+            if (p == 0) continue
+            old = substr(line, 1, p - 1)
+            new = substr(line, p + 1)
+          }
+          old = trim(old)
+          new = trim(new)
+          sub(/[[:space:]].*$/, "", old)
+          sub(/[[:space:]].*$/, "", new)
+          if (old != "" && new != "" && old != new) {
+            map[old] = new
+          }
+        }
+        close(mapfile)
+      }
+      {
+        line = $0
+        if (match(line, /^[[:space:]]*[^[:space:]=]+[[:space:]]*=/)) {
+          prefix = substr(line, 1, RLENGTH)
+          rest = substr(line, RLENGTH + 1)
+          key = prefix
+          sub(/^[[:space:]]*/, "", key)
+          sub(/[[:space:]]*=.*$/, "", key)
+          if (key in map) {
+            lead = prefix
+            sub(/[^[:space:]].*$/, "", lead)
+            tail = substr(prefix, length(lead) + length(key) + 1)
+            print lead map[key] tail rest
+            next
+          }
+        }
+        print line
+      }
+    ' "$file" > "$tmp"
+    if ! cmp -s "$file" "$tmp"; then
+      cat "$tmp" > "$file"
+      changed+=("$file")
+    fi
+    rm -f "$tmp"
+  done < <(git ls-files -z)
+  if [ "${#changed[@]}" -eq 0 ]; then
+    exit 1
+  fi
+  git add -- "${changed[@]}"
+  git commit -m "Migrate settings keys to current names"
+steps: null
+postconditions:
+- name: no_stale_keys_remain
+  description: no old key assignments remain under config
+  probe: |-
+    set -e
+    escape_re() { printf '%s' "$1" | sed 's/[].[\*^$()+?{}|]/\\&/g'; }
+    while IFS= read -r line; do
+      line=$(printf '%s' "$line" | sed 's/^[[:space:]]*//')
+      case "$line" in
+        ''|'#'*) continue ;;
+      esac
+      if [[ "$line" == *'->'* ]]; then
+        old=${line%%->*}
+        new=${line#*->}
+      elif [[ "$line" == *=* ]]; then
+        old=${line%%=*}
+        new=${line#*=}
+      else
+        continue
+      fi
+      old=$(printf '%s' "$old" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]].*$//')
+      new=$(printf '%s' "$new" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]].*$//')
+      if [ -z "$old" ] || [ -z "$new" ] || [ "$old" = "$new" ]; then
+        continue
+      fi
+      old_re=$(escape_re "$old")
+      if git grep -q -I -E "^[[:space:]]*${old_re}[[:space:]]*=" -- config ':(exclude)config/renames.conf'; then
+        exit 1
+      fi
+    done < config/renames.conf
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: renamed_values_preserved
+  description: each old key value is preserved under the new key
+  probe: |-
+    set -e
+    escape_re() { printf '%s' "$1" | sed 's/[].[\*^$()+?{}|]/\\&/g'; }
+    while IFS= read -r line; do
+      line=$(printf '%s' "$line" | sed 's/^[[:space:]]*//')
+      case "$line" in
+        ''|'#'*) continue ;;
+      esac
+      if [[ "$line" == *'->'* ]]; then
+        old=${line%%->*}
+        new=${line#*->}
+      elif [[ "$line" == *=* ]]; then
+        old=${line%%=*}
+        new=${line#*=}
+      else
+        continue
+      fi
+      old=$(printf '%s' "$old" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]].*$//')
+      new=$(printf '%s' "$new" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]].*$//')
+      if [ -z "$old" ] || [ -z "$new" ] || [ "$old" = "$new" ]; then
+        continue
+      fi
+      old_re=$(escape_re "$old")
+      while IFS= read -r -d '' file; do
+        old_val=$(git show "HEAD^:$file" | awk -v key="$old" '
+          {
+            line = $0
+            sub(/^[[:space:]]*/, "", line)
+            p = index(line, "=")
+            if (p > 0) {
+              k = substr(line, 1, p - 1)
+              sub(/[[:space:]]*$/, "", k)
+              if (k == key) {
+                v = substr(line, p + 1)
+                sub(/^[[:space:]]*/, "", v)
+                sub(/[[:space:]]*$/, "", v)
+                print "X" v
+                exit
+              }
+            }
+          }
+        ')
+        new_val=$(git show "HEAD:$file" | awk -v key="$new" '
+          {
+            line = $0
+            sub(/^[[:space:]]*/, "", line)
+            p = index(line, "=")
+            if (p > 0) {
+              k = substr(line, 1, p - 1)
+              sub(/[[:space:]]*$/, "", k)
+              if (k == key) {
+                v = substr(line, p + 1)
+                sub(/^[[:space:]]*/, "", v)
+                sub(/[[:space:]]*$/, "", v)
+                print "X" v
+                exit
+              }
+            }
+          }
+        ')
+        if [ "$old_val" != "$new_val" ]; then
+          exit 1
+        fi
+      done < <(git grep -l -z -I -E "^[[:space:]]*${old_re}[[:space:]]*=" HEAD^ -- config ':(exclude)config/renames.conf')
+    done < config/renames.conf
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: changes_committed
+  description: the rename is committed and the worktree is clean
+  probe: |-
+    git diff --quiet &&
+    git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: Migrate my settings to the current key names. Rename the old
+    key in the project's settings and keep its value.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Migrate my settings to the current key names. Rename the old key in
+    the project's settings and keep its value./seed-0-config_renamed-25586
+  fault: config_renamed
+status: admitted

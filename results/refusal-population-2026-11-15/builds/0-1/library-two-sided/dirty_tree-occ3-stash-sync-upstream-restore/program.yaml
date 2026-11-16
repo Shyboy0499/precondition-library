@@ -1,0 +1,94 @@
+id: dirty_tree-occ3-stash-sync-upstream-restore
+intent: Stash uncommitted work including untracked files, fast-forward the current
+  branch to its upstream, and restore the stashed work without losing local edits.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: tracks_upstream
+  description: the current branch tracks the given upstream remote and branch
+  probe: test "$(git for-each-ref --format='%(upstream:short)' "refs/heads/$(git rev-parse
+    --abbrev-ref HEAD)")" = "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_dirty
+  description: the working tree or index has uncommitted changes, including untracked
+    files
+  probe: '[ -n "$(git status --porcelain)" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_has_new_commits
+  description: the upstream branch contains at least one commit not in HEAD
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: fast_forwardable
+  description: HEAD is an ancestor of the upstream branch, so a fast-forward is possible
+  probe: git merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: no merge, cherry-pick, or rebase is in progress
+  probe: |-
+    test ! -e "$(git rev-parse --git-path MERGE_HEAD)" && \
+    test ! -e "$(git rev-parse --git-path CHERRY_PICK_HEAD)" && \
+    test ! -d "$(git rev-parse --git-path rebase-merge)" && \
+    test ! -d "$(git rev-parse --git-path rebase-apply)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_overlapping_tracked_changes
+  description: no locally modified tracked file is also changed between HEAD and upstream
+  probe: |-
+    ! comm -12 \
+      <(git diff --name-only -z HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_collision_with_upstream
+  description: no untracked file has the same path as a file changed between HEAD
+    and upstream
+  probe: |-
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git stash push --include-untracked -m 'wip: pre-upstream-sync'
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+  git stash pop
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is the upstream commit after the fast-forward
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_dirty_again
+  description: the working tree again contains the stashed uncommitted changes
+  probe: '[ -n "$(git status --porcelain)" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: the restored changes applied without leaving merge conflicts
+  probe: '! git ls-files -u | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: stash_entry_dropped
+  description: the stash created for this sync is no longer present
+  probe: '! git stash list --format=''%s'' | grep -q ''wip: pre-upstream-sync'''
+  expect_exit: 0
+  expect_pattern: null
+variant: stash
+provenance:
+  compiled_from_task: I am in the middle of something and upstream moved on. Sort
+    it out without losing my edits. Stash my uncommitted work, update the branch,
+    then put my work back.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: I am in the middle of something and upstream moved on. Sort it out without
+    losing my edits. Stash my uncommitted work, update the branch, then put my work
+    back./seed-10-dirty_tree-25587
+  fault: dirty_tree
+status: admitted

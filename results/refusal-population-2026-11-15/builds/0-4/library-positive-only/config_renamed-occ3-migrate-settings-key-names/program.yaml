@@ -1,0 +1,250 @@
+id: config_renamed-occ3-migrate-settings-key-names
+intent: Migrate the project's settings to the current key names by renaming stale
+  keys in config/settings.conf according to config/renames.conf while preserving their
+  values.
+parameters:
+- work_dir
+preconditions:
+- name: renames_file_present
+  description: the work tree contains a tracked config/renames.conf mapping old key
+    names to new ones
+  probe: test -f "{work_dir}/config/renames.conf" && git ls-files --error-unmatch
+    config/renames.conf >/dev/null 2>&1
+  expect_exit: 0
+  expect_pattern: null
+- name: settings_file_present
+  description: the work tree contains a tracked config/settings.conf
+  probe: test -f config/settings.conf && git ls-files --error-unmatch config/settings.conf
+    >/dev/null 2>&1
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: there are no staged, unstaged, or untracked changes
+  probe: '[ -z "$(git status --porcelain)" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_key_present
+  description: at least one key in config/settings.conf matches an old key in config/renames.conf
+  probe: |-
+    awk '
+      FILENAME == ARGV[1] {
+        line=$0
+        if (line ~ /^[ \t]*#/ || line ~ /^[ \t]*$/) next
+        eq=index(line, "=")
+        if (eq == 0) next
+        old=substr(line, 1, eq-1); gsub(/^[ \t]+|[ \t]+$/, "", old)
+        new=substr(line, eq+1); gsub(/^[ \t]+|[ \t]+$/, "", new)
+        if (old != "" && new != "") oldkeys[old]=1
+        next
+      }
+      {
+        line=$0
+        if (line ~ /^[ \t]*#/ || line ~ /^[ \t]*$/) next
+        eq=index(line, "=")
+        if (eq == 0) next
+        key=substr(line, 1, eq-1); gsub(/^[ \t]+|[ \t]+$/, "", key)
+        if (key in oldkeys) found=1
+      }
+      END { exit found ? 0 : 1 }
+    ' config/renames.conf config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_keys_unique
+  description: each stale old key appears at most once in config/settings.conf
+  probe: |-
+    awk '
+      FILENAME == ARGV[1] {
+        line=$0
+        if (line ~ /^[ \t]*#/ || line ~ /^[ \t]*$/) next
+        eq=index(line, "=")
+        if (eq == 0) next
+        old=substr(line, 1, eq-1); gsub(/^[ \t]+|[ \t]+$/, "", old)
+        new=substr(line, eq+1); gsub(/^[ \t]+|[ \t]+$/, "", new)
+        if (old != "" && new != "") oldkeys[old]=1
+        next
+      }
+      {
+        line=$0
+        if (line ~ /^[ \t]*#/ || line ~ /^[ \t]*$/) next
+        eq=index(line, "=")
+        if (eq == 0) next
+        key=substr(line, 1, eq-1); gsub(/^[ \t]+|[ \t]+$/, "", key)
+        if (key in oldkeys) count[key]++
+      }
+      END {
+        dup=0
+        for (k in count) if (count[k] > 1) dup=1
+        exit dup ? 1 : 0
+      }
+    ' config/renames.conf config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: rename_targets_safe
+  description: no stale key would overwrite an existing key or collide with another
+    stale key's new name
+  probe: |-
+    awk '
+      FILENAME == ARGV[1] {
+        line=$0
+        if (line ~ /^[ \t]*#/ || line ~ /^[ \t]*$/) next
+        eq=index(line, "=")
+        if (eq == 0) next
+        old=substr(line, 1, eq-1); gsub(/^[ \t]+|[ \t]+$/, "", old)
+        new=substr(line, eq+1); gsub(/^[ \t]+|[ \t]+$/, "", new)
+        if (old != "" && new != "") map[old]=new
+        next
+      }
+      {
+        line=$0
+        if (line ~ /^[ \t]*#/ || line ~ /^[ \t]*$/) next
+        eq=index(line, "=")
+        if (eq == 0) next
+        key=substr(line, 1, eq-1); gsub(/^[ \t]+|[ \t]+$/, "", key)
+        if (key != "") present[key]=1
+      }
+      END {
+        conflict=0
+        for (old in map) {
+          if (old in present) {
+            new=map[old]
+            if (new in present) conflict=1
+            if (new in seen) conflict=1
+            seen[new]=1
+          }
+        }
+        exit conflict ? 1 : 0
+      }
+    ' config/renames.conf config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  set -e
+  cd "{work_dir}"
+  awk '
+    FILENAME == ARGV[1] {
+      line=$0
+      if (line ~ /^[ \t]*#/ || line ~ /^[ \t]*$/) next
+      eq=index(line, "=")
+      if (eq == 0) next
+      old=substr(line, 1, eq-1); gsub(/^[ \t]+|[ \t]+$/, "", old)
+      new=substr(line, eq+1); gsub(/^[ \t]+|[ \t]+$/, "", new)
+      if (old != "" && new != "") map[old]=new
+      next
+    }
+    {
+      line=$0
+      trimmed=line
+      sub(/^[ \t]*/, "", trimmed)
+      if (trimmed ~ /^#/ || trimmed == "") { print line; next }
+      eq=index(line, "=")
+      if (eq == 0) { print line; next }
+      pre=substr(line, 1, eq-1)
+      post=substr(line, eq)
+      match(pre, /^[ \t]*/)
+      lead=substr(pre, 1, RLENGTH)
+      rest=substr(pre, RLENGTH+1)
+      key=rest
+      sub(/[ \t]+$/, "", key)
+      trail=substr(rest, length(key)+1)
+      if (key in map) {
+        print lead map[key] trail post
+      } else {
+        print line
+      }
+    }
+  ' config/renames.conf config/settings.conf > config/settings.conf.tmp
+  cat config/settings.conf.tmp > config/settings.conf
+  rm -f config/settings.conf.tmp
+  git add config/settings.conf
+  git -c user.name="Config Migrator" -c user.email="config-migrator@example.com" commit -m "Migrate settings to current key names"
+steps: null
+postconditions:
+- name: worktree_clean
+  description: the rename was committed and leaves no uncommitted changes
+  probe: '[ -z "$(git status --porcelain)" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_stale_keys_remain
+  description: config/settings.conf no longer contains any old key from config/renames.conf
+  probe: |-
+    awk '
+      FILENAME == ARGV[1] {
+        line=$0
+        if (line ~ /^[ \t]*#/ || line ~ /^[ \t]*$/) next
+        eq=index(line, "=")
+        if (eq == 0) next
+        old=substr(line, 1, eq-1); gsub(/^[ \t]+|[ \t]+$/, "", old)
+        new=substr(line, eq+1); gsub(/^[ \t]+|[ \t]+$/, "", new)
+        if (old != "" && new != "") oldkeys[old]=1
+        next
+      }
+      {
+        line=$0
+        if (line ~ /^[ \t]*#/ || line ~ /^[ \t]*$/) next
+        eq=index(line, "=")
+        if (eq == 0) next
+        key=substr(line, 1, eq-1); gsub(/^[ \t]+|[ \t]+$/, "", key)
+        if (key in oldkeys) found=1
+      }
+      END { exit found ? 1 : 0 }
+    ' config/renames.conf config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: new_keys_preserve_values
+  description: every old key that existed before the commit now has its new key with
+    the same value
+  probe: |-
+    awk '
+      FILENAME == ARGV[1] {
+        line=$0
+        if (line ~ /^[ \t]*#/ || line ~ /^[ \t]*$/) next
+        eq=index(line, "=")
+        if (eq == 0) next
+        old=substr(line, 1, eq-1); gsub(/^[ \t]+|[ \t]+$/, "", old)
+        new=substr(line, eq+1); gsub(/^[ \t]+|[ \t]+$/, "", new)
+        if (old != "" && new != "") map[old]=new
+        next
+      }
+      FILENAME == ARGV[2] {
+        line=$0
+        if (line ~ /^[ \t]*#/ || line ~ /^[ \t]*$/) next
+        eq=index(line, "=")
+        if (eq == 0) next
+        key=substr(line, 1, eq-1); gsub(/^[ \t]+|[ \t]+$/, "", key)
+        val=substr(line, eq+1); gsub(/^[ \t]+|[ \t]+$/, "", val)
+        if (key != "") oldval[key]=val
+        next
+      }
+      FILENAME == ARGV[3] {
+        line=$0
+        if (line ~ /^[ \t]*#/ || line ~ /^[ \t]*$/) next
+        eq=index(line, "=")
+        if (eq == 0) next
+        key=substr(line, 1, eq-1); gsub(/^[ \t]+|[ \t]+$/, "", key)
+        val=substr(line, eq+1); gsub(/^[ \t]+|[ \t]+$/, "", val)
+        if (key != "") newval[key]=val
+      }
+      END {
+        bad=0
+        for (old in map) {
+          if (old in oldval) {
+            new=map[old]
+            if (!(new in newval)) bad=1
+            else if (oldval[old] != newval[new]) bad=1
+          }
+        }
+        exit bad ? 1 : 0
+      }
+    ' config/renames.conf <(git show HEAD^:config/settings.conf) <(git show HEAD:config/settings.conf)
+  expect_exit: 0
+  expect_pattern: null
+variant: migrate_local
+provenance:
+  compiled_from_task: Migrate my settings to the current key names. Rename the old
+    key in the project's settings and keep its value.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Migrate my settings to the current key names. Rename the old key in
+    the project's settings and keep its value./seed-0-config_renamed-4812
+  fault: config_renamed
+status: candidate

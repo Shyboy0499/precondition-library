@@ -1,0 +1,290 @@
+{
+ "0-0": {
+  "config/.deps.lock": {
+   "fires": 7,
+   "wrong": 0
+  },
+  "services/api/deps.lock": {
+   "fires": 8,
+   "wrong": 0
+  },
+  "vendor/abhängigkeiten.lock": {
+   "fires": 8,
+   "wrong": 0
+  },
+  "web app/deps.lock": {
+   "fires": 8,
+   "wrong": 0
+  }
+ },
+ "0-1": {
+  "config/.deps.lock": {
+   "fires": 4,
+   "wrong": 0
+  },
+  "services/api/deps.lock": {
+   "fires": 4,
+   "wrong": 0
+  },
+  "vendor/abhängigkeiten.lock": {
+   "fires": 3,
+   "wrong": 0
+  },
+  "web app/deps.lock": {
+   "fires": 5,
+   "wrong": 0
+  }
+ },
+ "0-3": {
+  "config/.deps.lock": {
+   "fires": 3,
+   "wrong": 0
+  },
+  "services/api/deps.lock": {
+   "fires": 4,
+   "wrong": 0
+  },
+  "vendor/abhängigkeiten.lock": {
+   "fires": 5,
+   "wrong": 0
+  },
+  "web app/deps.lock": {
+   "fires": 3,
+   "wrong": 0
+  }
+ },
+ "0-4": {
+  "config/.deps.lock": {
+   "fires": 10,
+   "wrong": 10
+  },
+  "services/api/deps.lock": {
+   "fires": 6,
+   "wrong": 0
+  },
+  "vendor/abhängigkeiten.lock": {
+   "fires": 10,
+   "wrong": 10
+  },
+  "web app/deps.lock": {
+   "fires": 7,
+   "wrong": 0
+  }
+ },
+ "0-5": {
+  "config/.deps.lock": {
+   "fires": 10,
+   "wrong": 0
+  },
+  "services/api/deps.lock": {
+   "fires": 10,
+   "wrong": 0
+  },
+  "vendor/abhängigkeiten.lock": {
+   "fires": 10,
+   "wrong": 0
+  },
+  "web app/deps.lock": {
+   "fires": 10,
+   "wrong": 0
+  }
+ },
+ "0-6": {
+  "config/.deps.lock": {
+   "fires": 7,
+   "wrong": 0
+  },
+  "services/api/deps.lock": {
+   "fires": 8,
+   "wrong": 0
+  },
+  "vendor/abhängigkeiten.lock": {
+   "fires": 8,
+   "wrong": 0
+  },
+  "web app/deps.lock": {
+   "fires": 8,
+   "wrong": 0
+  }
+ },
+ "0-7": {
+  "config/.deps.lock": {
+   "fires": 3,
+   "wrong": 0
+  },
+  "services/api/deps.lock": {
+   "fires": 4,
+   "wrong": 0
+  },
+  "vendor/abhängigkeiten.lock": {
+   "fires": 5,
+   "wrong": 0
+  },
+  "web app/deps.lock": {
+   "fires": 3,
+   "wrong": 0
+  }
+ },
+ "0-8": {
+  "config/.deps.lock": {
+   "fires": 7,
+   "wrong": 0
+  },
+  "services/api/deps.lock": {
+   "fires": 8,
+   "wrong": 0
+  },
+  "vendor/abhängigkeiten.lock": {
+   "fires": 8,
+   "wrong": 0
+  },
+  "web app/deps.lock": {
+   "fires": 8,
+   "wrong": 0
+  }
+ },
+ "R-0": {
+  "config/.deps.lock": {
+   "fires": 7,
+   "wrong": 0
+  },
+  "services/api/deps.lock": {
+   "fires": 6,
+   "wrong": 0
+  },
+  "vendor/abhängigkeiten.lock": {
+   "fires": 5,
+   "wrong": 0
+  },
+  "web app/deps.lock": {
+   "fires": 7,
+   "wrong": 0
+  }
+ },
+ "R-1": {
+  "config/.deps.lock": {
+   "fires": 3,
+   "wrong": 0
+  },
+  "services/api/deps.lock": {
+   "fires": 4,
+   "wrong": 0
+  },
+  "vendor/abhängigkeiten.lock": {
+   "fires": 5,
+   "wrong": 0
+  },
+  "web app/deps.lock": {
+   "fires": 3,
+   "wrong": 0
+  }
+ },
+ "R-3": {
+  "config/.deps.lock": {
+   "fires": 3,
+   "wrong": 0
+  },
+  "services/api/deps.lock": {
+   "fires": 4,
+   "wrong": 0
+  },
+  "vendor/abhängigkeiten.lock": {
+   "fires": 5,
+   "wrong": 0
+  },
+  "web app/deps.lock": {
+   "fires": 3,
+   "wrong": 0
+  }
+ },
+ "R-4": {
+  "config/.deps.lock": {
+   "fires": 7,
+   "wrong": 0
+  },
+  "services/api/deps.lock": {
+   "fires": 6,
+   "wrong": 0
+  },
+  "vendor/abhängigkeiten.lock": {
+   "fires": 5,
+   "wrong": 0
+  },
+  "web app/deps.lock": {
+   "fires": 7,
+   "wrong": 0
+  }
+ },
+ "R-6": {
+  "config/.deps.lock": {
+   "fires": 10,
+   "wrong": 0
+  },
+  "services/api/deps.lock": {
+   "fires": 10,
+   "wrong": 0
+  },
+  "vendor/abhängigkeiten.lock": {
+   "fires": 10,
+   "wrong": 0
+  },
+  "web app/deps.lock": {
+   "fires": 10,
+   "wrong": 0
+  }
+ },
+ "R-9": {
+  "config/.deps.lock": {
+   "fires": 3,
+   "wrong": 0
+  },
+  "services/api/deps.lock": {
+   "fires": 4,
+   "wrong": 0
+  },
+  "vendor/abhängigkeiten.lock": {
+   "fires": 5,
+   "wrong": 0
+  },
+  "web app/deps.lock": {
+   "fires": 3,
+   "wrong": 0
+  }
+ },
+ "run-14": {
+  "config/.deps.lock": {
+   "fires": 7,
+   "wrong": 0
+  },
+  "services/api/deps.lock": {
+   "fires": 8,
+   "wrong": 0
+  },
+  "vendor/abhängigkeiten.lock": {
+   "fires": 8,
+   "wrong": 0
+  },
+  "web app/deps.lock": {
+   "fires": 8,
+   "wrong": 0
+  }
+ },
+ "run-15": {
+  "config/.deps.lock": {
+   "fires": 7,
+   "wrong": 0
+  },
+  "services/api/deps.lock": {
+   "fires": 6,
+   "wrong": 0
+  },
+  "vendor/abhängigkeiten.lock": {
+   "fires": 5,
+   "wrong": 0
+  },
+  "web app/deps.lock": {
+   "fires": 7,
+   "wrong": 0
+  }
+ }
+}

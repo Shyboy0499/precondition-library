@@ -1,0 +1,122 @@
+id: diverged-occ1-diverged-rebase-local-onto-upstream
+intent: Replay local commits on top of the upstream branch so history stays linear.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: remote_configured
+  description: the upstream remote is configured so it can be fetched
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: .
+- name: upstream_ref_present
+  description: the remote-tracking upstream branch exists
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[0-9a-f]+$
+- name: common_ancestor_exists
+  description: the current branch and upstream share history
+  probe: git merge-base HEAD {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[0-9a-f]+$
+- name: on_a_branch
+  description: HEAD is attached to a local branch so rebase can update it
+  probe: git symbolic-ref --quiet HEAD
+  expect_exit: 0
+  expect_pattern: ^refs/heads/
+- name: worktree_clean
+  description: no tracked or untracked changes are present
+  probe: '! git status --porcelain -z | tr ''\0'' ''\n'' | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_ahead
+  description: the current branch has local commits not in upstream
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: upstream_commits_ahead
+  description: upstream has commits not in the current branch
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: no_rebase_in_progress
+  description: no rebase is already underway
+  probe: '! test -d "$(git rev-parse --git-path rebase-merge)" && ! test -d "$(git
+    rev-parse --git-path rebase-apply)"'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: no merge is already underway
+  probe: '! test -e "$(git rev-parse --git-path MERGE_HEAD)"'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_entries
+  description: the index has no unresolved merge entries
+  probe: '! git diff --name-only --diff-filter=U -z | tr ''\0'' ''\n'' | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: remote_head_is_target
+  description: if upstream advertises a default branch, it is the branch being rebased
+    onto
+  probe: |-
+    if git symbolic-ref -q refs/remotes/{upstream_remote}/HEAD >/dev/null; then
+      git symbolic-ref refs/remotes/{upstream_remote}/HEAD | grep -Fqx "refs/remotes/{upstream_remote}/{upstream_branch}"
+    else
+      exit 0
+    fi
+  expect_exit: 0
+  expect_pattern: null
+- name: local_upstream_files_disjoint
+  description: local commits and upstream commits do not touch the same paths
+  probe: |-
+    ! comm -12 \
+      <(git diff --name-only -z "$(git merge-base HEAD {upstream_remote}/{upstream_branch})" HEAD | tr '\0' '\n' | sort -u) \
+      <(git diff --name-only -z "$(git merge-base HEAD {upstream_remote}/{upstream_branch})" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort -u) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git rebase {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: upstream_is_ancestor
+  description: upstream is an ancestor of HEAD after the rebase
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: linear_history
+  description: no merge commits remain between upstream and HEAD
+  probe: git rev-list --merges --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^0$
+- name: local_commits_replayed
+  description: local commits remain ahead of upstream
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: worktree_clean_after
+  description: working tree is clean after the rebase
+  probe: '! git status --porcelain -z | tr ''\0'' ''\n'' | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_after
+  description: no unresolved entries remain after the rebase
+  probe: '! git diff --name-only --diff-filter=U -z | tr ''\0'' ''\n'' | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_rebase_in_progress_after
+  description: the rebase completed without leaving state behind
+  probe: '! test -d "$(git rev-parse --git-path rebase-merge)" && ! test -d "$(git
+    rev-parse --git-path rebase-apply)"'
+  expect_exit: 0
+  expect_pattern: null
+variant: rebase
+provenance:
+  compiled_from_task: I have local work and upstream has new commits. Untangle it.
+    Replay my local commits on top of upstream so the history stays linear.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: I have local work and upstream has new commits. Untangle it. Replay
+    my local commits on top of upstream so the history stays linear./seed-5-diverged-17967
+  fault: diverged
+status: candidate

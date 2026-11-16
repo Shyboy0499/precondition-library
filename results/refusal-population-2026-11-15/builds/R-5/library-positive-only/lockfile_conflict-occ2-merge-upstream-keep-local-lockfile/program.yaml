@@ -1,0 +1,245 @@
+id: lockfile_conflict-occ2-merge-upstream-keep-local-lockfile
+intent: Merge the upstream branch into the current branch and resolve conflicts in
+  the dependency lock file by keeping the local file's changes (including its removals)
+  while adding the lines upstream added.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_local_branch
+  description: HEAD points at a local branch rather than a detached commit
+  probe: test "$(git rev-parse --abbrev-ref HEAD)" != "HEAD"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_exists
+  description: the upstream remote-tracking branch is present locally
+  probe: git rev-parse --verify --quiet 'refs/remotes/{upstream_remote}/{upstream_branch}'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_has_new_commits
+  description: upstream has at least one commit the current branch does not have
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: local_has_diverged_commits
+  description: the current branch has at least one commit upstream does not have
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: worktree_clean
+  description: no staged, unstaged or untracked changes are present
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: there is no unfinished merge in the repository
+  probe: '! test -e "$(git rev-parse --git-path MERGE_HEAD)"'
+  expect_exit: 0
+  expect_pattern: null
+- name: dependency_lock_tracked
+  description: the dependency lock file is tracked by git
+  probe: git ls-files --error-unmatch deps.lock
+  expect_exit: 0
+  expect_pattern: null
+- name: dependency_lock_changed_on_both_sides
+  description: both the current branch and upstream changed deps.lock since their
+    merge base
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+    [ -n "$(git diff --name-only -z "$base" HEAD -- deps.lock | tr '\0' '\n')" ] &&
+    [ -n "$(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} -- deps.lock | tr '\0' '\n')" ]
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git merge --no-edit {upstream_remote}/{upstream_branch} >/dev/null 2>&1 || true
+
+  tmp=$(mktemp -d)
+  trap 'rm -rf "$tmp"' EXIT
+
+  cat > "$tmp/merge.awk" <<'AWK'
+  function parse_diff(fn, side,   line, k, nh, parts, rng, arr) {
+    k = 0
+    nh = 0
+    while ((getline line < fn) > 0) {
+      if (line ~ /^@@ /) {
+        hnewcnt[side, k] = nh
+        k++
+        nh = 0
+        split(line, parts, " ")
+        rng = parts[2]
+        sub(/^-/, "", rng)
+        split(rng, arr, ",")
+        hstart[side, k] = arr[1] + 0
+        hcnt[side, k] = (2 in arr) ? arr[2] + 0 : 1
+      } else if (line ~ /^\+/ && line !~ /^\+\+\+/) {
+        nh++
+        hline[side, k, nh] = substr(line, 2)
+      }
+    }
+    hnewcnt[side, k] = nh
+    nk[side] = k
+    close(fn)
+  }
+  BEGIN {
+    while ((getline line < base) > 0) b[++bn] = line
+    close(base)
+    while ((getline line < ours) > 0) o[++on] = line
+    close(ours)
+    while ((getline line < theirs) > 0) t[++tn] = line
+    close(theirs)
+    parse_diff(do_file, 1)
+    parse_diff(dt_file, 2)
+    no = nk[1]
+    nt = nk[2]
+    rn = 0
+    pos = 1
+    io = 1
+    it = 1
+    while (pos <= bn) {
+      hs_o = (io <= no && hstart[1, io] == pos) ? 1 : 0
+      hs_t = (it <= nt && hstart[2, it] == pos) ? 1 : 0
+      if (hs_o && hs_t) {
+        co = hcnt[1, io]
+        ct = hcnt[2, it]
+        if (co == 0 || ct == 0) {
+          for (j = 1; j <= hnewcnt[1, io]; j++) r[++rn] = hline[1, io, j]
+          for (j = 1; j <= hnewcnt[2, it]; j++) r[++rn] = hline[2, it, j]
+        } else {
+          for (j = 1; j <= hnewcnt[2, it]; j++) r[++rn] = hline[2, it, j]
+        }
+        pos += (co > ct ? co : ct)
+        io++
+        it++
+      } else if (hs_o) {
+        for (j = 1; j <= hnewcnt[1, io]; j++) r[++rn] = hline[1, io, j]
+        pos += hcnt[1, io]
+        io++
+      } else if (hs_t) {
+        for (j = 1; j <= hnewcnt[2, it]; j++) r[++rn] = hline[2, it, j]
+        pos += hcnt[2, it]
+        it++
+      } else {
+        r[++rn] = b[pos]
+        pos++
+      }
+    }
+    while (io <= no) {
+      for (j = 1; j <= hnewcnt[1, io]; j++) r[++rn] = hline[1, io, j]
+      io++
+    }
+    while (it <= nt) {
+      for (j = 1; j <= hnewcnt[2, it]; j++) r[++rn] = hline[2, it, j]
+      it++
+    }
+    for (i = 1; i <= rn; i++) print r[i]
+  }
+  AWK
+
+  git diff --name-only --diff-filter=U -z > "$tmp/conflicts"
+  if [ -s "$tmp/conflicts" ]; then
+    while IFS= read -r -d '' f; do
+      if ! git cat-file -e ":1:$f" 2>/dev/null; then
+        if git cat-file -e ":2:$f" 2>/dev/null; then
+          git checkout --ours -- "$f"
+        else
+          git checkout --theirs -- "$f"
+        fi
+        git add -- "$f"
+        continue
+      fi
+      if ! git cat-file -e ":2:$f" 2>/dev/null; then
+        git rm -q -- "$f" 2>/dev/null || true
+        continue
+      fi
+      if ! git cat-file -e ":3:$f" 2>/dev/null; then
+        git checkout --ours -- "$f"
+        git add -- "$f"
+        continue
+      fi
+      git show ":1:$f" > "$tmp/base"
+      if [ ! -s "$tmp/base" ]; then
+        git checkout --ours -- "$f"
+        git add -- "$f"
+        continue
+      fi
+      git show ":2:$f" > "$tmp/ours"
+      git show ":3:$f" > "$tmp/theirs"
+      git diff --no-index --unified=0 -- "$tmp/base" "$tmp/ours" > "$tmp/do.diff" || true
+      git diff --no-index --unified=0 -- "$tmp/base" "$tmp/theirs" > "$tmp/dt.diff" || true
+      awk -v base="$tmp/base" -v ours="$tmp/ours" -v theirs="$tmp/theirs" \
+          -v do_file="$tmp/do.diff" -v dt_file="$tmp/dt.diff" \
+          -f "$tmp/merge.awk" > "$tmp/merged"
+      cat "$tmp/merged" > "$f"
+      git add -- "$f"
+    done < "$tmp/conflicts"
+    if git config user.email >/dev/null 2>&1; then
+      git commit --no-edit --allow-empty
+    else
+      git -c user.name="git" -c user.email="git@example.com" commit --no-edit --allow-empty
+    fi
+  fi
+steps: null
+postconditions:
+- name: merge_commit_created
+  description: HEAD is a merge commit with exactly two parents
+  probe: git cat-file -p HEAD | grep -c '^parent '
+  expect_exit: 0
+  expect_pattern: ^2$
+- name: upstream_in_history
+  description: the upstream tip is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_history_preserved
+  description: the first parent of HEAD still carries commits upstream does not have
+  probe: '! git merge-base --is-ancestor HEAD^1 {upstream_remote}/{upstream_branch}'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: no conflicted entries remain in the index
+  probe: '! git diff --name-only --diff-filter=U | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_merge
+  description: the working tree is clean after the merge
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: dependency_lock_resolved
+  description: the dependency lock file contains no conflict markers
+  probe: '! grep -qE ''^(<<<<<<<|>>>>>>>)( |$)'' deps.lock'
+  expect_exit: 0
+  expect_pattern: null
+- name: local_additions_preserved
+  description: lines the current branch added to deps.lock are still present
+  probe: |-
+    base=$(git merge-base HEAD^1 HEAD^2)
+    git diff -U0 "$base" HEAD^1 -- deps.lock | awk '/^@@ /{r=$2; sub(/^-/,"",r); split(r,a,","); p=((2 in a)?a[2]+0:1)==0; next} p && /^\+/ && !/^\+\+\+/{print substr($0,2)}' | while IFS= read -r l; do grep -qxF -- "$l" deps.lock || exit 1; done
+  expect_exit: 0
+  expect_pattern: null
+- name: local_removals_preserved
+  description: lines the current branch removed from deps.lock are still absent
+  probe: |-
+    base=$(git merge-base HEAD^1 HEAD^2)
+    git diff -U0 "$base" HEAD^1 -- deps.lock | awk '/^@@ /{r=$2; sub(/^-/,"",r); split(r,a,","); oc=(2 in a)?a[2]+0:1; r=$3; sub(/^\+/,"",r); split(r,c,","); nc=(2 in c)?c[2]+0:1; p=(oc>0 && nc==0); next} p && /^-/ && !/^---/{print substr($0,2)}' | while IFS= read -r l; do if grep -qxF -- "$l" deps.lock; then exit 1; fi; done
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_additions_applied
+  description: lines upstream added to deps.lock are present in the merged file
+  probe: |-
+    base=$(git merge-base HEAD^1 HEAD^2)
+    git diff -U0 "$base" HEAD^2 -- deps.lock | awk '/^@@ /{r=$2; sub(/^-/,"",r); split(r,a,","); p=((2 in a)?a[2]+0:1)==0; next} p && /^\+/ && !/^\+\+\+/{print substr($0,2)}' | while IFS= read -r l; do grep -qxF -- "$l" deps.lock || exit 1; done
+  expect_exit: 0
+  expect_pattern: null
+variant: keep_local
+provenance:
+  compiled_from_task: Update this branch from upstream and make sure the dependency
+    list still makes sense. Keep my dependency file, with what I removed still removed,
+    and add what upstream added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Update this branch from upstream and make sure the dependency list still
+    makes sense. Keep my dependency file, with what I removed still removed, and add
+    what upstream added./seed-2-lockfile_conflict-7516
+  fault: lockfile_conflict
+status: candidate

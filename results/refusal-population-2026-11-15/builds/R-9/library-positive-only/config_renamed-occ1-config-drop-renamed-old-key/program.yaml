@@ -1,0 +1,210 @@
+id: config_renamed-occ1-config-drop-renamed-old-key
+intent: Drop stale config keys that have been renamed upstream when the new name is
+  already set, keeping the new key and committing the change.
+parameters:
+- upstream_remote
+preconditions:
+- name: renames_file_present
+  description: the repository tracks a renames mapping file
+  probe: git ls-files -z | tr '\0' '\n' | grep -qE '(^|/)renames\.conf$'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_remote_configured
+  description: the configured upstream remote exists
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_old_key_with_new_key
+  description: a tracked config file sets both an old key and its renamed replacement
+  probe: |-
+    renames=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1)
+    [ -n "$renames" ] || exit 1
+    has_key() {
+      key=$1
+      shift
+      awk -v k="$key" '
+        {
+          line=$0
+          sub(/\r$/, "", line)
+          sub(/^[[:space:]]*/, "", line)
+          if (index(line, "=") > 0) {
+            name=line
+            sub(/[[:space:]]*=.*/, "", name)
+            sub(/[[:space:]]*$/, "", name)
+            if (name == k) { found=1; exit 0 }
+          }
+        }
+        END { exit(found ? 0 : 1) }
+      ' "$@"
+    }
+    found=1
+    while IFS= read -r line; do
+      line=$(printf '%s' "$line" | tr -d '\r')
+      trimmed=$(printf '%s' "$line" | sed 's/^[[:space:]]*//')
+      case "$trimmed" in ''|'#'*) continue;; esac
+      old=$(printf '%s\n' "$line" | sed -n 's/^[[:space:]]*\([^=[:space:]]*\)[[:space:]]*=.*/\1/p')
+      new=$(printf '%s\n' "$line" | sed -n 's/^[^=]*=[[:space:]]*\([^[:space:]]*\).*/\1/p')
+      [ -n "$old" ] && [ -n "$new" ] && [ "$old" != "$new" ] || continue
+      while IFS= read -r -d '' f; do
+        [ "$f" = "$renames" ] && continue
+        if has_key "$old" "$f" && has_key "$new" "$f"; then
+          found=0
+        fi
+      done < <(git ls-files -z)
+    done < <(git show "HEAD:$renames" 2>/dev/null)
+    [ "$found" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_worktree_clean
+  description: there are no staged or unstaged modifications to tracked files
+  probe: git diff --quiet && git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  set -e
+  renames=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1)
+  [ -n "$renames" ] || exit 1
+  has_key() {
+    key=$1
+    shift
+    awk -v k="$key" '
+      {
+        line=$0
+        sub(/\r$/, "", line)
+        sub(/^[[:space:]]*/, "", line)
+        if (index(line, "=") > 0) {
+          name=line
+          sub(/[[:space:]]*=.*/, "", name)
+          sub(/[[:space:]]*$/, "", name)
+          if (name == k) { found=1; exit 0 }
+        }
+      }
+      END { exit(found ? 0 : 1) }
+    ' "$@"
+  }
+  escape_re() {
+    printf '%s' "$1" | sed 's/[][\\.*^$()+?{}|]/\\&/g'
+  }
+  while IFS= read -r line; do
+    line=$(printf '%s' "$line" | tr -d '\r')
+    trimmed=$(printf '%s' "$line" | sed 's/^[[:space:]]*//')
+    case "$trimmed" in ''|'#'*) continue;; esac
+    old=$(printf '%s\n' "$line" | sed -n 's/^[[:space:]]*\([^=[:space:]]*\)[[:space:]]*=.*/\1/p')
+    new=$(printf '%s\n' "$line" | sed -n 's/^[^=]*=[[:space:]]*\([^[:space:]]*\).*/\1/p')
+    [ -n "$old" ] && [ -n "$new" ] && [ "$old" != "$new" ] || continue
+    old_re=$(escape_re "$old")
+    while IFS= read -r -d '' f; do
+      [ "$f" = "$renames" ] && continue
+      if has_key "$old" "$f" && has_key "$new" "$f"; then
+        sed -i -E "/^[[:space:]]*${old_re}[[:space:]]*=/d" "$f"
+      fi
+    done < <(git ls-files -z)
+  done < <(git show "HEAD:$renames")
+  if ! git diff --quiet; then
+    git add -u
+    git -c user.name=config-maintainer -c user.email=config-maintainer@localhost commit -m "config: drop renamed keys"
+  fi
+steps: null
+postconditions:
+- name: no_stale_key_where_new_key_set
+  description: no tracked config file still sets both an old key and its renamed replacement
+  probe: |-
+    renames=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1)
+    [ -n "$renames" ] || exit 1
+    has_key() {
+      key=$1
+      shift
+      awk -v k="$key" '
+        {
+          line=$0
+          sub(/\r$/, "", line)
+          sub(/^[[:space:]]*/, "", line)
+          if (index(line, "=") > 0) {
+            name=line
+            sub(/[[:space:]]*=.*/, "", name)
+            sub(/[[:space:]]*$/, "", name)
+            if (name == k) { found=1; exit 0 }
+          }
+        }
+        END { exit(found ? 0 : 1) }
+      ' "$@"
+    }
+    stale=0
+    while IFS= read -r line; do
+      line=$(printf '%s' "$line" | tr -d '\r')
+      trimmed=$(printf '%s' "$line" | sed 's/^[[:space:]]*//')
+      case "$trimmed" in ''|'#'*) continue;; esac
+      old=$(printf '%s\n' "$line" | sed -n 's/^[[:space:]]*\([^=[:space:]]*\)[[:space:]]*=.*/\1/p')
+      new=$(printf '%s\n' "$line" | sed -n 's/^[^=]*=[[:space:]]*\([^[:space:]]*\).*/\1/p')
+      [ -n "$old" ] && [ -n "$new" ] && [ "$old" != "$new" ] || continue
+      while IFS= read -r -d '' f; do
+        [ "$f" = "$renames" ] && continue
+        if has_key "$old" "$f" && has_key "$new" "$f"; then
+          stale=1
+        fi
+      done < <(git ls-files -z)
+    done < <(git show "HEAD:$renames" 2>/dev/null)
+    [ "$stale" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: renamed_new_keys_preserved
+  description: for every file that had both keys before the change, the new key remains
+    and the old key is gone
+  probe: |-
+    renames=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1)
+    [ -n "$renames" ] || exit 1
+    has_key() {
+      key=$1
+      shift
+      awk -v k="$key" '
+        {
+          line=$0
+          sub(/\r$/, "", line)
+          sub(/^[[:space:]]*/, "", line)
+          if (index(line, "=") > 0) {
+            name=line
+            sub(/[[:space:]]*=.*/, "", name)
+            sub(/[[:space:]]*$/, "", name)
+            if (name == k) { found=1; exit 0 }
+          }
+        }
+        END { exit(found ? 0 : 1) }
+      ' "$@"
+    }
+    bad=0
+    while IFS= read -r line; do
+      line=$(printf '%s' "$line" | tr -d '\r')
+      trimmed=$(printf '%s' "$line" | sed 's/^[[:space:]]*//')
+      case "$trimmed" in ''|'#'*) continue;; esac
+      old=$(printf '%s\n' "$line" | sed -n 's/^[[:space:]]*\([^=[:space:]]*\)[[:space:]]*=.*/\1/p')
+      new=$(printf '%s\n' "$line" | sed -n 's/^[^=]*=[[:space:]]*\([^[:space:]]*\).*/\1/p')
+      [ -n "$old" ] && [ -n "$new" ] && [ "$old" != "$new" ] || continue
+      while IFS= read -r -d '' f; do
+        [ "$f" = "$renames" ] && continue
+        if git show "HEAD~1:$f" 2>/dev/null | has_key "$old" && \
+           git show "HEAD~1:$f" 2>/dev/null | has_key "$new"; then
+          if git show "HEAD:$f" 2>/dev/null | has_key "$old"; then bad=1; fi
+          if ! git show "HEAD:$f" 2>/dev/null | has_key "$new"; then bad=1; fi
+        fi
+      done < <(git ls-files -z)
+    done < <(git show "HEAD:$renames" 2>/dev/null)
+    [ "$bad" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_commit
+  description: the change has been committed and no tracked modifications remain
+  probe: git diff --quiet && git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+variant: drop_old
+provenance:
+  compiled_from_task: Some setting in my config has been renamed upstream. Sort the
+    config out. The new name is already set too, so delete the old key's line and
+    keep the new one.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Some setting in my config has been renamed upstream. Sort the config
+    out. The new name is already set too, so delete the old key's line and keep the
+    new one./seed-31-config_renamed-12721
+  fault: config_renamed
+status: candidate

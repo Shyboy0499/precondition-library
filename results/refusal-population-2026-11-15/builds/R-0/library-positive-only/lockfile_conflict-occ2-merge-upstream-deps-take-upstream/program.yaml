@@ -1,0 +1,165 @@
+id: lockfile_conflict-occ2-merge-upstream-deps-take-upstream
+intent: Merge upstream into the current branch, resolving the shared dependency-file
+  conflict by starting from upstream's version, preserving local additions, and not
+  reviving lines either side removed.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: clean_worktree
+  description: the working tree and index have no changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: no merge is already in progress
+  probe: '! git rev-parse -q --verify MERGE_HEAD'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_exists
+  description: the upstream remote-tracking branch exists locally
+  probe: git rev-parse --verify {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_diverged
+  description: both the local branch and upstream have commits the other lacks
+  probe: git rev-list --left-right --count {upstream_remote}/{upstream_branch}...HEAD
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*[[:space:]]+[1-9][0-9]*$
+- name: exactly_one_file_touched_by_both
+  description: exactly one file was changed on both the local and upstream sides since
+    the merge base
+  probe: |-
+    test "$(comm -12 \
+      <(git diff --name-only -z "$(git merge-base HEAD {upstream_remote}/{upstream_branch})" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$(git merge-base HEAD {upstream_remote}/{upstream_branch})" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) \
+      | wc -l)" -eq 1
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  base=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+  file=$(comm -12 \
+    <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+    <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) \
+    | head -n 1)
+  test -n "$file"
+  git merge --no-commit --no-ff {upstream_remote}/{upstream_branch} || true
+  python3 - "$file" "$base" "{upstream_remote}/{upstream_branch}" <<'PY'
+  import sys, subprocess, difflib
+
+  path = sys.argv[1]
+  base_rev = sys.argv[2]
+  upstream_rev = sys.argv[3]
+
+  def show(rev):
+      p = subprocess.run(["git", "show", f"{rev}:{path}"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+      if p.returncode != 0:
+          sys.stderr.write(p.stderr.decode(errors="replace"))
+          raise SystemExit(p.returncode)
+      return p.stdout
+
+  base = show(base_rev).splitlines(keepends=True)
+  local = show("HEAD").splitlines(keepends=True)
+  upstream = show(upstream_rev).splitlines(keepends=True)
+
+  local_ins = {}
+  local_deleted = set()
+  sm_local = difflib.SequenceMatcher(None, base, local, autojunk=False)
+  for tag, i1, i2, j1, j2 in sm_local.get_opcodes():
+      if tag == "insert":
+          local_ins.setdefault(i1, []).extend(local[j1:j2])
+      elif tag == "delete":
+          for k in range(i1, i2):
+              local_deleted.add(k)
+
+  out = []
+  emitted = set()
+
+  def emit_ins_at(p):
+      if p not in emitted:
+          for line in local_ins.get(p, []):
+              out.append(line)
+          emitted.add(p)
+
+  sm_up = difflib.SequenceMatcher(None, base, upstream, autojunk=False)
+  base_cursor = 0
+  for tag, i1, i2, j1, j2 in sm_up.get_opcodes():
+      for p in range(base_cursor, i1):
+          emit_ins_at(p)
+      if tag == "equal":
+          for k in range(i1, i2):
+              emit_ins_at(k)
+              if k not in local_deleted:
+                  out.append(upstream[j1 + (k - i1)])
+          base_cursor = i2
+      elif tag == "delete":
+          for k in range(i1, i2):
+              emit_ins_at(k)
+          base_cursor = i2
+      elif tag == "insert":
+          emit_ins_at(i1)
+          out.extend(upstream[j1:j2])
+          base_cursor = i2
+      elif tag == "replace":
+          for k in range(i1, i2):
+              emit_ins_at(k)
+          out.extend(upstream[j1:j2])
+          base_cursor = i2
+
+  for p in range(base_cursor, len(base) + 1):
+      emit_ins_at(p)
+
+  with open(path, "wb") as f:
+      f.write(b"".join(out))
+  PY
+  git add -- "$file"
+  git commit --no-edit
+steps: null
+postconditions:
+- name: merge_commit_has_two_parents
+  description: HEAD is a merge commit with two parents
+  probe: test "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 3
+  expect_exit: 0
+  expect_pattern: null
+- name: second_parent_is_upstream
+  description: the second parent of HEAD is the upstream commit
+  probe: test "$(git rev-parse HEAD^2)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: upstream is an ancestor of the new HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: no unmerged entries remain in the index
+  probe: test -z "$(git ls-files -u -z | tr '\0' '\n')"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress_after
+  description: the merge is concluded
+  probe: '! git rev-parse -q --verify MERGE_HEAD'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_commit
+  description: the working tree and index are clean after committing
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers_in_head
+  description: no committed file contains Git conflict markers
+  probe: '! git grep -q ''^<<<<<<< '' HEAD'
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: Catch up with upstream without losing what either side added,
+    or reviving what either side removed. Start from upstream's dependency file and
+    add back what I added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Catch up with upstream without losing what either side added, or reviving
+    what either side removed. Start from upstream's dependency file and add back what
+    I added./seed-5-lockfile_conflict-213
+  fault: lockfile_conflict
+status: candidate

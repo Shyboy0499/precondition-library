@@ -1,0 +1,84 @@
+id: diverged-occ2-diverged-sync-upstream-discard
+intent: align the current branch with upstream by discarding the local commits so
+  the branch matches upstream exactly
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_attached_branch
+  description: HEAD is attached to a local branch
+  probe: git symbolic-ref --quiet --short HEAD >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: the working tree and index have no staged, unstaged or untracked changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflicted_files
+  description: the index holds no unmerged entries
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_remote_exists
+  description: the configured upstream remote is present
+  probe: git remote get-url '{upstream_remote}' >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_exists
+  description: the upstream branch has a remote-tracking ref
+  probe: git rev-parse --verify --quiet 'refs/remotes/{upstream_remote}/{upstream_branch}^{commit}'
+    >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_ahead
+  description: the current branch has commits not present upstream
+  probe: test "$(git rev-list --count '{upstream_remote}/{upstream_branch}..HEAD')"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_moved_ahead
+  description: upstream has commits not present on the current branch
+  probe: test "$(git rev-list --count 'HEAD..{upstream_remote}/{upstream_branch}')"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_change_no_files
+  description: the local-only commits leave the tree identical to the merge base,
+    so nothing needs merging or rebasing
+  probe: git diff --quiet "$(git merge-base HEAD '{upstream_remote}/{upstream_branch}')"
+    HEAD
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git reset --hard '{upstream_remote}/{upstream_branch}'
+steps: null
+postconditions:
+- name: head_equals_upstream
+  description: HEAD is the same commit as the upstream-tracking branch
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse '{upstream_remote}/{upstream_branch}')"
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_has_no_ahead_or_behind
+  description: the current branch has no commits ahead of or behind upstream
+  probe: |-
+    test "$(git rev-list --count 'HEAD..{upstream_remote}/{upstream_branch}')" -eq 0 &&
+    test "$(git rev-list --count '{upstream_remote}/{upstream_branch}..HEAD')" -eq 0
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_after_reset
+  description: the working tree is clean after the reset
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: discard
+provenance:
+  compiled_from_task: 'Upstream moved ahead of me. Get me back in line with it. My
+    local commits can go: make my branch match upstream exactly.'
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: 'Upstream moved ahead of me. Get me back in line with it. My local commits
+    can go: make my branch match upstream exactly./seed-3-diverged-25586'
+  fault: diverged
+status: admitted

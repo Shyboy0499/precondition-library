@@ -1,0 +1,95 @@
+id: submodule_moved-occ3-remove-nested-submodule-upstream
+intent: Remove a nested submodule checkout and make .gitmodules match upstream's removal.
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: upstream_ref_present
+  description: the upstream tracking ref resolves to a commit
+  probe: git rev-parse --verify --quiet "{upstream_remote}/{upstream_branch}^{commit}"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the worktree and index have no pending changes
+  probe: |-
+    git diff --quiet --ignore-submodules=none HEAD &&
+    git diff --cached --quiet --ignore-submodules=none HEAD &&
+    ! git ls-files --others --exclude-standard -z | tr '\0' '\n' | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_tracked_locally
+  description: the nested path is recorded as a gitlink in the local index
+  probe: git ls-files -s -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: ^160000 [0-9a-f]+ [0-9]+\t
+- name: local_gitmodules_lists_path
+  description: the local .gitmodules still declares the nested path
+  probe: git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | sed 's/^[^
+    ]* //' | grep -qxF "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_gitlink_gone
+  description: upstream has no tree entry at the nested path
+  probe: '! git ls-tree "{upstream_remote}/{upstream_branch}" -- "{submodule_path}"
+    | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_gitmodules_no_path
+  description: upstream's .gitmodules no longer lists the nested path
+  probe: '! git show "{upstream_remote}/{upstream_branch}:.gitmodules" 2>/dev/null
+    | git config --file - --get-regexp ''^submodule\..*\.path$'' | sed ''s/^[^ ]*
+    //'' | grep -qxF "{submodule_path}"'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git rm -f -- "{submodule_path}"
+  if git cat-file -e "{upstream_remote}/{upstream_branch}:.gitmodules" 2>/dev/null; then
+    git show "{upstream_remote}/{upstream_branch}:.gitmodules" > .gitmodules
+    git add -- .gitmodules
+  else
+    git rm -f --ignore-unmatch -- .gitmodules || true
+    rm -f -- .gitmodules
+  fi
+  git commit -m "Remove nested checkout"
+steps: null
+postconditions:
+- name: nested_path_not_tracked
+  description: no gitlink or file is tracked at the nested path
+  probe: '! git ls-files -s -- "{submodule_path}" | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: nested_path_absent
+  description: the nested checkout directory is gone
+  probe: '! test -e "{submodule_path}"'
+  expect_exit: 0
+  expect_pattern: null
+- name: gitmodules_no_path
+  description: the committed .gitmodules does not list the nested path
+  probe: '! git config -f .gitmodules --get-regexp ''^submodule\..*\.path$'' | sed
+    ''s/^[^ ]* //'' | grep -qxF "{submodule_path}"'
+  expect_exit: 0
+  expect_pattern: null
+- name: gitmodules_matches_upstream
+  description: .gitmodules has upstream's content
+  probe: git diff --quiet "{upstream_remote}/{upstream_branch}" HEAD -- .gitmodules
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after
+  description: the removal is committed and the worktree is clean
+  probe: |-
+    git diff --quiet --ignore-submodules=none HEAD &&
+    git diff --cached --quiet --ignore-submodules=none HEAD &&
+    ! git ls-files --others --exclude-standard -z | tr '\0' '\n' | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+variant: remove
+provenance:
+  compiled_from_task: Get this repo's nested dependency consistent with upstream.
+    Remove the nested checkout, the way upstream did.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this repo's nested dependency consistent with upstream. Remove the
+    nested checkout, the way upstream did./seed-0-submodule_moved-211
+  fault: submodule_moved
+status: admitted

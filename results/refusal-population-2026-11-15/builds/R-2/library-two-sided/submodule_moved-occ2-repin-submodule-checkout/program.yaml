@@ -1,0 +1,75 @@
+id: submodule_moved-occ2-repin-submodule-checkout
+intent: check the nested repository out at the commit upstream now pins
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: head_tracks_submodule
+  description: HEAD records submodule_path as a gitlink (mode 160000)
+  probe: git ls-tree HEAD -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: '^160000 commit '
+- name: submodule_initialised
+  description: the nested checkout has its own git directory, so it is already cloned
+  probe: test -e "{submodule_path}/.git"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_pins_submodule
+  description: the upstream branch still records a gitlink at submodule_path
+  probe: git ls-tree "{upstream_remote}/{upstream_branch}" -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: '^160000 commit '
+- name: fast_forward_possible
+  description: local HEAD is an ancestor of upstream, so the superproject can be fast-forwarded
+  probe: git merge-base --is-ancestor HEAD "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: pin_differs
+  description: the recorded submodule commit differs from the commit upstream pins
+  probe: '! [ "$(git rev-parse "HEAD:{submodule_path}")" = "$(git rev-parse "{upstream_remote}/{upstream_branch}:{submodule_path}")"
+    ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: nested_clean
+  description: the nested checkout has no uncommitted changes that an update would
+    overwrite
+  probe: '! git -C "{submodule_path}" status --porcelain -z | tr ''\0'' ''\n'' | grep
+    -q .'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git merge --ff-only "{upstream_remote}/{upstream_branch}"
+  git submodule sync -- "{submodule_path}"
+  git submodule update --init -- "{submodule_path}"
+steps: null
+postconditions:
+- name: head_at_upstream
+  description: the superproject HEAD is the upstream branch tip
+  probe: '[ "$(git rev-parse HEAD)" = "$(git rev-parse "{upstream_remote}/{upstream_branch}")"
+    ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: nested_at_upstream_pin
+  description: the nested checkout is at the commit upstream pins
+  probe: '[ "$(git -C "{submodule_path}" rev-parse HEAD)" = "$(git rev-parse "{upstream_remote}/{upstream_branch}:{submodule_path}")"
+    ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: nested_in_sync
+  description: git submodule status reports the nested checkout as in sync with the
+    superproject
+  probe: git submodule status -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: ^ [0-9a-f]+ {submodule_path}
+variant: repin
+provenance:
+  compiled_from_task: Sort out the nested checkout so it matches what upstream expects.
+    Check the nested repository out at the commit upstream now pins.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Sort out the nested checkout so it matches what upstream expects. Check
+    the nested repository out at the commit upstream now pins./seed-2-submodule_moved-211
+  fault: submodule_moved
+status: admitted

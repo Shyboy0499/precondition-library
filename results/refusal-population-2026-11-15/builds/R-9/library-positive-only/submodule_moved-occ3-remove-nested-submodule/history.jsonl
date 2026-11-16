@@ -1,0 +1,2 @@
+{"episode_id": "Get this repo's nested dependency consistent with upstream. Remove the nested checkout, the way upstream did./seed-0-submodule_moved-12721", "from": null, "program_id": "submodule_moved-occ3-remove-nested-submodule", "to": "candidate"}
+{"episode_id": "Get this repo's nested dependency consistent with upstream. Remove the nested checkout, the way upstream did./seed-0-submodule_moved-12721", "from": "candidate", "program_id": "submodule_moved-occ3-remove-nested-submodule", "to": "admitted"}

@@ -1,0 +1,196 @@
+id: config_renamed-occ1-config-renamed-occ1-rename-local-config-key
+intent: Rename a setting key in the user's ignored local override file according to
+  the upstream rename map, and keep that file untracked.
+parameters: []
+preconditions:
+- name: has_rename_mapping
+  description: config/renames.conf exists and declares at least one old = new mapping
+  probe: |-
+    test -f config/renames.conf &&
+    awk '
+      /^[[:space:]]*#/ { next }
+      /^[[:space:]]*$/ { next }
+      index($0, "=") > 0 { found=1 }
+      END { exit !found }
+    ' config/renames.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: has_stale_key_in_ignored_file
+  description: at least one ignored untracked file contains an old key from config/renames.conf
+  probe: |-
+    found=0
+    while IFS= read -r line; do
+      case "$line" in
+        \#*|'') continue ;;
+        *=*) ;;
+        *) continue ;;
+      esac
+      old="${line%%=*}"
+      old="${old#"${old%%[![:space:]]*}"}"
+      old="${old%"${old##*[![:space:]]}"}"
+      [ -z "$old" ] && continue
+      while IFS= read -r -d '' file; do
+        [ -f "$file" ] || continue
+        if awk -v key="$old" '
+          {
+            s = $0
+            sub(/^[[:space:]]*/, "", s)
+            eq = index(s, "=")
+            if (eq > 0) {
+              k = substr(s, 1, eq-1)
+              gsub(/[[:space:]]+$/, "", k)
+              if (k == key) { found=1; exit }
+            }
+          }
+          END { exit !found }
+        ' "$file"; then
+          found=1
+          break 2
+        fi
+      done < <(git ls-files --others --ignored --exclude-standard -z)
+    done < config/renames.conf
+    [ "$found" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  mapfile="config/renames.conf"
+  if [ ! -f "$mapfile" ]; then
+    exit 0
+  fi
+  git ls-files --others --ignored --exclude-standard -z | while IFS= read -r -d '' file; do
+    [ -f "$file" ] || continue
+    tmp=$(mktemp)
+    if ! awk -v mapfile="$mapfile" '
+      BEGIN {
+        while ((getline line < mapfile) > 0) {
+          if (line ~ /^[[:space:]]*#/ || line ~ /^[[:space:]]*$/) continue
+          eq = index(line, "=")
+          if (eq == 0) continue
+          old = substr(line, 1, eq-1)
+          new = substr(line, eq+1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+          if (old == "" || new == "") continue
+          mapping[old] = new
+        }
+        close(mapfile)
+      }
+      {
+        line = $0
+        eq = index(line, "=")
+        if (eq > 0) {
+          left = substr(line, 1, eq-1)
+          right = substr(line, eq+1)
+          match(left, /^[[:space:]]*/)
+          indent = substr(left, 1, RLENGTH)
+          rest = substr(left, RLENGTH+1)
+          match(rest, /[[:space:]]*$/)
+          trail = substr(rest, RSTART)
+          key = substr(rest, 1, RSTART-1)
+          if (key in mapping) {
+            print indent mapping[key] trail "=" right
+            next
+          }
+        }
+        print
+      }
+    ' "$file" > "$tmp"; then
+      rm -f "$tmp"
+      exit 1
+    fi
+    if ! cmp -s "$file" "$tmp"; then
+      cat "$tmp" > "$file"
+    fi
+    rm -f "$tmp"
+  done
+steps: null
+postconditions:
+- name: no_stale_keys_in_ignored_files
+  description: no ignored untracked file contains an old key from config/renames.conf
+  probe: |-
+    found=0
+    while IFS= read -r line; do
+      case "$line" in
+        \#*|'') continue ;;
+        *=*) ;;
+        *) continue ;;
+      esac
+      old="${line%%=*}"
+      old="${old#"${old%%[![:space:]]*}"}"
+      old="${old%"${old##*[![:space:]]}"}"
+      [ -z "$old" ] && continue
+      while IFS= read -r -d '' file; do
+        [ -f "$file" ] || continue
+        if awk -v key="$old" '
+          {
+            s = $0
+            sub(/^[[:space:]]*/, "", s)
+            eq = index(s, "=")
+            if (eq > 0) {
+              k = substr(s, 1, eq-1)
+              gsub(/[[:space:]]+$/, "", k)
+              if (k == key) { found=1; exit }
+            }
+          }
+          END { exit !found }
+        ' "$file"; then
+          found=1
+          break 2
+        fi
+      done < <(git ls-files --others --ignored --exclude-standard -z)
+    done < config/renames.conf
+    [ "$found" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: local_override_still_ignored
+  description: the local override file containing the new key is still ignored by
+    git
+  probe: |-
+    found=0
+    while IFS= read -r line; do
+      case "$line" in
+        \#*|'') continue ;;
+        *=*) ;;
+        *) continue ;;
+      esac
+      new="${line#*=}"
+      new="${new#"${new%%[![:space:]]*}"}"
+      new="${new%"${new##*[![:space:]]}"}"
+      [ -z "$new" ] && continue
+      while IFS= read -r -d '' file; do
+        [ -f "$file" ] || continue
+        if awk -v key="$new" '
+          {
+            s = $0
+            sub(/^[[:space:]]*/, "", s)
+            eq = index(s, "=")
+            if (eq > 0) {
+              k = substr(s, 1, eq-1)
+              gsub(/[[:space:]]+$/, "", k)
+              if (k == key) { found=1; exit }
+            }
+          }
+          END { exit !found }
+        ' "$file"; then
+          if ! git check-ignore -q "$file"; then
+            exit 1
+          fi
+          found=1
+          break 2
+        fi
+      done < <(git ls-files --others --ignored --exclude-standard -z)
+    done < config/renames.conf
+    [ "$found" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+variant: migrate_local
+provenance:
+  compiled_from_task: Some setting in my config has been renamed upstream. Sort the
+    config out. Rename the old key in my own override file, and keep that file out
+    of git.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Some setting in my config has been renamed upstream. Sort the config
+    out. Rename the old key in my own override file, and keep that file out of git./seed-12-config_renamed-7488
+  fault: config_renamed
+status: admitted

@@ -1,0 +1,213 @@
+id: lockfile_conflict-occ1-resolve-lockfile-sync-conflict-take-upstream
+intent: Resolve a diverged sync whose single commonly-changed dependency/lock file
+  genuinely conflicts by starting from upstream's version of that file, re-adding
+  only the lines the local branch added (never resurrecting lines the local branch
+  deleted), and committing the merge.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_present
+  description: the upstream remote-tracking branch exists locally
+  probe: git rev-parse --verify --quiet '{upstream_remote}/{upstream_branch}^{commit}'
+  expect_exit: 0
+  expect_pattern: null
+- name: diverged_from_upstream
+  description: HEAD and upstream each carry commits the other lacks, so a sync is
+    pending in both directions
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    [ -n "$base" ] || exit 1
+    [ "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -ge 1 ] || exit 1
+    [ "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -ge 1 ] || exit 1
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: single_path_changed_on_both_sides
+  description: exactly one path differs from the merge base on both HEAD and upstream,
+    i.e. there is exactly one sync-conflict candidate
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    common=$(comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort))
+    [ "$(printf '%s\n' "$common" | grep -c .)" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: common_path_changes_overlap
+  description: the local and upstream edits to that one commonly changed path touch
+    the same lines of the merge-base version, i.e. the sync really conflicts instead
+    of merging cleanly
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    up={upstream_remote}/{upstream_branch}
+    p=$(comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" "$up" | tr '\0' '\n' | sort) | head -n 1)
+    [ -n "$p" ] || exit 1
+    git cat-file -e "$base:$p" 2>/dev/null || exit 0
+    awk '
+      FNR == 1 { f++ }
+      /^@@ / {
+        split($2, a, ",")
+        s = substr(a[1], 2) + 0
+        c = (a[2] == "" ? 1 : a[2] + 0)
+        e = (c == 0 ? s : s + c - 1)
+        if (f == 1) { n1++; S1[n1] = s; E1[n1] = e }
+        else { n2++; S2[n2] = s; E2[n2] = e }
+      }
+      END {
+        for (i = 1; i <= n1; i++)
+          for (j = 1; j <= n2; j++)
+            if (S1[i] <= E2[j] && S2[j] <= E1[i]) exit 0
+        exit 1
+      }
+    ' <(git diff -U0 "$base" HEAD -- "$p") <(git diff -U0 "$base" "$up" -- "$p")
+  expect_exit: 0
+  expect_pattern: null
+- name: local_deletions_not_kept_upstream
+  description: the local side makes no pure deletion of a line that upstream's version
+    of the same path still carries, so starting from upstream does not resurrect an
+    entry the local branch deliberately dropped
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    up={upstream_remote}/{upstream_branch}
+    p=$(comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" "$up" | tr '\0' '\n' | sort) | head -n 1)
+    [ -n "$p" ] || exit 1
+    git cat-file -e "$up:$p" 2>/dev/null || exit 0
+    deleted=$(git diff -U0 "$base" HEAD -- "$p" | awk '
+      function flush() {
+        if (n > 0 && plus == 0) for (i = 1; i <= n; i++) print del[i]
+        n = 0; plus = 0
+      }
+      /^@@ / { flush(); in_hunk = 1; next }
+      /^\+/ { if (substr($0, 1, 3) != "+++") plus++; next }
+      /^-/ { if (substr($0, 1, 3) == "---") next; if (in_hunk) { n++; del[n] = substr($0, 2) } next }
+      END { flush() }
+    ')
+    [ -n "$deleted" ] || exit 0
+    if printf '%s\n' "$deleted" | grep -F -x -f - <(git show "$up:$p") | grep -q .; then
+      exit 1
+    fi
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_or_merging
+  description: no uncommitted work and no untracked files would obstruct the merge,
+    unless a merge is already in progress
+  probe: |-
+    if [ -f "$(git rev-parse --git-path MERGE_HEAD)" ]; then exit 0; fi
+    git diff --quiet || exit 1
+    git diff --cached --quiet || exit 1
+    ! git ls-files --others --exclude-standard -z | tr '\0' '\n' | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -uo pipefail
+  upstream="{upstream_remote}/{upstream_branch}"
+  base="$(git merge-base HEAD "$upstream")" || exit 1
+  git fetch --quiet {upstream_remote} >/dev/null 2>&1 || true
+  if [ ! -f "$(git rev-parse --git-path MERGE_HEAD)" ]; then
+    git merge --no-edit "$upstream" >/dev/null 2>&1 || true
+  fi
+  tmpdir="$(mktemp -d)"
+  trap 'rm -rf "$tmpdir"' EXIT
+  git diff --name-only --diff-filter=U -z | tr '\0' '\n' > "$tmpdir/conflicted"
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    git show "$upstream:$path" > "$tmpdir/upstream" 2>/dev/null || continue
+    git diff -U3 "$base" HEAD -- "$path" > "$tmpdir/local.diff" 2>/dev/null || true
+    awk -v difffile="$tmpdir/local.diff" -v upfile="$tmpdir/upstream" '
+      FILENAME == difffile {
+        if ($0 ~ /^@@/) { in_hunk = 1; anchor = ""; anchor_ok = 0; next }
+        if (!in_hunk) next
+        c = substr($0, 1, 1)
+        if (c == " ") { anchor = substr($0, 2); anchor_ok = 1; next }
+        if (c == "-") { anchor_ok = 0; next }
+        if (c == "+") {
+          if (anchor_ok) { n++; A[n] = anchor; T[n] = substr($0, 2) }
+          next
+        }
+        next
+      }
+      FILENAME == upfile { m++; U[m] = $0 }
+      END {
+        for (i = 1; i <= n; i++) {
+          text = T[i]
+          present = 0
+          for (j = 1; j <= m; j++) if (U[j] == text) { present = 1; break }
+          if (present) continue
+          if (A[i] in lastpos) {
+            pos = lastpos[A[i]]
+          } else {
+            pos = 0
+            for (j = 1; j <= m; j++) if (U[j] == A[i]) { pos = j; break }
+          }
+          if (pos <= 0) {
+            m++; U[m] = text; lastpos[A[i]] = m
+          } else {
+            for (j = m; j > pos; j--) U[j + 1] = U[j]
+            U[pos + 1] = text
+            m++
+            lastpos[A[i]] = pos + 1
+          }
+        }
+        for (i = 1; i <= m; i++) print U[i]
+      }
+    ' "$tmpdir/local.diff" "$tmpdir/upstream" > "$tmpdir/resolved"
+    cat "$tmpdir/resolved" > "$path"
+    git add -- "$path"
+  done < "$tmpdir/conflicted"
+  if [ -f "$(git rev-parse --git-path MERGE_HEAD)" ]; then
+    git commit --no-edit --no-verify
+  fi
+steps: null
+postconditions:
+- name: merge_completed
+  description: no merge is left in progress
+  probe: '! test -f "$(git rev-parse --git-path MERGE_HEAD)"'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_entries
+  description: the index holds no unmerged entries
+  probe: '! git ls-files --unmerged | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: upstream's commit is contained in HEAD, i.e. the sync was actually
+    integrated
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_lines_retained
+  description: the merged tree drops no line that upstream's version carries, so the
+    resolution was built on upstream's file
+  probe: '! git diff -U0 {upstream_remote}/{upstream_branch} HEAD | grep -e ''^-''
+    | grep -v ''^---'' | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: local_additions_retained
+  description: the merged tree still differs from upstream, so the local additions
+    were added back
+  probe: git diff --name-only -z {upstream_remote}/{upstream_branch} HEAD | tr '\0'
+    '\n' | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: no staged, unstaged or untracked leftovers remain
+  probe: git diff --quiet && git diff --cached --quiet && ! git ls-files --others
+    --exclude-standard -z | tr '\0' '\n' | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: The sync conflicts. Resolve it the way this project expects.
+    Start from upstream's dependency file and add back what I added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: The sync conflicts. Resolve it the way this project expects. Start from
+    upstream's dependency file and add back what I added./seed-6-lockfile_conflict-29016
+  fault: lockfile_conflict
+status: admitted

@@ -1,0 +1,159 @@
+id: dirty_tree-occ2-update-branch-preserve-untracked-aside
+intent: Bring the current branch up to date with upstream while preserving work in
+  progress, saving untracked files that upstream introduces beside upstream's version
+  as <name>.local.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: attached_to_branch
+  description: HEAD is attached to a branch so the fast-forward advances a branch
+    rather than a detached head.
+  probe: git symbolic-ref --quiet HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_present
+  description: the remote-tracking ref for the upstream branch exists and names a
+    commit.
+  probe: git rev-parse --verify --quiet "{upstream_remote}/{upstream_branch}^{commit}"
+  expect_exit: 0
+  expect_pattern: null
+- name: strictly_behind_upstream
+  description: the current branch has no commits missing upstream and is at least
+    one commit behind it.
+  probe: |-
+    ref="{upstream_remote}/{upstream_branch}"
+    test "$(git rev-list --count "${ref}..HEAD")" -eq 0 &&
+    test "$(git rev-list --count "HEAD..${ref}")" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: has_untracked_upstream_collision
+  description: at least one untracked non-ignored file occupies a path that the upstream
+    tree contains.
+  probe: |-
+    ref="{upstream_remote}/{upstream_branch}"
+    comm -12 -z \
+      <(git ls-files --others --exclude-standard -z | sort -z) \
+      <(git ls-tree -r --name-only -z "${ref}" | sort -z) \
+      | grep -qz .
+  expect_exit: 0
+  expect_pattern: null
+- name: local_tracked_changes_do_not_overlap_upstream
+  description: no locally modified tracked path is changed between HEAD and upstream
+    so the fast-forward cannot overwrite local edits.
+  probe: |-
+    ref="{upstream_remote}/{upstream_branch}"
+    ! comm -12 -z \
+      <(git diff --name-only -z HEAD | sort -z) \
+      <(git diff --name-only -z HEAD "${ref}" | sort -z) \
+      | grep -qz .
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_path_prefix_conflicts
+  description: no untracked path is a strict directory ancestor or descendant of an
+    upstream path so only exact file collisions need moving aside.
+  probe: |-
+    ref="{upstream_remote}/{upstream_branch}"
+    mapfile -d '' untracked < <(git ls-files --others --exclude-standard -z)
+    mapfile -d '' upstream < <(git ls-tree -r --name-only -z "${ref}")
+    for u in "${untracked[@]}"; do
+      for q in "${upstream[@]}"; do
+        if [ "$u" != "$q" ]; then
+          case "$q" in
+            "$u"/*) exit 1 ;;
+          esac
+          case "$u" in
+            "$q"/*) exit 1 ;;
+          esac
+        fi
+      done
+    done
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: local_copy_targets_free
+  description: every colliding untracked file can be copied to its <path>.local sidecar
+    without overwriting an existing path or colliding with an upstream path.
+  probe: |-
+    ref="{upstream_remote}/{upstream_branch}"
+    while IFS= read -r -d '' p; do
+      if [ -e "${p}.local" ] || [ -L "${p}.local" ]; then
+        exit 1
+      fi
+      if git cat-file -e "${ref}:${p}.local" 2>/dev/null; then
+        exit 1
+      fi
+    done < <(comm -12 -z <(git ls-files --others --exclude-standard -z | sort -z) <(git ls-tree -r --name-only -z "${ref}" | sort -z))
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: index_has_no_conflicts
+  description: the index has no unmerged entries.
+  probe: '! git ls-files -u -z | grep -qz .'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  tmp=$(mktemp -d)
+  trap 'rm -rf "$tmp"' EXIT
+
+  ref="{upstream_remote}/{upstream_branch}"
+  git ls-files --others --exclude-standard -z > "$tmp/untracked"
+  git ls-tree -r --name-only -z "$ref" > "$tmp/upstream"
+  comm -12 -z <(sort -z "$tmp/untracked") <(sort -z "$tmp/upstream") > "$tmp/collisions"
+
+  while IFS= read -r -d '' p; do
+    cp -a -- "$p" "${p}.local"
+    git clean -f -- "$p"
+  done < "$tmp/collisions"
+
+  git merge --ff-only "$ref"
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is exactly the upstream commit after the fast-forward.
+  probe: |-
+    ref="{upstream_remote}/{upstream_branch}"
+    test "$(git rev-parse HEAD)" = "$(git rev-parse "$ref")"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_collision_remains
+  description: no untracked file still occupies a path tracked in the updated HEAD.
+  probe: |-
+    ! comm -12 -z \
+      <(git ls-files --others --exclude-standard -z | sort -z) \
+      <(git ls-tree -r --name-only -z HEAD | sort -z) \
+      | grep -qz .
+  expect_exit: 0
+  expect_pattern: null
+- name: local_sidecar_present
+  description: at least one untracked <path>.local sidecar sits beside a path now
+    tracked in HEAD.
+  probe: |-
+    found=0
+    while IFS= read -r -d '' p; do
+      case "$p" in
+        *.local)
+          base=${p%.local}
+          type=$(git cat-file -t "HEAD:${base}" 2>/dev/null) || continue
+          if [ "$type" = "blob" ]; then
+            found=1
+            break
+          fi
+          ;;
+      esac
+    done < <(git ls-files --others --exclude-standard -z)
+    test "$found" -eq 1
+  expect_exit: 0
+  expect_pattern: null
+variant: aside
+provenance:
+  compiled_from_task: Bring this branch up to date with upstream, but my work in progress
+    must survive. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Bring this branch up to date with upstream, but my work in progress
+    must survive. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update./seed-2-dirty_tree-3956
+  fault: dirty_tree
+status: admitted

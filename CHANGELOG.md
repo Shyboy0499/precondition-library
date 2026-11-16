@@ -10,6 +10,15 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ## Unreleased
 
+### Added
+
+- **Study 2's 20 builds are committed** ([`results/refusal-population-2026-11-15/builds/`](results/refusal-population-2026-11-15/builds/README.md)),
+  frozen before their evaluation finishes, with the two interruptions they were resumed from.
+- **The held-out lock-file paths, on the 22 libraries built since the compile prompt changed
+  (spec revision 163, exploratory).** 20 of 403 fires wrong, against 41 of 101 in October. None
+  misreads a quoted path; all 20 are one library whose check knows lock files only by name
+  ([`results/heldout-2026-11-16/`](results/heldout-2026-11-16/README.md)).
+
 ### Changed
 
 - **The code is reorganised by what each part is (spec revision 162).**

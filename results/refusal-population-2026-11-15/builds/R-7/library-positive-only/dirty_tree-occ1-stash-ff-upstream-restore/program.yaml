@@ -1,0 +1,69 @@
+id: dirty_tree-occ1-stash-ff-upstream-restore
+intent: stash the uncommitted work (including untracked files), fast-forward the current
+  branch to the upstream remote-tracking branch, then restore the stashed work.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: worktree_dirty
+  description: there are uncommitted modifications, staged changes or untracked files
+    that must be stashed before updating
+  probe: '! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git ls-files
+    --others --exclude-standard | head -n 1)" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ahead
+  description: the upstream remote-tracking branch has commits the local branch does
+    not, so the branch needs updating
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: fast_forwardable
+  description: HEAD is an ancestor of the upstream tip, so the update is a pure fast-forward
+  probe: git merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: no_existing_stash
+  description: no stash entries exist before we start, so an empty stash afterwards
+    means our own stash was restored
+  probe: '! git stash list | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git stash push --include-untracked -m "wip: uncommitted work before updating {upstream_branch}"
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+  git stash pop
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: the branch now points at the upstream tip
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: stash_restored
+  description: the stash entry was popped and no longer remains (a conflicted pop
+    would leave it behind)
+  probe: '! git stash list | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: work_back_in_tree
+  description: the uncommitted changes and untracked files are present in the working
+    tree again
+  probe: '! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git ls-files
+    --others --exclude-standard | head -n 1)" ]'
+  expect_exit: 0
+  expect_pattern: null
+variant: stash
+provenance:
+  compiled_from_task: I am in the middle of something and upstream moved on. Sort
+    it out without losing my edits. Stash my uncommitted work, update the branch,
+    then put my work back.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: I am in the middle of something and upstream moved on. Sort it out without
+    losing my edits. Stash my uncommitted work, update the branch, then put my work
+    back./seed-10-dirty_tree-10981
+  fault: dirty_tree
+status: admitted

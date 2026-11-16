@@ -1,0 +1,84 @@
+id: dirty_tree-occ2-commit-then-rebase-upstream
+intent: Commit all uncommitted work, then bring the current branch up to date by rebasing
+  it onto the latest fetched upstream branch.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_configured
+  description: the requested upstream remote is configured
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_branch_exists
+  description: the remote-tracking branch for upstream is present locally
+  probe: git rev-parse --verify --quiet refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: shared_history_with_upstream
+  description: the current branch and the upstream branch share a commit
+  probe: git merge-base HEAD refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: on_a_branch
+  description: HEAD is attached to a branch rather than detached
+  probe: git symbolic-ref --quiet HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: has_committable_changes
+  description: the index or working tree has tracked or untracked changes that a commit
+    can capture
+  probe: |-
+    ! git diff --quiet ||
+    ! git diff --cached --quiet ||
+    test -n "$(git ls-files --others --exclude-standard)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_entries
+  description: the index contains no unmerged paths
+  probe: '! git ls-files -u | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_operation_in_progress
+  description: no merge, rebase, cherry-pick, or revert is in progress
+  probe: |-
+    ! git rev-parse -q --verify MERGE_HEAD >/dev/null &&
+    ! test -d "$(git rev-parse --git-path rebase-merge)" &&
+    ! test -d "$(git rev-parse --git-path rebase-apply)" &&
+    ! git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null &&
+    ! git rev-parse -q --verify REVERT_HEAD >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+- name: commit_identity_available
+  description: git can determine an author identity for the commit
+  probe: git var GIT_AUTHOR_IDENT
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote} +refs/heads/{upstream_branch}:refs/remotes/{upstream_remote}/{upstream_branch}
+  git add -A
+  git commit -m "wip: save local changes"
+  git rebase refs/remotes/{upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: working_tree_clean
+  description: no uncommitted changes remain
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor_of_head
+  description: HEAD contains the fetched upstream commit
+  probe: git merge-base --is-ancestor refs/remotes/{upstream_remote}/{upstream_branch}
+    HEAD
+  expect_exit: 0
+  expect_pattern: null
+variant: commit
+provenance:
+  compiled_from_task: Get the latest from upstream here, and keep every change I have
+    not saved yet. Commit my uncommitted work first, then bring the branch up to date.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get the latest from upstream here, and keep every change I have not
+    saved yet. Commit my uncommitted work first, then bring the branch up to date./seed-1-dirty_tree-12721
+  fault: dirty_tree
+status: admitted

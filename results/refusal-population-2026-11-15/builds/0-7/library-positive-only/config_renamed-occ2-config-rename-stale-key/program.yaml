@@ -1,0 +1,252 @@
+id: config_renamed-occ2-config-rename-stale-key
+intent: Rename stale configuration keys in config/settings.conf according to config/renames.conf
+  while preserving their values and all other settings, then commit the change.
+parameters:
+- work_dir
+preconditions:
+- name: work_dir_is_git_repo
+  description: the bound work_dir is the root of a git working tree
+  probe: git -C "{work_dir}" rev-parse --is-inside-work-tree
+  expect_exit: 0
+  expect_pattern: ^true$
+- name: has_head
+  description: HEAD exists so settings can be compared and committed
+  probe: git rev-parse --verify HEAD >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+- name: config_files_tracked
+  description: config/settings.conf and config/renames.conf are tracked by git
+  probe: git ls-files --error-unmatch config/settings.conf config/renames.conf >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+- name: has_stale_config_key
+  description: at least one old key from config/renames.conf appears in config/settings.conf
+  probe: |-
+    awk '
+    FNR == NR {
+      line = $0
+      sub(/#.*/, "", line)
+      if (line ~ /^[[:space:]]*$/ || line !~ /=/) next
+      eq = index(line, "=")
+      if (eq == 0) next
+      old = substr(line, 1, eq - 1)
+      new = substr(line, eq + 1)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+      if (old != "" && new != "" && old != new) map[old] = new
+      next
+    }
+    {
+      line = $0
+      if (line ~ /^[[:space:]]*#/ || line !~ /=/) next
+      eq = index(line, "=")
+      if (eq == 0) next
+      key = substr(line, 1, eq - 1)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+      if (key in map) found = 1
+    }
+    END { if (found) exit 0; exit 1 }
+    ' config/renames.conf config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_rename_targets_absent
+  description: no new key from a stale rename is already present in config/settings.conf
+  probe: |-
+    awk '
+    FNR == NR {
+      line = $0
+      sub(/#.*/, "", line)
+      if (line ~ /^[[:space:]]*$/ || line !~ /=/) next
+      eq = index(line, "=")
+      if (eq == 0) next
+      old = substr(line, 1, eq - 1)
+      new = substr(line, eq + 1)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+      if (old != "" && new != "" && old != new) map[old] = new
+      next
+    }
+    {
+      line = $0
+      if (line ~ /^[[:space:]]*#/ || line !~ /=/) next
+      eq = index(line, "=")
+      if (eq == 0) next
+      key = substr(line, 1, eq - 1)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+      present[key] = 1
+    }
+    END {
+      for (old in map) {
+        if (old in present) {
+          new = map[old]
+          if (new in present) exit 1
+        }
+      }
+      exit 0
+    }
+    ' config/renames.conf config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: settings_clean
+  description: config/settings.conf has no staged or unstaged changes relative to
+    HEAD
+  probe: git diff --quiet HEAD -- config/settings.conf && git diff --cached --quiet
+    HEAD -- config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  set -euo pipefail
+  cd "{work_dir}"
+  settings=config/settings.conf
+  renames=config/renames.conf
+  tmp=$(mktemp)
+  trap 'rm -f "$tmp"' EXIT
+  awk '
+  FNR == NR {
+    line = $0
+    sub(/#.*/, "", line)
+    if (line ~ /^[[:space:]]*$/ || line !~ /=/) next
+    eq = index(line, "=")
+    if (eq == 0) next
+    old = substr(line, 1, eq - 1)
+    new = substr(line, eq + 1)
+    gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+    gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+    if (old != "" && new != "" && old != new) map[old] = new
+    next
+  }
+  {
+    line = $0
+    if (line ~ /^[[:space:]]*#/ || line !~ /=/) { print line; next }
+    eq = index(line, "=")
+    if (eq == 0) { print line; next }
+    keypart = substr(line, 1, eq - 1)
+    valpart = substr(line, eq)
+    trimmed = keypart
+    gsub(/^[[:space:]]+|[[:space:]]+$/, "", trimmed)
+    if (trimmed in map) {
+      match(keypart, /^[[:space:]]*/)
+      lead = substr(keypart, 1, RLENGTH)
+      match(keypart, /[[:space:]]*$/)
+      trail = substr(keypart, RSTART, RLENGTH)
+      print lead map[trimmed] trail valpart
+    } else {
+      print line
+    }
+  }
+  ' "$renames" "$settings" > "$tmp"
+  if cmp -s "$tmp" "$settings"; then
+    rm -f "$tmp"
+    trap - EXIT
+    exit 0
+  fi
+  cat "$tmp" > "$settings"
+  rm -f "$tmp"
+  trap - EXIT
+  git add -- "$settings"
+  git commit -m "fix: rename stale config keys" -- "$settings"
+steps: null
+postconditions:
+- name: no_stale_keys_remain
+  description: no old key from config/renames.conf remains in config/settings.conf
+  probe: |-
+    awk '
+    FNR == NR {
+      line = $0
+      sub(/#.*/, "", line)
+      if (line ~ /^[[:space:]]*$/ || line !~ /=/) next
+      eq = index(line, "=")
+      if (eq == 0) next
+      old = substr(line, 1, eq - 1)
+      new = substr(line, eq + 1)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+      if (old != "" && new != "" && old != new) map[old] = new
+      next
+    }
+    {
+      line = $0
+      if (line ~ /^[[:space:]]*#/ || line !~ /=/) next
+      eq = index(line, "=")
+      if (eq == 0) next
+      key = substr(line, 1, eq - 1)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+      if (key in map) found = 1
+    }
+    END { if (found) exit 1; exit 0 }
+    ' config/renames.conf config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: renamed_values_preserved
+  description: every old key present before the commit was renamed to its new key
+    with the same value
+  probe: |-
+    awk '
+    FNR == 1 { file++ }
+    file == 1 {
+      line = $0
+      sub(/#.*/, "", line)
+      if (line ~ /^[[:space:]]*$/ || line !~ /=/) next
+      eq = index(line, "=")
+      if (eq == 0) next
+      old = substr(line, 1, eq - 1)
+      new = substr(line, eq + 1)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+      if (old != "" && new != "" && old != new) map[old] = new
+      next
+    }
+    file == 2 {
+      line = $0
+      if (line ~ /^[[:space:]]*#/ || line !~ /=/) next
+      eq = index(line, "=")
+      if (eq == 0) next
+      key = substr(line, 1, eq - 1)
+      val = substr(line, eq + 1)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+      oldval[key] = val
+      next
+    }
+    file == 3 {
+      line = $0
+      if (line ~ /^[[:space:]]*#/ || line !~ /=/) next
+      eq = index(line, "=")
+      if (eq == 0) next
+      key = substr(line, 1, eq - 1)
+      val = substr(line, eq + 1)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+      newval[key] = val
+      next
+    }
+    END {
+      for (old in map) {
+        if (old in oldval) {
+          new = map[old]
+          if (!(new in newval)) exit 1
+          if (oldval[old] != newval[new]) exit 1
+        }
+      }
+      exit 0
+    }
+    ' config/renames.conf <(git show HEAD^:config/settings.conf) <(git show HEAD:config/settings.conf)
+  expect_exit: 0
+  expect_pattern: null
+- name: settings_clean_after
+  description: config/settings.conf is committed and matches HEAD
+  probe: git diff --quiet HEAD -- config/settings.conf && git diff --cached --quiet
+    HEAD -- config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: Fix the stale config entry the app is warning about, without
+    losing any setting. Rename the old key in the project's settings and keep its
+    value.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Fix the stale config entry the app is warning about, without losing
+    any setting. Rename the old key in the project's settings and keep its value./seed-8-config_renamed-12454
+  fault: config_renamed
+status: admitted

@@ -1,0 +1,73 @@
+id: dirty_tree-occ3-dirty-tree-sync-upstream-commit-work
+intent: Commit all uncommitted work, then fetch the upstream branch and rebase the
+  current branch onto it.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: worktree_has_uncommitted_changes
+  description: At least one tracked, staged, or untracked change is present to commit.
+  probe: test -n "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: The index has no unresolved merge entries that would block a commit.
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+- name: on_a_branch
+  description: HEAD is attached to a local branch so the rebase updates that branch.
+  probe: git symbolic-ref --quiet --short HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_exists
+  description: The local remote-tracking ref for {upstream_remote}/{upstream_branch}
+    exists.
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_has_new_commits
+  description: The upstream branch contains at least one commit not reachable from
+    HEAD.
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_file_collides_with_upstream
+  description: No untracked file sits at a path the upstream branch also changes,
+    so committing the unsaved work and rebasing onto upstream cannot collide with
+    an incoming path and the work can be committed in place rather than kept aside.
+  probe: |-
+    test -n "$(git rev-parse --verify --quiet '{upstream_remote}/{upstream_branch}')" &&
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD '{upstream_remote}/{upstream_branch}' | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git add -A
+  git commit -m "chore: save work in progress before syncing with upstream"
+  git fetch {upstream_remote}
+  git rebase {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: worktree_clean
+  description: All changes are committed and the worktree and index are clean.
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor_of_head
+  description: HEAD is based on the fetched upstream branch.
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+variant: commit
+provenance:
+  compiled_from_task: Get the latest from upstream here, and keep every change I have
+    not saved yet. Commit my uncommitted work first, then bring the branch up to date.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get the latest from upstream here, and keep every change I have not
+    saved yet. Commit my uncommitted work first, then bring the branch up to date./seed-1-dirty_tree-29979
+  fault: dirty_tree
+status: admitted

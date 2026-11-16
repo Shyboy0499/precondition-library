@@ -1,0 +1,220 @@
+id: lockfile_conflict-occ1-merge-upstream-keep-local
+intent: Merge upstream into the current branch, resolving dependency-file conflicts
+  by keeping the local content, preserving local removals, and adding lines that upstream
+  introduced.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_exists
+  description: the upstream tracking ref named by the parameters exists
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: local_ahead_of_upstream
+  description: the current branch has at least one commit not in the upstream branch
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: upstream_ahead_of_local
+  description: the upstream branch has at least one commit not in the current branch
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: common_changed_file
+  description: at least one file changed on both the current branch and upstream since
+    their merge base
+  probe: |-
+    mb=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+    comm -12 \
+      <(git diff --name-only -z "$mb" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$mb" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: there are no modified, staged, or untracked files before merging
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch {upstream_remote}
+  merge_rc=0
+  git merge --no-edit {upstream_remote}/{upstream_branch} || merge_rc=$?
+  if [ "$merge_rc" -ne 0 ] && ! git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+    exit 1
+  fi
+  if git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+    while IFS= read -r -d '' f; do
+      base="$tmp/base"
+      ours="$tmp/ours"
+      theirs="$tmp/theirs"
+      diff="$tmp/diff"
+      have_base=1
+      if git cat-file -e ":1:$f" 2>/dev/null; then
+        git show ":1:$f" > "$base"
+      else
+        : > "$base"
+        have_base=0
+      fi
+      if ! git cat-file -e ":2:$f" 2>/dev/null; then
+        git rm -f --quiet -- "$f" 2>/dev/null || true
+        continue
+      fi
+      git show ":2:$f" > "$ours"
+      if ! git cat-file -e ":3:$f" 2>/dev/null; then
+        cat "$ours" > "$f"
+        git add -- "$f"
+        continue
+      fi
+      git show ":3:$f" > "$theirs"
+      if [ "$have_base" -eq 0 ]; then
+        cat "$ours" > "$f"
+        git add -- "$f"
+        continue
+      fi
+      git diff --no-index -U0 -- "$base" "$theirs" > "$diff" || true
+      awk -v ours="$ours" -v theirs="$theirs" -v base="$base" '
+        function emit(b,   k, line) {
+          for (k = 1; k <= blen[b]; k++) {
+            line = bline[b, k]
+            if (!(line in firstO) && !(line in inBase) && !(line in emitted)) {
+              print line
+              emitted[line] = 1
+            }
+          }
+        }
+        function record(   b, k, follow, prev, idx, mode) {
+          if (!pure || ai == 0) return
+          b = ++nb
+          for (k = 1; k <= ai; k++) bline[b, k] = A[k]
+          blen[b] = ai
+          follow = L + ai
+          prev = L - 1
+          mode = ""
+          idx = 0
+          if (follow <= tn && (T[follow] in firstO)) {
+            mode = "before"; idx = firstO[T[follow]]
+          } else if (prev >= 1 && (T[prev] in firstO)) {
+            mode = "after"; idx = lastO[T[prev]]
+          } else {
+            for (k = prev; k >= 1; k--) {
+              if (T[k] in firstO) { mode = "after"; idx = lastO[T[k]]; break }
+            }
+            if (mode == "") {
+              for (k = follow; k <= tn; k++) {
+                if (T[k] in firstO) { mode = "before"; idx = firstO[T[k]]; break }
+              }
+            }
+            if (mode == "") { mode = "append"; idx = 0 }
+          }
+          bmode[b] = mode
+          bidx[b] = idx
+        }
+        BEGIN {
+          while ((getline line < base) > 0) inBase[line] = 1
+          close(base)
+          on = 0
+          while ((getline line < ours) > 0) {
+            O[++on] = line
+            if (!(line in firstO)) firstO[line] = on
+            lastO[line] = on
+          }
+          close(ours)
+          tn = 0
+          while ((getline line < theirs) > 0) {
+            T[++tn] = line
+          }
+          close(theirs)
+          nb = 0
+          pure = 0
+          ai = 0
+        }
+        /^@@ / {
+          if (pure) record()
+          old = substr($2, 2)
+          new = substr($3, 2)
+          split(old, oa, ",")
+          split(new, na, ",")
+          oldcount = (2 in oa) ? oa[2] + 0 : 1
+          L = na[1] + 0
+          newcount = (2 in na) ? na[2] + 0 : 1
+          pure = (oldcount == 0 && newcount > 0)
+          ai = 0
+          next
+        }
+        pure && /^\+/ && !/^\+\+\+/ {
+          ++ai
+          A[ai] = substr($0, 2)
+          next
+        }
+        END {
+          if (pure) record()
+          for (i = 1; i <= on; i++) {
+            for (b = 1; b <= nb; b++) {
+              if (!done[b] && bmode[b] == "before" && bidx[b] == i) {
+                emit(b)
+                done[b] = 1
+              }
+            }
+            print O[i]
+            for (b = 1; b <= nb; b++) {
+              if (!done[b] && bmode[b] == "after" && bidx[b] == i) {
+                emit(b)
+                done[b] = 1
+              }
+            }
+          }
+          for (b = 1; b <= nb; b++) {
+            if (!done[b]) {
+              emit(b)
+              done[b] = 1
+            }
+          }
+        }
+      ' "$diff" > "$f"
+      git add -- "$f"
+    done < <(git diff --name-only --diff-filter=U -z)
+    git commit --no-edit
+  fi
+steps: null
+postconditions:
+- name: upstream_is_ancestor
+  description: the upstream branch is now an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_parent_is_upstream
+  description: HEAD is a merge commit whose second parent is the upstream tip
+  probe: test "$(git rev-parse HEAD^2)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_entries
+  description: the index has no unmerged entries
+  probe: '! git ls-files -u | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: no conflict markers remain in tracked files
+  probe: '! git grep -q -e ''^<<<<<<< '' -e ''^=======$'' -e ''^>>>>>>> '' -- . 2>/dev/null'
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree_after_merge
+  description: the working tree is clean after the merge commit
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+variant: keep_local
+provenance:
+  compiled_from_task: Get my fork current with upstream; our dependency changes collided.
+    Keep my dependency file, with what I removed still removed, and add what upstream
+    added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get my fork current with upstream; our dependency changes collided.
+    Keep my dependency file, with what I removed still removed, and add what upstream
+    added./seed-3-lockfile_conflict-214
+  fault: lockfile_conflict
+status: admitted

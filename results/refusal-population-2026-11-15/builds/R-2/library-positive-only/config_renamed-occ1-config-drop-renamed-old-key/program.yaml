@@ -1,0 +1,120 @@
+id: config_renamed-occ1-config-drop-renamed-old-key
+intent: |
+  When a config key has been renamed upstream and the new name is already set in the same file, delete the stale line that sets the old name and keep the new one, then commit the change. The old-to-new mapping is read from the tracked rename map file in the repository rather than hardcoded.
+parameters: []
+preconditions:
+- name: renames_map_present
+  description: a tracked file whose path mentions rename lists old-to-new key pairs
+  probe: |-
+    pairs=$(git ls-files -z | tr '\0' '\n' | grep -i 'rename' | while IFS= read -r f; do
+      if [ -f "$f" ]; then
+        awk '{ line=$0; sub(/^[ \t]+/,"",line); sub(/[ \t]+$/,"",line); if (line=="" || line ~ /^#/) next; i=index(line,"="); if (i==0) next; k=substr(line,1,i-1); v=substr(line,i+1); gsub(/^[ \t]+|[ \t]+$/,"",k); gsub(/^[ \t]+|[ \t]+$/,"",v); if (k ~ /^[A-Za-z_][A-Za-z0-9_.-]*$/ && v ~ /^[A-Za-z_][A-Za-z0-9_.-]*$/) print k "\t" v }' "$f"
+      fi
+    done)
+    [ -n "$pairs" ]
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_renamed_key_present
+  description: some tracked config file sets both the old and the new name of a renamed
+    key
+  probe: |-
+    pairs=$(git ls-files -z | tr '\0' '\n' | grep -i 'rename' | while IFS= read -r f; do
+      if [ -f "$f" ]; then
+        awk '{ line=$0; sub(/^[ \t]+/,"",line); sub(/[ \t]+$/,"",line); if (line=="" || line ~ /^#/) next; i=index(line,"="); if (i==0) next; k=substr(line,1,i-1); v=substr(line,i+1); gsub(/^[ \t]+|[ \t]+$/,"",k); gsub(/^[ \t]+|[ \t]+$/,"",v); if (k ~ /^[A-Za-z_][A-Za-z0-9_.-]*$/ && v ~ /^[A-Za-z_][A-Za-z0-9_.-]*$/) print k "\t" v }' "$f"
+      fi
+    done)
+    stale=$(git ls-files -z | tr '\0' '\n' | grep -v -i 'rename' | while IFS= read -r f; do
+      [ -f "$f" ] || continue
+      awk -v pairs="$pairs" 'function keyof(line,  t,i,k){ t=line; sub(/^[ \t]+/,"",t); if (t=="" || t ~ /^#/) return ""; i=index(t,"="); if (i==0) return ""; k=substr(t,1,i-1); gsub(/^[ \t]+|[ \t]+$/,"",k); if (k !~ /^[A-Za-z_][A-Za-z0-9_.-]*$/) return ""; return k } BEGIN{ n=split(pairs,ln,"\n"); for (i=1;i<=n;i++){ split(ln[i],kv,"\t"); if (kv[1]!="") old[kv[1]]=kv[2] } } { lines[NR]=$0; k=keyof($0); if (k!="") have[k]=1 } END{ for (i=1;i<=NR;i++){ k=keyof(lines[i]); if (k!="" && (k in old) && (old[k] in have)) print FILENAME ": " k " -> " old[k] } }' "$f"
+    done)
+    [ -n "$stale" ]
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the working tree has no staged, unstaged or untracked changes
+  probe: '[ -z "$(git status --porcelain)" ]'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  pairs=$(git ls-files -z | tr '\0' '\n' | grep -i 'rename' | while IFS= read -r f; do
+    if [ -f "$f" ]; then
+      awk '{ line=$0; sub(/^[ \t]+/,"",line); sub(/[ \t]+$/,"",line); if (line=="" || line ~ /^#/) next; i=index(line,"="); if (i==0) next; k=substr(line,1,i-1); v=substr(line,i+1); gsub(/^[ \t]+|[ \t]+$/,"",k); gsub(/^[ \t]+|[ \t]+$/,"",v); if (k ~ /^[A-Za-z_][A-Za-z0-9_.-]*$/ && v ~ /^[A-Za-z_][A-Za-z0-9_.-]*$/) print k "\t" v }' "$f"
+    fi
+  done)
+
+  work=$(mktemp -d)
+  trap 'rm -rf "$work"' EXIT
+  git ls-files -z | tr '\0' '\n' > "$work/all"
+  : > "$work/changed"
+
+  while IFS= read -r f; do
+    [ -f "$f" ] || continue
+    case "$f" in
+      *[Rr][Ee][Nn][Aa][Mm][Ee]*) continue ;;
+    esac
+    awk -v pairs="$pairs" 'function keyof(line,  t,i,k){ t=line; sub(/^[ \t]+/,"",t); if (t=="" || t ~ /^#/) return ""; i=index(t,"="); if (i==0) return ""; k=substr(t,1,i-1); gsub(/^[ \t]+|[ \t]+$/,"",k); if (k !~ /^[A-Za-z_][A-Za-z0-9_.-]*$/) return ""; return k } BEGIN{ n=split(pairs,ln,"\n"); for (i=1;i<=n;i++){ split(ln[i],kv,"\t"); if (kv[1]!="") old[kv[1]]=kv[2] } } { lines[NR]=$0; k=keyof($0); if (k!="") have[k]=1 } END{ for (i=1;i<=NR;i++){ k=keyof(lines[i]); if (k!="" && (k in old) && (old[k] in have)) continue; print lines[i] } }' "$f" > "$work/out"
+    if ! cmp -s "$work/out" "$f"; then
+      cat "$work/out" > "$f"
+      printf '%s\n' "$f" >> "$work/changed"
+    fi
+  done < "$work/all"
+
+  if [ -s "$work/changed" ]; then
+    while IFS= read -r f; do git add -- "$f"; done < "$work/changed"
+    git -c user.name=config-fix -c user.email=config-fix@localhost -c commit.gpgsign=false commit -m "Remove stale renamed config keys" > /dev/null
+  fi
+steps: null
+postconditions:
+- name: old_key_lines_removed
+  description: no tracked non-rename file still sets an old name whose new name it
+    also sets
+  probe: |-
+    pairs=$(git ls-files -z | tr '\0' '\n' | grep -i 'rename' | while IFS= read -r f; do
+      if [ -f "$f" ]; then
+        awk '{ line=$0; sub(/^[ \t]+/,"",line); sub(/[ \t]+$/,"",line); if (line=="" || line ~ /^#/) next; i=index(line,"="); if (i==0) next; k=substr(line,1,i-1); v=substr(line,i+1); gsub(/^[ \t]+|[ \t]+$/,"",k); gsub(/^[ \t]+|[ \t]+$/,"",v); if (k ~ /^[A-Za-z_][A-Za-z0-9_.-]*$/ && v ~ /^[A-Za-z_][A-Za-z0-9_.-]*$/) print k "\t" v }' "$f"
+      fi
+    done)
+    stale=$(git ls-files -z | tr '\0' '\n' | grep -v -i 'rename' | while IFS= read -r f; do
+      [ -f "$f" ] || continue
+      awk -v pairs="$pairs" 'function keyof(line,  t,i,k){ t=line; sub(/^[ \t]+/,"",t); if (t=="" || t ~ /^#/) return ""; i=index(t,"="); if (i==0) return ""; k=substr(t,1,i-1); gsub(/^[ \t]+|[ \t]+$/,"",k); if (k !~ /^[A-Za-z_][A-Za-z0-9_.-]*$/) return ""; return k } BEGIN{ n=split(pairs,ln,"\n"); for (i=1;i<=n;i++){ split(ln[i],kv,"\t"); if (kv[1]!="") old[kv[1]]=kv[2] } } { lines[NR]=$0; k=keyof($0); if (k!="") have[k]=1 } END{ for (i=1;i<=NR;i++){ k=keyof(lines[i]); if (k!="" && (k in old) && (old[k] in have)) print FILENAME ": " k " -> " old[k] } }' "$f"
+    done)
+    [ -z "$stale" ]
+  expect_exit: 0
+  expect_pattern: null
+- name: commit_only_deletes_old_key_lines
+  description: the last commit adds no lines and removes only lines belonging to old
+    renamed key names
+  probe: |-
+    git rev-parse -q --verify HEAD^ > /dev/null || exit 0
+    if git diff HEAD^ HEAD --unified=0 --no-color | grep -q '^+[^+]'; then
+      exit 1
+    fi
+    olds=$(git ls-files -z | tr '\0' '\n' | grep -i 'rename' | while IFS= read -r f; do
+      if [ -f "$f" ]; then
+        awk '{ line=$0; sub(/^[ \t]+/,"",line); sub(/[ \t]+$/,"",line); if (line=="" || line ~ /^#/) next; i=index(line,"="); if (i==0) next; k=substr(line,1,i-1); v=substr(line,i+1); gsub(/^[ \t]+|[ \t]+$/,"",k); gsub(/^[ \t]+|[ \t]+$/,"",v); if (k ~ /^[A-Za-z_][A-Za-z0-9_.-]*$/ && v ~ /^[A-Za-z_][A-Za-z0-9_.-]*$/) print k "\t" v }' "$f"
+      fi
+    done | cut -f1 | grep -v '^$' | sort -u)
+    git diff HEAD^ HEAD --unified=0 --no-color | grep '^-[^-]' | sed 's/^-//' | while IFS= read -r line; do
+      k=$(printf '%s\n' "$line" | sed -n 's/^[[:space:]]*\([A-Za-z_][A-Za-z0-9_.-]*\)[[:space:]]*=.*/\1/p')
+      [ -n "$k" ] || exit 1
+      printf '%s\n' "$olds" | grep -qxF -- "$k" || exit 1
+    done
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_commit
+  description: all edits are committed and the working tree is clean
+  probe: '[ -z "$(git status --porcelain)" ]'
+  expect_exit: 0
+  expect_pattern: null
+variant: drop_old
+provenance:
+  compiled_from_task: Some setting in my config has been renamed upstream. Sort the
+    config out. The new name is already set too, so delete the old key's line and
+    keep the new one.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Some setting in my config has been renamed upstream. Sort the config
+    out. The new name is already set too, so delete the old key's line and keep the
+    new one./seed-31-config_renamed-211
+  fault: config_renamed
+status: candidate

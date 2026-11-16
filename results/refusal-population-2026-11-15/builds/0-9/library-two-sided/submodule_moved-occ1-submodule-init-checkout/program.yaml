@@ -1,0 +1,59 @@
+id: submodule_moved-occ1-submodule-init-checkout
+intent: Initialise the repository's declared submodule and check it out at the commit
+  pinned in HEAD, which must match upstream's pin.
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: submodule_declared
+  description: .gitmodules declares a submodule at the requested path
+  probe: git config -f .gitmodules --get "submodule.{submodule_path}.path"
+  expect_exit: 0
+  expect_pattern: ^{submodule_path}$
+- name: gitlink_recorded
+  description: HEAD records a gitlink for the submodule path
+  probe: git ls-tree HEAD -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: ^160000 commit [0-9a-f]{40}[[:space:]]
+- name: submodule_uninitialised
+  description: the submodule has not been initialised or checked out yet
+  probe: git submodule status -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: ^-
+- name: pin_matches_upstream
+  description: the gitlink recorded in HEAD equals upstream's gitlink
+  probe: test "$(git rev-parse "HEAD:{submodule_path}")" = "$(git rev-parse "{upstream_remote}/{upstream_branch}:{submodule_path}")"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git submodule init -- "{submodule_path}"
+  git submodule update --init -- "{submodule_path}"
+steps: null
+postconditions:
+- name: submodule_checked_out
+  description: the submodule has a checkout whose HEAD equals the recorded gitlink
+  probe: test "$(git -C "{submodule_path}" rev-parse HEAD)" = "$(git rev-parse "HEAD:{submodule_path}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: status_reports_clean_pin
+  description: git submodule status reports an initialised submodule at the pinned
+    commit
+  probe: git submodule status -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: ^ [0-9a-f]{40}
+- name: upstream_pin_matches
+  description: the checked-out commit equals upstream's gitlink
+  probe: test "$(git -C "{submodule_path}" rev-parse HEAD)" = "$(git rev-parse "{upstream_remote}/{upstream_branch}:{submodule_path}")"
+  expect_exit: 0
+  expect_pattern: null
+variant: init
+provenance:
+  compiled_from_task: Get this repo's nested dependency consistent with upstream.
+    Initialise the nested repository and check it out.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this repo's nested dependency consistent with upstream. Initialise
+    the nested repository and check it out./seed-5-submodule_moved-29980
+  fault: submodule_moved
+status: admitted

@@ -1,0 +1,85 @@
+id: dirty_tree-occ1-stash-upstream-ff-reapply
+intent: Stash all uncommitted and untracked work, fetch and fast-forward the current
+  branch to the upstream branch, then reapply the stash.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_local_branch
+  description: HEAD is attached to a local branch.
+  probe: git symbolic-ref --quiet --short HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: has_upstream_tracking_ref
+  description: A remote-tracking ref exists for the given upstream remote and branch.
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ahead
+  description: The current branch is strictly behind upstream and has no local commits
+    to replay, so a fast-forward is possible.
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0 && test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -eq 0
+  expect_exit: 0
+  expect_pattern: null
+- name: has_dirty_worktree
+  description: There are uncommitted or untracked changes to stash.
+  probe: test -n "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: dirty_paths_do_not_collide_with_upstream
+  description: No local dirty path is changed by upstream, so the stash can reapply
+    cleanly after the fast-forward.
+  probe: |-
+    ! comm -12 \
+      <( { git diff --name-only -z HEAD; git ls-files --others --exclude-standard -z; } | tr '\0' '\n' | sort -u ) \
+      <(git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort -u) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_entries
+  description: The index has no unresolved merge entries.
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+  git stash push --include-untracked -m "wip: autostash before updating"
+  git fetch {upstream_remote}
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+  git stash pop
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is the upstream-tracking commit after the fast-forward.
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: temporary_stash_removed
+  description: The temporary stash created by the body is no longer present, so the
+    local work was reapplied.
+  probe: '! git stash list | grep -q ''wip: autostash before updating'''
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_dirty_again
+  description: Uncommitted or untracked changes are present again after the stash
+    is reapplied.
+  probe: test -n "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths_after_pop
+  description: No merge conflicts remain after reapplying the stash.
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+variant: stash
+provenance:
+  compiled_from_task: Get the latest from upstream here, and keep every change I have
+    not saved yet. Stash my uncommitted work, update the branch, then put my work
+    back.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get the latest from upstream here, and keep every change I have not
+    saved yet. Stash my uncommitted work, update the branch, then put my work back./seed-5-dirty_tree-29979
+  fault: dirty_tree
+status: admitted

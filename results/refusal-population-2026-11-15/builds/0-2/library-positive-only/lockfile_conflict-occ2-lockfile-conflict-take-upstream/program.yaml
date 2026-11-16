@@ -1,0 +1,228 @@
+id: lockfile_conflict-occ2-lockfile-conflict-take-upstream
+intent: Resolve a dependency-file merge conflict by taking upstream's version and
+  re-adding the local pure additions.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_configured
+  description: the configured upstream remote exists
+  probe: git remote get-url "{upstream_remote}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_branch_ref_exists
+  description: the remote-tracking branch for upstream exists locally
+  probe: git rev-parse --verify --quiet "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: diverged_or_conflicted
+  description: either a merge is in progress with unmerged files, or local and upstream
+    have both modified a common file since their merge base
+  probe: |
+    if [ -f .git/MERGE_HEAD ]; then
+      git diff --name-only --diff-filter=U -z | tr '\0' '\n' | grep -q .
+    else
+      base=$(git merge-base HEAD "{upstream_remote}/{upstream_branch}") || exit 1
+      comm -12 \
+        <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+        <(git diff --name-only -z "$base" "{upstream_remote}/{upstream_branch}" | tr '\0' '\n' | sort) | grep -q .
+    fi
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_or_merge_in_progress
+  description: the worktree is clean unless a merge is already in progress
+  probe: |
+    if [ -f .git/MERGE_HEAD ]; then
+      exit 0
+    fi
+    ! git status --porcelain | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+
+  git fetch --no-tags "{upstream_remote}" "{upstream_branch}"
+
+  if [ ! -f .git/MERGE_HEAD ]; then
+    if ! git merge --no-edit "{upstream_remote}/{upstream_branch}"; then
+      if [ ! -f .git/MERGE_HEAD ]; then
+        exit 1
+      fi
+    fi
+  fi
+
+  if [ ! -f .git/MERGE_HEAD ]; then
+    exit 0
+  fi
+
+  mapfile -t conflicted < <(git diff --name-only --diff-filter=U -z | tr '\0' '\n')
+  if [ "${#conflicted[@]}" -eq 0 ]; then
+    git commit --no-edit
+    exit 0
+  fi
+
+  python3 - "{upstream_remote}/{upstream_branch}" "${conflicted[@]}" <<'PY'
+  import subprocess
+  import sys
+  import difflib
+  import re
+
+  upstream_ref = sys.argv[1]
+  files = sys.argv[2:]
+
+  _pkg_re = re.compile(r'^\s*"([^"]+)\s+[^"]*",\s*$')
+
+  def package_name(line):
+      try:
+          s = line.decode('utf-8')
+      except UnicodeDecodeError:
+          return None
+      m = _pkg_re.match(s)
+      return m.group(1) if m else None
+
+  def git_bytes(*args):
+      return subprocess.run(["git"] + list(args), check=True, stdout=subprocess.PIPE).stdout
+
+  def get_file(rev, path):
+      try:
+          return git_bytes("show", f"{rev}:{path}")
+      except subprocess.CalledProcessError:
+          return None
+
+  def write_file(path, data):
+      with open(path, "wb") as f:
+          f.write(data)
+
+  def remove_file(path):
+      subprocess.run(["git", "rm", "-f", "--quiet", "--", path], check=False)
+
+  def map_base_boundary(pos, up_lines, up_matcher):
+      for tag, i1, i2, j1, j2 in up_matcher.get_opcodes():
+          if i1 <= pos <= i2:
+              if tag == "equal":
+                  return j1 + (pos - i1)
+              if tag == "replace":
+                  if pos == i1:
+                      return j1
+                  return j2
+              if tag == "delete":
+                  return j1
+              if tag == "insert":
+                  return j1
+      return len(up_lines)
+
+  def resolve(path, base):
+      base_content = get_file(base, path)
+      local_content = get_file("HEAD", path)
+      upstream_content = get_file(upstream_ref, path)
+
+      if upstream_content is None:
+          remove_file(path)
+          return
+
+      if base_content is None or local_content is None:
+          write_file(path, upstream_content)
+          return
+
+      if b"\x00" in base_content or b"\x00" in local_content or b"\x00" in upstream_content:
+          write_file(path, upstream_content)
+          return
+
+      base_lines = base_content.splitlines(keepends=True)
+      local_lines = local_content.splitlines(keepends=True)
+      up_lines = list(upstream_content.splitlines(keepends=True))
+
+      local_matcher = difflib.SequenceMatcher(None, base_lines, local_lines)
+      up_matcher = difflib.SequenceMatcher(None, base_lines, up_lines)
+
+      insertions = []
+      for tag, i1, i2, j1, j2 in local_matcher.get_opcodes():
+          if tag == "insert":
+              insertions.append((i1, local_lines[j1:j2]))
+
+      if not insertions:
+          write_file(path, upstream_content)
+          return
+
+      present = set(up_lines)
+      present_pkgs = set()
+      for line in up_lines:
+          p = package_name(line)
+          if p:
+              present_pkgs.add(p)
+
+      mapped = []
+      for pos, added_lines in insertions:
+          filtered = []
+          for line in added_lines:
+              if line in present:
+                  continue
+              p = package_name(line)
+              if p and p in present_pkgs:
+                  continue
+              filtered.append(line)
+              present.add(line)
+              if p:
+                  present_pkgs.add(p)
+          if not filtered:
+              continue
+          up_pos = map_base_boundary(pos, up_lines, up_matcher)
+          mapped.append((up_pos, filtered))
+
+      if not mapped:
+          write_file(path, upstream_content)
+          return
+
+      mapped.sort(key=lambda x: x[0])
+      out = []
+      last = 0
+      for up_pos, added in mapped:
+          if up_pos < last:
+              up_pos = last
+          out.extend(up_lines[last:up_pos])
+          out.extend(added)
+          last = up_pos
+      out.extend(up_lines[last:])
+      write_file(path, b"".join(out))
+
+  base = git_bytes("merge-base", "HEAD", upstream_ref).decode().strip()
+  for path in files:
+      try:
+          resolve(path, base)
+      except Exception:
+          upstream_content = get_file(upstream_ref, path)
+          if upstream_content is None:
+              remove_file(path)
+          else:
+              write_file(path, upstream_content)
+  PY
+
+  git add -A -- "${conflicted[@]}"
+  git commit --no-edit
+steps: null
+postconditions:
+- name: no_unmerged_entries
+  description: the index has no unmerged entries
+  probe: '! git ls-files -u | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor_of_head
+  description: upstream's branch is now an ancestor of HEAD
+  probe: git merge-base --is-ancestor "{upstream_remote}/{upstream_branch}" HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: no unresolved changes remain in the worktree
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: The sync conflicts. Resolve it the way this project expects.
+    Start from upstream's dependency file and add back what I added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: The sync conflicts. Resolve it the way this project expects. Start from
+    upstream's dependency file and add back what I added./seed-6-lockfile_conflict-27083
+  fault: lockfile_conflict
+status: candidate

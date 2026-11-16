@@ -1,0 +1,223 @@
+id: config_renamed-occ1-drop-stale-config-keys
+intent: Remove legacy config keys whose replacement key is already set, keeping the
+  replacement and committing the cleanup.
+parameters: []
+preconditions:
+- name: has_renames_conf
+  description: At least one tracked renames.conf mapping file exists.
+  probe: git ls-files -z -- '*renames.conf' | tr '\0' '\n' | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: has_stale_old_key_with_new_key
+  description: Some config file contains both an old key and its replacement new key.
+  probe: |-
+    python3 - <<'PY'
+    import os, re, subprocess, sys
+
+    tracked = [p for p in subprocess.check_output(['git', 'ls-files', '-z']).decode('utf-8', 'surrogateescape').split('\0') if p]
+    renames_files = [p for p in tracked if os.path.basename(p) == 'renames.conf']
+    if not renames_files:
+        sys.exit(1)
+    rf = next((p for p in renames_files if p == 'config/renames.conf'), renames_files[0])
+    mapping = dict()
+    try:
+        with open(rf, 'r', encoding='utf-8', errors='surrogateescape', newline='') as f:
+            for line in f:
+                s = line.strip()
+                if not s or s.startswith('#') or '=' not in s:
+                    continue
+                old, new = s.split('=', 1)
+                old, new = old.strip(), new.strip()
+                if old and new:
+                    mapping[old] = new
+    except OSError:
+        sys.exit(1)
+
+    config_dir = os.path.dirname(rf)
+
+    def key_of(line):
+        m = re.match(r'^\s*([^\s=:#]+)\s*[=:]\s*', line)
+        return m.group(1) if m else None
+
+    config_exts = ['.conf', '.cfg', '.ini', '.toml', '.yaml', '.yml', '.json', '.properties', '.env']
+
+    for path in tracked:
+        if path == rf:
+            continue
+        if config_dir:
+            if not path.startswith(config_dir + '/'):
+                continue
+        else:
+            if os.path.splitext(path)[1].lower() not in config_exts:
+                continue
+        try:
+            with open(path, 'r', encoding='utf-8', errors='surrogateescape', newline='') as f:
+                lines = f.readlines()
+        except (OSError, UnicodeError):
+            continue
+        keys = set(key_of(l) for l in lines)
+        for line in lines:
+            k = key_of(line)
+            if k in mapping and mapping[k] in keys:
+                sys.exit(0)
+    sys.exit(1)
+    PY
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_is_clean
+  description: The working tree and index have no pending changes.
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: on_a_branch
+  description: HEAD is attached to a branch so the cleanup commit is recorded.
+  probe: git symbolic-ref -q HEAD >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+  python3 - <<'PY'
+  import os, re, subprocess, sys
+
+  tracked = [p for p in subprocess.check_output(['git', 'ls-files', '-z']).decode('utf-8', 'surrogateescape').split('\0') if p]
+  renames_files = [p for p in tracked if os.path.basename(p) == 'renames.conf']
+  if not renames_files:
+      sys.exit(1)
+  rf = next((p for p in renames_files if p == 'config/renames.conf'), renames_files[0])
+  mapping = dict()
+  try:
+      with open(rf, 'r', encoding='utf-8', errors='surrogateescape', newline='') as f:
+          for line in f:
+              s = line.strip()
+              if not s or s.startswith('#') or '=' not in s:
+                  continue
+              old, new = s.split('=', 1)
+              old, new = old.strip(), new.strip()
+              if old and new:
+                  mapping[old] = new
+  except OSError:
+      sys.exit(1)
+
+  config_dir = os.path.dirname(rf)
+
+  def key_of(line):
+      m = re.match(r'^\s*([^\s=:#]+)\s*[=:]\s*', line)
+      return m.group(1) if m else None
+
+  config_exts = ['.conf', '.cfg', '.ini', '.toml', '.yaml', '.yml', '.json', '.properties', '.env']
+
+  changed = []
+  for path in tracked:
+      if path == rf:
+          continue
+      if config_dir:
+          if not path.startswith(config_dir + '/'):
+              continue
+      else:
+          if os.path.splitext(path)[1].lower() not in config_exts:
+              continue
+      try:
+          with open(path, 'r', encoding='utf-8', errors='surrogateescape', newline='') as f:
+              lines = f.readlines()
+      except (OSError, UnicodeError):
+          continue
+      keys = set(key_of(l) for l in lines)
+      new_lines = []
+      removed = False
+      for line in lines:
+          k = key_of(line)
+          if k in mapping and mapping[k] in keys:
+              removed = True
+              continue
+          new_lines.append(line)
+      if removed and new_lines != lines:
+          with open(path, 'w', encoding='utf-8', errors='surrogateescape', newline='') as f:
+              f.writelines(new_lines)
+          changed.append(path)
+
+  if not changed:
+      sys.exit(1)
+  print('dropped old keys from:', ', '.join(changed))
+  PY
+  git add -u
+  git -c user.name='Config Maintenance' -c user.email='config-maintenance@example.com' commit -m "config: remove legacy setting names"
+steps: null
+postconditions:
+- name: no_stale_old_keys_remain
+  description: No config file still contains an old key whose replacement new key
+    is present.
+  probe: |-
+    python3 - <<'PY'
+    import os, re, subprocess, sys
+
+    tracked = [p for p in subprocess.check_output(['git', 'ls-files', '-z']).decode('utf-8', 'surrogateescape').split('\0') if p]
+    renames_files = [p for p in tracked if os.path.basename(p) == 'renames.conf']
+    if not renames_files:
+        sys.exit(0)
+    rf = next((p for p in renames_files if p == 'config/renames.conf'), renames_files[0])
+    mapping = dict()
+    try:
+        with open(rf, 'r', encoding='utf-8', errors='surrogateescape', newline='') as f:
+            for line in f:
+                s = line.strip()
+                if not s or s.startswith('#') or '=' not in s:
+                    continue
+                old, new = s.split('=', 1)
+                old, new = old.strip(), new.strip()
+                if old and new:
+                    mapping[old] = new
+    except OSError:
+        sys.exit(0)
+
+    config_dir = os.path.dirname(rf)
+
+    def key_of(line):
+        m = re.match(r'^\s*([^\s=:#]+)\s*[=:]\s*', line)
+        return m.group(1) if m else None
+
+    config_exts = ['.conf', '.cfg', '.ini', '.toml', '.yaml', '.yml', '.json', '.properties', '.env']
+
+    found = False
+    for path in tracked:
+        if path == rf:
+            continue
+        if config_dir:
+            if not path.startswith(config_dir + '/'):
+                continue
+        else:
+            if os.path.splitext(path)[1].lower() not in config_exts:
+                continue
+        try:
+            with open(path, 'r', encoding='utf-8', errors='surrogateescape', newline='') as f:
+                lines = f.readlines()
+        except (OSError, UnicodeError):
+            continue
+        keys = set(key_of(l) for l in lines)
+        for line in lines:
+            k = key_of(line)
+            if k in mapping and mapping[k] in keys:
+                found = True
+                break
+        if found:
+            break
+    sys.exit(1 if found else 0)
+    PY
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_commit
+  description: The cleanup is committed and the working tree is clean.
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: drop_old
+provenance:
+  compiled_from_task: The app keeps warning that my config uses old setting names.
+    Make the warning go away without changing what the settings do. The new name is
+    already set too, so delete the old key's line and keep the new one.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: The app keeps warning that my config uses old setting names. Make the
+    warning go away without changing what the settings do. The new name is already
+    set too, so delete the old key's line and keep the new one./seed-23-config_renamed-29016
+  fault: config_renamed
+status: candidate

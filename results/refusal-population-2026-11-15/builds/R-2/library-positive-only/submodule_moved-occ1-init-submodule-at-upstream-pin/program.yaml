@@ -1,0 +1,69 @@
+id: submodule_moved-occ1-init-submodule-at-upstream-pin
+intent: Initialise the declared nested submodule and check it out at the commit recorded
+  in the parent index, when that pin already matches upstream.
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: submodule_gitlink_present
+  description: the parent index records a gitlink at the declared submodule path
+  probe: git ls-files -s -z -- "{submodule_path}" | tr '\0' '\n' | grep -q '^160000
+    '
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_gitlink_present
+  description: the upstream branch records a gitlink at the same submodule path
+  probe: git ls-tree -z "{upstream_remote}/{upstream_branch}" -- "{submodule_path}"
+    | tr '\0' '\n' | grep -q '^160000 commit '
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_pin_matches_upstream
+  description: the index gitlink equals the upstream commit for the submodule
+  probe: |-
+    local_pin=$(git ls-files -s -z -- "{submodule_path}" | tr '\0' '\n' | awk '{print $2}')
+    upstream_pin=$(git ls-tree -z "{upstream_remote}/{upstream_branch}" -- "{submodule_path}" | tr '\0' '\n' | awk '{print $3}')
+    test -n "$local_pin" && test "$local_pin" = "$upstream_pin"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_not_initialised
+  description: the submodule is present in the index but not yet initialised or checked
+    out
+  probe: git submodule status -- "{submodule_path}" | grep -q '^-'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git submodule update --init -- "{submodule_path}"
+steps: null
+postconditions:
+- name: submodule_checked_out
+  description: the submodule status has no uninitialised or modified marker
+  probe: git submodule status -- "{submodule_path}" | grep -q '^ '
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_head_matches_recorded_pin
+  description: the submodule HEAD equals the commit recorded in the parent index
+  probe: |-
+    sub_pin=$(git -C "{submodule_path}" rev-parse HEAD 2>/dev/null)
+    recorded_pin=$(git ls-files -s -z -- "{submodule_path}" | tr '\0' '\n' | awk '{print $2}')
+    test -n "$sub_pin" && test "$sub_pin" = "$recorded_pin"
+  expect_exit: 0
+  expect_pattern: null
+- name: recorded_pin_still_matches_upstream
+  description: the parent index gitlink still equals the upstream commit
+  probe: |-
+    local_pin=$(git ls-files -s -z -- "{submodule_path}" | tr '\0' '\n' | awk '{print $2}')
+    upstream_pin=$(git ls-tree -z "{upstream_remote}/{upstream_branch}" -- "{submodule_path}" | tr '\0' '\n' | awk '{print $3}')
+    test -n "$local_pin" && test "$local_pin" = "$upstream_pin"
+  expect_exit: 0
+  expect_pattern: null
+variant: init
+provenance:
+  compiled_from_task: Get this repo's nested dependency consistent with upstream.
+    Initialise the nested repository and check it out.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this repo's nested dependency consistent with upstream. Initialise
+    the nested repository and check it out./seed-5-submodule_moved-211
+  fault: submodule_moved
+status: admitted

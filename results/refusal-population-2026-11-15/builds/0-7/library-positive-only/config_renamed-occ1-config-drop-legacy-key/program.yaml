@@ -1,0 +1,375 @@
+id: config_renamed-occ1-config-drop-legacy-key
+intent: remove legacy configuration key lines when the new key is already set, preserving
+  the new setting and committing the change
+parameters:
+- work_dir
+preconditions:
+- name: worktree_clean
+  description: the tracked working tree has no uncommitted changes
+  probe: |-
+    cd "{work_dir}"
+    test -z "$(git status --porcelain -uno)"
+  expect_exit: 0
+  expect_pattern: null
+- name: has_renames_mapping
+  description: a tracked renames.conf file defines at least one old key -> new key
+    mapping
+  probe: |-
+    cd "{work_dir}"
+    renames_files=()
+    while IFS= read -r -d '' f; do
+      case "$f" in
+        */renames.conf|renames.conf) renames_files+=("$f") ;;
+      esac
+    done < <(git ls-files -z)
+    if [ "${#renames_files[@]}" -eq 0 ]; then
+      exit 1
+    fi
+    for r in "${renames_files[@]}"; do
+      awk -F= '
+        /^[[:space:]]*#/ { next }
+        {
+          old=$1; new=$2
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+          if (old != "" && new != "") print old "\t" new
+        }' "$r"
+    done | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: has_stale_key_with_new_key_set
+  description: a tracked file other than renames.conf assigns both an old key and
+    its new name
+  probe: |-
+    cd "{work_dir}"
+    renames_files=()
+    while IFS= read -r -d '' f; do
+      case "$f" in
+        */renames.conf|renames.conf) renames_files+=("$f") ;;
+      esac
+    done < <(git ls-files -z)
+    if [ "${#renames_files[@]}" -eq 0 ]; then
+      exit 1
+    fi
+    mappings=()
+    while IFS= read -r line; do
+      mappings+=("$line")
+    done < <(
+      for r in "${renames_files[@]}"; do
+        awk -F= '
+          /^[[:space:]]*#/ { next }
+          {
+            old=$1; new=$2
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+            if (old != "" && new != "") print old "\t" new
+          }' "$r"
+      done
+    )
+    if [ "${#mappings[@]}" -eq 0 ]; then
+      exit 1
+    fi
+    while IFS= read -r -d '' f; do
+      for r in "${renames_files[@]}"; do
+        if [ "$f" = "$r" ]; then
+          continue 2
+        fi
+      done
+      [ -f "$f" ] || continue
+      for mapping in "${mappings[@]}"; do
+        IFS=$'\t' read -r old new <<< "$mapping"
+        [ -n "$old" ] && [ -n "$new" ] || continue
+        if awk -v old="$old" -v new="$new" '
+          { line[NR]=$0 }
+          END {
+            has_old=0; has_new=0
+            for (i=1;i<=NR;i++) {
+              l=line[i]
+              if (l ~ /^[[:space:]]*#/ || index(l,"=")==0) continue
+              eq=index(l,"="); k=substr(l,1,eq-1)
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+              if (k==old) has_old=1
+              if (k==new) has_new=1
+            }
+            exit (has_old && has_new) ? 0 : 1
+          }' "$f"; then
+          echo "$f: $old -> $new"
+          exit 0
+        fi
+      done
+    done < <(git ls-files -z)
+    exit 1
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  cd "{work_dir}"
+  set -euo pipefail
+
+  renames_files=()
+  while IFS= read -r -d '' f; do
+    case "$f" in
+      */renames.conf|renames.conf) renames_files+=("$f") ;;
+    esac
+  done < <(git ls-files -z)
+  if [ "${#renames_files[@]}" -eq 0 ]; then
+    echo "no renames.conf found" >&2
+    exit 1
+  fi
+
+  mappings=()
+  while IFS= read -r line; do
+    mappings+=("$line")
+  done < <(
+    for r in "${renames_files[@]}"; do
+      awk -F= '
+        /^[[:space:]]*#/ { next }
+        {
+          old=$1; new=$2
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+          if (old != "" && new != "") print old "\t" new
+        }' "$r"
+    done
+  )
+  if [ "${#mappings[@]}" -eq 0 ]; then
+    echo "no renames mappings found" >&2
+    exit 1
+  fi
+
+  is_renames_file() {
+    local f="$1" r
+    for r in "${renames_files[@]}"; do
+      if [ "$f" = "$r" ]; then
+        return 0
+      fi
+    done
+    return 1
+  }
+
+  apply_mapping() {
+    local file="$1" old="$2" new="$3"
+    local tmp
+    tmp=$(mktemp)
+    if awk -v old="$old" -v new="$new" '
+      { line[NR]=$0 }
+      END {
+        has_old=0; has_new=0
+        for (i=1;i<=NR;i++) {
+          l=line[i]
+          if (l ~ /^[[:space:]]*#/ || index(l,"=")==0) continue
+          eq=index(l,"="); k=substr(l,1,eq-1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+          if (k==old) { has_old=1; oldline[i]=1 }
+          if (k==new) has_new=1
+        }
+        if (has_old && has_new) {
+          for (i=1;i<=NR;i++) if (!oldline[i]) print line[i]
+          exit 0
+        }
+        exit 1
+      }' "$file" > "$tmp"; then
+      if ! cmp -s "$file" "$tmp"; then
+        mv "$tmp" "$file"
+        return 0
+      fi
+    fi
+    rm -f "$tmp"
+    return 1
+  }
+
+  changed=()
+  while IFS= read -r -d '' file; do
+    if is_renames_file "$file"; then
+      continue
+    fi
+    [ -f "$file" ] || continue
+    file_changed=0
+    for mapping in "${mappings[@]}"; do
+      IFS=$'\t' read -r old new <<< "$mapping"
+      if [ -n "$old" ] && [ -n "$new" ]; then
+        if apply_mapping "$file" "$old" "$new"; then
+          file_changed=1
+        fi
+      fi
+    done
+    if [ "$file_changed" -eq 1 ]; then
+      changed+=("$file")
+    fi
+  done < <(git ls-files -z)
+
+  if [ "${#changed[@]}" -eq 0 ]; then
+    echo "no stale keys found to remove" >&2
+    exit 1
+  fi
+
+  git add -- "${changed[@]}"
+  git commit -m "config: remove legacy setting keys" -- "${changed[@]}"
+steps: null
+postconditions:
+- name: no_stale_key_pairs
+  description: no tracked file other than renames.conf still assigns both an old key
+    and its new name
+  probe: |-
+    cd "{work_dir}"
+    renames_files=()
+    while IFS= read -r -d '' f; do
+      case "$f" in
+        */renames.conf|renames.conf) renames_files+=("$f") ;;
+      esac
+    done < <(git ls-files -z)
+    if [ "${#renames_files[@]}" -eq 0 ]; then
+      exit 1
+    fi
+    mappings=()
+    while IFS= read -r line; do
+      mappings+=("$line")
+    done < <(
+      for r in "${renames_files[@]}"; do
+        awk -F= '
+          /^[[:space:]]*#/ { next }
+          {
+            old=$1; new=$2
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+            if (old != "" && new != "") print old "\t" new
+          }' "$r"
+      done
+    )
+    if [ "${#mappings[@]}" -eq 0 ]; then
+      exit 1
+    fi
+    while IFS= read -r -d '' f; do
+      for r in "${renames_files[@]}"; do
+        if [ "$f" = "$r" ]; then
+          continue 2
+        fi
+      done
+      [ -f "$f" ] || continue
+      for mapping in "${mappings[@]}"; do
+        IFS=$'\t' read -r old new <<< "$mapping"
+        [ -n "$old" ] && [ -n "$new" ] || continue
+        if awk -v old="$old" -v new="$new" '
+          { line[NR]=$0 }
+          END {
+            has_old=0; has_new=0
+            for (i=1;i<=NR;i++) {
+              l=line[i]
+              if (l ~ /^[[:space:]]*#/ || index(l,"=")==0) continue
+              eq=index(l,"="); k=substr(l,1,eq-1)
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+              if (k==old) has_old=1
+              if (k==new) has_new=1
+            }
+            exit (has_old && has_new) ? 0 : 1
+          }' "$f"; then
+          echo "stale pair remains in $f: $old -> $new" >&2
+          exit 1
+        fi
+      done
+    done < <(git ls-files -z)
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: new_keys_preserved
+  description: for every file that had both an old key and its new name before the
+    change, the new key is still set and the old key is gone
+  probe: |-
+    cd "{work_dir}"
+    if ! git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+      exit 0
+    fi
+    renames_files=()
+    while IFS= read -r -d '' f; do
+      case "$f" in
+        */renames.conf|renames.conf) renames_files+=("$f") ;;
+      esac
+    done < <(git ls-files -z)
+    if [ "${#renames_files[@]}" -eq 0 ]; then
+      exit 1
+    fi
+    mappings=()
+    while IFS= read -r line; do
+      mappings+=("$line")
+    done < <(
+      for r in "${renames_files[@]}"; do
+        awk -F= '
+          /^[[:space:]]*#/ { next }
+          {
+            old=$1; new=$2
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+            if (old != "" && new != "") print old "\t" new
+          }' "$r"
+      done
+    )
+    if [ "${#mappings[@]}" -eq 0 ]; then
+      exit 1
+    fi
+    while IFS= read -r -d '' f; do
+      for r in "${renames_files[@]}"; do
+        if [ "$f" = "$r" ]; then
+          continue 2
+        fi
+      done
+      if ! git cat-file -e "HEAD^:$f" 2>/dev/null; then
+        continue
+      fi
+      for mapping in "${mappings[@]}"; do
+        IFS=$'\t' read -r old new <<< "$mapping"
+        [ -n "$old" ] && [ -n "$new" ] || continue
+        if git show "HEAD^:$f" | awk -v old="$old" -v new="$new" '
+          { line[NR]=$0 }
+          END {
+            has_old=0; has_new=0
+            for (i=1;i<=NR;i++) {
+              l=line[i]
+              if (l ~ /^[[:space:]]*#/ || index(l,"=")==0) continue
+              eq=index(l,"="); k=substr(l,1,eq-1)
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+              if (k==old) has_old=1
+              if (k==new) has_new=1
+            }
+            exit (has_old && has_new) ? 0 : 1
+          }'; then
+          if ! git show "HEAD:$f" | awk -v old="$old" -v new="$new" '
+            { line[NR]=$0 }
+            END {
+              has_old=0; has_new=0
+              for (i=1;i<=NR;i++) {
+                l=line[i]
+                if (l ~ /^[[:space:]]*#/ || index(l,"=")==0) continue
+                eq=index(l,"="); k=substr(l,1,eq-1)
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+                if (k==old) has_old=1
+                if (k==new) has_new=1
+              }
+              exit (has_new && !has_old) ? 0 : 1
+            }'; then
+            echo "new key not preserved or old key still present in $f: $old -> $new" >&2
+            exit 1
+          fi
+        fi
+      done
+    done < <(git ls-tree -r --name-only -z HEAD^)
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after
+  description: the commit leaves the tracked working tree clean
+  probe: |-
+    cd "{work_dir}"
+    test -z "$(git status --porcelain -uno)"
+  expect_exit: 0
+  expect_pattern: null
+variant: drop_old
+provenance:
+  compiled_from_task: The app keeps warning that my config uses old setting names.
+    Make the warning go away without changing what the settings do. The new name is
+    already set too, so delete the old key's line and keep the new one.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: The app keeps warning that my config uses old setting names. Make the
+    warning go away without changing what the settings do. The new name is already
+    set too, so delete the old key's line and keep the new one./seed-23-config_renamed-12454
+  fault: config_renamed
+status: candidate

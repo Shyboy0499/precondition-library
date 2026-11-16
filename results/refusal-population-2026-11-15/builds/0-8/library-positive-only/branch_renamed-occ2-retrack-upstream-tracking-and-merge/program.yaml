@@ -1,0 +1,87 @@
+id: branch_renamed-occ2-retrack-upstream-tracking-and-merge
+intent: Retarget the current branch to track upstream's renamed mainline branch, prune
+  stale remote-tracking refs, and merge the new upstream branch into the local commits.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_a_local_branch
+  description: HEAD is attached to a local branch rather than detached
+  probe: git symbolic-ref --quiet --short HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: there are no tracked or untracked changes in the worktree
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_remote_exists
+  description: the named upstream remote is configured
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: new_upstream_ref_exists
+  description: the remote-tracking ref for upstream's renamed branch exists
+  probe: git rev-parse --verify --quiet refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: tracks_a_different_upstream
+  description: the current branch has an upstream configured and it is not the renamed
+    branch
+  probe: |-
+    current=$(git for-each-ref --format='%(upstream:short)' "refs/heads/$(git symbolic-ref --short HEAD)")
+    test -n "$current" && test "$current" != "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_has_unmerged_commits
+  description: the renamed upstream branch is not already an ancestor of HEAD
+  probe: '! git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD'
+  expect_exit: 0
+  expect_pattern: null
+- name: local_has_own_commits
+  description: HEAD is not merely behind the renamed upstream branch
+  probe: '! git merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch}'
+  expect_exit: 0
+  expect_pattern: null
+- name: shared_history
+  description: the local branch and the renamed upstream branch have a common ancestor
+  probe: git merge-base {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch --prune {upstream_remote}
+  git branch --set-upstream-to="{upstream_remote}/{upstream_branch}"
+  git merge --no-edit "{upstream_remote}/{upstream_branch}"
+steps: null
+postconditions:
+- name: tracking_retargeted
+  description: the current branch now tracks the renamed upstream branch
+  probe: git for-each-ref --format='%(upstream:short)' "refs/heads/$(git symbolic-ref
+    --short HEAD)"
+  expect_exit: 0
+  expect_pattern: ^{upstream_remote}/{upstream_branch}$
+- name: upstream_merged
+  description: the renamed upstream branch is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_entries
+  description: the index contains no conflicted entries
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_merge
+  description: the merge left no changes in the worktree
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: retrack
+provenance:
+  compiled_from_task: Make this branch follow upstream's current main line again,
+    and catch it up. Track upstream's new branch and merge it into my own commits.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Make this branch follow upstream's current main line again, and catch
+    it up. Track upstream's new branch and merge it into my own commits./seed-1-branch_renamed-29979
+  fault: branch_renamed
+status: admitted

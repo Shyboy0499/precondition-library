@@ -1,0 +1,158 @@
+id: config_renamed-occ3-config-renamed-migrate-local
+intent: Rename a configuration key that was renamed upstream inside the user's own
+  gitignored local override file, leaving that file untracked and out of git.
+parameters: []
+preconditions:
+- name: has_ignored_key_value_override
+  description: at least one gitignored untracked file contains key = value settings
+  probe: |-
+    git ls-files --others --ignored --exclude-standard -z | tr '\0' '\n' | while IFS= read -r f; do
+      [ -f "$f" ] || continue
+      sed -n 's/^[[:space:]]*\([A-Za-z0-9_.-]\{1,\}\)[[:space:]]*=.*/\1/p' "$f"
+    done | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: has_stale_key_mapped_by_tracked_renames
+  description: an ignored override file uses a key that a tracked file maps to a new
+    key that is also defined in tracked files
+  probe: |-
+    ignored_keys=$(git ls-files --others --ignored --exclude-standard -z | tr '\0' '\n' | while IFS= read -r f; do
+      [ -f "$f" ] || continue
+      sed -n 's/^[[:space:]]*\([A-Za-z0-9_.-]\{1,\}\)[[:space:]]*=.*/\1/p' "$f"
+    done | sort -u)
+    [ -n "$ignored_keys" ] || exit 1
+    tracked_keys=$(git ls-files -z | tr '\0' '\n' | while IFS= read -r f; do
+      [ -f "$f" ] || continue
+      sed -n 's/^[[:space:]]*\([A-Za-z0-9_.-]\{1,\}\)[[:space:]]*=.*/\1/p' "$f"
+    done | sort -u)
+    found=$(git ls-files -z | tr '\0' '\n' | while IFS= read -r f; do
+      [ -f "$f" ] || continue
+      sed -n 's/^[[:space:]]*\([A-Za-z0-9_.-]\{1,\}\)[[:space:]]*=[[:space:]]*\([A-Za-z0-9_.-]\{1,\}\).*/\1 \2/p' "$f"
+    done | while read -r old new; do
+      [ -n "$old" ] || continue
+      if printf '%s\n' "$ignored_keys" | grep -qxF -- "$old" && printf '%s\n' "$tracked_keys" | grep -qxF -- "$new"; then
+        echo "$old -> $new"
+        break
+      fi
+    done)
+    [ -n "$found" ]
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -eu
+  tmpd=$(mktemp -d)
+  trap 'rm -rf "$tmpd"' EXIT
+
+  git ls-files --others --ignored --exclude-standard -z | tr '\0' '\n' > "$tmpd/ignored"
+  git ls-files -z | tr '\0' '\n' > "$tmpd/tracked"
+
+  : > "$tmpd/ignored_keys"
+  while IFS= read -r f; do
+    [ -f "$f" ] || continue
+    sed -n 's/^[[:space:]]*\([A-Za-z0-9_.-]\{1,\}\)[[:space:]]*=.*/\1/p' "$f" >> "$tmpd/ignored_keys"
+  done < "$tmpd/ignored"
+  sort -u "$tmpd/ignored_keys" -o "$tmpd/ignored_keys"
+
+  : > "$tmpd/tracked_keys"
+  while IFS= read -r f; do
+    [ -f "$f" ] || continue
+    sed -n 's/^[[:space:]]*\([A-Za-z0-9_.-]\{1,\}\)[[:space:]]*=.*/\1/p' "$f" >> "$tmpd/tracked_keys"
+  done < "$tmpd/tracked"
+  sort -u "$tmpd/tracked_keys" -o "$tmpd/tracked_keys"
+
+  : > "$tmpd/pairs"
+  while IFS= read -r f; do
+    [ -f "$f" ] || continue
+    sed -n 's/^[[:space:]]*\([A-Za-z0-9_.-]\{1,\}\)[[:space:]]*=[[:space:]]*\([A-Za-z0-9_.-]\{1,\}\).*/\1 \2/p' "$f" \
+      | while read -r old new; do
+          [ -n "$old" ] || continue
+          if grep -qxF -- "$old" "$tmpd/ignored_keys" && grep -qxF -- "$new" "$tmpd/tracked_keys"; then
+            printf '%s %s\n' "$old" "$new" >> "$tmpd/pairs"
+          fi
+        done
+  done < "$tmpd/tracked"
+  sort -u "$tmpd/pairs" -o "$tmpd/pairs"
+
+  while read -r old new; do
+    [ -n "$old" ] || continue
+    old_re=$(printf '%s' "$old" | sed 's/\./\\./g')
+    new_re=$(printf '%s' "$new" | sed 's/[\\&]/\\&/g')
+    while IFS= read -r f; do
+      [ -f "$f" ] || continue
+      grep -qE "^[[:space:]]*${old_re}[[:space:]]*=" "$f" || continue
+      sed -i -E "s/^([[:space:]]*)${old_re}([[:space:]]*=)/\1${new_re}\2/" "$f"
+    done < "$tmpd/ignored"
+  done < "$tmpd/pairs"
+steps: null
+postconditions:
+- name: no_stale_keys_remain
+  description: no ignored override file still uses an old key that a tracked file
+    maps to a new key
+  probe: |-
+    ignored_keys=$(git ls-files --others --ignored --exclude-standard -z | tr '\0' '\n' | while IFS= read -r f; do
+      [ -f "$f" ] || continue
+      sed -n 's/^[[:space:]]*\([A-Za-z0-9_.-]\{1,\}\)[[:space:]]*=.*/\1/p' "$f"
+    done | sort -u)
+    tracked_keys=$(git ls-files -z | tr '\0' '\n' | while IFS= read -r f; do
+      [ -f "$f" ] || continue
+      sed -n 's/^[[:space:]]*\([A-Za-z0-9_.-]\{1,\}\)[[:space:]]*=.*/\1/p' "$f"
+    done | sort -u)
+    stale=$(git ls-files -z | tr '\0' '\n' | while IFS= read -r f; do
+      [ -f "$f" ] || continue
+      sed -n 's/^[[:space:]]*\([A-Za-z0-9_.-]\{1,\}\)[[:space:]]*=[[:space:]]*\([A-Za-z0-9_.-]\{1,\}\).*/\1 \2/p' "$f"
+    done | while read -r old new; do
+      [ -n "$old" ] || continue
+      if printf '%s\n' "$ignored_keys" | grep -qxF -- "$old" && printf '%s\n' "$tracked_keys" | grep -qxF -- "$new"; then
+        echo "$old"
+      fi
+    done)
+    [ -z "$stale" ]
+  expect_exit: 0
+  expect_pattern: null
+- name: renamed_key_present_in_override
+  description: an ignored override file now uses the new key name from a tracked rename
+  probe: |-
+    ignored_keys=$(git ls-files --others --ignored --exclude-standard -z | tr '\0' '\n' | while IFS= read -r f; do
+      [ -f "$f" ] || continue
+      sed -n 's/^[[:space:]]*\([A-Za-z0-9_.-]\{1,\}\)[[:space:]]*=.*/\1/p' "$f"
+    done | sort -u)
+    tracked_keys=$(git ls-files -z | tr '\0' '\n' | while IFS= read -r f; do
+      [ -f "$f" ] || continue
+      sed -n 's/^[[:space:]]*\([A-Za-z0-9_.-]\{1,\}\)[[:space:]]*=.*/\1/p' "$f"
+    done | sort -u)
+    present=$(git ls-files -z | tr '\0' '\n' | while IFS= read -r f; do
+      [ -f "$f" ] || continue
+      sed -n 's/^[[:space:]]*\([A-Za-z0-9_.-]\{1,\}\)[[:space:]]*=[[:space:]]*\([A-Za-z0-9_.-]\{1,\}\).*/\1 \2/p' "$f"
+    done | while read -r old new; do
+      [ -n "$new" ] || continue
+      if printf '%s\n' "$tracked_keys" | grep -qxF -- "$new" && printf '%s\n' "$ignored_keys" | grep -qxF -- "$new"; then
+        echo "$new"
+        break
+      fi
+    done)
+    [ -n "$present" ]
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_files_unchanged
+  description: the body made no tracked or staged changes, so the override stays out
+    of git
+  probe: git diff --quiet && git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+- name: override_still_ignored
+  description: a gitignored untracked override file still exists after the rename
+  probe: git ls-files --others --ignored --exclude-standard -z | tr '\0' '\n' | grep
+    -q .
+  expect_exit: 0
+  expect_pattern: null
+variant: migrate_local
+provenance:
+  compiled_from_task: Some setting in my config has been renamed upstream. Sort the
+    config out. Rename the old key in my own override file, and keep that file out
+    of git.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Some setting in my config has been renamed upstream. Sort the config
+    out. Rename the old key in my own override file, and keep that file out of git./seed-12-config_renamed-10981
+  fault: config_renamed
+status: admitted

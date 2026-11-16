@@ -1,0 +1,73 @@
+id: diverged-occ4-merge-upstream-diverged
+intent: Merge upstream into the current branch, preserving both the local and upstream
+  histories.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_local_branch
+  description: HEAD is attached to a local branch rather than being detached
+  probe: git symbolic-ref --quiet HEAD >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: there are no tracked or untracked changes in the working tree
+  probe: test -z "$(git status --porcelain --untracked-files=normal)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_remote_configured
+  description: the requested upstream remote is configured
+  probe: git remote get-url {upstream_remote} >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_exists
+  description: the upstream branch has an existing remote-tracking ref to merge from
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch} >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_have_diverged
+  description: the local branch has commits upstream lacks and upstream has commits
+    the local branch lacks
+  probe: |-
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0 &&
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0 &&
+    git merge-base HEAD {upstream_remote}/{upstream_branch} >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch {upstream_remote}
+  git merge --no-edit {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: upstream_is_second_parent
+  description: HEAD is a merge commit whose second parent is the upstream tip
+  probe: test "$(git rev-parse HEAD^2)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_fully_merged
+  description: the upstream tip is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_history_preserved
+  description: the local branch still carries commits beyond upstream
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_merge
+  description: no tracked or untracked changes remain after the merge
+  probe: test -z "$(git status --porcelain --untracked-files=normal)"
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: This branch and upstream have both changed. Bring it back into
+    line. Merge upstream into my branch and keep both histories.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: This branch and upstream have both changed. Bring it back into line.
+    Merge upstream into my branch and keep both histories./seed-0-diverged-17967
+  fault: diverged
+status: admitted

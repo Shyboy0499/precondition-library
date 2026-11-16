@@ -1,0 +1,70 @@
+id: branch_renamed-occ1-retrack-upstream-branch
+intent: Keep the checked-out branch's name, retarget its upstream tracking from the
+  stale branch to upstream's current default branch, and fast-forward it to that branch.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: tracked_branch_differs
+  description: the checked-out branch tracks the upstream remote but a branch other
+    than the upstream default branch
+  probe: |-
+    b=$(git symbolic-ref --short -q HEAD) &&
+    [ "$(git config --get "branch.$b.remote")" = "{upstream_remote}" ] &&
+    m=$(git config --get "branch.$b.merge") &&
+    [ "$m" != "refs/heads/{upstream_branch}" ]
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_branch_exists
+  description: the upstream remote-tracking branch exists in this repository
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: fast_forwardable
+  description: the checked-out branch has no commits beyond the upstream branch
+  probe: git merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: there are no staged, unstaged or untracked changes
+  probe: '[ -z "$(git status --porcelain)" ]'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch --prune {upstream_remote}
+  b=$(git symbolic-ref --short HEAD)
+  git branch --set-upstream-to={upstream_remote}/{upstream_branch} "$b"
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: head_at_upstream_tip
+  description: HEAD points at the same commit as the upstream branch
+  probe: '[ "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+    ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: tracking_retargeted
+  description: the checked-out branch tracks the upstream default branch
+  probe: |-
+    b=$(git symbolic-ref --short -q HEAD) &&
+    [ "$(git config --get "branch.$b.remote")" = "{upstream_remote}" ] &&
+    [ "$(git config --get "branch.$b.merge")" = "refs/heads/{upstream_branch}" ]
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the working tree is still clean
+  probe: '[ -z "$(git status --porcelain)" ]'
+  expect_exit: 0
+  expect_pattern: null
+variant: retrack
+provenance:
+  compiled_from_task: Make this branch follow upstream's current main line again,
+    and catch it up. Keep my branch's name, point its tracking at upstream's new branch
+    and catch up.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Make this branch follow upstream's current main line again, and catch
+    it up. Keep my branch's name, point its tracking at upstream's new branch and
+    catch up./seed-6-branch_renamed-29979
+  fault: branch_renamed
+status: admitted

@@ -1,0 +1,102 @@
+id: config_renamed-occ2-rename-stale-config-key
+intent: Rename the stale key in the project's settings to the current name from the
+  rename map while preserving its value and all other settings, then commit the change.
+parameters:
+- work_dir
+preconditions:
+- name: settings_files_tracked
+  description: the settings file and rename map exist and are tracked in the repository
+  probe: git -C "{work_dir}" ls-files --error-unmatch config/settings.conf config/renames.conf
+    >/dev/null 2>&1
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: no uncommitted or untracked changes exist so the fix is the only committed
+    change
+  probe: '! git -C "{work_dir}" status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: has_stale_rename_key
+  description: at least one old key from the rename map is present while its new key
+    is absent
+  probe: |-
+    awk -F'=' '
+    FNR==NR { if ($0 !~ /^[[:space:]]*#/ && NF>=2) { o=$1; n=$2; gsub(/[[:space:]]/,"",o); gsub(/[[:space:]]/,"",n); if (o!="" && n!="") old[o]=n } next }
+    { if ($0 !~ /^[[:space:]]*#/ && NF>=2) { k=$1; gsub(/[[:space:]]/,"",k); if (k!="") present[k]=1 } }
+    END { found=0; for (o in old) { n=old[o]; if ((o in present) && !(n in present)) found=1 } exit(found?0:1) }
+    ' "{work_dir}/config/renames.conf" "{work_dir}/config/settings.conf"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  cd "{work_dir}"
+  settings=config/settings.conf
+  renames=config/renames.conf
+  tmp=$(mktemp)
+  cp "$settings" "$tmp"
+  while IFS='=' read -r old new; do
+    old=$(printf '%s' "$old" | tr -d '[:space:]')
+    new=$(printf '%s' "$new" | tr -d '[:space:]')
+    [ -n "$old" ] || continue
+    case "$old" in \#*) continue;; esac
+    [ -n "$new" ] || continue
+    if grep -qE "^[[:space:]]*${old}[[:space:]]*=" "$tmp" && ! grep -qE "^[[:space:]]*${new}[[:space:]]*=" "$tmp"; then
+      sed -i -E "s/^([[:space:]]*)${old}([[:space:]]*=)/\1${new}\2/" "$tmp"
+    fi
+  done < "$renames"
+  cp "$tmp" "$settings"
+  rm -f "$tmp"
+  git add -- "$settings"
+  git commit -m "fix: rename stale config keys"
+steps: null
+postconditions:
+- name: worktree_clean
+  description: the rename is committed and no other changes remain pending
+  probe: '! git -C "{work_dir}" status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_stale_old_keys
+  description: no old key from the rename map remains in the settings file
+  probe: |-
+    awk -F'=' '
+    FNR==NR { if ($0 !~ /^[[:space:]]*#/ && NF>=2) { o=$1; gsub(/[[:space:]]/,"",o); if (o!="") old[o]=1 } next }
+    { if ($0 !~ /^[[:space:]]*#/ && NF>=2) { k=$1; gsub(/[[:space:]]/,"",k); if (k in old) found=1 } }
+    END { exit(found?1:0) }
+    ' "{work_dir}/config/renames.conf" "{work_dir}/config/settings.conf"
+  expect_exit: 0
+  expect_pattern: null
+- name: new_keys_present
+  description: every old key present before the rename now has its mapped new key
+    present
+  probe: |-
+    git -C "{work_dir}" rev-parse --verify -q HEAD^ >/dev/null || exit 0
+    status=0
+    while IFS=$'\t' read -r o n; do
+      [ -n "$o" ] || continue
+      if git -C "{work_dir}" show HEAD^:config/settings.conf | grep -qE "^[[:space:]]*${o}[[:space:]]*="; then
+        grep -qE "^[[:space:]]*${n}[[:space:]]*=" "{work_dir}/config/settings.conf" || status=1
+      fi
+    done < <(awk -F'=' '/^[[:space:]]*#/ {next} NF>=2 {o=$1;n=$2;gsub(/[[:space:]]/,"",o);gsub(/[[:space:]]/,"",n); if(o!=""&&n!="") print o"\t"n}' "{work_dir}/config/renames.conf")
+    exit $status
+  expect_exit: 0
+  expect_pattern: null
+- name: setting_values_preserved
+  description: the multiset of setting values is unchanged from the commit before
+    the rename
+  probe: |-
+    git -C "{work_dir}" rev-parse --verify -q HEAD^ >/dev/null || exit 0
+    diff -u \
+      <(git -C "{work_dir}" show HEAD^:config/settings.conf | sed -nE 's/^[^=]*=[[:space:]]*//p' | sort) \
+      <(sed -nE 's/^[^=]*=[[:space:]]*//p' "{work_dir}/config/settings.conf" | sort)
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: Fix the stale config entry the app is warning about, without
+    losing any setting. Rename the old key in the project's settings and keep its
+    value.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Fix the stale config entry the app is warning about, without losing
+    any setting. Rename the old key in the project's settings and keep its value./seed-8-config_renamed-10981
+  fault: config_renamed
+status: admitted

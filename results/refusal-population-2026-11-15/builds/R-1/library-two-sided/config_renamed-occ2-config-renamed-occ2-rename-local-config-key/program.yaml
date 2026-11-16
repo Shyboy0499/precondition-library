@@ -1,0 +1,279 @@
+id: config_renamed-occ2-config-renamed-occ2-rename-local-config-key
+intent: Rename a renamed config key in the user's ignored local override file, keeping
+  the file out of git.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: has_rename_mapping
+  description: A tracked renames.conf defines at least one old=new key mapping.
+  probe: |-
+    python3 - <<'PY'
+    import subprocess, sys
+    tracked = subprocess.run(['git', 'ls-files', '-z'], check=True, stdout=subprocess.PIPE).stdout.decode('utf-8', 'surrogateescape').split('\0')
+    files = [p for p in tracked if p.endswith('renames.conf')]
+    if not files:
+        sys.exit(1)
+    for path in files:
+        try:
+            with open(path, 'r', encoding='utf-8', errors='surrogateescape') as f:
+                for line in f:
+                    line = line.split('#', 1)[0].strip()
+                    if '=' not in line:
+                        continue
+                    old, new = line.split('=', 1)
+                    old, new = old.strip(), new.strip()
+                    if old and new and old != new:
+                        sys.exit(0)
+        except OSError:
+            pass
+    sys.exit(1)
+    PY
+  expect_exit: 0
+  expect_pattern: null
+- name: has_stale_ignored_override
+  description: An ignored, untracked local override file contains an old key without
+    the corresponding new key.
+  probe: |-
+    python3 - <<'PY'
+    import subprocess, sys, re
+    def git_z(*args):
+        return subprocess.run(['git', *args, '-z'], check=True, stdout=subprocess.PIPE).stdout.decode('utf-8', 'surrogateescape').split('\0')
+    tracked = [p for p in git_z('ls-files') if p]
+    mapping_files = [p for p in tracked if p.endswith('renames.conf')]
+    mappings = []
+    for mf in mapping_files:
+        try:
+            with open(mf, 'r', encoding='utf-8', errors='surrogateescape') as f:
+                for line in f:
+                    line = line.split('#', 1)[0].strip()
+                    if '=' not in line:
+                        continue
+                    old, new = line.split('=', 1)
+                    old, new = old.strip(), new.strip()
+                    if old and new and old != new:
+                        mappings.append((old, new))
+        except OSError:
+            pass
+    if not mappings:
+        sys.exit(1)
+    ignored = [p for p in git_z('ls-files', '--others', '--ignored', '--exclude-standard') if p]
+    for path in ignored:
+        try:
+            with open(path, 'r', encoding='utf-8', errors='surrogateescape') as f:
+                text = f.read()
+        except OSError:
+            continue
+        for old, new in mappings:
+            old_re = re.compile(r'^[ \t]*' + re.escape(old) + r'[ \t]*=', re.M)
+            new_re = re.compile(r'^[ \t]*' + re.escape(new) + r'[ \t]*=', re.M)
+            if old_re.search(text) and not new_re.search(text):
+                sys.exit(0)
+    sys.exit(1)
+    PY
+  expect_exit: 0
+  expect_pattern: null
+- name: renames_file_matches_upstream
+  description: At least one tracked renames.conf matches the upstream version.
+  probe: |-
+    while IFS= read -r -d '' f; do
+      case "$f" in
+        *renames.conf)
+          if git diff --quiet {upstream_remote}/{upstream_branch} -- "$f"; then
+            exit 0
+          fi
+          ;;
+      esac
+    done < <(git ls-files -z)
+    exit 1
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_worktree_clean
+  description: The tracked worktree and index have no visible changes.
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+
+  python3 - <<'PY'
+  import os, re, subprocess, sys
+
+  def git_z(*args):
+      return subprocess.run(['git', *args, '-z'], check=True, stdout=subprocess.PIPE).stdout.decode('utf-8', 'surrogateescape').split('\0')
+
+  tracked = [p for p in git_z('ls-files') if p]
+  mapping_files = [p for p in tracked if p.endswith('renames.conf')]
+  if not mapping_files:
+      sys.exit('no tracked renames.conf found')
+
+  mappings = []
+  for mf in mapping_files:
+      with open(mf, 'r', encoding='utf-8', errors='surrogateescape') as f:
+          for line in f:
+              line = line.split('#', 1)[0].strip()
+              if '=' not in line:
+                  continue
+              old, new = line.split('=', 1)
+              old, new = old.strip(), new.strip()
+              if old and new and old != new:
+                  mappings.append((old, new))
+  if not mappings:
+      sys.exit('no rename mappings found')
+
+  # Longest old key first, to avoid prefix collisions.
+  mappings.sort(key=lambda x: len(x[0]), reverse=True)
+  replacement = dict()
+  for old, new in mappings:
+      if old not in replacement:
+          replacement[old] = new
+
+  ignored = [p for p in git_z('ls-files', '--others', '--ignored', '--exclude-standard') if p]
+  if not ignored:
+      sys.exit('no ignored untracked files')
+
+  changed = 0
+  for path in ignored:
+      try:
+          with open(path, 'r', encoding='utf-8', errors='surrogateescape', newline='') as f:
+              text = f.read()
+      except (OSError, UnicodeDecodeError):
+          continue
+
+      lines = text.splitlines(keepends=True)
+      entries = []
+      for i, line in enumerate(lines):
+          m = re.match(r'^([ \t]*)([^=\s][^=]*?)([ \t]*=[ \t]*)(.*)$', line, re.S)
+          if m:
+              indent, key, eq, rest = m.groups()
+              entries.append((i, indent, key.strip(), eq, rest, line))
+          else:
+              entries.append((i, None, None, None, None, line))
+
+      present_keys = set(entry[2] for entry in entries if entry[2] is not None)
+      new_lines = []
+      for i, indent, key, eq, rest, line in entries:
+          if key is not None and key in replacement:
+              new_key = replacement[key]
+              if new_key in present_keys and new_key != key:
+                  # Drop the old key line to avoid duplicate new keys.
+                  continue
+              new_lines.append(indent + new_key + eq + rest)
+              present_keys.add(new_key)
+          else:
+              new_lines.append(line)
+      new_text = ''.join(new_lines)
+      if new_text != text:
+          with open(path, 'w', encoding='utf-8', errors='surrogateescape', newline='') as f:
+              f.write(new_text)
+          changed += 1
+
+  if changed == 0:
+      sys.exit('no local override file needed renaming')
+  print('renamed keys in ' + str(changed) + ' local override file(s)')
+  PY
+steps: null
+postconditions:
+- name: local_override_renamed
+  description: No ignored local override file still contains an old key, and at least
+    one contains a new key.
+  probe: |-
+    python3 - <<'PY'
+    import subprocess, sys, re
+    def git_z(*args):
+        return subprocess.run(['git', *args, '-z'], check=True, stdout=subprocess.PIPE).stdout.decode('utf-8', 'surrogateescape').split('\0')
+    tracked = [p for p in git_z('ls-files') if p]
+    mapping_files = [p for p in tracked if p.endswith('renames.conf')]
+    mappings = []
+    for mf in mapping_files:
+        try:
+            with open(mf, 'r', encoding='utf-8', errors='surrogateescape') as f:
+                for line in f:
+                    line = line.split('#', 1)[0].strip()
+                    if '=' not in line:
+                        continue
+                    old, new = line.split('=', 1)
+                    old, new = old.strip(), new.strip()
+                    if old and new and old != new:
+                        mappings.append((old, new))
+        except OSError:
+            pass
+    if not mappings:
+        sys.exit(1)
+    ignored = [p for p in git_z('ls-files', '--others', '--ignored', '--exclude-standard') if p]
+    found_new = False
+    for path in ignored:
+        try:
+            with open(path, 'r', encoding='utf-8', errors='surrogateescape') as f:
+                text = f.read()
+        except OSError:
+            continue
+        for old, new in mappings:
+            if re.search(r'^[ \t]*' + re.escape(old) + r'[ \t]*=', text, re.M):
+                sys.exit(1)
+            if re.search(r'^[ \t]*' + re.escape(new) + r'[ \t]*=', text, re.M):
+                found_new = True
+    if not found_new:
+        sys.exit(1)
+    sys.exit(0)
+    PY
+  expect_exit: 0
+  expect_pattern: null
+- name: no_visible_git_changes
+  description: The worktree and index have no visible changes, so the modified override
+    file remains ignored and untracked.
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: new_key_file_is_ignored
+  description: Any untracked file containing a new key is ignored by git.
+  probe: |-
+    python3 - <<'PY'
+    import subprocess, sys, re
+    def git_z(*args):
+        return subprocess.run(['git', *args, '-z'], check=True, stdout=subprocess.PIPE).stdout.decode('utf-8', 'surrogateescape').split('\0')
+    tracked = [p for p in git_z('ls-files') if p]
+    mapping_files = [p for p in tracked if p.endswith('renames.conf')]
+    mappings = []
+    for mf in mapping_files:
+        try:
+            with open(mf, 'r', encoding='utf-8', errors='surrogateescape') as f:
+                for line in f:
+                    line = line.split('#', 1)[0].strip()
+                    if '=' not in line:
+                        continue
+                    old, new = line.split('=', 1)
+                    old, new = old.strip(), new.strip()
+                    if old and new and old != new:
+                        mappings.append((old, new))
+        except OSError:
+            pass
+    if not mappings:
+        sys.exit(1)
+    untracked = [p for p in git_z('ls-files', '--others') if p]
+    for path in untracked:
+        try:
+            with open(path, 'r', encoding='utf-8', errors='surrogateescape') as f:
+                text = f.read()
+        except OSError:
+            continue
+        for old, new in mappings:
+            if re.search(r'^[ \t]*' + re.escape(new) + r'[ \t]*=', text, re.M):
+                r = subprocess.run(['git', 'check-ignore', '-q', '--', path])
+                if r.returncode != 0:
+                    sys.exit(1)
+    sys.exit(0)
+    PY
+  expect_exit: 0
+  expect_pattern: null
+variant: migrate_local
+provenance:
+  compiled_from_task: Some setting in my config has been renamed upstream. Sort the
+    config out. Rename the old key in my own override file, and keep that file out
+    of git.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Some setting in my config has been renamed upstream. Sort the config
+    out. Rename the old key in my own override file, and keep that file out of git./seed-12-config_renamed-8327
+  fault: config_renamed
+status: admitted

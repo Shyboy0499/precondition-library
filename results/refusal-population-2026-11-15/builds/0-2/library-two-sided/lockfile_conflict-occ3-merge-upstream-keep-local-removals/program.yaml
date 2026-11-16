@@ -1,0 +1,180 @@
+id: lockfile_conflict-occ3-merge-upstream-keep-local-removals
+intent: Merge the upstream branch into the current branch, resolving the conflict
+  in the one dependency file both sides changed so that lines the local side removed
+  stay removed and lines upstream added are present, then commit the merge.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_ref_exists
+  description: the upstream remote-tracking branch exists in this clone
+  probe: git rev-parse --verify --quiet refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: on_a_branch
+  description: HEAD is a symbolically referenced branch, so the merge lands on a branch
+  probe: git symbolic-ref -q HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: nothing is modified, staged or untracked in the working tree and no
+    merge is in progress
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: the repository is not already in the middle of a merge
+  probe: test ! -e "$(git rev-parse --git-path MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_diverged
+  description: local HEAD and the upstream branch each carry commits the other lacks,
+    so a real merge is required
+  probe: |-
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0 &&
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: one_shared_file_changed
+  description: exactly one path differs from the merge base on both sides, i.e. the
+    two sides edited the same single file
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+    test "$(comm -12 <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -c .)" -eq 1
+  expect_exit: 0
+  expect_pattern: null
+- name: both_sides_changed_the_same_paths
+  description: the set of paths the local branch changed equals the set upstream changed,
+    i.e. both sides touched only the one shared file and the local branch carries
+    no unrelated edits
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+    test -z "$(comm -3 <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sed '/^$/d' | sort) <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sed '/^$/d' | sort))"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_side_removed_lines
+  description: the local side dropped at least one line from the shared file relative
+    to the merge base, so the resolution must preserve that removal
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+    f=$(comm -12 <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sed '/^$/d' | sort) <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sed '/^$/d' | sort) | head -1) &&
+    test -n "$f" &&
+    comm -23 <(git show "$base:$f" | sort -u) <(git show "HEAD:$f" | sort -u) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git merge --no-edit {upstream_remote}/{upstream_branch} || true
+  unmerged=$(git diff --name-only --diff-filter=U -z | tr '\0' '\n')
+  if [ -n "$unmerged" ]; then
+    tmp=$(mktemp -d)
+    printf '%s\n' "$unmerged" | while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      git show ":1:$f" > "$tmp/base" 2>/dev/null || : > "$tmp/base"
+      git show ":2:$f" > "$tmp/ours" 2>/dev/null || : > "$tmp/ours"
+      git show ":3:$f" > "$tmp/theirs" 2>/dev/null || : > "$tmp/theirs"
+      git merge-file -p --diff3 -L ours -L base -L theirs "$tmp/ours" "$tmp/base" "$tmp/theirs" > "$tmp/merged" || true
+      awk '
+      function key(s,   t, i) {
+        t = s
+        sub(/^[ \t]+/, "", t)
+        i = index(t, "=")
+        if (i > 0) {
+          t = substr(t, 1, i - 1)
+          sub(/[ \t]+$/, "", t)
+          return t
+        }
+        return ""
+      }
+      function emit(   i, k, bset, tset, oset, skeys) {
+        split("", bset); split("", tset); split("", oset); split("", skeys)
+        for (i = 1; i <= n_b; i++) bset[B[i]] = 1
+        for (i = 1; i <= n_o; i++) oset[O[i]] = 1
+        for (i = 1; i <= n_t; i++) {
+          tset[T[i]] = 1
+          if ((T[i] in bset) && !(T[i] in oset)) continue
+          print T[i]
+          k = key(T[i])
+          if (k != "") skeys[k] = 1
+        }
+        for (i = 1; i <= n_o; i++) {
+          if ((O[i] in bset) || (O[i] in tset)) continue
+          k = key(O[i])
+          if (k != "" && (k in skeys)) continue
+          print O[i]
+          if (k != "") skeys[k] = 1
+        }
+      }
+      st == 0 && /^<<<<<<< / { st = 1; n_o = 0; n_b = 0; n_t = 0; next }
+      st == 1 && /^\|\|\|\|\|\|\| / { st = 2; next }
+      (st == 1 || st == 2) && /^=======$/ { st = 3; next }
+      st == 3 && /^>>>>>>> / { emit(); st = 0; next }
+      st == 1 { O[++n_o] = $0; next }
+      st == 2 { B[++n_b] = $0; next }
+      st == 3 { T[++n_t] = $0; next }
+      { print }
+      ' "$tmp/merged" > "$tmp/resolved"
+      cp "$tmp/resolved" "$f"
+      git add -- "$f"
+    done
+    rm -rf "$tmp"
+    git commit --no-edit
+  fi
+steps: null
+postconditions:
+- name: merge_commit_created
+  description: HEAD is a merge commit whose second parent is the upstream branch tip
+  probe: test "$(git rev-parse HEAD^2)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: every upstream commit is now reachable from HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_or_dirty_paths
+  description: the index has no unmerged entries and the working tree is clean
+  probe: test -z "$(git ls-files -u)" && test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: the shared file committed in HEAD carries no conflict markers
+  probe: |-
+    base=$(git merge-base HEAD^1 HEAD^2) &&
+    f=$(comm -12 <(git diff --name-only -z "$base" HEAD^1 | tr '\0' '\n' | sort) <(git diff --name-only -z "$base" HEAD^2 | tr '\0' '\n' | sort) | head -1) &&
+    test -n "$f" &&
+    ! git show "HEAD:$f" | grep -q '^<<<<<<<'
+  expect_exit: 0
+  expect_pattern: null
+- name: local_removals_still_removed
+  description: no line the local side had dropped from the merge base reappears in
+    the merged file
+  probe: |-
+    base=$(git merge-base HEAD^1 HEAD^2) &&
+    f=$(comm -12 <(git diff --name-only -z "$base" HEAD^1 | tr '\0' '\n' | sort) <(git diff --name-only -z "$base" HEAD^2 | tr '\0' '\n' | sort) | head -1) &&
+    test -n "$f" &&
+    ! comm -23 <(git show "$base:$f" | sort -u) <(git show "HEAD^1:$f" | sort -u) | grep -qxF -f - <(git show "HEAD:$f")
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_additions_present
+  description: every line upstream added relative to the merge base is present in
+    the merged file
+  probe: |-
+    base=$(git merge-base HEAD^1 HEAD^2) &&
+    f=$(comm -12 <(git diff --name-only -z "$base" HEAD^1 | tr '\0' '\n' | sort) <(git diff --name-only -z "$base" HEAD^2 | tr '\0' '\n' | sort) | head -1) &&
+    test -n "$f" &&
+    ! comm -13 <(git show "$base:$f" | sort -u) <(git show "HEAD^2:$f" | sort -u) | grep -vxF -f <(git show "HEAD:$f") | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+variant: keep_local
+provenance:
+  compiled_from_task: Update this branch from upstream and make sure the dependency
+    list still makes sense. Keep my dependency file, with what I removed still removed,
+    and add what upstream added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Update this branch from upstream and make sure the dependency list still
+    makes sense. Keep my dependency file, with what I removed still removed, and add
+    what upstream added./seed-2-lockfile_conflict-27083
+  fault: lockfile_conflict
+status: candidate

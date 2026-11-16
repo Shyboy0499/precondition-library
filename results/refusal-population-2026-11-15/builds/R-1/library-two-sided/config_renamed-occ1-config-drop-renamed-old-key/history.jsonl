@@ -1,0 +1,2 @@
+{"episode_id": "Some setting in my config has been renamed upstream. Sort the config out. The new name is already set too, so delete the old key's line and keep the new one./seed-31-config_renamed-8327", "from": null, "program_id": "config_renamed-occ1-config-drop-renamed-old-key", "to": "candidate"}
+{"episode_id": "config_renamed/seed-31/occurrence-1", "from": "candidate", "program_id": "config_renamed-occ1-config-drop-renamed-old-key", "to": "admitted"}

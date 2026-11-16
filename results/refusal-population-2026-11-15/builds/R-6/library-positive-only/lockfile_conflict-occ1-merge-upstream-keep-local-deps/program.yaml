@@ -1,0 +1,263 @@
+id: lockfile_conflict-occ1-merge-upstream-keep-local-deps
+intent: Merge upstream into the current branch, resolving a dependency-file conflict
+  by keeping local removals and adding upstream additions.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_exists
+  description: the configured upstream remote is present
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_branch_exists
+  description: the upstream branch is fetched and resolvable
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_diverged
+  description: local branch and upstream branch have commits the other lacks
+  probe: '[ "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt
+    0 ] && [ "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt
+    0 ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: working_tree_clean
+  description: there are no uncommitted changes
+  probe: '[ -z "$(git status --porcelain)" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: no merge is currently in progress
+  probe: '! git rev-parse -q --verify MERGE_HEAD'
+  expect_exit: 0
+  expect_pattern: null
+- name: single_common_dependency_file
+  description: exactly one file was modified on both sides and it is a lock-shaped
+    dependency file
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    common=$(comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort))
+    count=$(printf '%s\n' "$common" | sed '/^$/d' | wc -l)
+    [ "$count" -eq 1 ] || exit 1
+    file=$(printf '%s\n' "$common" | sed '/^$/d' | head -n1)
+    git show "HEAD:$file" | grep -qE 'packages[[:space:]]*=[[:space:]]*\['
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+
+  git fetch {upstream_remote}
+
+  git merge --no-ff --no-commit {upstream_remote}/{upstream_branch} || true
+
+  if ! git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+    echo "merge did not start" >&2
+    exit 1
+  fi
+
+  tmpdir=$(mktemp -d)
+  trap 'rm -rf "$tmpdir"' EXIT
+
+  unmerged=$(git diff --name-only --diff-filter=U -z | tr '\0' '\n')
+  if [ -n "$unmerged" ]; then
+    while IFS= read -r file; do
+      [ -z "$file" ] && continue
+      git show ":1:$file" > "$tmpdir/base"
+      git show ":2:$file" > "$tmpdir/ours"
+      git show ":3:$file" > "$tmpdir/theirs"
+      python3 - "$file" "$tmpdir/base" "$tmpdir/ours" "$tmpdir/theirs" > "$tmpdir/merged" <<'PY'
+  import sys, re
+
+  path = sys.argv[1]
+  base_path = sys.argv[2]
+  ours_path = sys.argv[3]
+  theirs_path = sys.argv[4]
+
+  def read_lines(p):
+      with open(p, 'r', encoding='utf-8', errors='surrogateescape') as f:
+          return f.read().splitlines(keepends=True)
+
+  base = read_lines(base_path)
+  ours = read_lines(ours_path)
+  theirs = read_lines(theirs_path)
+
+  kv_re = re.compile(r'^(\s*)([A-Za-z_][\w.-]*)\s*=\s*(.*?)(\r?\n)?$')
+  item_re = re.compile(r'^\s*"[^"]*"\s*,?\s*$')
+
+  def split_kv(line):
+      m = kv_re.match(line)
+      if not m:
+          return None
+      key = m.group(2)
+      value = m.group(3).strip()
+      if value in ('[', '{', '('):
+          return None
+      return key, line
+
+  def kv_map(lines):
+      d = {}
+      for line in lines:
+          r = split_kv(line)
+          if r:
+              key, l = r
+              d[key] = l
+      return d
+
+  def items_set(lines):
+      s = set()
+      for line in lines:
+          if item_re.match(line):
+              s.add(line.strip())
+      return s
+
+  base_kv = kv_map(base)
+  ours_kv = kv_map(ours)
+  theirs_kv = kv_map(theirs)
+
+  base_items = items_set(base)
+  ours_items = items_set(ours)
+  theirs_items = items_set(theirs)
+
+  new_items = {item for item in theirs_items if item not in base_items and item not in ours_items}
+
+  result = list(ours)
+
+  key_to_index = {}
+  for i, line in enumerate(result):
+      r = split_kv(line)
+      if r:
+          key, _ = r
+          key_to_index[key] = i
+
+  for key, theirs_line in theirs_kv.items():
+      base_line = base_kv.get(key)
+      if base_line is not None and theirs_line.strip() != base_line.strip():
+          if key in key_to_index:
+              result[key_to_index[key]] = theirs_line
+          elif key not in base_kv:
+              result.append(theirs_line)
+      elif base_line is None and key not in ours_kv:
+          result.append(theirs_line)
+
+  if new_items:
+      close_idx = None
+      for i in range(len(result) - 1, -1, -1):
+          if re.match(r'^\s*[\]\}\)]\s*,?\s*$', result[i]):
+              close_idx = i
+              break
+      indent = '    '
+      for line in ours:
+          if item_re.match(line):
+              m = re.match(r'^(\s*)', line)
+              if m:
+                  indent = m.group(1)
+                  break
+      item_lines = [indent + item + '\n' for item in sorted(new_items)]
+      if close_idx is not None:
+          result[close_idx:close_idx] = item_lines
+      else:
+          result.extend(item_lines)
+
+  sys.stdout.write(''.join(result))
+  PY
+      cat "$tmpdir/merged" > "$file"
+      git add -- "$file"
+    done <<< "$unmerged"
+  fi
+
+  if [ -n "$(git diff --name-only --diff-filter=U)" ]; then
+    echo "unresolved conflicts remain" >&2
+    exit 1
+  fi
+
+  git commit --no-edit
+steps: null
+postconditions:
+- name: merge_commit_created
+  description: HEAD is a merge commit with two parents
+  probe: git rev-parse --verify HEAD^2
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_merged
+  description: upstream branch is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: working_tree_clean_after
+  description: no uncommitted changes remain
+  probe: '[ -z "$(git status --porcelain)" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: no conflict markers remain in tracked files
+  probe: '! git grep -q -E ''^(<<<<<<<|=======|>>>>>>>)'''
+  expect_exit: 0
+  expect_pattern: null
+- name: dependency_file_resolved
+  description: the conflicted dependency file keeps local removals, preserves local
+    additions, and adds upstream additions
+  probe: |-
+    p1=$(git rev-parse HEAD^1) || exit 1
+    p2=$(git rev-parse HEAD^2) || exit 1
+    base=$(git merge-base "$p1" "$p2") || exit 1
+    common=$(comm -12 \
+      <(git diff --name-only -z "$base" "$p1" | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" "$p2" | tr '\0' '\n' | sort))
+    count=$(printf '%s\n' "$common" | sed '/^$/d' | wc -l)
+    [ "$count" -eq 1 ] || exit 1
+    file=$(printf '%s\n' "$common" | sed '/^$/d' | head -n1)
+
+    items() {
+      git show "$1:$file" | grep -E '^[[:space:]]*"[^"]*"[[:space:]]*,?[[:space:]]*$' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | sort -u
+    }
+
+    local_items=$(items "$p1")
+    upstream_items=$(items "$p2")
+    base_items=$(items "$base")
+    head_items=$(items HEAD)
+
+    upstream_new=$(comm -23 <(printf '%s\n' "$upstream_items") <(printf '%s\n' "$base_items") | sed '/^$/d')
+    expected=$(printf '%s\n%s\n' "$local_items" "$upstream_new" | sed '/^$/d' | sort -u)
+    actual=$(printf '%s\n' "$head_items" | sed '/^$/d' | sort -u)
+    [ "$expected" = "$actual" ] || exit 1
+
+    kv() {
+      git show "$1:$file" | awk -F= '
+        /^[[:space:]]*[A-Za-z_][A-Za-z0-9_.-]*[[:space:]]*=/ {
+          key=$1; sub(/^[[:space:]]*/, "", key); sub(/[[:space:]]*$/, "", key);
+          val=$2; sub(/^[[:space:]]*/, "", val); sub(/[[:space:]]*$/, "", val);
+          if (val != "[" && val != "{" && val != "(") print key "=" val;
+        }' | sort
+    }
+
+    upstream_kv=$(kv "$p2")
+    base_kv=$(kv "$base")
+    head_kv=$(kv HEAD)
+
+    while IFS='=' read -r key val; do
+      [ -z "$key" ] && continue
+      base_val=$(printf '%s\n' "$base_kv" | grep -E "^${key//./\\.}=" | head -n1 | cut -d= -f2-)
+      if [ -n "$base_val" ] && [ "$base_val" != "$val" ]; then
+        head_val=$(printf '%s\n' "$head_kv" | grep -E "^${key//./\\.}=" | head -n1 | cut -d= -f2-)
+        [ "$head_val" = "$val" ] || exit 1
+      fi
+    done <<< "$upstream_kv"
+
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+variant: keep_local
+provenance:
+  compiled_from_task: Update this branch from upstream and make sure the dependency
+    list still makes sense. Keep my dependency file, with what I removed still removed,
+    and add what upstream added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Update this branch from upstream and make sure the dependency list still
+    makes sense. Keep my dependency file, with what I removed still removed, and add
+    what upstream added./seed-2-lockfile_conflict-17967
+  fault: lockfile_conflict
+status: admitted

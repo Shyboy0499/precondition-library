@@ -1,0 +1,2 @@
+{"episode_id": "Get the latest from upstream here, and keep every change I have not saved yet. Stash my uncommitted work, update the branch, then put my work back./seed-5-dirty_tree-3956", "from": null, "program_id": "dirty_tree-occ1-upstream-update-stash-reapply", "to": "candidate"}
+{"episode_id": "Get the latest from upstream here, and keep every change I have not saved yet. Stash my uncommitted work, update the branch, then put my work back./seed-5-dirty_tree-3956", "from": "candidate", "program_id": "dirty_tree-occ1-upstream-update-stash-reapply", "to": "admitted"}

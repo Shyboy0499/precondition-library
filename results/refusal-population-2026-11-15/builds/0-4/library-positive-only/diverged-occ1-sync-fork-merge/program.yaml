@@ -1,0 +1,70 @@
+id: diverged-occ1-sync-fork-merge
+intent: Bring a diverged fork back in sync with upstream by merging upstream into
+  the current branch, preserving both local and upstream history.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_a_branch
+  description: HEAD is attached to a local branch, so a merge commit can advance it
+  probe: git symbolic-ref --quiet HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: there are no uncommitted or untracked changes that a merge could clobber
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_exists
+  description: the remote-tracking ref for the upstream branch is already known locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}^{commit}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_has_new_commits
+  description: upstream carries at least one commit that HEAD does not have
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: local_has_own_commits
+  description: the branch has diverged, carrying commits upstream does not have
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+body: |
+  git fetch {upstream_remote}
+  if ! git merge --no-edit {upstream_remote}/{upstream_branch}; then
+    git merge --abort || true
+    exit 1
+  fi
+steps: null
+postconditions:
+- name: upstream_is_ancestor
+  description: the upstream tip is reachable from HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: head_is_a_merge_commit
+  description: HEAD has two parents, recording both histories
+  probe: git rev-list --parents -1 HEAD
+  expect_exit: 0
+  expect_pattern: ^[0-9a-f]+ [0-9a-f]+ [0-9a-f]+$
+- name: first_parent_keeps_local_commits
+  description: the pre-merge branch tip still carries commits upstream does not have
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD^1
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: worktree_left_clean
+  description: the merge completed without leaving changes or conflicts behind
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: Get this fork back in sync with upstream without losing my commits.
+    Merge upstream into my branch and keep both histories.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this fork back in sync with upstream without losing my commits.
+    Merge upstream into my branch and keep both histories./seed-4-diverged-4812
+  fault: diverged
+status: admitted

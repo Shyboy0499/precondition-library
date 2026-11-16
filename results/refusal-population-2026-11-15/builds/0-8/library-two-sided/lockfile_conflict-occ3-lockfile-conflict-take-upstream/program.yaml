@@ -1,0 +1,244 @@
+id: lockfile_conflict-occ3-lockfile-conflict-take-upstream
+intent: Merge upstream into the current branch, resolving dependency-lockfile conflicts
+  by starting from upstream's file, honoring deletions from either side, and re-adding
+  the local side's additions.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_exists
+  description: the upstream-tracking branch named by the parameters exists
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_diverged
+  description: the current branch and upstream each contain commits the other does
+    not
+  probe: |-
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0 &&
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_or_matching_merge
+  description: either no merge is in progress and the worktree is clean, or the in-progress
+    merge is with the requested upstream
+  probe: |-
+    if git rev-parse --verify -q MERGE_HEAD >/dev/null; then
+      test "$(git rev-parse MERGE_HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+    else
+      test -z "$(git status --porcelain)"
+    fi
+  expect_exit: 0
+  expect_pattern: null
+- name: overlapping_changes_are_dependency_locks
+  description: every file changed on both sides since the merge base is a dependency
+    lockfile
+  probe: |-
+    python3 - <<'PY'
+    import os
+    import re
+    import subprocess
+    import sys
+
+    def out(args):
+        return subprocess.check_output(["git"] + args, stderr=subprocess.DEVNULL)
+
+    base = out(["merge-base", "HEAD", "{upstream_remote}/{upstream_branch}"]).decode().strip()
+    if not base:
+        sys.exit(1)
+
+    def changed(rev):
+        raw = out(["diff", "--name-only", "-z", base, rev])
+        return [os.fsdecode(p) for p in raw.split(b"\0") if p]
+
+    overlap = set(changed("HEAD")) & set(changed("{upstream_remote}/{upstream_branch}"))
+    if not overlap:
+        sys.exit(1)
+
+    def is_lock(path):
+        b = os.path.basename(path).lower()
+        if b.endswith(".lock") or b.endswith(".lockb"):
+            return True
+        if re.search(r"-lock\.(json|ya?ml)$", b):
+            return True
+        return b in ("go.sum", "npm-shrinkwrap.json")
+
+    for path in overlap:
+        if not is_lock(path):
+            sys.exit(1)
+    sys.exit(0)
+    PY
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_deletion_kept_locally
+  description: at least one dependency lockfile has a line that upstream dropped but
+    the local branch still has
+  probe: |-
+    python3 - <<'PY'
+    import os
+    import re
+    import subprocess
+    import sys
+    from collections import Counter
+
+    def out(args):
+        return subprocess.check_output(["git"] + args, stderr=subprocess.DEVNULL)
+
+    upstream = "{upstream_remote}/{upstream_branch}"
+    base = out(["merge-base", "HEAD", upstream]).decode().strip()
+    if not base:
+        sys.exit(1)
+
+    def changed(rev):
+        raw = out(["diff", "--name-only", "-z", base, rev])
+        return [os.fsdecode(p) for p in raw.split(b"\0") if p]
+
+    def is_lock(path):
+        b = os.path.basename(path).lower()
+        if b.endswith(".lock") or b.endswith(".lockb"):
+            return True
+        if re.search(r"-lock\.(json|ya?ml)$", b):
+            return True
+        return b in ("go.sum", "npm-shrinkwrap.json")
+
+    overlap = set(changed("HEAD")) & set(changed(upstream))
+    for path in overlap:
+        if not is_lock(path):
+            continue
+        try:
+            b = out(["show", base + ":" + path])
+            u = out(["show", upstream + ":" + path])
+            l = out(["show", "HEAD:" + path])
+        except subprocess.CalledProcessError:
+            continue
+        bc = Counter(b.splitlines())
+        uc = Counter(u.splitlines())
+        lc = Counter(l.splitlines())
+        for line, count in bc.items():
+            if uc.get(line, 0) == 0 and lc.get(line, 0) > 0:
+                sys.exit(0)
+    sys.exit(1)
+    PY
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+
+  if ! git rev-parse --verify -q MERGE_HEAD >/dev/null 2>&1; then
+    git merge --no-edit {upstream_remote}/{upstream_branch} || true
+  fi
+
+  if git rev-parse --verify -q MERGE_HEAD >/dev/null 2>&1; then
+    base=$(git merge-base HEAD MERGE_HEAD)
+    git diff --name-only --diff-filter=U -z |
+    while IFS= read -r -d '' path; do
+      b=$(mktemp)
+      o=$(mktemp)
+      t=$(mktemp)
+      n=$(mktemp)
+      git show "$base:$path" > "$b" 2>/dev/null || :
+      git show ":2:$path" > "$o" 2>/dev/null || :
+      git show ":3:$path" > "$t" 2>/dev/null || :
+      python3 - "$b" "$o" "$t" > "$n" <<'PY'
+  import sys
+  import difflib
+
+  def read(path):
+      with open(path, "r", encoding="utf-8", errors="surrogateescape", newline="") as f:
+          return f.read().splitlines(keepends=True)
+
+  base = read(sys.argv[1])
+  ours = read(sys.argv[2])
+  theirs = read(sys.argv[3])
+
+  final = list(theirs)
+  local_deleted = []
+  local_added = []
+
+  sm = difflib.SequenceMatcher(None, base, ours, autojunk=False)
+  for tag, i1, i2, j1, j2 in sm.get_opcodes():
+      if tag == "delete":
+          local_deleted.extend(base[i1:i2])
+      elif tag == "insert":
+          following = ours[j2] if j2 < len(ours) else None
+          preceding = ours[j1 - 1] if j1 > 0 else None
+          for line in ours[j1:j2]:
+              local_added.append((line, following, preceding))
+      elif tag == "replace":
+          nbase = i2 - i1
+          nours = j2 - j1
+          if nours > nbase:
+              following = ours[j2] if j2 < len(ours) else None
+              preceding = ours[j1 - 1] if j1 > 0 else None
+              for line in ours[j1 + nbase:j2]:
+                  local_added.append((line, following, preceding))
+          elif nbase > nours:
+              local_deleted.extend(base[i1 + nours:i2])
+
+  for line in local_deleted:
+      try:
+          final.remove(line)
+      except ValueError:
+          pass
+
+  for line, following, preceding in local_added:
+      if line in final:
+          continue
+      pos = None
+      if following is not None:
+          try:
+              pos = final.index(following)
+          except ValueError:
+              pos = None
+      if pos is None and preceding is not None:
+          try:
+              pos = final.index(preceding) + 1
+          except ValueError:
+              pos = None
+      if pos is None:
+          pos = len(final)
+      final.insert(pos, line)
+
+  sys.stdout.write("".join(final))
+  PY
+      cat "$n" > "$path"
+      git add -- "$path"
+      rm -f "$b" "$o" "$t" "$n"
+    done
+    git commit --no-edit
+  fi
+steps: null
+postconditions:
+- name: merge_commit_has_upstream_parent
+  description: HEAD is a merge commit with the requested upstream branch as its second
+    parent
+  probe: test "$(git rev-parse HEAD^2)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: no conflicted index entries remain
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the working tree has no staged or unstaged changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: tracked files contain no unresolved conflict markers
+  probe: '! git grep -q -e ''^<<<<<<< '' -e ''^>>>>>>> '' -- .'
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: Catch up with upstream without losing what either side added,
+    or reviving what either side removed. Start from upstream's dependency file and
+    add back what I added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Catch up with upstream without losing what either side added, or reviving
+    what either side removed. Start from upstream's dependency file and add back what
+    I added./seed-5-lockfile_conflict-29979
+  fault: lockfile_conflict
+status: admitted

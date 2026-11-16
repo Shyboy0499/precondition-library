@@ -1,0 +1,76 @@
+id: dirty_tree-occ1-stash-then-update-branch
+intent: Stash the user's uncommitted work (tracked edits and untracked files), fast-forward
+  the current branch to the upstream branch, then restore the stashed work so nothing
+  is lost.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: worktree_dirty
+  description: the worktree has uncommitted changes (tracked or untracked) to stash
+  probe: test -n "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ahead
+  description: the upstream branch has at least one commit the local HEAD lacks
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: fast_forward_possible
+  description: HEAD is an ancestor of the upstream tip so the branch can fast-forward
+  probe: git merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: no_worktree_upstream_overlap
+  description: no locally modified or untracked path is also changed by the upstream
+    branch, so the restore cannot conflict or collide
+  probe: |-
+    ! comm -12 \
+      <( { git diff --name-only -z HEAD; git ls-files --others --exclude-standard -z; } | tr '\0' '\n' | sort ) \
+      <( git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort ) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: no_previous_autostash
+  description: no stash entry left behind by an earlier run of this program exists
+  probe: '! git stash list | grep -q ''autostash: wip before updating branch'''
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git stash push --include-untracked -m "autostash: wip before updating branch"
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+  git stash pop
+steps: null
+postconditions:
+- name: head_at_upstream
+  description: HEAD is now the upstream tip
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: work_restored
+  description: the stashed edits are present again as uncommitted changes
+  probe: test -n "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: stash_entry_consumed
+  description: the stash entry created by this program has been popped and dropped
+  probe: '! git stash list | grep -q ''autostash: wip before updating branch'''
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflicted_paths
+  description: the restored work left no unmerged index entries
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+variant: stash
+provenance:
+  compiled_from_task: I am in the middle of something and upstream moved on. Sort
+    it out without losing my edits. Stash my uncommitted work, update the branch,
+    then put my work back.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: I am in the middle of something and upstream moved on. Sort it out without
+    losing my edits. Stash my uncommitted work, update the branch, then put my work
+    back./seed-10-dirty_tree-211
+  fault: dirty_tree
+status: admitted

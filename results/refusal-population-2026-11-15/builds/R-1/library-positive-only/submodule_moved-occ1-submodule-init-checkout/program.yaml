@@ -1,0 +1,57 @@
+id: submodule_moved-occ1-submodule-init-checkout
+intent: Initialise the nested submodule and check out the commit pinned by HEAD, which
+  matches upstream.
+parameters:
+- submodule_path
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: submodule_gitlink_in_head
+  description: HEAD records a gitlink at the nested dependency path.
+  probe: git ls-tree HEAD -- "{submodule_path}" | grep -q '^160000 commit '
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_declared_in_gitmodules
+  description: .gitmodules declares the nested dependency path.
+  probe: git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | cut -d'
+    ' -f2- | grep -qxF -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_not_initialised
+  description: The nested repository is not yet initialised.
+  probe: git submodule status -- "{submodule_path}" | grep -q '^-'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_pin_matches_head
+  description: The gitlink at HEAD is the same commit upstream references.
+  probe: |-
+    pin=$(git ls-tree HEAD -- "{submodule_path}" | awk '$1 == "160000" {print $3}')
+    up=$(git ls-tree "{upstream_remote}/{upstream_branch}" -- "{submodule_path}" | awk '$1 == "160000" {print $3}')
+    test -n "$pin" && test "$pin" = "$up"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git submodule update --init -- "{submodule_path}"
+steps: null
+postconditions:
+- name: submodule_initialised
+  description: The nested repository is initialised rather than uninitialised.
+  probe: '! git submodule status -- "{submodule_path}" | grep -q ''^-'''
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_head_matches_pin
+  description: The nested repository's HEAD is the commit recorded in the superproject.
+  probe: test "$(git -C "{submodule_path}" rev-parse HEAD)" = "$(git ls-tree HEAD
+    -- "{submodule_path}" | awk '$1 == "160000" {print $3}')"
+  expect_exit: 0
+  expect_pattern: null
+variant: init
+provenance:
+  compiled_from_task: Get this repo's nested dependency consistent with upstream.
+    Initialise the nested repository and check it out.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this repo's nested dependency consistent with upstream. Initialise
+    the nested repository and check it out./seed-5-submodule_moved-214
+  fault: submodule_moved
+status: admitted

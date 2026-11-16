@@ -1,0 +1,95 @@
+id: submodule_moved-occ2-repin-submodule-to-upstream
+intent: Reconcile a nested repository with upstream by fast-forwarding the superproject
+  and checking the submodule out at the commit upstream pins.
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: clean_worktree
+  description: the superproject has no tracked or untracked changes
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_remote_exists
+  description: the named upstream remote is configured
+  probe: git remote get-url "{upstream_remote}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_branch_ref_exists
+  description: the upstream remote-tracking branch exists
+  probe: git rev-parse --verify --quiet "refs/remotes/{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_local_only_commits
+  description: HEAD has no commits that upstream lacks
+  probe: test "$(git rev-list --count "{upstream_remote}/{upstream_branch}..HEAD")"
+    -eq 0
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ahead
+  description: upstream has commits that HEAD lacks
+  probe: test "$(git rev-list --count "HEAD..{upstream_remote}/{upstream_branch}")"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_declared
+  description: the submodule path is declared in .gitmodules
+  probe: git config --file .gitmodules --get-regexp '^submodule\..*\.path$' | sed
+    's/^[^ ]* //' | grep -Fx -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_initialised
+  description: the submodule working tree is already initialized
+  probe: test -e "{submodule_path}/.git"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_references_submodule
+  description: HEAD records the path as a gitlink
+  probe: git ls-tree HEAD -- "{submodule_path}" | grep -Eq '^160000 commit '
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_references_submodule
+  description: upstream records the path as a gitlink
+  probe: git ls-tree "{upstream_remote}/{upstream_branch}" -- "{submodule_path}" |
+    grep -Eq '^160000 commit '
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_pin_differs
+  description: the local and upstream gitlinks are different commits
+  probe: test "$(git ls-tree HEAD -- "{submodule_path}" | awk '$1 == "160000" {print
+    $3}')" != "$(git ls-tree "{upstream_remote}/{upstream_branch}" -- "{submodule_path}"
+    | awk '$1 == "160000" {print $3}')"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch "{upstream_remote}"
+  git merge --ff-only "{upstream_remote}/{upstream_branch}"
+  git submodule update --init -- "{submodule_path}"
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is the same commit as upstream
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse "{upstream_remote}/{upstream_branch}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_checked_out_at_pin
+  description: the submodule HEAD matches the gitlink recorded in HEAD
+  probe: test "$(git -C "{submodule_path}" rev-parse HEAD)" = "$(git rev-parse "HEAD:{submodule_path}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the superproject has no remaining changes
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+variant: repin
+provenance:
+  compiled_from_task: Upstream and this clone disagree about a nested repository.
+    Reconcile them. Check the nested repository out at the commit upstream now pins.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Upstream and this clone disagree about a nested repository. Reconcile
+    them. Check the nested repository out at the commit upstream now pins./seed-1-submodule_moved-28874
+  fault: submodule_moved
+status: admitted

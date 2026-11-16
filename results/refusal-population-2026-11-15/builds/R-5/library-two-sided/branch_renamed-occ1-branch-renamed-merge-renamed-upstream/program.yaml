@@ -1,0 +1,92 @@
+id: branch_renamed-occ1-branch-renamed-merge-renamed-upstream
+intent: Re-point the current local branch to upstream's renamed default branch and
+  merge it into the local commits.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_configured
+  description: the upstream remote is configured
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: new_upstream_ref_exists
+  description: the remote-tracking ref for upstream's new branch exists
+  probe: git show-ref --verify --quiet refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: current_branch_has_local_commits
+  description: the current branch has at least one commit not reachable from the new
+    upstream branch
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: new_upstream_has_commits_to_merge
+  description: the new upstream branch has at least one commit not in the current
+    branch
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: current_branch_tracks_other_branch_on_same_remote
+  description: the current branch tracks a different branch on the same remote
+  probe: |-
+    ref=$(git for-each-ref --format='%(upstream:short)' "refs/heads/$(git symbolic-ref --short HEAD)")
+    test -n "$ref" && test "$ref" != "{upstream_remote}/{upstream_branch}" && test "${ref%%/*}" = "{upstream_remote}"
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_files_clean
+  description: there are no uncommitted changes to tracked files
+  probe: test -z "$(git status --porcelain --untracked-files=no)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch --prune {upstream_remote}
+  git branch --set-upstream-to={upstream_remote}/{upstream_branch}
+  git merge --no-edit {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: current_branch_tracks_new_upstream
+  description: the current branch is configured to track the new upstream branch
+  probe: test "$(git for-each-ref --format='%(upstream:short)' "refs/heads/$(git symbolic-ref
+    --short HEAD)")" = "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: new_upstream_is_ancestor
+  description: the new upstream branch is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: head_is_merge_commit
+  description: HEAD is a merge commit with at least two parents
+  probe: test "$(git rev-list --parents -n 1 HEAD | wc -w)" -ge 3
+  expect_exit: 0
+  expect_pattern: null
+- name: local_first_parent_preserved
+  description: the first parent still has local commits not in upstream
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD^1)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_entries
+  description: the index has no unmerged entries
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_files_clean_after_merge
+  description: there are no uncommitted changes to tracked files after the merge
+  probe: test -z "$(git status --porcelain --untracked-files=no)"
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: Upstream changed something about its branches and my checkout
+    is lost. Sort it out. Track upstream's new branch and merge it into my own commits.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Upstream changed something about its branches and my checkout is lost.
+    Sort it out. Track upstream's new branch and merge it into my own commits./seed-2-branch_renamed-7516
+  fault: branch_renamed
+status: admitted

@@ -1,0 +1,52 @@
+model: deepseek-flash
+compiled 22; admitted two-sided 14, positive-only 20
+library hash: 67bc94e6c24ac5fdc9baf53b3be0dbc0d37fc2c7b15c8ff0b68db8c7dd546a68
+
+build episodes:
+  branch_renamed seed 1: fallback, 12 tool calls, checker ok, admitted True
+  branch_renamed seed 10: fallback, 11 tool calls, checker ok, admitted True
+  branch_renamed seed 4: fallback, 16 tool calls, checker ok, admitted True
+  config_renamed seed 31: fallback, 9 tool calls, checker ok, admitted True
+  config_renamed seed 12: fallback, 12 tool calls, checker ok, admitted False -- positive side failed on config_renamed seed 12: the preconditions do not hold on the state the program is meant to fix, so it could never fire there (ignored_file_has_stale_key: exit=1 (expected 0); stdout='' stderr='')
+  config_renamed seed 2: fallback, 12 tool calls, checker ok, admitted False -- positive side failed on config_renamed seed 2: postconditions failed: override_file_still_ignored: exit=1 (expected 0); stdout='' stderr=''
+  config_renamed seed 0: fallback, 12 tool calls, checker ok, admitted True
+  dirty_tree seed 2: fallback, 15 tool calls, checker ok, admitted True
+  dirty_tree seed 5: fallback, 13 tool calls, checker ok, admitted False -- negative side failed: preconditions accepted 1 of 2 same-intent states (dirty_tree seed 2 resolves to 'aside', which accepts ['aside'], but the program implements 'stash'); firing where a sibling resolution is correct is the mismatch this gate exists to refuse; the revision did not parse: the reply was not a YAML mapping, so it is not a Program: mapping values are not allowed here in "<unicode string>", line 2, column 71: ... hile preserving all unsaved work: stash the uncommitted and untr ... ^
+  dirty_tree seed 10: fallback, 9 tool calls, checker ok, admitted True
+  dirty_tree seed 1: fallback, 14 tool calls, checker ok, admitted True
+  diverged seed 2: fallback, 12 tool calls, checker ok, admitted False -- negative side failed: preconditions accepted 1 of 15 unrelated states (branch_renamed seed 1 resolves to 'merge'); a precondition set that accepts unrelated states is a defect
+  diverged seed 5: fallback, 13 tool calls, checker ok, admitted True
+  diverged seed 1: fallback, 10 tool calls, checker ok, admitted True
+  diverged seed 4: fallback, 12 tool calls, checker ok, admitted False -- negative side failed: preconditions accepted 1 of 15 unrelated states (lockfile_conflict seed 0 resolves to 'take_upstream'); a precondition set that accepts unrelated states is a defect. It also accepted 2 more state(s) it must refuse: preconditions accepted 1 of 15 unrelated states (lockfile_conflict seed 2 resolves to 'keep_local'); a precondition set that accepts unrelated states is a defect; preconditions accepted 1 of 15 unrelated states (lockfile_conflict seed 5 resolves to 'take_upstream'); a precondition set that accepts unrelated states is a defect
+  diverged seed 0: fallback, 10 tool calls, checker ok, admitted False -- negative side failed: preconditions accepted 1 of 15 unrelated states (branch_renamed seed 1 resolves to 'merge'); a precondition set that accepts unrelated states is a defect
+  lockfile_conflict seed 3: fallback, 18 tool calls, checker ok, admitted False -- negative side failed: preconditions accepted 1 of 15 unrelated states (diverged seed 0 resolves to 'merge'); a precondition set that accepts unrelated states is a defect. It also accepted 1 more state(s) it must refuse: preconditions accepted 1 of 2 same-intent states (lockfile_conflict seed 5 resolves to 'take_upstream', which accepts ['take_upstream'], but the program implements 'keep_local'); firing where a sibling resolution is correct is the mismatch this gate exists to refuse
+  lockfile_conflict seed 2: fallback, 23 tool calls, checker ok, admitted False -- negative side failed: preconditions accepted 1 of 2 same-intent states (lockfile_conflict seed 5 resolves to 'take_upstream', which accepts ['take_upstream'], but the program implements 'keep_local'); firing where a sibling resolution is correct is the mismatch this gate exists to refuse
+  lockfile_conflict seed 5: fallback, 16 tool calls, checker ok, admitted True
+  submodule_moved seed 5: fail, 22 tool calls, checker ok, admitted None -- not compiled: the agent did not declare the task done
+  submodule_moved seed 4: fallback, 14 tool calls, checker ok, admitted True
+  submodule_moved seed 8: fallback, 19 tool calls, checker ok, admitted True
+  submodule_moved seed 1: fallback, 16 tool calls, checker ok, admitted True
+
+2b threshold (tune seeds): 0.875
+claim 2: at matched dispatch coverage, executable-precondition dispatch mis-fires less often than text-similarity dispatch (at arm 3's coverage the soft vote's matched point is the hard rule itself (threshold >= 1.0), so it makes arm 3's decisions and cannot show that requiring every probe adds nothing; the registered claim keeps its wording)
+
+Primary metric, uninformed regime, 480 labelled pairs (spec §7 item 1, ADR-0008)
+  arm 3 (pre-registered coverage point): coverage 197/480, mismatch 4/197
+  arm 2 curve: 105 operating point(s), each with a 95% Wilson interval in figure1.csv
+  at matched coverage arm 2 (threshold 0.1414141414141414) has mismatch 171/193; coverage gap -0.008; mismatch difference (arm 2 - arm 3) +0.8657
+  power (item 3): with 193 and 197 fires, alpha 0.05 two-sided and power 0.8, the smallest detectable mismatch difference is 0.142 at a 50% base rate and 0.141 at the observed 0.449
+  baseline arm 2b (soft vote): curve, 4 operating point(s) -- context, not part of the claim
+  baseline arm 2c (intent key): point, 1 operating point(s) -- context, not part of the claim
+
+
+arm 2 baseline floor (spec §7 item 11): not measurable, so not usable: an intent needs two or more candidate resolutions for arm 2 to choose between, and the library's admitted programs give sync_through_a_conflicting_lockfile has ['take_upstream']
+  arm 2 is not a usable baseline (spec §7 item 11), so this run may not say that precondition dispatch beats text similarity; the comparison is reported, not claimed
+
+episode stages skipped (--primary-only): no frozen benchmark
+
+artifacts:
+  build_ledger: build.jsonl
+  build_transcripts: build.transcripts.jsonl
+  library_two_sided: library-two-sided
+  library_positive_only: library-positive-only
+  primary: primary

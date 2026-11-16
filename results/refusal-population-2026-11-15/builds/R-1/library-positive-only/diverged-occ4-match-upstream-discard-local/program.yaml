@@ -1,0 +1,66 @@
+id: diverged-occ4-match-upstream-discard-local
+intent: Make the current branch identical to the upstream branch, discarding any local
+  commits by hard-resetting to the upstream remote-tracking ref.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_attached_branch
+  description: HEAD is attached to a local branch, so a reset moves that branch
+  probe: git symbolic-ref -q HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_exists
+  description: the upstream branch is already available as a local remote-tracking
+    ref
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: local_has_commits_upstream_lacks
+  description: the local branch carries commits that can be discarded
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_has_commits_local_lacks
+  description: upstream has moved ahead of the local branch
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: no tracked changes or untracked files that a hard reset would destroy
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git reset --hard {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is the same commit as the upstream branch
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_local_only_commits
+  description: the branch contains no commits absent from upstream
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -eq 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after
+  description: the working tree has no changes after the reset
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: discard
+provenance:
+  compiled_from_task: 'Upstream moved ahead of me. Get me back in line with it. My
+    local commits can go: make my branch match upstream exactly.'
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: 'Upstream moved ahead of me. Get me back in line with it. My local commits
+    can go: make my branch match upstream exactly./seed-3-diverged-214'
+  fault: diverged
+status: admitted

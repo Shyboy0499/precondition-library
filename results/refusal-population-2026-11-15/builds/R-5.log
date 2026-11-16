@@ -1,0 +1,49 @@
+model: deepseek-flash
+compiled 20; admitted two-sided 14, positive-only 18
+library hash: 1f59e563db9f4989e8a79e8603328a9ac09a8581b17acfcbc0509fabe81d2e4c
+
+build episodes:
+  branch_renamed seed 2: fallback, 12 tool calls, checker ok, admitted True
+  branch_renamed seed 0: fallback, 14 tool calls, checker ok, admitted True
+  branch_renamed seed 6: fallback, 11 tool calls, checker ok, admitted True
+  config_renamed seed 8: fallback, 12 tool calls, checker ok, admitted True
+  config_renamed seed 2: fallback, 15 tool calls, checker ok, admitted True
+  config_renamed seed 23: fallback, 12 tool calls, checker ok, admitted True
+  dirty_tree seed 0: fallback, 12 tool calls, checker ok, admitted True
+  dirty_tree seed 10: fallback, 13 tool calls, checker ok, admitted True
+  dirty_tree seed 7: fallback, 14 tool calls, checker ok, admitted True
+  diverged seed 0: fallback, 12 tool calls, checker ok, admitted False -- refusal side failed: preconditions accepted 1 of 35 real conflicts no resolution can express (refusal-tested admission, configuration R): saleor/saleor@1fef436c133c
+  diverged seed 4: fallback, 14 tool calls, checker ok, admitted False -- refusal side failed: preconditions accepted 1 of 35 real conflicts no resolution can express (refusal-tested admission, configuration R): saleor/saleor@1fef436c133c
+  diverged seed 3: fallback, 8 tool calls, checker ok, admitted True
+  diverged seed 5: fallback, 9 tool calls, checker ok, admitted True
+  lockfile_conflict seed 3: fallback, 21 tool calls, checker ok, admitted False -- positive side failed on lockfile_conflict seed 3: guard refused git config override: git config override 'merge.conflictStyle=diff3'; only ['protocol.file.allow=always'] may be set per invocation
+  lockfile_conflict seed 2: fallback, 18 tool calls, checker ok, admitted False -- negative side failed: preconditions accepted 1 of 2 same-intent states (lockfile_conflict seed 5 resolves to 'take_upstream', which accepts ['take_upstream'], but the program implements 'keep_local'); firing where a sibling resolution is correct is the mismatch this gate exists to refuse
+  lockfile_conflict seed 5: fallback, 17 tool calls, checker ok, admitted False -- refusal side failed: preconditions accepted 2 of 35 real conflicts no resolution can express (refusal-tested admission, configuration R): saleor/saleor@e3c62ad985ed, saleor/saleor@4fb40d636d2b
+  lockfile_conflict seed 6: fallback, 17 tool calls, checker ok, admitted False -- refusal side failed: preconditions accepted 18 of 35 real conflicts no resolution can express (refusal-tested admission, configuration R): saleor/saleor@f1f268d21153, saleor/saleor@b5efc1343e14, saleor/saleor@e3c62ad985ed, saleor/saleor@ad2c9ccff7d9, saleor/saleor@1fef436c133c, saleor/saleor@4fb40d636d2b, saleor/saleor@0e0efbc30033, saleor/saleor@9221056ea321, openfoodfoundation/openfoodnetwork@df0c98d013c6, openfoodfoundation/openfoodnetwork@db809923264a, openfoodfoundation/openfoodnetwork@983bed3c4e8c, openfoodfoundation/openfoodnetwork@cce26cb45334, openfoodfoundation/openfoodnetwork@c9a7a6e89704, openfoodfoundation/openfoodnetwork@f34f6936203b, openfoodfoundation/openfoodnetwork@19da0ba969e6, openfoodfoundation/openfoodnetwork@839b373b5cd1, openfoodfoundation/openfoodnetwork@384ca310a34d, openfoodfoundation/openfoodnetwork@1c628fac5824
+  submodule_moved seed 4: fallback, 8 tool calls, checker ok, admitted True
+  submodule_moved seed 2: fallback, 16 tool calls, checker ok, admitted True
+  submodule_moved seed 8: fallback, 16 tool calls, checker ok, admitted True
+
+2b threshold (tune seeds): 1.0
+claim 2: at matched dispatch coverage, executable-precondition dispatch mis-fires less often than text-similarity dispatch (at arm 3's coverage the soft vote's matched point is the hard rule itself (threshold >= 1.0), so it makes arm 3's decisions and cannot show that requiring every probe adds nothing; the registered claim keeps its wording)
+
+Primary metric, uninformed regime, 480 labelled pairs (spec §7 item 1, ADR-0008)
+  arm 3 (pre-registered coverage point): coverage 191/480, mismatch 0/191
+  arm 2 curve: 89 operating point(s), each with a 95% Wilson interval in figure1.csv
+  at matched coverage arm 2 (threshold 0.14285714285714285) has mismatch 162/191; coverage gap +0.000; mismatch difference (arm 2 - arm 3) +0.8482
+  power (item 3): with 191 and 191 fires, alpha 0.05 two-sided and power 0.8, the smallest detectable mismatch difference is 0.143 at a 50% base rate and 0.142 at the observed 0.424
+  baseline arm 2b (soft vote): curve, 3 operating point(s) -- context, not part of the claim
+  baseline arm 2c (intent key): point, 1 operating point(s) -- context, not part of the claim
+
+
+arm 2 baseline floor (spec §7 item 11): not measurable, so not usable: an intent needs two or more candidate resolutions for arm 2 to choose between, and the library's admitted programs give sync_through_a_conflicting_lockfile has none
+  arm 2 is not a usable baseline (spec §7 item 11), so this run may not say that precondition dispatch beats text similarity; the comparison is reported, not claimed
+
+episode stages skipped (--primary-only): no frozen benchmark
+
+artifacts:
+  build_ledger: build.jsonl
+  build_transcripts: build.transcripts.jsonl
+  library_two_sided: library-two-sided
+  library_positive_only: library-positive-only
+  primary: primary

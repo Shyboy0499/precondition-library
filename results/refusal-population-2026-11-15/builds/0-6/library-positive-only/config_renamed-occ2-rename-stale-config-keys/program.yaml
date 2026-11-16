@@ -1,0 +1,237 @@
+id: config_renamed-occ2-rename-stale-config-keys
+intent: Rename stale settings keys according to config/renames.conf while preserving
+  their values, then commit the change.
+parameters: []
+preconditions:
+- name: config_files_tracked
+  description: config/settings.conf and config/renames.conf are tracked in the index
+  probe: git ls-files --error-unmatch -- config/settings.conf config/renames.conf
+    >/dev/null 2>&1
+  expect_exit: 0
+  expect_pattern: null
+- name: settings_clean
+  description: config/settings.conf has no staged or unstaged changes
+  probe: git diff --quiet -- config/settings.conf && git diff --cached --quiet --
+    config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_conflicts
+  description: the index has no unmerged entries
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+- name: has_unambiguous_stale_key
+  description: settings contains a rename-map old key whose new key is absent, with
+    no duplicate old keys, chained mappings, or colliding targets
+  probe: |-
+    awk '
+    function trim(s) {
+      sub(/^[[:space:]]+/, "", s)
+      sub(/[[:space:]]+$/, "", s)
+      return s
+    }
+    FNR==NR {
+      line=trim($0)
+      if (line == "" || line ~ /^#/) next
+      pos=index(line, "=")
+      if (pos == 0) next
+      old=trim(substr(line, 1, pos-1))
+      new=trim(substr(line, pos+1))
+      if (old != "" && new != "") map[old]=new
+      next
+    }
+    {
+      line=$0
+      pos=index(line, "=")
+      if (pos == 0) next
+      key=trim(substr(line, 1, pos-1))
+      if (key != "") count[key]++
+    }
+    END {
+      found=0
+      for (old in map) {
+        if ((map[old]) in map) exit 1
+        if (count[old] > 1) exit 1
+        if (count[old] == 1) {
+          new=map[old]
+          if (count[new] > 0) exit 1
+          if (used[new]) exit 1
+          used[new]=1
+          found=1
+        }
+      }
+      exit(found ? 0 : 1)
+    }
+    ' config/renames.conf config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  tmp=$(mktemp)
+  trap 'rm -f "$tmp"' EXIT
+  awk '
+  function trim(s) {
+    sub(/^[[:space:]]+/, "", s)
+    sub(/[[:space:]]+$/, "", s)
+    return s
+  }
+  FNR==NR {
+    line=trim($0)
+    if (line == "" || line ~ /^#/) next
+    pos=index(line, "=")
+    if (pos == 0) next
+    old=trim(substr(line, 1, pos-1))
+    new=trim(substr(line, pos+1))
+    if (old != "" && new != "") map[old]=new
+    next
+  }
+  {
+    line=$0
+    pos=index(line, "=")
+    if (pos == 0) { print line; next }
+    left=substr(line, 1, pos-1)
+    right=substr(line, pos)
+    match(left, /^[[:space:]]*/)
+    prefix=substr(left, 1, RLENGTH)
+    rest=substr(left, RLENGTH+1)
+    match(rest, /[[:space:]]*$/)
+    trail=substr(rest, RSTART)
+    key=substr(rest, 1, length(rest)-length(trail))
+    if (key in map) {
+      print prefix map[key] trail right
+      next
+    }
+    print line
+  }
+  ' config/renames.conf config/settings.conf > "$tmp"
+  if ! cmp -s "$tmp" config/settings.conf; then
+    cat "$tmp" > config/settings.conf
+    git add -- config/settings.conf
+    git -c user.name="config maintenance" -c user.email="config-maintenance@example.invalid" commit -m "config: rename stale settings keys" -- config/settings.conf
+  fi
+steps: null
+postconditions:
+- name: settings_committed
+  description: config/settings.conf matches HEAD and has no staged changes
+  probe: git diff --quiet HEAD -- config/settings.conf && git diff --cached --quiet
+    -- config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: no_stale_keys_remain
+  description: no key from the rename map remains in settings.conf
+  probe: |-
+    awk '
+    function trim(s) {
+      sub(/^[[:space:]]+/, "", s)
+      sub(/[[:space:]]+$/, "", s)
+      return s
+    }
+    FNR==NR {
+      line=trim($0)
+      if (line == "" || line ~ /^#/) next
+      pos=index(line, "=")
+      if (pos == 0) next
+      old=trim(substr(line, 1, pos-1))
+      new=trim(substr(line, pos+1))
+      if (old != "" && new != "") map[old]=new
+      next
+    }
+    {
+      line=$0
+      pos=index(line, "=")
+      if (pos == 0) next
+      key=trim(substr(line, 1, pos-1))
+      if (key != "") count[key]++
+    }
+    END {
+      for (old in map) {
+        if (count[old] > 0) exit 1
+      }
+      exit 0
+    }
+    ' config/renames.conf config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: renamed_values_preserved
+  description: the last commit only renames mapped keys and keeps their values unchanged
+  probe: |-
+    {
+      sed 's/^/MAP:/' config/renames.conf
+      git show HEAD^:config/settings.conf | sed 's/^/OLD:/'
+      git show HEAD:config/settings.conf | sed 's/^/NEW:/'
+    } | awk '
+    function trim(s) {
+      sub(/^[[:space:]]+/, "", s)
+      sub(/[[:space:]]+$/, "", s)
+      return s
+    }
+    function parse(line, counts, vals,    pos, key, val) {
+      pos=index(line, "=")
+      if (pos == 0) return
+      key=trim(substr(line, 1, pos-1))
+      if (key == "") return
+      val=trim(substr(line, pos+1))
+      counts[key]++
+      vals[key]=val
+    }
+    {
+      type=substr($0, 1, 4)
+      line=substr($0, 5)
+      if (type == "MAP:") {
+        line=trim(line)
+        if (line == "" || line ~ /^#/) next
+        pos=index(line, "=")
+        if (pos == 0) next
+        old=trim(substr(line, 1, pos-1))
+        new=trim(substr(line, pos+1))
+        if (old != "" && new != "") map[old]=new
+        next
+      }
+      if (type == "OLD:") { parse(line, oldc, oldv); next }
+      if (type == "NEW:") { parse(line, newc, newv); next }
+    }
+    END {
+      for (old in map) {
+        if (oldc[old] > 0) {
+          new=map[old]
+          if (oldc[old] != 1) exit 1
+          if (newc[old] > 0) exit 1
+          if (newc[new] != 1) exit 1
+          if (oldv[old] != newv[new]) exit 1
+        } else {
+          if (newc[old] > 0) exit 1
+        }
+      }
+      for (key in oldc) {
+        if (key in map) continue
+        if (newc[key] != oldc[key]) exit 1
+        if (oldv[key] != newv[key]) exit 1
+      }
+      for (key in newc) {
+        if (key in oldc) continue
+        is_target=0
+        for (old in map) {
+          if (map[old] == key) {
+            is_target=1
+            if (oldc[old] == 0) exit 1
+            break
+          }
+        }
+        if (!is_target) exit 1
+      }
+      exit 0
+    }
+    '
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: Fix the stale config entry the app is warning about, without
+    losing any setting. Rename the old key in the project's settings and keep its
+    value.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Fix the stale config entry the app is warning about, without losing
+    any setting. Rename the old key in the project's settings and keep its value./seed-8-config_renamed-7488
+  fault: config_renamed
+status: candidate

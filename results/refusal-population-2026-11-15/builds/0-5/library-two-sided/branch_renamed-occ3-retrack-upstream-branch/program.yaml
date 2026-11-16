@@ -1,0 +1,67 @@
+id: branch_renamed-occ3-retrack-upstream-branch
+intent: Keep the current branch name, repoint its upstream tracking to the upstream
+  remote's current branch, and fast-forward it to that branch.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: tracks_other_branch_on_same_remote
+  description: The current branch is configured to track a different branch on the
+    upstream remote.
+  probe: |-
+    branch=$(git symbolic-ref --quiet --short HEAD) || exit 1
+    remote=$(git config --get "branch.$branch.remote") || exit 1
+    merge=$(git config --get "branch.$branch.merge") || exit 1
+    [ "$remote" = "{upstream_remote}" ] && [ "$merge" != "refs/heads/{upstream_branch}" ]
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_branch_ref_exists
+  description: The remote-tracking ref for upstream's current branch exists locally.
+  probe: git rev-parse --verify --quiet '{upstream_remote}/{upstream_branch}^{commit}'
+  expect_exit: 0
+  expect_pattern: null
+- name: can_fast_forward
+  description: HEAD is an ancestor of the upstream branch tip, so it can be fast-forwarded.
+  probe: git merge-base --is-ancestor HEAD '{upstream_remote}/{upstream_branch}'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: The working tree and index have no pending changes.
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch --prune {upstream_remote}
+  git branch --set-upstream-to=refs/remotes/{upstream_remote}/{upstream_branch}
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: tracks_upstream_branch
+  description: The current branch tracks the upstream remote's current branch.
+  probe: '[ "$(git rev-parse --abbrev-ref --symbolic-full-name ''@{u}'')" = "{upstream_remote}/{upstream_branch}"
+    ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: head_matches_upstream
+  description: HEAD is the same commit as the upstream branch tip.
+  probe: '[ "$(git rev-parse HEAD)" = "$(git rev-parse ''{upstream_remote}/{upstream_branch}'')"
+    ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after
+  description: The working tree and index remain clean after catching up.
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+variant: retrack
+provenance:
+  compiled_from_task: Make this branch follow upstream's current main line again,
+    and catch it up. Keep my branch's name, point its tracking at upstream's new branch
+    and catch up.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Make this branch follow upstream's current main line again, and catch
+    it up. Keep my branch's name, point its tracking at upstream's new branch and
+    catch up./seed-6-branch_renamed-19837
+  fault: branch_renamed
+status: admitted

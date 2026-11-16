@@ -1,0 +1,103 @@
+id: diverged-occ2-discard-diverged-branch-onto-upstream
+intent: discard local commits and make the current branch match upstream exactly
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: remote_is_configured
+  description: the upstream remote is configured
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_exists
+  description: the upstream-tracking ref is present locally
+  probe: git rev-parse --verify --quiet refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: head_is_attached
+  description: HEAD is attached to a local branch
+  probe: git symbolic-ref --quiet HEAD
+  expect_exit: 0
+  expect_pattern: ^refs/heads/
+- name: branch_tracks_upstream
+  description: the current branch's configured upstream is exactly the upstream branch
+  probe: test "$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)"
+    = "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: remote_head_matches_current_branch
+  description: if the remote advertises a default branch, it is the branch being reset
+  probe: |-
+    head_ref=$(git rev-parse --abbrev-ref refs/remotes/{upstream_remote}/HEAD 2>/dev/null) || true
+    if [ -n "$head_ref" ]; then
+      test "$head_ref" = "{upstream_remote}/$(git symbolic-ref --short HEAD)"
+    fi
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_is_clean
+  description: there are no tracked or untracked changes to preserve
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: the index has no unresolved merge entries
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+- name: has_local_commits_to_discard
+  description: the current branch has commits not in upstream
+  probe: git rev-list --count refs/remotes/{upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: upstream_has_new_commits
+  description: upstream is ahead of the current branch
+  probe: git rev-list --count HEAD..refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: local_and_upstream_changes_are_disjoint
+  description: local-only commits do not touch files changed upstream
+  probe: |-
+    base=$(git merge-base HEAD refs/remotes/{upstream_remote}/{upstream_branch}) || exit 1
+    ! comm -12 \
+      <(git diff --name-only -z --no-renames "$base" HEAD | tr '\0' '\n' | LC_ALL=C sort) \
+      <(git diff --name-only -z --no-renames "$base" refs/remotes/{upstream_remote}/{upstream_branch} | tr '\0' '\n' | LC_ALL=C sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: no_textual_merge_conflicts
+  description: a hypothetical merge of upstream would not conflict with the local
+    commits
+  probe: |-
+    base=$(git merge-base HEAD refs/remotes/{upstream_remote}/{upstream_branch}) || exit 1
+    ! git merge-tree "$base" HEAD refs/remotes/{upstream_remote}/{upstream_branch} | grep -q '<<<<<<<'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git reset --hard refs/remotes/{upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is exactly the upstream commit
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse refs/remotes/{upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_local_commits_ahead
+  description: the branch has no commits beyond upstream
+  probe: git rev-list --count refs/remotes/{upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^0$
+- name: worktree_is_clean
+  description: the working tree is clean after the reset
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: discard
+provenance:
+  compiled_from_task: 'Upstream moved ahead of me. Get me back in line with it. My
+    local commits can go: make my branch match upstream exactly.'
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: 'Upstream moved ahead of me. Get me back in line with it. My local commits
+    can go: make my branch match upstream exactly./seed-3-diverged-212'
+  fault: diverged
+status: candidate

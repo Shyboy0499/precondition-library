@@ -1,0 +1,234 @@
+id: lockfile_conflict-occ2-sync-upstream-keep-local-deps
+intent: Update the current branch from upstream and resolve the dependency lock conflict
+  by keeping locally removed dependencies removed while adding dependencies upstream
+  added.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: clean_worktree
+  description: the working tree has no staged, unstaged, or untracked changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_exists
+  description: the upstream remote-tracking branch exists
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_diverged
+  description: local HEAD and upstream have commits the other lacks
+  probe: |-
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0 &&
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: deps_lock_touched_by_both
+  description: deps.lock changed on both the local branch and upstream since their
+    merge base
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+    git diff --name-only -z "$base" HEAD -- deps.lock | tr '\0' '\n' | grep -qx 'deps.lock' &&
+    git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} -- deps.lock | tr '\0' '\n' | grep -qx 'deps.lock'
+  expect_exit: 0
+  expect_pattern: null
+- name: deps_lock_only_overlap
+  description: deps.lock is the only path modified by both sides since the merge base
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+    test "$(comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | LC_ALL=C sort) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | LC_ALL=C sort) | wc -l)" -eq 1 &&
+    comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | LC_ALL=C sort) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | LC_ALL=C sort) | grep -qx 'deps.lock'
+  expect_exit: 0
+  expect_pattern: null
+- name: deps_lock_format
+  description: deps.lock has the lock-shaped packages block this resolver handles
+  probe: |-
+    git show HEAD:deps.lock | grep -q '^[[:space:]]*packages[[:space:]]*=[[:space:]]*\[$' &&
+    git show HEAD:deps.lock | grep -q '^[[:space:]]*"'
+  expect_exit: 0
+  expect_pattern: null
+- name: local_removed_a_dependency
+  description: the local branch removed at least one dependency entry from deps.lock
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+    comm -23 \
+      <(git show "$base":deps.lock | sed -n 's/^[[:space:]]*"\([^"]*\)".*/\1/p' | LC_ALL=C sort -u) \
+      <(git show HEAD:deps.lock | sed -n 's/^[[:space:]]*"\([^"]*\)".*/\1/p' | LC_ALL=C sort -u) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_added_a_dependency
+  description: upstream added at least one dependency entry to deps.lock
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+    comm -13 \
+      <(git show "$base":deps.lock | sed -n 's/^[[:space:]]*"\([^"]*\)".*/\1/p' | LC_ALL=C sort -u) \
+      <(git show {upstream_remote}/{upstream_branch}:deps.lock | sed -n 's/^[[:space:]]*"\([^"]*\)".*/\1/p' | LC_ALL=C sort -u) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git merge --no-ff --no-commit {upstream_remote}/{upstream_branch} || true
+  git rev-parse -q --verify MERGE_HEAD >/dev/null
+  python3 - <<'PY'
+  import subprocess, re, sys
+
+  def show(rev):
+      return subprocess.check_output(["git", "show", rev + ":deps.lock"], text=True)
+
+  def parse(lines):
+      start = None
+      end = None
+      for i, line in enumerate(lines):
+          if re.match(r'^\s*packages\s*=\s*\[\s*$', line):
+              start = i
+              for j in range(i + 1, len(lines)):
+                  if re.match(r'^\s*\]\s*$', lines[j]):
+                      end = j
+                      break
+              break
+      if start is None or end is None:
+          return lines, [], []
+      return lines[:start+1], lines[start+1:end], lines[end:]
+
+  def entries(body):
+      res = []
+      for line in body:
+          m = re.match(r'^(\s*)"([^"]+)"\s*,?\s*$', line)
+          if m:
+              name = m.group(2).split()[0] if m.group(2).split() else m.group(2)
+              res.append((name, line))
+      return res
+
+  def merge_header(bh, lh, uh):
+      out = []
+      n = max(len(bh), len(lh), len(uh))
+      for i in range(n):
+          bl = bh[i] if i < len(bh) else None
+          ll = lh[i] if i < len(lh) else None
+          ul = uh[i] if i < len(uh) else None
+          if ll is None and ul is None:
+              continue
+          if ll is None:
+              if ul is not None:
+                  out.append(ul)
+              continue
+          if ul is None:
+              out.append(ll)
+              continue
+          if bl is not None and ll == bl and ul != bl:
+              out.append(ul)
+          elif bl is not None and ll != bl and ul != bl and ll != ul:
+              out.append(ul)
+          else:
+              out.append(ll)
+      return out
+
+  def merge(base, local, up):
+      b = base.splitlines()
+      l = local.splitlines()
+      u = up.splitlines()
+      bh, bb, bf = parse(b)
+      lh, lb, lf = parse(l)
+      uh, ub, uf = parse(u)
+      header = merge_header(bh, lh, uh)
+      be = entries(bb)
+      le = entries(lb)
+      ue = entries(ub)
+      bnames = set(n for n, _ in be)
+      lnames = set(n for n, _ in le)
+      removed = bnames - lnames
+      final = []
+      for n, line in le:
+          if n in removed:
+              continue
+          final.append((n, line))
+      finalnames = set(n for n, _ in final)
+      add = []
+      for n, line in ue:
+          if n not in bnames and n not in removed and n not in finalnames:
+              add.append((n, line))
+              finalnames.add(n)
+      if add:
+          at = len(final)
+          for i, (n, _) in enumerate(final):
+              if n in bnames:
+                  at = i
+                  break
+          final[at:at] = add
+      lines = header + [line for n, line in final] + lf
+      return "\n".join(lines) + "\n"
+
+  def main():
+      remote = "{upstream_remote}"
+      branch = "{upstream_branch}"
+      upref = remote + "/" + branch
+      base = subprocess.check_output(["git", "merge-base", "HEAD", upref], text=True).strip()
+      merged = merge(show(base), show("HEAD"), show(upref))
+      with open("deps.lock", "w", encoding="utf-8", newline="") as f:
+          f.write(merged)
+
+  if __name__ == "__main__":
+      main()
+  PY
+  git add deps.lock
+  git commit -m "Merge upstream: keep local dependency removals, add upstream dependencies"
+steps: null
+postconditions:
+- name: no_conflict_markers
+  description: deps.lock contains no merge conflict markers
+  probe: '! grep -q -E ''^(<<<<<<<|=======|>>>>>>>)'' deps.lock'
+  expect_exit: 0
+  expect_pattern: null
+- name: local_removals_absent
+  description: every dependency entry the local branch removed is absent from deps.lock
+  probe: |-
+    base=$(git merge-base HEAD^1 HEAD^2) &&
+    ! comm -12 \
+      <(comm -23 \
+        <(git show "$base":deps.lock | sed -n 's/^[[:space:]]*"\([^"]*\)".*/\1/p' | LC_ALL=C sort -u) \
+        <(git show HEAD^1:deps.lock | sed -n 's/^[[:space:]]*"\([^"]*\)".*/\1/p' | LC_ALL=C sort -u)) \
+      <(sed -n 's/^[[:space:]]*"\([^"]*\)".*/\1/p' deps.lock | LC_ALL=C sort -u) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_additions_present
+  description: every dependency entry upstream added is present in deps.lock
+  probe: |-
+    base=$(git merge-base HEAD^1 HEAD^2) &&
+    ! comm -23 \
+      <(comm -13 \
+        <(git show "$base":deps.lock | sed -n 's/^[[:space:]]*"\([^"]*\)".*/\1/p' | LC_ALL=C sort -u) \
+        <(git show HEAD^2:deps.lock | sed -n 's/^[[:space:]]*"\([^"]*\)".*/\1/p' | LC_ALL=C sort -u)) \
+      <(sed -n 's/^[[:space:]]*"\([^"]*\)".*/\1/p' deps.lock | LC_ALL=C sort -u) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_commit_created
+  description: HEAD is a merge commit with two parents
+  probe: test "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 3
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_state
+  description: no merge is left in progress
+  probe: '! git rev-parse -q --verify MERGE_HEAD'
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree_after
+  description: the working tree is clean after committing the merge
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: keep_local
+provenance:
+  compiled_from_task: Update this branch from upstream and make sure the dependency
+    list still makes sense. Keep my dependency file, with what I removed still removed,
+    and add what upstream added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Update this branch from upstream and make sure the dependency list still
+    makes sense. Keep my dependency file, with what I removed still removed, and add
+    what upstream added./seed-2-lockfile_conflict-29980
+  fault: lockfile_conflict
+status: admitted

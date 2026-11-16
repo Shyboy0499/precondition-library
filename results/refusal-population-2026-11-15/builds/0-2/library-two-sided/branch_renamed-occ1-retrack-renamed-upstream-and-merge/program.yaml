@@ -1,0 +1,118 @@
+id: branch_renamed-occ1-retrack-renamed-upstream-and-merge
+intent: Retarget the current local branch to track upstream's renamed branch and merge
+  that branch into the local commits.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_attached_branch
+  description: HEAD is attached to a local branch, not detached.
+  probe: git symbolic-ref --quiet --short HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_remote_configured
+  description: The remote named by upstream_remote is configured.
+  probe: git remote get-url "{upstream_remote}"
+  expect_exit: 0
+  expect_pattern: null
+- name: tracks_other_upstream_branch
+  description: The current branch tracks a branch of upstream_remote other than upstream_branch,
+    i.e. upstream renamed it.
+  probe: |-
+    branch=$(git symbolic-ref --quiet --short HEAD) || exit 1
+    remote=$(git config --get "branch.$branch.remote") || exit 1
+    merge=$(git config --get "branch.$branch.merge") || exit 1
+    test "$remote" = "{upstream_remote}" || exit 1
+    test "$merge" != "refs/heads/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: new_upstream_branch_known
+  description: The remote-tracking ref upstream_remote/upstream_branch already exists
+    locally.
+  probe: git show-ref --verify --quiet "refs/remotes/{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_head_is_new_branch
+  description: The upstream remote's HEAD symref points at upstream_branch.
+  probe: git symbolic-ref --quiet "refs/remotes/{upstream_remote}/HEAD"
+  expect_exit: 0
+  expect_pattern: ^refs/remotes/{upstream_remote}/{upstream_branch}$
+- name: local_has_commits_not_in_new_upstream
+  description: The local branch has commits not reachable from the new upstream branch.
+  probe: test "$(git rev-list --count "{upstream_remote}/{upstream_branch}..HEAD")"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: new_upstream_has_commits_not_local
+  description: The new upstream branch has commits not reachable from HEAD.
+  probe: test "$(git rev-list --count "HEAD..{upstream_remote}/{upstream_branch}")"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: There are no staged or unstaged tracked changes.
+  probe: git diff --quiet && git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: The index has no unmerged entries.
+  probe: '! git ls-files -u | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_collisions
+  description: No untracked file would be overwritten by the upstream branch.
+  probe: |-
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD "{upstream_remote}/{upstream_branch}" \
+        | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch --prune "{upstream_remote}"
+  git branch --set-upstream-to="{upstream_remote}/{upstream_branch}"
+  git merge --no-edit "{upstream_remote}/{upstream_branch}"
+steps: null
+postconditions:
+- name: tracks_new_upstream
+  description: The current branch now tracks the renamed upstream branch.
+  probe: git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}'
+  expect_exit: 0
+  expect_pattern: ^{upstream_remote}/{upstream_branch}$
+- name: upstream_branch_merged
+  description: The renamed upstream branch is an ancestor of HEAD.
+  probe: git merge-base --is-ancestor "{upstream_remote}/{upstream_branch}" HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_preserved
+  description: HEAD carries the local commits plus a merge commit on top of the upstream
+    branch.
+  probe: test "$(git rev-list --count "{upstream_remote}/{upstream_branch}..HEAD")"
+    -ge 2
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_merge
+  description: The merge left no staged or unstaged tracked changes.
+  probe: git diff --quiet && git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths_after_merge
+  description: The index has no unmerged entries after the merge.
+  probe: '! git ls-files -u | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_leftover_conflict_markers
+  description: No conflict markers were committed in the working tree files.
+  probe: '! git grep -q -e ''^<<<<<<< '' -e ''^>>>>>>> '' -- .'
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: Upstream changed something about its branches and my checkout
+    is lost. Sort it out. Track upstream's new branch and merge it into my own commits.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Upstream changed something about its branches and my checkout is lost.
+    Sort it out. Track upstream's new branch and merge it into my own commits./seed-2-branch_renamed-27083
+  fault: branch_renamed
+status: admitted

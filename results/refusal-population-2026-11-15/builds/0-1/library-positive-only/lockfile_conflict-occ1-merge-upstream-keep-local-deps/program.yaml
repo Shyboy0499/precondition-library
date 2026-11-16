@@ -1,0 +1,238 @@
+id: lockfile_conflict-occ1-merge-upstream-keep-local-deps
+intent: Merge the upstream branch into the current fork, resolving dependency-file
+  collisions by keeping local dependency choices and additions while retaining local
+  removals and incorporating upstream additions.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_local_branch
+  description: HEAD is attached to a local branch rather than detached.
+  probe: git symbolic-ref -q HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: There are no staged, unstaged, or untracked changes before merging.
+  probe: test -z "$(git status --porcelain -z | tr '\0' '\n')"
+  expect_exit: 0
+  expect_pattern: null
+- name: diverged_from_upstream
+  description: The current branch and the upstream-tracking branch have both advanced,
+    so a merge is required.
+  probe: |-
+    git rev-parse --verify "{upstream_remote}/{upstream_branch}" >/dev/null &&
+    test "$(git rev-list --count "{upstream_remote}/{upstream_branch}..HEAD")" -gt 0 &&
+    test "$(git rev-list --count "HEAD..{upstream_remote}/{upstream_branch}")" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: shares_changed_paths
+  description: Local and upstream both changed at least one common path, so dependency
+    changes can collide.
+  probe: |-
+    base=$(git merge-base HEAD "{upstream_remote}/{upstream_branch}") || exit 1
+    comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" "{upstream_remote}/{upstream_branch}" | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -eu
+  git fetch "{upstream_remote}"
+  git -c merge.conflictStyle=diff3 merge --no-ff --no-commit "{upstream_remote}/{upstream_branch}" || true
+  git rev-parse -q --verify MERGE_HEAD >/dev/null
+  python3 - <<'PY'
+  import os
+  import subprocess
+  import sys
+
+  def git_show(stage, path):
+      res = subprocess.run(["git", "show", ":" + str(stage) + ":" + path], capture_output=True)
+      if res.returncode != 0:
+          return None
+      return res.stdout
+
+  def line_key(line):
+      s = line.decode("utf-8", "surrogateescape").strip()
+      if not s or s.startswith("#"):
+          return None
+      if s[0] in ("\"", "'"):
+          q = s[0]
+          end = s.find(q, 1)
+          inner = s[1:end] if end != -1 else s[1:]
+          parts = inner.split()
+          return parts[0] if parts else s
+      if "=" in s:
+          return s.split("=", 1)[0].strip()
+      if s in ("]",):
+          return None
+      return s.split()[0]
+
+  def merge_hunk(base, ours, theirs):
+      base_set = set(base)
+      ours_set = set(ours)
+      base_by_key = dict()
+      for line in base:
+          k = line_key(line)
+          if k is not None and k not in base_by_key:
+              base_by_key[k] = line
+      ours_by_key = dict()
+      for line in ours:
+          k = line_key(line)
+          if k is not None and k not in ours_by_key:
+              ours_by_key[k] = line
+
+      result = list(ours)
+      replacements = dict()
+      additions = list()
+
+      for idx, line in enumerate(theirs):
+          if line in base_set or line in ours_set:
+              continue
+          k = line_key(line)
+          if k is None:
+              additions.append((idx, line))
+              continue
+          if k in ours_by_key:
+              ours_line = ours_by_key[k]
+              base_line = base_by_key.get(k)
+              if base_line is not None and ours_line == base_line:
+                  pos = result.index(ours_line)
+                  replacements[pos] = line
+              continue
+          if k in base_by_key:
+              continue
+          additions.append((idx, line))
+
+      placements = list()
+      for idx, line in additions:
+          pos = 0
+          for j in range(idx - 1, -1, -1):
+              prev = theirs[j]
+              if prev in ours_set:
+                  pos = ours.index(prev) + 1
+                  break
+          placements.append((pos, line))
+
+      for pos, line in replacements.items():
+          result[pos] = line
+      for pos, line in reversed(placements):
+          result.insert(pos, line)
+      return result
+
+  def resolve_text(data):
+      lines = data.splitlines(keepends=True)
+      out = list()
+      i = 0
+      while i < len(lines):
+          line = lines[i]
+          if line.startswith(b"<<<<<<<"):
+              i += 1
+              ours = list()
+              while i < len(lines) and not lines[i].startswith(b"|||||||"):
+                  ours.append(lines[i])
+                  i += 1
+              if i >= len(lines):
+                  out.append(b"<<<<<<<\n")
+                  out.extend(ours)
+                  break
+              i += 1
+              base = list()
+              while i < len(lines) and lines[i].rstrip(b"\r\n") != b"=======":
+                  base.append(lines[i])
+                  i += 1
+              if i < len(lines):
+                  i += 1
+              theirs = list()
+              while i < len(lines) and not lines[i].startswith(b">>>>>>>"):
+                  theirs.append(lines[i])
+                  i += 1
+              if i < len(lines):
+                  i += 1
+              out.extend(merge_hunk(base, ours, theirs))
+          else:
+              out.append(line)
+              i += 1
+      return b"".join(out)
+
+  def main():
+      res = subprocess.run(["git", "diff", "--name-only", "--diff-filter=U", "-z"], capture_output=True, check=True)
+      raw_paths = res.stdout.split(b"\0")
+      paths = [p for p in raw_paths if p]
+      for path_b in paths:
+          path = os.fsdecode(path_b)
+          base = git_show(1, path)
+          ours = git_show(2, path)
+          theirs = git_show(3, path)
+          if ours is None:
+              subprocess.run(["git", "rm", "-f", "--", path], check=True)
+              continue
+          if theirs is None:
+              subprocess.run(["git", "add", "--", path], check=True)
+              continue
+          if base is None:
+              base = b""
+          try:
+              with open(path, "rb") as f:
+                  data = f.read()
+          except FileNotFoundError:
+              data = ours
+          resolved = resolve_text(data)
+          with open(path, "wb") as f:
+              f.write(resolved)
+          subprocess.run(["git", "add", "--", path], check=True)
+      res = subprocess.run(["git", "diff", "--name-only", "--diff-filter=U", "-z"], capture_output=True, check=True)
+      if any(p for p in res.stdout.split(b"\0")):
+          sys.exit("unmerged paths remain")
+
+  if __name__ == "__main__":
+      main()
+  PY
+  git commit -m "Merge {upstream_remote}/{upstream_branch} into $(git symbolic-ref --short HEAD)"
+steps: null
+postconditions:
+- name: upstream_is_ancestor
+  description: The upstream tip is now reachable from HEAD.
+  probe: git merge-base --is-ancestor "{upstream_remote}/{upstream_branch}" HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: is_merge_commit
+  description: HEAD has a second parent, confirming that a merge commit was created.
+  probe: git rev-parse -q --verify HEAD^2
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: The index has no remaining unmerged conflict entries.
+  probe: '! git ls-files -u | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_after_commit
+  description: The tracked working tree and index are clean after the merge commit.
+  probe: |-
+    git diff --quiet &&
+    git diff --cached --quiet &&
+    test -z "$(git ls-files --others --exclude-standard -z | tr '\0' '\n')"
+  expect_exit: 0
+  expect_pattern: null
+- name: retained_local_choices
+  description: The merged tree still differs from upstream, so local dependency choices
+    survived.
+  probe: '! git diff --quiet HEAD "{upstream_remote}/{upstream_branch}"'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_committed_conflict_markers
+  description: Tracked files contain no committed conflict-marker header.
+  probe: '! git grep -q ''^<<<<<<<'' -- .'
+  expect_exit: 0
+  expect_pattern: null
+variant: keep_local
+provenance:
+  compiled_from_task: Get my fork current with upstream; our dependency changes collided.
+    Keep my dependency file, with what I removed still removed, and add what upstream
+    added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get my fork current with upstream; our dependency changes collided.
+    Keep my dependency file, with what I removed still removed, and add what upstream
+    added./seed-3-lockfile_conflict-25587
+  fault: lockfile_conflict
+status: candidate

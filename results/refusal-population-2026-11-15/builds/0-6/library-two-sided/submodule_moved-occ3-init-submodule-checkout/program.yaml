@@ -1,0 +1,51 @@
+id: submodule_moved-occ3-init-submodule-checkout
+intent: Initialise the nested repository (submodule) declared in this project and
+  check it out at the commit recorded in HEAD
+parameters:
+- submodule_path
+preconditions:
+- name: submodule_declared
+  description: .gitmodules declares a submodule at the given path
+  probe: git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | cut -d'
+    ' -f2- | grep -qxF '{submodule_path}'
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_gitlink_in_head
+  description: HEAD records a gitlink entry at the submodule path
+  probe: git ls-tree HEAD -- '{submodule_path}' | grep -q '^160000 commit '
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_not_initialised
+  description: the submodule has no working tree checkout yet
+  probe: git submodule status -- '{submodule_path}' | grep -q '^-'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git submodule update --init --recursive -- '{submodule_path}'
+steps: null
+postconditions:
+- name: submodule_at_recorded_commit
+  description: submodule status reports a clean checkout (no leading '-' or '+')
+  probe: git submodule status -- '{submodule_path}' | grep -q '^ [0-9a-f]\{40\}'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_head_matches_gitlink
+  description: the submodule's HEAD equals the commit recorded in the superproject
+  probe: test "$(git -C '{submodule_path}' rev-parse HEAD)" = "$(git rev-parse HEAD:'{submodule_path}')"
+  expect_exit: 0
+  expect_pattern: null
+- name: superproject_clean
+  description: initialising the submodule left the superproject working tree clean
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+variant: init
+provenance:
+  compiled_from_task: A nested repository in this project needs bringing into line.
+    Initialise the nested repository and check it out.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: A nested repository in this project needs bringing into line. Initialise
+    the nested repository and check it out./seed-4-submodule_moved-7488
+  fault: submodule_moved
+status: admitted

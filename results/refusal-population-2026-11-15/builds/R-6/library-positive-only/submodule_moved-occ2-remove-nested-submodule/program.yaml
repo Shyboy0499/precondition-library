@@ -1,0 +1,75 @@
+id: submodule_moved-occ2-remove-nested-submodule
+intent: Remove the nested submodule checkout so the repository matches upstream, which
+  dropped the submodule.
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: upstream_tracking_ref_present
+  description: The upstream remote-tracking branch exists locally.
+  probe: git rev-parse --verify --quiet "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_records_submodule_gitlink
+  description: The local HEAD records a gitlink at the nested dependency path.
+  probe: git ls-tree -r HEAD -- "{submodule_path}" | grep -q '^160000 commit '
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_dropped_submodule
+  description: Upstream no longer has any tree entry at the nested dependency path.
+  probe: test -z "$(git ls-tree -r --name-only "{upstream_remote}/{upstream_branch}"
+    -- "{submodule_path}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: nested_checkout_present
+  description: The submodule is initialized and has a working checkout at the path.
+  probe: test -e "{submodule_path}/.git"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: There are no modified, untracked, or ignored files before fast-forwarding.
+  probe: test -z "$(git status --porcelain --ignored)"
+  expect_exit: 0
+  expect_pattern: null
+- name: fast_forward_possible
+  description: The local HEAD is an ancestor of upstream, so no local commits would
+    be lost.
+  probe: git merge-base --is-ancestor HEAD "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git merge --ff-only "{upstream_remote}/{upstream_branch}"
+  git clean -ffdx -- "{submodule_path}"
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is exactly at the upstream branch tip.
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse "{upstream_remote}/{upstream_branch}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_gitlink_removed
+  description: HEAD no longer records a tree entry at the nested dependency path.
+  probe: test -z "$(git ls-tree -r --name-only HEAD -- "{submodule_path}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: nested_checkout_removed
+  description: The nested working checkout is gone.
+  probe: test ! -e "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after
+  description: The working tree is clean, including ignored and untracked files.
+  probe: test -z "$(git status --porcelain --ignored)"
+  expect_exit: 0
+  expect_pattern: null
+variant: remove
+provenance:
+  compiled_from_task: Get this repo's nested dependency consistent with upstream.
+    Remove the nested checkout, the way upstream did.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this repo's nested dependency consistent with upstream. Remove the
+    nested checkout, the way upstream did./seed-0-submodule_moved-17967
+  fault: submodule_moved
+status: admitted

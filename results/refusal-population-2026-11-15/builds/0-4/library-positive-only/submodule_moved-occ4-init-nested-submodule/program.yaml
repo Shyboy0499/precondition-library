@@ -1,0 +1,44 @@
+id: submodule_moved-occ4-init-nested-submodule
+intent: Initialise the nested repository declared as a submodule and check it out
+  at the commit recorded by the parent repository.
+parameters:
+- submodule_path
+preconditions:
+- name: submodule_reference_in_index
+  description: the parent repository tracks a gitlink at the declared submodule path
+  probe: git ls-files -s -z -- "{submodule_path}" | tr '\0' '\n'
+  expect_exit: 0
+  expect_pattern: ^160000 [0-9a-f]+ 0\t{submodule_path}$
+- name: submodule_not_initialised
+  description: the submodule is declared but its working tree has not been initialised
+    or checked out
+  probe: git submodule status -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: ^-[0-9a-f]+[[:space:]]+{submodule_path}
+body: |
+  git submodule init -- "{submodule_path}"
+  git submodule update --init -- "{submodule_path}"
+steps: null
+postconditions:
+- name: submodule_checked_out
+  description: the submodule is initialised and checked out at the commit recorded
+    in the parent index
+  probe: git submodule status -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: ^ [0-9a-f]+[[:space:]]+{submodule_path}
+- name: parent_worktree_clean
+  description: initialising and checking out the submodule left the parent worktree
+    clean
+  probe: '! git status --porcelain --ignore-submodules=none | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+variant: init
+provenance:
+  compiled_from_task: A nested repository in this project needs bringing into line.
+    Initialise the nested repository and check it out.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: A nested repository in this project needs bringing into line. Initialise
+    the nested repository and check it out./seed-4-submodule_moved-4812
+  fault: submodule_moved
+status: admitted

@@ -1,0 +1,93 @@
+id: diverged-occ5-diverged-merge-upstream
+intent: Bring a diverged branch back into line with upstream by merging upstream into
+  it and keeping both histories.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_exists
+  description: the upstream remote-tracking branch is present locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}^{commit}
+  expect_exit: 0
+  expect_pattern: null
+- name: shares_merge_base
+  description: the branch and upstream share a common ancestor, so this is a divergence
+    and not unrelated history
+  probe: git merge-base HEAD {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_ahead
+  description: the current branch has at least one commit that upstream does not have
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_commits_behind
+  description: upstream has at least one commit the current branch does not have
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_and_index_clean
+  description: nothing is staged, modified or untracked, so the merge cannot be blocked
+    by local changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: there is no half-finished merge or other unmerged index entries
+  probe: test ! -e "$(git rev-parse --git-path MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_default_branch_is_target
+  description: the remote's default branch is the branch being merged (or the remote
+    head is unset), so this is not a renamed-default-branch situation
+  probe: |-
+    head=$(git symbolic-ref -q --short "refs/remotes/{upstream_remote}/HEAD" 2>/dev/null)
+    test -z "$head" || test "$head" = "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_lockfile_changed_on_both_sides
+  description: no dependency lockfile is modified on both sides, which would make
+    the merge conflict
+  probe: |-
+    ! comm -12 \
+      <(git diff --name-only -z "{upstream_remote}/{upstream_branch}...HEAD" | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "HEAD...{upstream_remote}/{upstream_branch}" | tr '\0' '\n' | sort) \
+      | grep -Eqi '(^|/)[^/]*lock[^/]*$'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git merge --no-ff {upstream_remote}/{upstream_branch} -m "Merge {upstream_remote}/{upstream_branch}"
+steps: null
+postconditions:
+- name: head_is_merge_commit
+  description: HEAD is a merge commit with exactly two parents
+  probe: test "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 3
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_merged_in
+  description: upstream's tip is the second parent of HEAD
+  probe: test "$(git rev-parse HEAD^2)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: upstream is fully contained in the current history
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_merge
+  description: the merge left no staged, modified or untracked files behind
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: This branch and upstream have both changed. Bring it back into
+    line. Merge upstream into my branch and keep both histories.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: This branch and upstream have both changed. Bring it back into line.
+    Merge upstream into my branch and keep both histories./seed-0-diverged-25587
+  fault: diverged
+status: candidate

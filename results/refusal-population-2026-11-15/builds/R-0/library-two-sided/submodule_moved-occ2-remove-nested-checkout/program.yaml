@@ -1,0 +1,100 @@
+id: submodule_moved-occ2-remove-nested-checkout
+intent: Remove a nested submodule checkout and its stale local configuration so the
+  repository matches upstream, which dropped that submodule.
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: upstream_ref_exists
+  description: the upstream branch tip is available locally
+  probe: git rev-parse --verify --quiet "{upstream_remote}/{upstream_branch}^{commit}"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_has_submodule_gitlink
+  description: HEAD records a gitlink at the nested checkout path
+  probe: out=$(git ls-tree HEAD -- "{submodule_path}") && printf '%s\n' "$out" | grep
+    -q '^160000 commit '
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_dropped_submodule_gitlink
+  description: upstream's tree has no entry at the nested checkout path
+  probe: out=$(git ls-tree "{upstream_remote}/{upstream_branch}" -- "{submodule_path}")
+    && test -z "$out"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_dropped_submodule_config
+  description: upstream's .gitmodules no longer declares this nested checkout
+  probe: '! git show "{upstream_remote}/{upstream_branch}:.gitmodules" 2>/dev/null
+    | grep -Fq ''path = {submodule_path}'''
+  expect_exit: 0
+  expect_pattern: null
+- name: local_is_ancestor_of_upstream
+  description: local HEAD can be fast-forwarded to upstream
+  probe: git merge-base --is-ancestor HEAD "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: no tracked or untracked files are present in the superproject
+  probe: out=$(git status --porcelain --untracked-files=normal) && test -z "$out"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_checkout_clean
+  description: the initialized nested checkout has no local modifications or ignored
+    files
+  probe: out=$(git -C "{submodule_path}" status --porcelain --ignored) && test -z
+    "$out"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch {upstream_remote} {upstream_branch}
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+  if [ -e "{submodule_path}" ]; then
+    git clean -xfdff -- "{submodule_path}"
+    rmdir -p "{submodule_path}" 2>/dev/null || true
+  fi
+  git config --local --remove-section "submodule.{submodule_path}" 2>/dev/null || true
+steps: null
+postconditions:
+- name: head_equals_upstream
+  description: local HEAD is the upstream tip
+  probe: head=$(git rev-parse HEAD) && upstream=$(git rev-parse "{upstream_remote}/{upstream_branch}")
+    && test "$head" = "$upstream"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_submodule_gitlink
+  description: HEAD no longer records any entry at the nested checkout path
+  probe: out=$(git ls-tree HEAD -- "{submodule_path}") && test -z "$out"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_submodule_reference
+  description: HEAD's .gitmodules no longer declares this nested checkout
+  probe: '! git show HEAD:.gitmodules 2>/dev/null | grep -Fq ''path = {submodule_path}'''
+  expect_exit: 0
+  expect_pattern: null
+- name: no_stale_submodule_config
+  description: the local configuration has no section for this nested checkout
+  probe: '! git config --local --get-regexp ''^submodule\.'' | grep -Fq "{submodule_path}"'
+  expect_exit: 0
+  expect_pattern: null
+- name: nested_checkout_absent
+  description: the nested checkout path has been removed
+  probe: test ! -e "{submodule_path}" && test ! -L "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after
+  description: the superproject has no remaining changes
+  probe: out=$(git status --porcelain --untracked-files=normal) && test -z "$out"
+  expect_exit: 0
+  expect_pattern: null
+variant: remove
+provenance:
+  compiled_from_task: Get this repo's nested dependency consistent with upstream.
+    Remove the nested checkout, the way upstream did.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this repo's nested dependency consistent with upstream. Remove the
+    nested checkout, the way upstream did./seed-0-submodule_moved-213
+  fault: submodule_moved
+status: admitted

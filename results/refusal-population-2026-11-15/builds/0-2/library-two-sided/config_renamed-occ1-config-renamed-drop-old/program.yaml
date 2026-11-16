@@ -1,0 +1,171 @@
+id: config_renamed-occ1-config-renamed-drop-old
+intent: delete config lines whose key was renamed upstream, but only where the new
+  key name is already set in the same file, then commit the edit
+parameters:
+- work_dir
+preconditions:
+- name: renames_map_present
+  description: the repository tracks a renames.conf file that declares at least one
+    old = new key mapping
+  probe: |-
+    cd "{work_dir}"
+    map=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n1)
+    [ -n "$map" ] || exit 1
+    awk '!/^[[:space:]]*#/ && /=/ { found=1 } END { exit !found }' "$map"
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_key_duplicated_in_config
+  description: at least one non-dotfile, non-secret config file still assigns an old
+    key although the same file already assigns that key's new name
+  probe: |-
+    cd "{work_dir}"
+    map=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n1)
+    [ -n "$map" ] || exit 1
+    mapdir=$(dirname "$map")
+    candidate() {
+      f=$1
+      [ -n "$f" ] || return 1
+      if [ "$f" = "$map" ]; then return 1; fi
+      case "$f" in */.*|.*) return 1 ;; esac
+      case "$f" in *secret*|*credential*|*token*|*.pem|*.key|*.p12|*.env) return 1 ;; esac
+      [ -f "$f" ] || return 1
+      case "$f" in "$mapdir"/*|*.conf|*.cfg|*.ini|*.toml|*.properties) return 0 ;; esac
+      return 1
+    }
+    hit=0
+    while IFS= read -r f; do
+      candidate "$f" || continue
+      while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in \#*|"") continue ;; *=*) ;; *) continue ;; esac
+        old=${line%%=*}
+        new=${line#*=}
+        old=$(printf '%s' "$old" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+        new=$(printf '%s' "$new" | sed 's/#.*//; s/^[[:space:]]*//; s/[[:space:]]*$//')
+        [ -n "$old" ] || continue
+        [ -n "$new" ] || continue
+        [ "$old" != "$new" ] || continue
+        o=$(printf '%s' "$old" | sed 's/[][\\.^$*+?(){}|]/\\&/g')
+        n=$(printf '%s' "$new" | sed 's/[][\\.^$*+?(){}|]/\\&/g')
+        if grep -Eq "^[[:space:]]*${o}[[:space:]]*=" "$f" && grep -Eq "^[[:space:]]*${n}[[:space:]]*=" "$f"; then
+          hit=1
+        fi
+      done < "$map"
+    done < <(git ls-files -z | tr '\0' '\n')
+    [ "$hit" = 1 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the working tree has no uncommitted or untracked files before the edit
+  probe: |-
+    cd "{work_dir}"
+    ! git status --porcelain | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -eu
+  cd "{work_dir}"
+  map=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n1)
+  [ -n "$map" ] || { echo "no renames.conf found" >&2; exit 1; }
+  mapdir=$(dirname "$map")
+  candidate() {
+    f=$1
+    [ -n "$f" ] || return 1
+    if [ "$f" = "$map" ]; then return 1; fi
+    case "$f" in */.*|.*) return 1 ;; esac
+    case "$f" in *secret*|*credential*|*token*|*.pem|*.key|*.p12|*.env) return 1 ;; esac
+    [ -f "$f" ] || return 1
+    case "$f" in "$mapdir"/*|*.conf|*.cfg|*.ini|*.toml|*.properties) return 0 ;; esac
+    return 1
+  }
+  changed=$(mktemp)
+  trap 'rm -f "$changed"' EXIT
+  : > "$changed"
+  while IFS= read -r f; do
+    candidate "$f" || continue
+    touched=0
+    while IFS= read -r line || [ -n "$line" ]; do
+      case "$line" in \#*|"") continue ;; *=*) ;; *) continue ;; esac
+      old=${line%%=*}
+      new=${line#*=}
+      old=$(printf '%s' "$old" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+      new=$(printf '%s' "$new" | sed 's/#.*//; s/^[[:space:]]*//; s/[[:space:]]*$//')
+      [ -n "$old" ] || continue
+      [ -n "$new" ] || continue
+      [ "$old" != "$new" ] || continue
+      o=$(printf '%s' "$old" | sed 's/[][\\.^$*+?(){}|]/\\&/g')
+      n=$(printf '%s' "$new" | sed 's/[][\\.^$*+?(){}|]/\\&/g')
+      grep -Eq "^[[:space:]]*${n}[[:space:]]*=" "$f" || continue
+      grep -Eq "^[[:space:]]*${o}[[:space:]]*=" "$f" || continue
+      sed -i "/^[[:space:]]*${o}[[:space:]]*=/d" "$f"
+      touched=1
+    done < "$map"
+    if [ "$touched" = 1 ]; then printf '%s\n' "$f" >> "$changed"; fi
+  done < <(git ls-files -z | tr '\0' '\n')
+  if [ -s "$changed" ]; then
+    sort -u "$changed" -o "$changed"
+    while IFS= read -r f; do git add -- "$f"; done < "$changed"
+    git -c user.name=git-maintainer -c user.email=git-maintainer@example.com \
+      commit -m "config: drop old key lines already set under their renamed keys"
+  fi
+steps: null
+postconditions:
+- name: no_stale_duplicate_keys
+  description: no non-dotfile, non-secret config file still assigns an old key whose
+    new name is also assigned in that same file
+  probe: |-
+    cd "{work_dir}"
+    map=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n1)
+    [ -n "$map" ] || exit 1
+    mapdir=$(dirname "$map")
+    candidate() {
+      f=$1
+      [ -n "$f" ] || return 1
+      if [ "$f" = "$map" ]; then return 1; fi
+      case "$f" in */.*|.*) return 1 ;; esac
+      case "$f" in *secret*|*credential*|*token*|*.pem|*.key|*.p12|*.env) return 1 ;; esac
+      [ -f "$f" ] || return 1
+      case "$f" in "$mapdir"/*|*.conf|*.cfg|*.ini|*.toml|*.properties) return 0 ;; esac
+      return 1
+    }
+    hit=0
+    while IFS= read -r f; do
+      candidate "$f" || continue
+      while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in \#*|"") continue ;; *=*) ;; *) continue ;; esac
+        old=${line%%=*}
+        new=${line#*=}
+        old=$(printf '%s' "$old" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+        new=$(printf '%s' "$new" | sed 's/#.*//; s/^[[:space:]]*//; s/[[:space:]]*$//')
+        [ -n "$old" ] || continue
+        [ -n "$new" ] || continue
+        [ "$old" != "$new" ] || continue
+        o=$(printf '%s' "$old" | sed 's/[][\\.^$*+?(){}|]/\\&/g')
+        n=$(printf '%s' "$new" | sed 's/[][\\.^$*+?(){}|]/\\&/g')
+        if grep -Eq "^[[:space:]]*${o}[[:space:]]*=" "$f" && grep -Eq "^[[:space:]]*${n}[[:space:]]*=" "$f"; then
+          hit=1
+        fi
+      done < "$map"
+    done < <(git ls-files -z | tr '\0' '\n')
+    [ "$hit" = 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: change_committed
+  description: the working tree is clean after the edit, so the deletion is recorded
+    in a commit
+  probe: |-
+    cd "{work_dir}"
+    ! git status --porcelain | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+variant: drop_old
+provenance:
+  compiled_from_task: Some setting in my config has been renamed upstream. Sort the
+    config out. The new name is already set too, so delete the old key's line and
+    keep the new one.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Some setting in my config has been renamed upstream. Sort the config
+    out. The new name is already set too, so delete the old key's line and keep the
+    new one./seed-31-config_renamed-27083
+  fault: config_renamed
+status: candidate

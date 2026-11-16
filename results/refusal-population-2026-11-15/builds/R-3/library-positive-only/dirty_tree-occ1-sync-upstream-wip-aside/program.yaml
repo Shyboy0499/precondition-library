@@ -1,0 +1,77 @@
+id: dirty_tree-occ1-sync-upstream-wip-aside
+intent: 'Bring the checked-out branch up to date with upstream while preserving the
+  work in progress: copy each locally modified or colliding untracked file to `<name>.local`
+  beside upstream''s version, then fast-forward the branch.'
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_exists
+  description: the named upstream remote-tracking ref exists locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: fast_forward_possible
+  description: HEAD is an ancestor of upstream so a --ff-only merge can update the
+    branch
+  probe: git merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ahead
+  description: upstream has at least one commit the local branch does not have
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: has_local_work_to_preserve
+  description: tracked files differ from HEAD, or untracked files sit at paths upstream's
+    tree already tracks, so there is work in progress to set aside
+  probe: '{ git diff --name-only --diff-filter=ACMRT -z HEAD | tr ''\0'' ''\n'' |
+    grep -q .; } || git ls-files --others --exclude-standard -z | tr ''\0'' ''\n''
+    | while IFS= read -r p; do git cat-file -e "{upstream_remote}/{upstream_branch}:$p"
+    2>/dev/null && printf ''%s\n'' "$p"; done | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  upstream_ref="{upstream_remote}/{upstream_branch}"
+  while IFS= read -r -d '' p; do
+    cp -a -- "$p" "$p.local"
+  done < <(git diff --name-only --diff-filter=ACMRT -z HEAD)
+  while IFS= read -r -d '' p; do
+    if git cat-file -e "$upstream_ref:$p" 2>/dev/null; then
+      cp -a -- "$p" "$p.local"
+      rm -f -- "$p"
+    fi
+  done < <(git ls-files --others --exclude-standard -z)
+  git reset --hard HEAD
+  git merge --ff-only "$upstream_ref"
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is exactly upstream's tip
+  probe: '[ "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+    ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_worktree_matches_head
+  description: no tracked file differs from HEAD, so the worktree is upstream's version
+  probe: git diff --quiet HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: preserved_work_sits_beside
+  description: at least one `<name>.local` file holds the work that was set aside
+  probe: git ls-files --others --exclude-standard -z | tr '\0' '\n' | grep -q '\.local$'
+  expect_exit: 0
+  expect_pattern: null
+variant: aside
+provenance:
+  compiled_from_task: Bring this branch up to date with upstream, but my work in progress
+    must survive. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Bring this branch up to date with upstream, but my work in progress
+    must survive. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update./seed-2-dirty_tree-212
+  fault: dirty_tree
+status: admitted

@@ -1,0 +1,91 @@
+id: submodule_moved-occ1-repin-submodule-upstream
+intent: reconcile a nested repository with upstream by fast-forwarding to upstream
+  and checking the submodule out at the upstream-pinned commit
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: upstream_tracking_branch_present
+  description: the upstream remote-tracking branch exists and resolves to a commit
+  probe: git rev-parse --verify --quiet "refs/remotes/{upstream_remote}/{upstream_branch}^{commit}"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_branch_behind_upstream
+  description: HEAD has no commits that upstream lacks and upstream is strictly ahead
+    so a fast-forward is possible
+  probe: |-
+    test "$(git rev-list --count "refs/remotes/{upstream_remote}/{upstream_branch}"..HEAD)" -eq 0 &&
+    test "$(git rev-list --count HEAD.."refs/remotes/{upstream_remote}/{upstream_branch}")" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: no tracked, untracked, or submodule changes are present
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: local_head_pins_submodule
+  description: HEAD records a gitlink at the submodule path
+  probe: git ls-tree HEAD -- "{submodule_path}" | grep -q '^160000 commit '
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_pins_submodule
+  description: the upstream branch records a gitlink at the submodule path
+  probe: git ls-tree "refs/remotes/{upstream_remote}/{upstream_branch}" -- "{submodule_path}"
+    | grep -q '^160000 commit '
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_pins_a_different_submodule_commit
+  description: the commit upstream pins for the submodule differs from the one recorded
+    in HEAD
+  probe: test "$(git rev-parse "HEAD:{submodule_path}")" != "$(git rev-parse "refs/remotes/{upstream_remote}/{upstream_branch}:{submodule_path}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_checkout_initialised
+  description: the submodule working tree is initialised with a checked-out commit
+  probe: git -C "{submodule_path}" rev-parse --verify --quiet HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: gitmodules_declares_submodule
+  description: .gitmodules maps a submodule to the path
+  probe: git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | sed 's/^[^
+    ]* //' | grep -Fxq -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch "{upstream_remote}" "{upstream_branch}:refs/remotes/{upstream_remote}/{upstream_branch}"
+  git merge --ff-only "refs/remotes/{upstream_remote}/{upstream_branch}"
+  git submodule update --init "{submodule_path}"
+steps: null
+postconditions:
+- name: head_equals_upstream
+  description: HEAD is exactly the upstream branch commit
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/remotes/{upstream_remote}/{upstream_branch}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_checked_out_at_upstream_pin
+  description: the submodule working tree is checked out at the commit upstream pins
+  probe: test "$(git -C "{submodule_path}" rev-parse HEAD)" = "$(git rev-parse "refs/remotes/{upstream_remote}/{upstream_branch}:{submodule_path}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: superproject_clean
+  description: the superproject has no modified, deleted, or untracked files after
+    the update
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_clean
+  description: the submodule has no local modifications
+  probe: test -z "$(git -C "{submodule_path}" status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: repin
+provenance:
+  compiled_from_task: Upstream and this clone disagree about a nested repository.
+    Reconcile them. Check the nested repository out at the commit upstream now pins.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Upstream and this clone disagree about a nested repository. Reconcile
+    them. Check the nested repository out at the commit upstream now pins./seed-1-submodule_moved-7488
+  fault: submodule_moved
+status: admitted

@@ -1,0 +1,90 @@
+id: dirty_tree-occ3-upstream-update-stash
+intent: Fetch the latest upstream, stash all uncommitted work, fast-forward the current
+  branch, then restore the stashed work.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: has_upstream_remote
+  description: the configured upstream remote exists
+  probe: git remote | grep -Fqx -- '{upstream_remote}'
+  expect_exit: 0
+  expect_pattern: null
+- name: has_upstream_branch_ref
+  description: the upstream branch is already known as a remote-tracking ref
+  probe: git show-ref --verify --quiet 'refs/remotes/{upstream_remote}/{upstream_branch}'
+  expect_exit: 0
+  expect_pattern: null
+- name: on_local_branch
+  description: HEAD is attached to a local branch
+  probe: git symbolic-ref --quiet --short HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_has_changes
+  description: there is uncommitted tracked or untracked work to stash
+  probe: test -n "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths_before
+  description: the index has no unresolved conflicts before stashing
+  probe: '! git diff --name-only --diff-filter=U | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: fast_forward_possible
+  description: the current branch has no local commits missing upstream and upstream
+    has commits to bring in
+  probe: |-
+    test "$(git rev-list --count '{upstream_remote}/{upstream_branch}'..HEAD)" -eq 0 &&
+    test "$(git rev-list --count HEAD..'{upstream_remote}/{upstream_branch}')" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: no_tracked_upstream_collisions
+  description: no locally modified tracked path is also changed by the upstream update
+  probe: |-
+    ! comm -12 \
+      <(git diff --name-only -z HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD '{upstream_remote}/{upstream_branch}' | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_upstream_collisions
+  description: no untracked local path is added or changed by the upstream update
+  probe: |-
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD '{upstream_remote}/{upstream_branch}' | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch {upstream_remote}
+  git stash push -u -m "wip before upstream update"
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+  git stash pop
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: the current branch tip is the upstream branch tip
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse '{upstream_remote}/{upstream_branch}')"
+  expect_exit: 0
+  expect_pattern: null
+- name: work_restored
+  description: the working tree has uncommitted changes again after the stash is popped
+  probe: test -n "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: restoring the stash left no conflict entries in the index
+  probe: '! git diff --name-only --diff-filter=U | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+variant: stash
+provenance:
+  compiled_from_task: Get the latest from upstream here, and keep every change I have
+    not saved yet. Stash my uncommitted work, update the branch, then put my work
+    back.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get the latest from upstream here, and keep every change I have not
+    saved yet. Stash my uncommitted work, update the branch, then put my work back./seed-5-dirty_tree-29016
+  fault: dirty_tree
+status: admitted

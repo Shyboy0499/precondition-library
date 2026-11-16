@@ -1,0 +1,2 @@
+{"episode_id": "Upstream and this clone disagree about a nested repository. Reconcile them. Check the nested repository out at the commit upstream now pins./seed-1-submodule_moved-3956", "from": null, "program_id": "submodule_moved-occ1-repin-nested-repo-to-upstream-pin", "to": "candidate"}
+{"episode_id": "submodule_moved/seed-1/occurrence-1", "from": "candidate", "program_id": "submodule_moved-occ1-repin-nested-repo-to-upstream-pin", "to": "admitted"}

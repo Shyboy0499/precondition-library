@@ -1,0 +1,63 @@
+id: submodule_moved-occ1-init-submodule-checkout
+intent: Initialise the nested repository and check it out.
+parameters:
+- submodule_path
+preconditions:
+- name: submodule_declared
+  description: .gitmodules declares the given path
+  probe: git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | sed 's/^[^[:space:]]*[[:space:]]//'
+    | grep -qxF -- '{submodule_path}'
+  expect_exit: 0
+  expect_pattern: null
+- name: path_is_gitlink
+  description: the index records a gitlink at the submodule path
+  probe: git ls-files -s -z -- '{submodule_path}' | tr '\0' '\n' | grep -q '^160000
+    '
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_not_initialized
+  description: the submodule working tree has not been checked out yet
+  probe: git submodule status -- '{submodule_path}' | grep -q '^-'
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_superproject
+  description: the superproject working tree is clean
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git submodule update --init -- {submodule_path}
+steps: null
+postconditions:
+- name: submodule_initialized
+  description: the submodule is checked out at the recorded commit
+  probe: git submodule status -- '{submodule_path}' | grep -q '^ '
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_head_matches_gitlink
+  description: the submodule HEAD matches the commit recorded in the superproject
+    index
+  probe: test "$(git -C '{submodule_path}' rev-parse HEAD)" = "$(git ls-tree HEAD
+    -- '{submodule_path}' | awk '{print $3}')"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_worktree_clean
+  description: the submodule working tree is clean
+  probe: test -z "$(git -C '{submodule_path}' status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: superproject_clean
+  description: the superproject working tree is clean after initialisation
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: init
+provenance:
+  compiled_from_task: A nested repository in this project needs bringing into line.
+    Initialise the nested repository and check it out.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: A nested repository in this project needs bringing into line. Initialise
+    the nested repository and check it out./seed-4-submodule_moved-10981
+  fault: submodule_moved
+status: admitted

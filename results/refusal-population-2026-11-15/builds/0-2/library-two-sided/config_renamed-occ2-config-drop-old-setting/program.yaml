@@ -1,0 +1,189 @@
+id: config_renamed-occ2-config-drop-old-setting
+intent: Remove deprecated old setting names from config when the new name is already
+  set, keeping the new setting and committing the change.
+parameters: []
+preconditions:
+- name: renames_config_present
+  description: config/renames.conf exists and lists at least one old = new key mapping
+  probe: |-
+    test -f config/renames.conf &&
+    grep -Eq '^[[:space:]]*[^#[:space:]]+[[:space:]]*=[[:space:]]*[^#[:space:]]+' config/renames.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: settings_file_tracked_and_clean
+  description: config/settings.conf is tracked and has no staged or unstaged changes
+  probe: |-
+    git ls-files --error-unmatch config/settings.conf >/dev/null 2>&1 &&
+    git diff --quiet -- config/settings.conf &&
+    git diff --cached --quiet -- config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_old_key_with_new_key_set
+  description: at least one old key from config/renames.conf is set in config/settings.conf
+    together with its new key
+  probe: |-
+    awk -F= '
+      FNR==NR {
+        if ($0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*$/) next
+        o=$1; n=$2
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", o)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", n)
+        old[o]=n
+        next
+      }
+      {
+        l=$0
+        if (l ~ /^[[:space:]]*#/) next
+        k=l
+        sub(/[[:space:]]*=.*/, "", k)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+        present[k]=1
+      }
+      END {
+        for (o in old) {
+          if (present[o] && present[old[o]]) exit 0
+        }
+        exit 1
+      }
+    ' config/renames.conf config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  tmp=$(mktemp)
+  git show HEAD:config/settings.conf | awk -F= '
+    FILENAME == "config/renames.conf" {
+      if ($0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*$/) next
+      o=$1; n=$2
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", o)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", n)
+      old[o]=n
+      next
+    }
+    FILENAME == "-" {
+      line[FNR]=$0
+      next
+    }
+    END {
+      nlines=FNR
+      for (i=1; i<=nlines; i++) {
+        l=line[i]
+        if (l ~ /^[[:space:]]*#/) continue
+        k=l
+        sub(/[[:space:]]*=.*/, "", k)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+        present[k]=1
+      }
+      for (i=1; i<=nlines; i++) {
+        l=line[i]
+        if (l !~ /^[[:space:]]*#/) {
+          k=l
+          sub(/[[:space:]]*=.*/, "", k)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+          drop=0
+          for (o in old) {
+            if (k == o && present[old[o]]) { drop=1; break }
+          }
+          if (drop) continue
+        }
+        print l
+      }
+    }
+  ' config/renames.conf - > "$tmp"
+  cat "$tmp" > config/settings.conf
+  rm -f "$tmp"
+  git add config/settings.conf
+  git commit -m "chore: remove deprecated config setting names" -- config/settings.conf
+steps: null
+postconditions:
+- name: no_stale_old_key_left
+  description: no old key from config/renames.conf remains in config/settings.conf
+    while its new key is still set
+  probe: |-
+    awk -F= '
+      FNR==NR {
+        if ($0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*$/) next
+        o=$1; n=$2
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", o)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", n)
+        old[o]=n
+        next
+      }
+      {
+        l=$0
+        if (l ~ /^[[:space:]]*#/) next
+        k=l
+        sub(/[[:space:]]*=.*/, "", k)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+        present[k]=1
+      }
+      END {
+        for (o in old) {
+          if (present[o] && present[old[o]]) exit 1
+        }
+        exit 0
+      }
+    ' config/renames.conf config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_new_key_preserved
+  description: for every old key that was set together with its new key before the
+    change, the new key is still set and the old key is gone
+  probe: |-
+    git show HEAD^:config/settings.conf | awk -F= '
+      FILENAME == "config/renames.conf" {
+        if ($0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*$/) next
+        o=$1; n=$2
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", o)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", n)
+        old[o]=n
+        next
+      }
+      FILENAME == "-" {
+        l=$0
+        if (l ~ /^[[:space:]]*#/) next
+        k=l
+        sub(/[[:space:]]*=.*/, "", k)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+        prev[k]=1
+        next
+      }
+      FILENAME == "config/settings.conf" {
+        l=$0
+        if (l ~ /^[[:space:]]*#/) next
+        k=l
+        sub(/[[:space:]]*=.*/, "", k)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+        curr[k]=1
+        next
+      }
+      END {
+        for (o in old) {
+          n=old[o]
+          if (prev[o] && prev[n]) {
+            if (!curr[n] || curr[o]) exit 1
+          }
+        }
+        exit 0
+      }
+    ' config/renames.conf - config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: settings_change_committed
+  description: config/settings.conf has no remaining staged or unstaged changes
+  probe: |-
+    git diff --quiet -- config/settings.conf &&
+    git diff --cached --quiet -- config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+variant: drop_old
+provenance:
+  compiled_from_task: The app keeps warning that my config uses old setting names.
+    Make the warning go away without changing what the settings do. The new name is
+    already set too, so delete the old key's line and keep the new one.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: The app keeps warning that my config uses old setting names. Make the
+    warning go away without changing what the settings do. The new name is already
+    set too, so delete the old key's line and keep the new one./seed-23-config_renamed-27083
+  fault: config_renamed
+status: admitted

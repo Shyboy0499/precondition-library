@@ -1,0 +1,71 @@
+id: diverged-occ1-reset-branch-to-upstream-discard
+intent: Make the current branch match upstream exactly, discarding local commits.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_exists
+  description: the upstream remote is configured
+  probe: git remote | grep -Fxq '{upstream_remote}'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_exists
+  description: the upstream remote-tracking branch exists
+  probe: git rev-parse --verify --quiet 'refs/remotes/{upstream_remote}/{upstream_branch}'
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_diverged_from_upstream
+  description: the current branch has local commits and upstream has commits not present
+    locally
+  probe: |-
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0 &&
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_before_reset
+  description: there are no modified or untracked files to discard
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_stashes
+  description: no stashed work would be lost
+  probe: '! git stash list | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: on_a_local_branch
+  description: HEAD points at a local branch rather than a detached commit
+  probe: git symbolic-ref --quiet --short HEAD
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git reset --hard {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is exactly the upstream tip
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_commits_ahead_or_behind
+  description: the branch has no commits relative to upstream
+  probe: |-
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -eq 0 &&
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -eq 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_reset
+  description: the working tree has no modified or untracked files
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: discard
+provenance:
+  compiled_from_task: 'Upstream moved ahead of me. Get me back in line with it. My
+    local commits can go: make my branch match upstream exactly.'
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: 'Upstream moved ahead of me. Get me back in line with it. My local commits
+    can go: make my branch match upstream exactly./seed-3-diverged-10981'
+  fault: diverged
+status: admitted

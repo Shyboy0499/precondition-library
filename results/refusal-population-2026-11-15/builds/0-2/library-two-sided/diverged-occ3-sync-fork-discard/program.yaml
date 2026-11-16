@@ -1,0 +1,85 @@
+id: diverged-occ3-sync-fork-discard
+intent: Bring a diverged fork back in sync with its upstream by discarding the local
+  commits and hard-resetting the branch so it matches upstream exactly.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_configured
+  description: the remote named by upstream_remote exists
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_branch_fetched
+  description: the upstream branch already exists as a remote-tracking ref
+  probe: git rev-parse --verify --quiet refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: on_attached_branch
+  description: HEAD is on a branch rather than detached
+  probe: git symbolic-ref --quiet --short HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: index, tracked files, untracked files and merge state are clean
+  probe: |-
+    git diff --quiet &&
+    git diff --cached --quiet &&
+    test -z "$(git ls-files --others --exclude-standard -z | tr '\0' '\n')" &&
+    test -z "$(git ls-files -u -z | tr '\0' '\n')"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_has_incoming_commits
+  description: the upstream branch carries commits the local branch lacks
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: local_branch_is_ahead
+  description: the local branch carries commits the upstream branch lacks
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_are_disposable
+  description: the local commits are empty or purely additive against the merge base,
+    or the branch carries three or more local commits
+  probe: |-
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -ge 3 && exit 0
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+    test -z "$(git diff --no-renames --diff-filter=MD --name-only -z "$base" HEAD | tr '\0' '\n')"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git reset --hard {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is the upstream branch's commit
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_local_only_commits
+  description: no commit remains that the upstream branch lacks
+  probe: test -z "$(git rev-list {upstream_remote}/{upstream_branch}..HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: index, tracked files and untracked files remain clean
+  probe: |-
+    git diff --quiet &&
+    git diff --cached --quiet &&
+    test -z "$(git ls-files --others --exclude-standard -z | tr '\0' '\n')"
+  expect_exit: 0
+  expect_pattern: null
+variant: discard
+provenance:
+  compiled_from_task: 'Get this fork back in sync with upstream without losing my
+    commits. My local commits can go: make my branch match upstream exactly.'
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: 'Get this fork back in sync with upstream without losing my commits.
+    My local commits can go: make my branch match upstream exactly./seed-1-diverged-27083'
+  fault: diverged
+status: admitted

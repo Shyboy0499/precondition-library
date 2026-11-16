@@ -1,0 +1,313 @@
+{
+  "model": "deepseek-flash",
+  "plan": {
+    "faults": [
+      "branch_renamed",
+      "config_renamed",
+      "dirty_tree",
+      "diverged",
+      "lockfile_conflict",
+      "submodule_moved"
+    ],
+    "build_seeds": null,
+    "tune_seeds": [
+      1000,
+      1001,
+      1002,
+      1003,
+      1004,
+      1005,
+      1006,
+      1007,
+      1008,
+      1009,
+      1010,
+      1011,
+      1012,
+      1013,
+      1014,
+      1015
+    ],
+    "pair_seeds": [
+      2000,
+      2001,
+      2002,
+      2003,
+      2004,
+      2005,
+      2006,
+      2007,
+      2008,
+      2009,
+      2010,
+      2011,
+      2012,
+      2013,
+      2014,
+      2015,
+      2016,
+      2017,
+      2018,
+      2019,
+      2020,
+      2021,
+      2022,
+      2023,
+      2024,
+      2025,
+      2026,
+      2027,
+      2028,
+      2029,
+      2030,
+      2031,
+      2032,
+      2033,
+      2034,
+      2035,
+      2036,
+      2037,
+      2038,
+      2039
+    ],
+    "episode_seeds": [
+      2000,
+      2001,
+      2002,
+      2003
+    ],
+    "online": false,
+    "episodes": false,
+    "replicates": 1,
+    "build_order": 8,
+    "refusal_set": "results/refusal-population-2026-11-01/R"
+  },
+  "admitted_two_sided": 15,
+  "admitted_positive_only": 19,
+  "compiled": 22,
+  "library_hash": "9daeaffb37f686149046114f4461ffaeb187f7436b928ec1fb735327c5ca7da4",
+  "build": [
+    {
+      "fault": "branch_renamed",
+      "seed": 6,
+      "outcome": "fallback",
+      "tool_calls": 11,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "branch_renamed",
+      "seed": 1,
+      "outcome": "fallback",
+      "tool_calls": 12,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "branch_renamed",
+      "seed": 4,
+      "outcome": "fallback",
+      "tool_calls": 12,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "config_renamed",
+      "seed": 23,
+      "outcome": "fallback",
+      "tool_calls": 9,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "config_renamed",
+      "seed": 2,
+      "outcome": "fallback",
+      "tool_calls": 13,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "config_renamed",
+      "seed": 8,
+      "outcome": "fallback",
+      "tool_calls": 10,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "dirty_tree",
+      "seed": 5,
+      "outcome": "fallback",
+      "tool_calls": 9,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "dirty_tree",
+      "seed": 2,
+      "outcome": "fallback",
+      "tool_calls": 13,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "dirty_tree",
+      "seed": 1,
+      "outcome": "fallback",
+      "tool_calls": 12,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "diverged",
+      "seed": 4,
+      "outcome": "fallback",
+      "tool_calls": 7,
+      "ground_truth_ok": true,
+      "admitted": false,
+      "reason": "refusal side failed: preconditions accepted 1 of 35 real conflicts no resolution can express (refusal-tested admission, configuration R): saleor/saleor@1fef436c133c"
+    },
+    {
+      "fault": "diverged",
+      "seed": 0,
+      "outcome": "fallback",
+      "tool_calls": 11,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "diverged",
+      "seed": 1,
+      "outcome": "fallback",
+      "tool_calls": 11,
+      "ground_truth_ok": true,
+      "admitted": false,
+      "reason": "refusal side failed: preconditions accepted 35 of 35 real conflicts no resolution can express (refusal-tested admission, configuration R): matomo-org/matomo@3ac997619c17, matomo-org/matomo@0e48dd9887cd, matomo-org/matomo@524565eb40d8, matomo-org/matomo@8d1e15a49d05, matomo-org/matomo@1cd924d0371a, saleor/saleor@a78b116c8d56, saleor/saleor@f1f268d21153, saleor/saleor@b5efc1343e14, saleor/saleor@e3c62ad985ed, saleor/saleor@ad2c9ccff7d9, saleor/saleor@1fef436c133c, saleor/saleor@4fb40d636d2b, saleor/saleor@a17dacfeda98, saleor/saleor@0e0efbc30033, saleor/saleor@9221056ea321, openfoodfoundation/openfoodnetwork@df0c98d013c6, openfoodfoundation/openfoodnetwork@db809923264a, openfoodfoundation/openfoodnetwork@983bed3c4e8c, openfoodfoundation/openfoodnetwork@cce26cb45334, openfoodfoundation/openfoodnetwork@c9a7a6e89704, openfoodfoundation/openfoodnetwork@f34f6936203b, openfoodfoundation/openfoodnetwork@19da0ba969e6, openfoodfoundation/openfoodnetwork@839b373b5cd1, openfoodfoundation/openfoodnetwork@384ca310a34d, openfoodfoundation/openfoodnetwork@1c628fac5824, RocketChat/Rocket.Chat@80834855d9f9, RocketChat/Rocket.Chat@8c3125b42215, RocketChat/Rocket.Chat@7b858dafdbac, RocketChat/Rocket.Chat@10300a25dcc6, RocketChat/Rocket.Chat@dd60cf8aefe6, RocketChat/Rocket.Chat@828565d5a12f, RocketChat/Rocket.Chat@4d9c8735bd2f, RocketChat/Rocket.Chat@6cd73b0fe9d4, RocketChat/Rocket.Chat@3340757b7582, RocketChat/Rocket.Chat@fec3c9f0bab0"
+    },
+    {
+      "fault": "diverged",
+      "seed": 3,
+      "outcome": "fallback",
+      "tool_calls": 9,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "diverged",
+      "seed": 2,
+      "outcome": "fallback",
+      "tool_calls": 12,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "lockfile_conflict",
+      "seed": 3,
+      "outcome": "fallback",
+      "tool_calls": 16,
+      "ground_truth_ok": true,
+      "admitted": false,
+      "reason": "refusal side failed: preconditions accepted 2 of 35 real conflicts no resolution can express (refusal-tested admission, configuration R): matomo-org/matomo@524565eb40d8, RocketChat/Rocket.Chat@6cd73b0fe9d4"
+    },
+    {
+      "fault": "lockfile_conflict",
+      "seed": 2,
+      "outcome": "fallback",
+      "tool_calls": 17,
+      "ground_truth_ok": true,
+      "admitted": false,
+      "reason": "negative side failed: preconditions accepted 1 of 15 unrelated states (diverged seed 0 resolves to 'merge'); a precondition set that accepts unrelated states is a defect. It also accepted 1 more state(s) it must refuse: preconditions accepted 1 of 2 same-intent states (lockfile_conflict seed 5 resolves to 'take_upstream', which accepts ['take_upstream'], but the program implements 'keep_local'); firing where a sibling resolution is correct is the mismatch this gate exists to refuse"
+    },
+    {
+      "fault": "lockfile_conflict",
+      "seed": 5,
+      "outcome": "fallback",
+      "tool_calls": 16,
+      "ground_truth_ok": true,
+      "admitted": false,
+      "reason": "negative side failed: preconditions accepted 1 of 1 same-intent states (lockfile_conflict seed 2 resolves to 'keep_local', which accepts ['keep_local'], but the program implements 'take_upstream'); firing where a sibling resolution is correct is the mismatch this gate exists to refuse"
+    },
+    {
+      "fault": "lockfile_conflict",
+      "seed": 6,
+      "outcome": "fallback",
+      "tool_calls": 16,
+      "ground_truth_ok": true,
+      "admitted": false,
+      "reason": "negative side failed: preconditions accepted 1 of 15 unrelated states (diverged seed 0 resolves to 'merge'); a precondition set that accepts unrelated states is a defect. It also accepted 1 more state(s) it must refuse: preconditions accepted 1 of 1 same-intent states (lockfile_conflict seed 2 resolves to 'keep_local', which accepts ['keep_local'], but the program implements 'take_upstream'); firing where a sibling resolution is correct is the mismatch this gate exists to refuse"
+    },
+    {
+      "fault": "submodule_moved",
+      "seed": 1,
+      "outcome": "fallback",
+      "tool_calls": 12,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "submodule_moved",
+      "seed": 0,
+      "outcome": "fallback",
+      "tool_calls": 18,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "submodule_moved",
+      "seed": 4,
+      "outcome": "fallback",
+      "tool_calls": 16,
+      "ground_truth_ok": true,
+      "admitted": false,
+      "reason": "refusal side failed: preconditions accepted 4 of 35 real conflicts no resolution can express (refusal-tested admission, configuration R): matomo-org/matomo@0e48dd9887cd, matomo-org/matomo@524565eb40d8, matomo-org/matomo@8d1e15a49d05, matomo-org/matomo@1cd924d0371a"
+    },
+    {
+      "fault": "submodule_moved",
+      "seed": 5,
+      "outcome": "fallback",
+      "tool_calls": 20,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    }
+  ],
+  "stopped_after": null,
+  "stop_reason": null,
+  "soft_threshold": 1.0,
+  "claim2": "at matched dispatch coverage, executable-precondition dispatch mis-fires less often than text-similarity dispatch",
+  "claim2_reason": "at arm 3's coverage the soft vote's matched point is the hard rule itself (threshold >= 1.0), so it makes arm 3's decisions and cannot show that requiring every probe adds nothing; the registered claim keeps its wording",
+  "figure1": "Primary metric, uninformed regime, 480 labelled pairs (spec §7 item 1, ADR-0008)\n  arm 3 (pre-registered coverage point): coverage 200/480, mismatch 0/200\n  arm 2 curve: 110 operating point(s), each with a 95% Wilson interval in figure1.csv\n  at matched coverage arm 2 (threshold 0.13541666666666666) has mismatch 164/200; coverage gap +0.000; mismatch difference (arm 2 - arm 3) +0.8200\n  power (item 3): with 200 and 200 fires, alpha 0.05 two-sided and power 0.8, the smallest detectable mismatch difference is 0.140 at a 50% base rate and 0.138 at the observed 0.410\n  baseline arm 2b (soft vote): curve, 2 operating point(s) -- context, not part of the claim\n  baseline arm 2c (intent key): point, 1 operating point(s) -- context, not part of the claim\n",
+  "arm2_floor": {
+    "decided": 0,
+    "decidable": 0,
+    "chance": 0.3333333333333333,
+    "lower_bound": null,
+    "usable": false,
+    "reason": "not measurable, so not usable: an intent needs two or more candidate resolutions for arm 2 to choose between, and the library's admitted programs give sync_through_a_conflicting_lockfile has none"
+  },
+  "bootstrap": null,
+  "replicate_ledgers": {},
+  "factorial": [],
+  "artifacts": {
+    "build_ledger": "build.jsonl",
+    "build_transcripts": "build.transcripts.jsonl",
+    "library_two_sided": "library-two-sided",
+    "library_positive_only": "library-positive-only",
+    "primary": "primary"
+  }
+}

@@ -1,0 +1,261 @@
+id: config_renamed-occ2-rename-config-key-in-ignored-override
+intent: Rename a stale config key in the user's git-ignored local override file using
+  the upstream renames mapping, keeping the override file out of git.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_has_renames_mapping
+  description: The upstream branch has a file named like a renames mapping containing
+    at least one old = new line.
+  probe: |-
+    while IFS= read -r f; do
+      if git show "{upstream_remote}/{upstream_branch}:$f" 2>/dev/null | grep -Eq '^[[:space:]]*[^#[:space:]]+[[:space:]]*=[[:space:]]*[^[:space:]]+[[:space:]]*$'; then
+        exit 0
+      fi
+    done < <(git ls-tree -r -z --name-only {upstream_remote}/{upstream_branch} | tr '\0' '\n' | grep -i 'rename')
+    exit 1
+  expect_exit: 0
+  expect_pattern: null
+- name: ignored_file_has_stale_key
+  description: At least one git-ignored untracked file still uses an old key taken
+    from the upstream renames mapping.
+  probe: |-
+    renames_path=""
+    while IFS= read -r f; do
+      if git show "{upstream_remote}/{upstream_branch}:$f" 2>/dev/null | grep -Eq '^[[:space:]]*[^#[:space:]]+[[:space:]]*=[[:space:]]*[^[:space:]]+[[:space:]]*$'; then
+        renames_path="$f"
+        break
+      fi
+    done < <(git ls-tree -r -z --name-only {upstream_remote}/{upstream_branch} | tr '\0' '\n' | grep -i 'rename')
+    [ -n "$renames_path" ] || exit 1
+    map=$(git show "{upstream_remote}/{upstream_branch}:$renames_path" | awk '
+      function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
+      {
+        t = trim($0)
+        if (t == "" || substr(t, 1, 1) == "#") next
+        eq = index(t, "=")
+        if (eq == 0) next
+        o = trim(substr(t, 1, eq-1))
+        n = trim(substr(t, eq+1))
+        if (o != "" && n != "") print o "\t" n
+      }')
+    [ -n "$map" ] || exit 1
+    stale=0
+    while IFS= read -r -d '' file; do
+      [ -f "$file" ] || continue
+      while IFS=$'\t' read -r old new; do
+        [ -n "$old" ] || continue
+        if awk -v key="$old" '
+          function keyof(s,   i, j, e, t) {
+            i = 1
+            t = length(s)
+            while (i <= t && substr(s, i, 1) ~ /[[:space:]]/) i++
+            if (i > t) return ""
+            if (substr(s, i, 1) == "#") return ""
+            e = index(substr(s, i), "=")
+            if (e == 0) return ""
+            j = i + e - 2
+            while (j >= i && substr(s, j, 1) ~ /[[:space:]]/) j--
+            return substr(s, i, j - i + 1)
+          }
+          { if (keyof($0) == key) found = 1 }
+          END { exit(found ? 0 : 1) }
+        ' "$file"; then
+          stale=1
+          break
+        fi
+      done <<< "$map"
+      [ "$stale" -eq 1 ] && break
+    done < <(git ls-files --others --ignored --exclude-standard -z)
+    exit $stale
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  renames_path=""
+  while IFS= read -r f; do
+    if git show "{upstream_remote}/{upstream_branch}:$f" 2>/dev/null | grep -Eq '^[[:space:]]*[^#[:space:]]+[[:space:]]*=[[:space:]]*[^[:space:]]+[[:space:]]*$'; then
+      renames_path="$f"
+      break
+    fi
+  done < <(git ls-tree -r -z --name-only {upstream_remote}/{upstream_branch} | tr '\0' '\n' | grep -i 'rename')
+  [ -n "$renames_path" ] || exit 0
+
+  mapping_file=$(mktemp)
+  trap 'rm -f "$mapping_file"' EXIT
+  git show "{upstream_remote}/{upstream_branch}:$renames_path" | awk '
+    function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
+    {
+      t = trim($0)
+      if (t == "" || substr(t, 1, 1) == "#") next
+      eq = index(t, "=")
+      if (eq == 0) next
+      o = trim(substr(t, 1, eq-1))
+      n = trim(substr(t, eq+1))
+      if (o != "" && n != "") print o "\t" n
+    }' > "$mapping_file"
+  [ -s "$mapping_file" ] || exit 0
+
+  while IFS= read -r -d '' file; do
+    [ -f "$file" ] || continue
+    tmp=$(mktemp)
+    awk -v mapfile="$mapping_file" '
+      BEGIN {
+        while ((getline line < mapfile) > 0) {
+          eq = index(line, "\t")
+          if (eq > 0) old[substr(line, 1, eq-1)] = substr(line, eq+1)
+        }
+        close(mapfile)
+      }
+      {
+        line = $0
+        i = 1
+        n = length(line)
+        while (i <= n && substr(line, i, 1) ~ /[[:space:]]/) i++
+        if (i > n || substr(line, i, 1) == "#") { print line; next }
+        eq = index(substr(line, i), "=")
+        if (eq == 0) { print line; next }
+        j = i + eq - 2
+        while (j >= i && substr(line, j, 1) ~ /[[:space:]]/) j--
+        key = substr(line, i, j - i + 1)
+        if (key in old) {
+          print substr(line, 1, i-1) old[key] substr(line, j+1)
+        } else {
+          print line
+        }
+      }' "$file" > "$tmp"
+    if cmp -s "$file" "$tmp"; then
+      rm -f "$tmp"
+    else
+      cat "$tmp" > "$file"
+      rm -f "$tmp"
+    fi
+  done < <(git ls-files --others --ignored --exclude-standard -z)
+  rm -f "$mapping_file"
+steps: null
+postconditions:
+- name: no_stale_keys_remain
+  description: No git-ignored untracked file still uses an old key from the upstream
+    renames mapping.
+  probe: |-
+    renames_path=""
+    while IFS= read -r f; do
+      if git show "{upstream_remote}/{upstream_branch}:$f" 2>/dev/null | grep -Eq '^[[:space:]]*[^#[:space:]]+[[:space:]]*=[[:space:]]*[^[:space:]]+[[:space:]]*$'; then
+        renames_path="$f"
+        break
+      fi
+    done < <(git ls-tree -r -z --name-only {upstream_remote}/{upstream_branch} | tr '\0' '\n' | grep -i 'rename')
+    [ -n "$renames_path" ] || exit 0
+    map=$(git show "{upstream_remote}/{upstream_branch}:$renames_path" | awk '
+      function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
+      {
+        t = trim($0)
+        if (t == "" || substr(t, 1, 1) == "#") next
+        eq = index(t, "=")
+        if (eq == 0) next
+        o = trim(substr(t, 1, eq-1))
+        n = trim(substr(t, eq+1))
+        if (o != "" && n != "") print o "\t" n
+      }')
+    [ -n "$map" ] || exit 0
+    bad=0
+    while IFS= read -r -d '' file; do
+      [ -f "$file" ] || continue
+      while IFS=$'\t' read -r old new; do
+        [ -n "$old" ] || continue
+        if awk -v key="$old" '
+          function keyof(s,   i, j, e, t) {
+            i = 1
+            t = length(s)
+            while (i <= t && substr(s, i, 1) ~ /[[:space:]]/) i++
+            if (i > t) return ""
+            if (substr(s, i, 1) == "#") return ""
+            e = index(substr(s, i), "=")
+            if (e == 0) return ""
+            j = i + e - 2
+            while (j >= i && substr(s, j, 1) ~ /[[:space:]]/) j--
+            return substr(s, i, j - i + 1)
+          }
+          { if (keyof($0) == key) found = 1 }
+          END { exit(found ? 0 : 1) }
+        ' "$file"; then
+          bad=1
+          break
+        fi
+      done <<< "$map"
+      [ "$bad" -eq 1 ] && break
+    done < <(git ls-files --others --ignored --exclude-standard -z)
+    exit $bad
+  expect_exit: 0
+  expect_pattern: null
+- name: new_key_present_in_ignored_file
+  description: At least one git-ignored untracked file now uses a new key from the
+    upstream renames mapping.
+  probe: |-
+    renames_path=""
+    while IFS= read -r f; do
+      if git show "{upstream_remote}/{upstream_branch}:$f" 2>/dev/null | grep -Eq '^[[:space:]]*[^#[:space:]]+[[:space:]]*=[[:space:]]*[^[:space:]]+[[:space:]]*$'; then
+        renames_path="$f"
+        break
+      fi
+    done < <(git ls-tree -r -z --name-only {upstream_remote}/{upstream_branch} | tr '\0' '\n' | grep -i 'rename')
+    [ -n "$renames_path" ] || exit 1
+    map=$(git show "{upstream_remote}/{upstream_branch}:$renames_path" | awk '
+      function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
+      {
+        t = trim($0)
+        if (t == "" || substr(t, 1, 1) == "#") next
+        eq = index(t, "=")
+        if (eq == 0) next
+        o = trim(substr(t, 1, eq-1))
+        n = trim(substr(t, eq+1))
+        if (o != "" && n != "") print o "\t" n
+      }')
+    [ -n "$map" ] || exit 1
+    seen=0
+    while IFS= read -r -d '' file; do
+      [ -f "$file" ] || continue
+      while IFS=$'\t' read -r old new; do
+        [ -n "$new" ] || continue
+        if awk -v key="$new" '
+          function keyof(s,   i, j, e, t) {
+            i = 1
+            t = length(s)
+            while (i <= t && substr(s, i, 1) ~ /[[:space:]]/) i++
+            if (i > t) return ""
+            if (substr(s, i, 1) == "#") return ""
+            e = index(substr(s, i), "=")
+            if (e == 0) return ""
+            j = i + e - 2
+            while (j >= i && substr(s, j, 1) ~ /[[:space:]]/) j--
+            return substr(s, i, j - i + 1)
+          }
+          { if (keyof($0) == key) found = 1 }
+          END { exit(found ? 0 : 1) }
+        ' "$file"; then
+          seen=1
+          break
+        fi
+      done <<< "$map"
+      [ "$seen" -eq 1 ] && break
+    done < <(git ls-files --others --ignored --exclude-standard -z)
+    exit $seen
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_files_clean
+  description: No tracked file is modified or staged, so the override file stays out
+    of git.
+  probe: git diff --quiet && git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: Some setting in my config has been renamed upstream. Sort the
+    config out. Rename the old key in my own override file, and keep that file out
+    of git.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Some setting in my config has been renamed upstream. Sort the config
+    out. Rename the old key in my own override file, and keep that file out of git./seed-12-config_renamed-25587
+  fault: config_renamed
+status: candidate

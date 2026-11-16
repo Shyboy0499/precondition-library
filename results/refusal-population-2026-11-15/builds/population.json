@@ -1,0 +1,186 @@
+{
+  "refusal_set": "results/refusal-population-2026-11-01/R",
+  "attempts": [
+    {
+      "configuration": "0",
+      "order": 0,
+      "directory": "results/refusal-population-2026-11-15/builds/0-0",
+      "runs": 1,
+      "status": "finished",
+      "reason": null,
+      "replaces": null
+    },
+    {
+      "configuration": "0",
+      "order": 1,
+      "directory": "results/refusal-population-2026-11-15/builds/0-1",
+      "runs": 1,
+      "status": "finished",
+      "reason": null,
+      "replaces": null
+    },
+    {
+      "configuration": "0",
+      "order": 2,
+      "directory": "results/refusal-population-2026-11-15/builds/0-2",
+      "runs": 1,
+      "status": "finished",
+      "reason": null,
+      "replaces": null
+    },
+    {
+      "configuration": "0",
+      "order": 3,
+      "directory": "results/refusal-population-2026-11-15/builds/0-3",
+      "runs": 1,
+      "status": "finished",
+      "reason": null,
+      "replaces": null
+    },
+    {
+      "configuration": "0",
+      "order": 4,
+      "directory": "results/refusal-population-2026-11-15/builds/0-4",
+      "runs": 1,
+      "status": "finished",
+      "reason": null,
+      "replaces": null
+    },
+    {
+      "configuration": "0",
+      "order": 5,
+      "directory": "results/refusal-population-2026-11-15/builds/0-5",
+      "runs": 1,
+      "status": "finished",
+      "reason": null,
+      "replaces": null
+    },
+    {
+      "configuration": "0",
+      "order": 6,
+      "directory": "results/refusal-population-2026-11-15/builds/0-6",
+      "runs": 1,
+      "status": "finished",
+      "reason": null,
+      "replaces": null
+    },
+    {
+      "configuration": "0",
+      "order": 7,
+      "directory": "results/refusal-population-2026-11-15/builds/0-7",
+      "runs": 1,
+      "status": "finished",
+      "reason": null,
+      "replaces": null
+    },
+    {
+      "configuration": "0",
+      "order": 8,
+      "directory": "results/refusal-population-2026-11-15/builds/0-8",
+      "runs": 1,
+      "status": "finished",
+      "reason": null,
+      "replaces": null
+    },
+    {
+      "configuration": "0",
+      "order": 9,
+      "directory": "results/refusal-population-2026-11-15/builds/0-9",
+      "runs": 1,
+      "status": "finished",
+      "reason": null,
+      "replaces": null
+    },
+    {
+      "configuration": "R",
+      "order": 0,
+      "directory": "results/refusal-population-2026-11-15/builds/R-0",
+      "runs": 1,
+      "status": "finished",
+      "reason": null,
+      "replaces": null
+    },
+    {
+      "configuration": "R",
+      "order": 1,
+      "directory": "results/refusal-population-2026-11-15/builds/R-1",
+      "runs": 1,
+      "status": "finished",
+      "reason": null,
+      "replaces": null
+    },
+    {
+      "configuration": "R",
+      "order": 2,
+      "directory": "results/refusal-population-2026-11-15/builds/R-2",
+      "runs": 1,
+      "status": "finished",
+      "reason": null,
+      "replaces": null
+    },
+    {
+      "configuration": "R",
+      "order": 3,
+      "directory": "results/refusal-population-2026-11-15/builds/R-3",
+      "runs": 1,
+      "status": "finished",
+      "reason": null,
+      "replaces": null
+    },
+    {
+      "configuration": "R",
+      "order": 4,
+      "directory": "results/refusal-population-2026-11-15/builds/R-4",
+      "runs": 1,
+      "status": "finished",
+      "reason": null,
+      "replaces": null
+    },
+    {
+      "configuration": "R",
+      "order": 5,
+      "directory": "results/refusal-population-2026-11-15/builds/R-5",
+      "runs": 1,
+      "status": "finished",
+      "reason": null,
+      "replaces": null
+    },
+    {
+      "configuration": "R",
+      "order": 6,
+      "directory": "results/refusal-population-2026-11-15/builds/R-6",
+      "runs": 1,
+      "status": "finished",
+      "reason": null,
+      "replaces": null
+    },
+    {
+      "configuration": "R",
+      "order": 7,
+      "directory": "results/refusal-population-2026-11-15/builds/R-7",
+      "runs": 1,
+      "status": "finished",
+      "reason": null,
+      "replaces": null
+    },
+    {
+      "configuration": "R",
+      "order": 8,
+      "directory": "results/refusal-population-2026-11-15/builds/R-8",
+      "runs": 2,
+      "status": "finished",
+      "reason": null,
+      "replaces": null
+    },
+    {
+      "configuration": "R",
+      "order": 9,
+      "directory": "results/refusal-population-2026-11-15/builds/R-9",
+      "runs": 1,
+      "status": "finished",
+      "reason": null,
+      "replaces": null
+    }
+  ],
+  "stopped": null
+}

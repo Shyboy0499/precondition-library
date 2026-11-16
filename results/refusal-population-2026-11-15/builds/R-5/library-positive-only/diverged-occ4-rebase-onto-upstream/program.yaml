@@ -1,0 +1,91 @@
+id: diverged-occ4-rebase-onto-upstream
+intent: Replay the local branch's commits on top of upstream so the history stays
+  linear.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_exists
+  description: the remote-tracking ref for the upstream branch is present
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: local_and_upstream_diverged
+  description: HEAD has local-only commits and upstream has commits HEAD lacks
+  probe: |-
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0 &&
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: no staged, unstaged or untracked changes
+  probe: test -z "$(git --no-optional-locks status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: on_local_branch
+  description: HEAD is attached to a local branch
+  probe: git symbolic-ref --quiet HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: no_operation_in_progress
+  description: no rebase, merge or cherry-pick is in progress
+  probe: |-
+    test ! -e "$(git rev-parse --git-path rebase-merge)" &&
+    test ! -e "$(git rev-parse --git-path rebase-apply)" &&
+    test ! -e "$(git rev-parse --git-path MERGE_HEAD)" &&
+    test ! -e "$(git rev-parse --git-path CHERRY_PICK_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_overlapping_changes
+  description: local-only commits and upstream commits touch disjoint paths, so the
+    replay applies cleanly
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) &&
+    ! comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git rebase {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: upstream_is_ancestor_of_head
+  description: upstream's tip is contained in HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: replayed_commits_present
+  description: HEAD carries local commits beyond upstream
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: history_is_linear
+  description: no merge commits among the replayed local commits
+  probe: test -z "$(git rev-list --merges {upstream_remote}/{upstream_branch}..HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after
+  description: the working tree is clean after the rebase
+  probe: test -z "$(git --no-optional-locks status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_rebase_in_progress
+  description: the rebase completed and left nothing in progress
+  probe: |-
+    test ! -e "$(git rev-parse --git-path rebase-merge)" &&
+    test ! -e "$(git rev-parse --git-path rebase-apply)"
+  expect_exit: 0
+  expect_pattern: null
+variant: rebase
+provenance:
+  compiled_from_task: I have local work and upstream has new commits. Untangle it.
+    Replay my local commits on top of upstream so the history stays linear.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: I have local work and upstream has new commits. Untangle it. Replay
+    my local commits on top of upstream so the history stays linear./seed-5-diverged-7516
+  fault: diverged
+status: admitted

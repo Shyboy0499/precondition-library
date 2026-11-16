@@ -1,0 +1,176 @@
+id: lockfile_conflict-occ1-merge-upstream-keep-local-dep-file
+intent: Merge the upstream branch into the fork while keeping the local dependency
+  file, preserving local removals and adding only the lines upstream added.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_configured
+  description: the named upstream remote resolves to a URL
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_branch_present
+  description: the upstream branch has an already-fetched remote-tracking ref
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the index and working tree have no pending changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: histories_diverged
+  description: local and upstream each contain commits the other lacks
+  probe: |-
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -ge 1 &&
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -ge 1
+  expect_exit: 0
+  expect_pattern: null
+- name: common_changed_path_exists
+  description: at least one path changed on both sides since their merge base
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) \
+      | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  if ! git merge --no-edit {upstream_remote}/{upstream_branch}; then
+    if ! git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+      exit 1
+    fi
+  fi
+  if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+    base=$(git merge-base HEAD MERGE_HEAD)
+    up=$(git rev-parse MERGE_HEAD)
+    git diff --name-only --diff-filter=U -z | while IFS= read -r -d '' p; do
+      [ -n "$p" ] || continue
+      ours=$(mktemp)
+      add=$(mktemp)
+      out=$(mktemp)
+      diff=$(mktemp)
+      if ! git show :2:"$p" > "$ours" 2>/dev/null; then
+        if git show :3:"$p" > "$out" 2>/dev/null; then
+          cat "$out" > "$p"
+          git add -- "$p"
+        fi
+        rm -f "$ours" "$add" "$out" "$diff"
+        continue
+      fi
+      git diff --no-color --no-ext-diff --unified=0 "$base" "$up" -- "$p" > "$diff"
+      awk '
+        function flush() {
+          if (in_hunk && !has_del) {
+            for (i = 1; i <= nadd; i++) print addlines[i]
+          }
+          nadd = 0
+          has_del = 0
+        }
+        /^@@/ {
+          flush()
+          in_hunk = 1
+          next
+        }
+        in_hunk {
+          c = substr($0, 1, 1)
+          if (c == "-") { has_del = 1 }
+          else if (c == "+") { addlines[++nadd] = substr($0, 2) }
+          else if (c == "\\") { }
+          else { flush(); in_hunk = 0 }
+        }
+        END { flush() }
+      ' "$diff" > "$add"
+      if [ -s "$add" ]; then
+        awk -v addfile="$add" '
+          BEGIN {
+            while ((getline line < addfile) > 0) { add[++na] = line }
+            close(addfile)
+          }
+          { lines[NR] = $0 }
+          END {
+            pos = NR + 1
+            for (i = NR; i >= 1; i--) {
+              tmp = lines[i]
+              sub(/^[[:space:]]+/, "", tmp)
+              sub(/[[:space:]]+$/, "", tmp)
+              if (tmp == "]" || tmp == "}") { pos = i; break }
+            }
+            for (i = 1; i <= NR; i++) {
+              if (i == pos) {
+                for (j = 1; j <= na; j++) {
+                  dup = 0
+                  for (k = 1; k <= NR; k++) if (lines[k] == add[j]) { dup = 1; break }
+                  if (seen[add[j]]) dup = 1
+                  if (!dup) { print add[j]; seen[add[j]] = 1 }
+                }
+              }
+              print lines[i]
+            }
+            if (pos == NR + 1) {
+              for (j = 1; j <= na; j++) {
+                dup = 0
+                for (k = 1; k <= NR; k++) if (lines[k] == add[j]) { dup = 1; break }
+                if (seen[add[j]]) dup = 1
+                if (!dup) { print add[j]; seen[add[j]] = 1 }
+              }
+            }
+          }
+        ' "$ours" > "$out"
+      else
+        cp "$ours" "$out"
+      fi
+      cat "$out" > "$p"
+      git add -- "$p"
+      rm -f "$ours" "$add" "$out" "$diff"
+    done
+    git commit --no-edit
+  fi
+steps: null
+postconditions:
+- name: no_unmerged_paths
+  description: every conflicted path has been resolved in the index
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: tracked files contain no unresolved conflict markers
+  probe: test -z "$(git grep -l '^<<<<<<<' || true)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: the upstream branch commit is contained in HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_still_ahead
+  description: HEAD still contains commits not in upstream
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -ge 1
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_commit_present
+  description: HEAD is a merge commit with two parents
+  probe: test "$(git rev-list --parents -n 1 HEAD | wc -w)" -ge 3
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_merge
+  description: no pending or unmerged changes remain
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: keep_local
+provenance:
+  compiled_from_task: Get my fork current with upstream; our dependency changes collided.
+    Keep my dependency file, with what I removed still removed, and add what upstream
+    added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get my fork current with upstream; our dependency changes collided.
+    Keep my dependency file, with what I removed still removed, and add what upstream
+    added./seed-3-lockfile_conflict-3956
+  fault: lockfile_conflict
+status: admitted

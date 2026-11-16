@@ -1,0 +1,95 @@
+id: branch_renamed-occ2-rename-fork-branch-to-upstream
+intent: Rename the current fork branch to the upstream branch's new name and make
+  it track that upstream branch.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: current_branch_differs_from_upstream_branch
+  description: HEAD is on a local branch whose name is not the new upstream branch
+    name
+  probe: current=$(git symbolic-ref --short HEAD) && [ "$current" != "{upstream_branch}"
+    ]
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_remote_exists
+  description: the named upstream remote exists
+  probe: git remote get-url "{upstream_remote}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_branch_exists_on_remote
+  description: the upstream remote has a branch with the new name
+  probe: git ls-remote --exit-code --heads "{upstream_remote}" "{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_local_branch_named_upstream_branch
+  description: no local branch already has the new upstream branch name
+  probe: '! git show-ref --verify --quiet refs/heads/{upstream_branch}'
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: there are no modified, staged, or untracked files
+  probe: '[ -z "$(git status --porcelain)" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: current_branch_tracks_upstream_remote
+  description: the current branch is configured to track the upstream remote
+  probe: |-
+    current=$(git symbolic-ref --short HEAD) &&
+    [ "$(git config --get branch.$current.remote)" = "{upstream_remote}" ]
+  expect_exit: 0
+  expect_pattern: null
+- name: no_local_only_commits
+  description: the current branch has no commits that are absent from its current
+    upstream
+  probe: '[ "$(git rev-list --count ''@{upstream}''..HEAD)" -eq 0 ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: not_already_tracking_new_upstream
+  description: the current branch is not already tracking the new upstream branch
+  probe: '! git rev-parse --abbrev-ref --symbolic-full-name ''@{upstream}'' 2>/dev/null
+    | grep -qx ''{upstream_remote}/{upstream_branch}'''
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch --prune "{upstream_remote}"
+  old_branch=$(git symbolic-ref --short HEAD)
+  git branch -m "$old_branch" "{upstream_branch}"
+  git branch --set-upstream-to="{upstream_remote}/{upstream_branch}" "{upstream_branch}"
+  git merge --ff-only "{upstream_remote}/{upstream_branch}"
+steps: null
+postconditions:
+- name: current_branch_is_upstream_branch
+  description: HEAD is on the renamed local branch
+  probe: '[ "$(git symbolic-ref --short HEAD)" = "{upstream_branch}" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: head_matches_upstream_branch
+  description: the renamed local branch points at the same commit as the upstream
+    branch
+  probe: '[ "$(git rev-parse HEAD)" = "$(git rev-parse "{upstream_remote}/{upstream_branch}")"
+    ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: tracks_new_upstream_branch
+  description: the renamed local branch tracks the new upstream branch
+  probe: '[ "$(git rev-parse --abbrev-ref --symbolic-full-name ''@{upstream}'')" =
+    "{upstream_remote}/{upstream_branch}" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the worktree has no modified, staged, or untracked files after the
+    update
+  probe: '[ -z "$(git status --porcelain)" ]'
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: I think upstream renamed things. Get this fork following it
+    again. Rename my branch to upstream's new name and track it.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: I think upstream renamed things. Get this fork following it again. Rename
+    my branch to upstream's new name and track it./seed-0-branch_renamed-12454
+  fault: branch_renamed
+status: admitted

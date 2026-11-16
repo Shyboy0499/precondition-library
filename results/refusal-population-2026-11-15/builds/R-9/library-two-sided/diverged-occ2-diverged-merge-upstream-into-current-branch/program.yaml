@@ -1,0 +1,88 @@
+id: diverged-occ2-diverged-merge-upstream-into-current-branch
+intent: Merge the upstream branch into the current local branch with a merge commit,
+  preserving both histories, but only when the fork has genuinely diverged, the merge
+  is conflict-free, and the local branch is the upstream's default branch.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_tracking_ref_exists
+  description: the upstream remote-tracking branch is available locally
+  probe: git rev-parse --verify --quiet "refs/remotes/{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: there are no tracked or untracked worktree changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: head_is_local_branch
+  description: HEAD points at a local branch rather than a detached commit
+  probe: git symbolic-ref --quiet HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: the repository is not already in the middle of a merge
+  probe: test ! -e "$(git rev-parse --git-path MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_has_commits_not_in_upstream
+  description: the local branch has commits that upstream does not have
+  probe: test "$(git rev-list --count "{upstream_remote}/{upstream_branch}..HEAD")"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_has_commits_not_local
+  description: the upstream branch has commits not yet in the local branch
+  probe: test "$(git rev-list --count "HEAD..{upstream_remote}/{upstream_branch}")"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_would_not_conflict
+  description: a trial three-way merge of the upstream branch into HEAD yields no
+    conflict markers
+  probe: |-
+    base=$(git merge-base HEAD "refs/remotes/{upstream_remote}/{upstream_branch}") || exit 1
+    out=$(git merge-tree "$base" HEAD "refs/remotes/{upstream_remote}/{upstream_branch}") || exit 1
+    ! printf '%s\n' "$out" | grep -q '<<<<<<<'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_default_branch_is_local_branch
+  description: when the upstream remote advertises a default branch, it is the branch
+    checked out here
+  probe: |-
+    ref=$(git symbolic-ref --quiet --short "refs/remotes/{upstream_remote}/HEAD" 2>/dev/null) || exit 0
+    prefix="{upstream_remote}/"
+    test "${ref#"$prefix"}" = "$(git symbolic-ref --short HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch "{upstream_remote}"
+  git merge --no-ff "{upstream_remote}/{upstream_branch}" -m "Merge {upstream_remote}/{upstream_branch} into $(git symbolic-ref --short HEAD)" || { git merge --abort >/dev/null 2>&1; exit 1; }
+steps: null
+postconditions:
+- name: upstream_is_ancestor_of_head
+  description: all upstream commits are included in the new HEAD
+  probe: git merge-base --is-ancestor "{upstream_remote}/{upstream_branch}" HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: head_is_merge_commit
+  description: HEAD is a merge commit with two parents, preserving both histories
+  probe: test "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 3
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_merge
+  description: the merge left no uncommitted or conflicted changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: Get this fork back in sync with upstream without losing my commits.
+    Merge upstream into my branch and keep both histories.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this fork back in sync with upstream without losing my commits.
+    Merge upstream into my branch and keep both histories./seed-4-diverged-12721
+  fault: diverged
+status: candidate

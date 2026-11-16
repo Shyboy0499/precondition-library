@@ -1,0 +1,87 @@
+id: submodule_moved-occ3-init-nested-submodule
+intent: Initialise the nested repository declared at submodule_path and check it out
+  at the upstream-consistent pinned commit.
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: submodule_declared
+  description: .gitmodules declares the requested submodule path
+  probe: git config -f .gitmodules --get-regexp '\.path$'
+  expect_exit: 0
+  expect_pattern: (?m)^submodule\..*\.path[[:space:]]+{submodule_path}$
+- name: gitlink_in_head
+  description: HEAD records a gitlink at the submodule path
+  probe: git ls-tree HEAD -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: ^160000 commit [0-9a-f]{40}
+- name: submodule_pin_matches_upstream
+  description: the gitlink in HEAD equals the one on the upstream branch
+  probe: |-
+    head_pin=$(git rev-parse "HEAD:{submodule_path}") &&
+    up_pin=$(git rev-parse "{upstream_remote}/{upstream_branch}:{submodule_path}" 2>/dev/null || git rev-parse "@{upstream}:{submodule_path}") &&
+    test -n "$head_pin" &&
+    test -n "$up_pin" &&
+    test "$head_pin" = "$up_pin"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_not_initialised
+  description: the submodule checkout is absent or not initialized
+  probe: git submodule status -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: ^-
+- name: worktree_clean
+  description: the parent worktree has no modified or untracked files
+  probe: status=$(git status --porcelain) && test -z "$status"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflicting_upstream_changes
+  description: no file is modified on both the local branch and upstream since their
+    merge base
+  probe: |-
+    up="{upstream_remote}/{upstream_branch}"
+    git rev-parse --verify "$up" >/dev/null 2>&1 || up="@{upstream}"
+    ! comm -12 \
+      <(git diff --name-only -z "${up}...HEAD" | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "HEAD...${up}" | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git submodule update --init --recursive -- "{submodule_path}"
+steps: null
+postconditions:
+- name: submodule_initialised_at_head
+  description: the submodule is initialized and checked out at HEAD's gitlink commit
+  probe: |-
+    line=$(git submodule status -- "{submodule_path}") &&
+    head_pin=$(git rev-parse "HEAD:{submodule_path}") &&
+    test -n "$line" &&
+    test "$(printf '%s\n' "$line" | cut -c1)" = " " &&
+    test "$(printf '%s\n' "$line" | cut -c2-41)" = "$head_pin"
+  expect_exit: 0
+  expect_pattern: null
+- name: recursive_submodules_initialised
+  description: every nested submodule under the path is initialized at its recorded
+    commit
+  probe: |-
+    out=$(git submodule status --recursive -- "{submodule_path}") &&
+    test -n "$out" &&
+    ! printf '%s\n' "$out" | grep -qv '^ '
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_still_clean
+  description: initialising the submodule left the parent worktree clean
+  probe: status=$(git status --porcelain) && test -z "$status"
+  expect_exit: 0
+  expect_pattern: null
+variant: init
+provenance:
+  compiled_from_task: Get this repo's nested dependency consistent with upstream.
+    Initialise the nested repository and check it out.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this repo's nested dependency consistent with upstream. Initialise
+    the nested repository and check it out./seed-5-submodule_moved-212
+  fault: submodule_moved
+status: admitted

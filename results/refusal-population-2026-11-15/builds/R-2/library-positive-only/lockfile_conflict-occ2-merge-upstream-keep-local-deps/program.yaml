@@ -1,0 +1,313 @@
+id: lockfile_conflict-occ2-merge-upstream-keep-local-deps
+intent: Update the current branch from upstream, resolve a deps.lock merge conflict
+  by preserving local package removals and additions while adding upstream package
+  additions and taking an upstream version bump.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: in_git_worktree
+  description: the probe runs inside a git worktree
+  probe: git rev-parse --is-inside-work-tree
+  expect_exit: 0
+  expect_pattern: ^true$
+- name: clean_worktree
+  description: the worktree has no tracked or untracked changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: no merge is currently in progress
+  probe: '! git rev-parse -q --verify MERGE_HEAD'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_remote_exists
+  description: the configured upstream remote exists
+  probe: git remote get-url "{upstream_remote}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_branch_ref_exists
+  description: the upstream branch remote-tracking ref exists
+  probe: git rev-parse --verify "refs/remotes/{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_ahead
+  description: local branch has at least one commit not in upstream
+  probe: git rev-list --count "{upstream_remote}/{upstream_branch}..HEAD"
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: upstream_ahead
+  description: upstream has at least one commit not in the local branch
+  probe: git rev-list --count "HEAD..{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: deps_lock_tracked_locally
+  description: deps.lock exists in the local branch
+  probe: git cat-file -e "HEAD:deps.lock"
+  expect_exit: 0
+  expect_pattern: null
+- name: deps_lock_tracked_upstream
+  description: deps.lock exists in the upstream branch
+  probe: git cat-file -e "{upstream_remote}/{upstream_branch}:deps.lock"
+  expect_exit: 0
+  expect_pattern: null
+- name: only_deps_lock_changed_locally
+  description: the local branch changed only deps.lock since the merge base
+  probe: test "$(git diff --name-only -z $(git merge-base HEAD "{upstream_remote}/{upstream_branch}")
+    HEAD | tr '\0' '\n' | sort)" = "deps.lock"
+  expect_exit: 0
+  expect_pattern: null
+- name: only_deps_lock_changed_upstream
+  description: the upstream branch changed only deps.lock since the merge base
+  probe: test "$(git diff --name-only -z $(git merge-base HEAD "{upstream_remote}/{upstream_branch}")
+    "{upstream_remote}/{upstream_branch}" | tr '\0' '\n' | sort)" = "deps.lock"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_removed_package_entries
+  description: the local branch removed at least one package entry from deps.lock
+  probe: |-
+    comm -23 \
+      <(git show "$(git merge-base HEAD {upstream_remote}/{upstream_branch}):deps.lock" | grep -E '^[[:space:]]*"' | sort -u) \
+      <(git show HEAD:deps.lock | grep -E '^[[:space:]]*"' | sort -u) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: local_added_package_entries
+  description: the local branch added at least one package entry to deps.lock
+  probe: |-
+    comm -23 \
+      <(git show HEAD:deps.lock | grep -E '^[[:space:]]*"' | sort -u) \
+      <(git show "$(git merge-base HEAD {upstream_remote}/{upstream_branch}):deps.lock" | grep -E '^[[:space:]]*"' | sort -u) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_added_package_entries
+  description: the upstream branch added at least one package entry to deps.lock
+  probe: |-
+    comm -23 \
+      <(git show "{upstream_remote}/{upstream_branch}:deps.lock" | grep -E '^[[:space:]]*"' | sort -u) \
+      <(git show "$(git merge-base HEAD {upstream_remote}/{upstream_branch}):deps.lock" | grep -E '^[[:space:]]*"' | sort -u) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  git fetch {upstream_remote} || true
+
+  git merge --no-edit "{upstream_remote}/{upstream_branch}" || true
+
+  tmp=$(mktemp -d)
+  trap 'rm -rf "$tmp"' EXIT
+
+  if git ls-files -u -- deps.lock | grep -q .; then
+    git show :1:deps.lock > "$tmp/base"
+    git show :2:deps.lock > "$tmp/ours"
+    git show :3:deps.lock > "$tmp/theirs"
+    commit_mode=merge
+  else
+    if ! git rev-parse -q --verify HEAD^2 >/dev/null; then
+      echo "merge did not produce a merge commit and deps.lock is not conflicted" >&2
+      exit 1
+    fi
+    base_rev=$(git merge-base HEAD^1 HEAD^2)
+    git show "$base_rev:deps.lock" > "$tmp/base"
+    git show HEAD^1:deps.lock > "$tmp/ours"
+    git show HEAD^2:deps.lock > "$tmp/theirs"
+    commit_mode=amend
+  fi
+
+  python3 - "$tmp/base" "$tmp/ours" "$tmp/theirs" "$tmp/merged" <<'PY'
+  import re, sys
+
+  base_path, ours_path, theirs_path, out_path = sys.argv[1:5]
+
+  def read(path):
+      with open(path, 'r', encoding='utf-8', errors='surrogateescape') as f:
+          return f.readlines()
+
+  base = read(base_path)
+  ours = read(ours_path)
+  theirs = read(theirs_path)
+
+  version_re = re.compile(r'^version[ \t]*=')
+  pkg_re = re.compile(r'^[ \t]*"')
+  pkg_name_re = re.compile(r'^[ \t]*"([^" \t]+)')
+
+  def version_line(lines):
+      for line in lines:
+          if version_re.match(line):
+              return line.rstrip('\n')
+      return None
+
+  def pkg_lines(lines):
+      return [line for line in lines if pkg_re.match(line)]
+
+  def pkg_name(line):
+      m = pkg_name_re.match(line)
+      return m.group(1) if m else None
+
+  base_version = version_line(base)
+  ours_version = version_line(ours)
+  theirs_version = version_line(theirs)
+
+  if theirs_version is not None and theirs_version != base_version:
+      chosen_version = theirs_version
+  elif ours_version is not None:
+      chosen_version = ours_version
+  else:
+      chosen_version = theirs_version
+
+  base_pkgs = pkg_lines(base)
+  ours_pkgs = pkg_lines(ours)
+  theirs_pkgs = pkg_lines(theirs)
+
+  base_names = {pkg_name(l) for l in base_pkgs if pkg_name(l)}
+  ours_names = {pkg_name(l) for l in ours_pkgs if pkg_name(l)}
+  local_removed_names = base_names - ours_names
+
+  base_pkg_set = set(l.rstrip('\n') for l in base_pkgs)
+  upstream_added = []
+  for line in theirs_pkgs:
+      s = line.rstrip('\n')
+      if s in base_pkg_set:
+          continue
+      name = pkg_name(line)
+      if name in local_removed_names:
+          continue
+      upstream_added.append(line)
+
+  final_pkgs = list(ours_pkgs)
+  final_names = {pkg_name(l) for l in final_pkgs if pkg_name(l)}
+  final_set = set(l.rstrip('\n') for l in final_pkgs)
+  for line in upstream_added:
+      name = pkg_name(line)
+      if name in final_names:
+          continue
+      s = line.rstrip('\n')
+      if s in final_set:
+          continue
+      final_pkgs.append(line)
+      final_set.add(s)
+      if name:
+          final_names.add(name)
+
+  final_pkgs = [l if l.endswith('\n') else l + '\n' for l in final_pkgs]
+
+  out = []
+  in_packages = False
+  packages_inserted = False
+  for line in ours:
+      if version_re.match(line):
+          if chosen_version is not None:
+              out.append(chosen_version + '\n')
+          else:
+              out.append(line)
+          continue
+      if re.match(r'^[ \t]*packages[ \t]*=[ \t]*\[', line):
+          out.append(line)
+          in_packages = True
+          continue
+      if in_packages:
+          if re.match(r'^[ \t]*\]', line):
+              if not packages_inserted:
+                  out.extend(final_pkgs)
+                  packages_inserted = True
+              out.append(line)
+              in_packages = False
+          else:
+              continue
+      else:
+          out.append(line)
+
+  if not packages_inserted:
+      out.extend(final_pkgs)
+
+  with open(out_path, 'w', encoding='utf-8', errors='surrogateescape') as f:
+      f.writelines(out)
+  PY
+
+  cp "$tmp/merged" deps.lock
+  git add deps.lock
+
+  if [ "$commit_mode" = merge ]; then
+    git commit --no-edit
+  else
+    if ! git diff --cached --quiet; then
+      git commit --amend --no-edit
+    fi
+  fi
+steps: null
+postconditions:
+- name: merge_commit_matches_upstream
+  description: HEAD is a merge whose second parent is the upstream branch tip
+  probe: test "$(git rev-parse HEAD^2)" = "$(git rev-parse "{upstream_remote}/{upstream_branch}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: no tracked or untracked changes remain
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: the dependency file has no merge conflict markers
+  probe: '! grep -qE ''^(<<<<<<<|=======|>>>>>>>)'' deps.lock'
+  expect_exit: 0
+  expect_pattern: null
+- name: local_removals_absent
+  description: package names removed locally are not reintroduced
+  probe: |-
+    base=$(git merge-base HEAD^1 HEAD^2)
+    ! comm -12 \
+      <(comm -23 \
+          <(git show "$base:deps.lock" | sed -n 's/^[[:space:]]*"\([^" ]*\).*/\1/p' | sort -u) \
+          <(git show HEAD^1:deps.lock | sed -n 's/^[[:space:]]*"\([^" ]*\).*/\1/p' | sort -u)) \
+      <(sed -n 's/^[[:space:]]*"\([^" ]*\).*/\1/p' deps.lock | sort -u) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_additions_present
+  description: package names added upstream are present
+  probe: |-
+    base=$(git merge-base HEAD^1 HEAD^2)
+    test -z "$(comm -23 \
+      <(comm -23 \
+          <(git show HEAD^2:deps.lock | sed -n 's/^[[:space:]]*"\([^" ]*\).*/\1/p' | sort -u) \
+          <(git show "$base:deps.lock" | sed -n 's/^[[:space:]]*"\([^" ]*\).*/\1/p' | sort -u)) \
+      <(sed -n 's/^[[:space:]]*"\([^" ]*\).*/\1/p' deps.lock | sort -u))"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_additions_present
+  description: package names added locally are retained
+  probe: |-
+    base=$(git merge-base HEAD^1 HEAD^2)
+    test -z "$(comm -23 \
+      <(comm -23 \
+          <(git show HEAD^1:deps.lock | sed -n 's/^[[:space:]]*"\([^" ]*\).*/\1/p' | sort -u) \
+          <(git show "$base:deps.lock" | sed -n 's/^[[:space:]]*"\([^" ]*\).*/\1/p' | sort -u)) \
+      <(sed -n 's/^[[:space:]]*"\([^" ]*\).*/\1/p' deps.lock | sort -u))"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_version_applied
+  description: an upstream version change is taken
+  probe: |-
+    base=$(git merge-base HEAD^1 HEAD^2)
+    base_version=$(git show "$base:deps.lock" | sed -n 's/^\(version[[:space:]]*=.*\)$/\1/p' | head -n 1)
+    theirs_version=$(git show HEAD^2:deps.lock | sed -n 's/^\(version[[:space:]]*=.*\)$/\1/p' | head -n 1)
+    final_version=$(sed -n 's/^\(version[[:space:]]*=.*\)$/\1/p' deps.lock | head -n 1)
+    if [ -n "$theirs_version" ] && [ "$theirs_version" != "$base_version" ]; then
+      test "$final_version" = "$theirs_version"
+    fi
+  expect_exit: 0
+  expect_pattern: null
+- name: deps_lock_matches_head
+  description: deps.lock is committed and matches the worktree
+  probe: git diff --quiet HEAD -- deps.lock
+  expect_exit: 0
+  expect_pattern: null
+variant: keep_local
+provenance:
+  compiled_from_task: Update this branch from upstream and make sure the dependency
+    list still makes sense. Keep my dependency file, with what I removed still removed,
+    and add what upstream added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Update this branch from upstream and make sure the dependency list still
+    makes sense. Keep my dependency file, with what I removed still removed, and add
+    what upstream added./seed-2-lockfile_conflict-211
+  fault: lockfile_conflict
+status: admitted

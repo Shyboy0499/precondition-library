@@ -1,0 +1,119 @@
+id: dirty_tree-occ1-ff-upstream-keep-untracked-aside
+intent: Fast-forward a branch that is behind upstream while preserving uncommitted
+  changes and moving untracked files that upstream adds aside as <name>.local.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: behind_upstream
+  description: HEAD is strictly behind the upstream branch
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: fast_forwardable
+  description: HEAD has no commits that upstream lacks
+  probe: git merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: dirty_worktree
+  description: the working tree has uncommitted changes to preserve
+  probe: test -n "$(git status --porcelain -z)"
+  expect_exit: 0
+  expect_pattern: null
+- name: has_tracked_changes
+  description: at least one tracked path has uncommitted changes
+  probe: git diff --name-only --no-renames -z HEAD | tr '\0' '\n' | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_changes_do_not_overlap_upstream
+  description: local tracked changes touch no path that upstream updates
+  probe: |-
+    ! comm -12 \
+      <(git diff --name-only --no-renames -z HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only --no-renames -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) \
+      | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: has_untracked_upstream_collision
+  description: at least one untracked file is added by upstream at the same path
+  probe: |-
+    comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git ls-tree -r --name-only -z {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) \
+      | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: aside_copy_is_available
+  description: no colliding untracked file already has a safe .local copy
+  probe: |-
+    while IFS= read -r -d '' path; do
+      if git cat-file -e "{upstream_remote}/{upstream_branch}:$path" 2>/dev/null; then
+        test ! -e "$path.local" || exit 1
+        if git cat-file -e "{upstream_remote}/{upstream_branch}:$path.local" 2>/dev/null; then
+          exit 1
+        fi
+      fi
+    done < <(git ls-files --others --exclude-standard -z)
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  while IFS= read -r -d '' path; do
+    if git cat-file -e "{upstream_remote}/{upstream_branch}:$path" 2>/dev/null; then
+      cp -- "$path" "$path.local"
+      rm -f -- "$path"
+    fi
+  done < <(git ls-files --others --exclude-standard -z)
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is now the upstream commit
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_changes_preserved
+  description: the original tracked modifications remain uncommitted
+  probe: git diff --name-only --no-renames -z HEAD | tr '\0' '\n' | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: aside_copies_present
+  description: at least one untracked .local copy sits beside its upstream-tracked
+    original
+  probe: |-
+    found=0
+    while IFS= read -r -d '' p; do
+      case "$p" in
+        *.local)
+          base=${p%.local}
+          if git cat-file -e "HEAD:$base" 2>/dev/null; then
+            found=1
+            break
+          fi
+          ;;
+      esac
+    done < <(git ls-files --others --exclude-standard -z)
+    test "$found" -eq 1
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_collision_with_head
+  description: no untracked file remains at a path tracked in HEAD
+  probe: |-
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git ls-tree -r --name-only -z HEAD | tr '\0' '\n' | sort) \
+      | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+variant: aside
+provenance:
+  compiled_from_task: My working tree has changes and the branch is behind upstream.
+    Fix that and keep my changes. Keep my unsaved file beside upstream's version,
+    as `<name>.local`, and update.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: My working tree has changes and the branch is behind upstream. Fix that
+    and keep my changes. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update./seed-7-dirty_tree-29016
+  fault: dirty_tree
+status: admitted

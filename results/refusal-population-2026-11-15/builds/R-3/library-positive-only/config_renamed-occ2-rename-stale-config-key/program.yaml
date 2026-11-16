@@ -1,0 +1,195 @@
+id: config_renamed-occ2-rename-stale-config-key
+intent: Rename a stale settings key to the name the project's own rename map declares
+  for it, preserving its value and leaving every other setting untouched.
+parameters:
+- work_dir
+preconditions:
+- name: rename_map_present
+  description: The repository tracks a rename map -- a comment line mentioning renamed
+    keys plus "old = new" pairs -- from which the current key names can be derived
+    instead of hard-coding them.
+  probe: |-
+    git ls-files -z | tr '\0' '\n' | while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      head -n 3 -- "$f" 2>/dev/null | grep -qiE '^[[:space:]]*#.*renam' || continue
+      grep -IqE '^[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*=[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*$' -- "$f" && printf '%s\n' "$f"
+    done | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_key_still_used
+  description: A tracked settings file beside the rename map still assigns one of
+    the old key names, so there is a stale entry left to rename; the repository tracks
+    no such assignment once it has already been fixed.
+  probe: |-
+    cd -- "{work_dir}"
+    map=$(git ls-files -z | tr '\0' '\n' | while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      head -n 3 -- "$f" 2>/dev/null | grep -qiE '^[[:space:]]*#.*renam' || continue
+      grep -IqE '^[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*=[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*$' -- "$f" && printf '%s\n' "$f"
+    done | head -n 1)
+    [ -n "$map" ] || exit 1
+    mapdir=$(dirname -- "$map")
+    olds=$(grep -vE '^[[:space:]]*#' -- "$map" | sed -nE 's/^[[:space:]]*([A-Za-z0-9_.-]+)[[:space:]]*=[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*$/\1/p')
+    [ -n "$olds" ] || exit 1
+    for old in $olds; do
+      git ls-files -z -- "$mapdir" | tr '\0' '\n' | while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        if [ "$f" = "$map" ]; then continue; fi
+        grep -qE "^[[:space:]]*${old}[[:space:]]*=" -- "$f" && printf '%s\n' "$f"
+      done
+    done | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -u
+  cd -- "{work_dir}"
+  map=$(git ls-files -z | tr '\0' '\n' | while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    head -n 3 -- "$f" 2>/dev/null | grep -qiE '^[[:space:]]*#.*renam' || continue
+    grep -IqE '^[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*=[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*$' -- "$f" && printf '%s\n' "$f"
+  done | head -n 1)
+  if [ -z "$map" ]; then
+    echo "no rename map found" >&2
+    exit 1
+  fi
+  mapdir=$(dirname -- "$map")
+  script=""
+  while IFS= read -r line; do
+    case "$line" in
+      ''|\#*) continue ;;
+    esac
+    case "$line" in
+      *=*) ;;
+      *) continue ;;
+    esac
+    old=${line%%=*}
+    new=${line#*=}
+    old=$(printf '%s' "$old" | tr -d '[:space:]')
+    new=$(printf '%s' "$new" | tr -d '[:space:]')
+    if [ -z "$old" ] || [ -z "$new" ]; then
+      continue
+    fi
+    e_old=$(printf '%s' "$old" | sed 's/[][\\.*^$]/\\&/g')
+    e_new=$(printf '%s' "$new" | sed 's/[\/&]/\\&/g')
+    script="${script}s/^\([[:space:]]*\)${e_old}\([[:space:]]*\)=/\1${e_new}\2=/"$'\n'
+  done < "$map"
+  if [ -z "$script" ]; then
+    echo "rename map declares no keys" >&2
+    exit 1
+  fi
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    if [ "$f" = "$map" ]; then
+      continue
+    fi
+    [ -f "$f" ] || continue
+    grep -IqE '^[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*=' -- "$f" || continue
+    tmp=$(mktemp)
+    if sed -e "$script" -- "$f" > "$tmp"; then
+      cat -- "$tmp" > "$f"
+    fi
+    rm -f "$tmp"
+  done < <(git ls-files -z -- "$mapdir" | tr '\0' '\n')
+steps: null
+postconditions:
+- name: no_stale_key_left
+  description: No tracked settings file other than the rename map still assigns an
+    old key name, so the stale entry is really gone.
+  probe: |-
+    cd -- "{work_dir}"
+    map=$(git ls-files -z | tr '\0' '\n' | while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      head -n 3 -- "$f" 2>/dev/null | grep -qiE '^[[:space:]]*#.*renam' || continue
+      grep -IqE '^[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*=[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*$' -- "$f" && printf '%s\n' "$f"
+    done | head -n 1)
+    [ -n "$map" ] || exit 1
+    mapdir=$(dirname -- "$map")
+    olds=$(grep -vE '^[[:space:]]*#' -- "$map" | sed -nE 's/^[[:space:]]*([A-Za-z0-9_.-]+)[[:space:]]*=[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*$/\1/p')
+    for old in $olds; do
+      git ls-files -z -- "$mapdir" | tr '\0' '\n' | while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        if [ "$f" = "$map" ]; then continue; fi
+        grep -qE "^[[:space:]]*${old}[[:space:]]*=" -- "$f" && printf '%s\n' "$f"
+      done
+    done | grep -q . && exit 1
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: renamed_key_keeps_value
+  description: Each file that now assigns a new key name carries exactly the value
+    that HEAD's version of that file assigned to the corresponding old key name.
+  probe: |-
+    cd -- "{work_dir}"
+    map=$(git ls-files -z | tr '\0' '\n' | while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      head -n 3 -- "$f" 2>/dev/null | grep -qiE '^[[:space:]]*#.*renam' || continue
+      grep -IqE '^[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*=[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*$' -- "$f" && printf '%s\n' "$f"
+    done | head -n 1)
+    [ -n "$map" ] || exit 1
+    mapdir=$(dirname -- "$map")
+    count=0
+    while IFS= read -r line; do
+      case "$line" in
+        ''|\#*) continue ;;
+      esac
+      case "$line" in
+        *=*) ;;
+        *) continue ;;
+      esac
+      old=${line%%=*}
+      new=${line#*=}
+      old=$(printf '%s' "$old" | tr -d '[:space:]')
+      new=$(printf '%s' "$new" | tr -d '[:space:]')
+      if [ -z "$old" ] || [ -z "$new" ]; then
+        continue
+      fi
+      while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        if [ "$f" = "$map" ]; then continue; fi
+        now=$(grep -E "^[[:space:]]*${new}[[:space:]]*=" -- "$f" 2>/dev/null | head -n 1 | sed -E 's/^[^=]*=[[:space:]]*//')
+        [ -n "$now" ] || continue
+        git cat-file -e "HEAD:${f}" 2>/dev/null || continue
+        was=$(git show "HEAD:${f}" 2>/dev/null | grep -E "^[[:space:]]*${old}[[:space:]]*=" | head -n 1 | sed -E 's/^[^=]*=[[:space:]]*//')
+        [ -n "$was" ] || continue
+        [ "$now" = "$was" ] || exit 1
+        count=$((count + 1))
+      done < <(git ls-files -z -- "$mapdir" | tr '\0' '\n')
+    done < "$map"
+    [ "$count" -ge 1 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: no_setting_lost
+  description: Every settings file beside the rename map still holds as many key assignments
+    as HEAD's version of it, so the rename dropped no setting.
+  probe: |-
+    cd -- "{work_dir}"
+    map=$(git ls-files -z | tr '\0' '\n' | while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      head -n 3 -- "$f" 2>/dev/null | grep -qiE '^[[:space:]]*#.*renam' || continue
+      grep -IqE '^[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*=[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*$' -- "$f" && printf '%s\n' "$f"
+    done | head -n 1)
+    [ -n "$map" ] || exit 1
+    mapdir=$(dirname -- "$map")
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      if [ "$f" = "$map" ]; then continue; fi
+      [ -f "$f" ] || continue
+      git cat-file -e "HEAD:${f}" 2>/dev/null || continue
+      was=$(git show "HEAD:${f}" 2>/dev/null | grep -cE '^[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*=[[:space:]]*[^[:space:]]' || true)
+      now=$(grep -cE '^[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*=[[:space:]]*[^[:space:]]' -- "$f" || true)
+      [ "$now" = "$was" ] || exit 1
+    done < <(git ls-files -z -- "$mapdir" | tr '\0' '\n')
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: Fix the stale config entry the app is warning about, without
+    losing any setting. Rename the old key in the project's settings and keep its
+    value.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Fix the stale config entry the app is warning about, without losing
+    any setting. Rename the old key in the project's settings and keep its value./seed-8-config_renamed-212
+  fault: config_renamed
+status: admitted

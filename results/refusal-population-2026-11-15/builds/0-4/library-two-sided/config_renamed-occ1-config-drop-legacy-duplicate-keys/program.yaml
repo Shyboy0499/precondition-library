@@ -1,0 +1,173 @@
+id: config_renamed-occ1-config-drop-legacy-duplicate-keys
+intent: Drop legacy configuration key lines when their replacement name is already
+  set, keep the replacement values untouched, and commit the removal.
+parameters: []
+preconditions:
+- name: renames_file_has_mappings
+  description: config/renames.conf exists and declares at least one old = new key
+    mapping
+  probe: |-
+    test -f config/renames.conf &&
+    grep -Eq '^[[:space:]]*[^#[:space:]][^=]*=[^=]' config/renames.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: has_stale_key_with_replacement_set
+  description: a tracked file under the config directory contains an old key line
+    and the corresponding new key line
+  probe: |-
+    renames=config/renames.conf
+    dir=$(dirname "$renames")
+    found=0
+    while IFS= read -r line; do
+      case "$line" in ''|'#'*) continue;; esac
+      case "$line" in *=*) ;; *) continue;; esac
+      old=${line%%=*}
+      new=${line#*=}
+      old=$(printf '%s' "$old" | tr -d '[:space:]')
+      new=$(printf '%s' "$new" | tr -d '[:space:]')
+      if [ -z "$old" ] || [ -z "$new" ]; then continue; fi
+      while IFS= read -r -d '' f; do
+        if [ "$f" = "$renames" ]; then continue; fi
+        if grep -Eq "^[[:space:]]*${old}[[:space:]]*=" "$f" && grep -Eq "^[[:space:]]*${new}[[:space:]]*=" "$f"; then
+          found=1
+        fi
+      done < <(git ls-files -z -- "$dir")
+    done < "$renames"
+    [ "$found" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: no pending tracked or untracked changes exist, so the body's commit
+    contains only the key removals
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  set -euo pipefail
+  renames=config/renames.conf
+  dir=$(dirname "$renames")
+  git ls-files -z -- "$dir" | while IFS= read -r -d '' f; do
+    if [ "$f" = "$renames" ]; then continue; fi
+    if [ ! -f "$f" ]; then continue; fi
+    tmp=$(mktemp)
+    awk -v renames="$renames" '
+      BEGIN {
+        while ((getline line < renames) > 0) {
+          sub(/#.*/, "", line)
+          if (line !~ /=/) continue
+          eq = index(line, "=")
+          o = substr(line, 1, eq - 1)
+          n = substr(line, eq + 1)
+          gsub(/^[ \t]+|[ \t]+$/, "", o)
+          gsub(/^[ \t]+|[ \t]+$/, "", n)
+          if (o != "" && n != "") old[o] = n
+        }
+      }
+      {
+        lines[NR] = $0
+        t = $0
+        sub(/#.*/, "", t)
+        eq = index(t, "=")
+        if (eq) {
+          k = substr(t, 1, eq - 1)
+          gsub(/^[ \t]+|[ \t]+$/, "", k)
+          present[k] = 1
+        }
+      }
+      END {
+        for (i = 1; i <= NR; i++) {
+          l = lines[i]
+          t = l
+          sub(/#.*/, "", t)
+          eq = index(t, "=")
+          drop = 0
+          if (eq) {
+            k = substr(t, 1, eq - 1)
+            gsub(/^[ \t]+|[ \t]+$/, "", k)
+            if ((k in old) && (old[k] in present)) drop = 1
+          }
+          if (!drop) print l
+        }
+      }
+    ' "$f" > "$tmp"
+    if ! cmp -s "$tmp" "$f"; then
+      cat "$tmp" > "$f"
+    fi
+    rm -f "$tmp"
+  done
+  if ! git diff --quiet; then
+    git add -u
+    git commit -m "config: drop legacy setting keys whose new names are set"
+  fi
+steps: null
+postconditions:
+- name: no_stale_duplicate_keys
+  description: no tracked config file still has an old key line whose replacement
+    key is also set
+  probe: |-
+    renames=config/renames.conf
+    dir=$(dirname "$renames")
+    stale=0
+    while IFS= read -r line; do
+      case "$line" in ''|'#'*) continue;; esac
+      case "$line" in *=*) ;; *) continue;; esac
+      old=${line%%=*}
+      new=${line#*=}
+      old=$(printf '%s' "$old" | tr -d '[:space:]')
+      new=$(printf '%s' "$new" | tr -d '[:space:]')
+      if [ -z "$old" ] || [ -z "$new" ]; then continue; fi
+      while IFS= read -r -d '' f; do
+        if [ "$f" = "$renames" ]; then continue; fi
+        if grep -Eq "^[[:space:]]*${old}[[:space:]]*=" "$f" && grep -Eq "^[[:space:]]*${new}[[:space:]]*=" "$f"; then
+          stale=1
+        fi
+      done < <(git ls-files -z -- "$dir")
+    done < "$renames"
+    [ "$stale" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: only_old_key_lines_deleted
+  description: the new commit removes only lines whose key is declared as an old name
+    in config/renames.conf
+  probe: |-
+    renames=config/renames.conf
+    if ! git rev-parse -q --verify HEAD^ >/dev/null; then exit 0; fi
+    olds=()
+    while IFS= read -r line; do
+      case "$line" in ''|'#'*) continue;; esac
+      case "$line" in *=*) ;; *) continue;; esac
+      old=${line%%=*}
+      old=$(printf '%s' "$old" | tr -d '[:space:]')
+      if [ -n "$old" ]; then olds+=("$old"); fi
+    done < "$renames"
+    bad=0
+    while IFS= read -r dl; do
+      dl=${dl#-}
+      key=${dl%%=*}
+      key=$(printf '%s' "$key" | tr -d '[:space:]')
+      matched=0
+      for o in "${olds[@]}"; do
+        if [ "$key" = "$o" ]; then matched=1; fi
+      done
+      if [ "$matched" -eq 0 ]; then bad=1; fi
+    done < <(git diff HEAD^ HEAD | grep -E '^-' | grep -Ev '^---( |$)')
+    [ "$bad" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_commit
+  description: the key removal is committed and no pending changes remain
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: drop_old
+provenance:
+  compiled_from_task: The app keeps warning that my config uses old setting names.
+    Make the warning go away without changing what the settings do. The new name is
+    already set too, so delete the old key's line and keep the new one.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: The app keeps warning that my config uses old setting names. Make the
+    warning go away without changing what the settings do. The new name is already
+    set too, so delete the old key's line and keep the new one./seed-23-config_renamed-4812
+  fault: config_renamed
+status: admitted

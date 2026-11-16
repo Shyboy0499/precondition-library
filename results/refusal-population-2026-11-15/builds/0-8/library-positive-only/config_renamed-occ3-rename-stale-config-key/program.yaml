@@ -1,0 +1,180 @@
+id: config_renamed-occ3-rename-stale-config-key
+intent: Rename stale configuration keys in the project settings file according to
+  the renames mapping, preserving their values.
+parameters: []
+preconditions:
+- name: renames_file_present
+  description: config/renames.conf exists and contains at least one old = new mapping
+  probe: |-
+    test -f config/renames.conf &&
+    awk -F= 'NF >= 2 && $1 !~ /^[[:space:]]*#/ && $1 !~ /^[[:space:]]*$/ { found=1 } END { exit !found }' config/renames.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: settings_file_tracked
+  description: config/settings.conf exists and is tracked by git
+  probe: |-
+    test -f config/settings.conf &&
+    git ls-files --error-unmatch config/settings.conf >/dev/null 2>&1
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the working tree has no uncommitted or untracked changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_key_present
+  description: at least one old key from config/renames.conf appears in config/settings.conf
+  probe: |-
+    awk -F= '
+      FNR == NR {
+        if ($0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*$/) next
+        old = $1
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+        if (old != "") seen[old] = 1
+        next
+      }
+      {
+        if (match($0, /^[[:space:]]*[^[:space:]=]+[[:space:]]*=/)) {
+          key = substr($0, RSTART, RLENGTH)
+          sub(/^[[:space:]]*/, "", key)
+          sub(/[[:space:]]*=.*$/, "", key)
+          if (key in seen) found = 1
+        }
+      }
+      END { exit !found }
+    ' config/renames.conf config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: no_target_key_conflict
+  description: no stale old key is being renamed to a new key that already exists
+    in config/settings.conf
+  probe: |-
+    awk -F= '
+      FNR == NR {
+        if ($0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*$/) next
+        old = $1
+        new = $2
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+        if (old != "") map[old] = new
+        next
+      }
+      {
+        if (match($0, /^[[:space:]]*[^[:space:]=]+[[:space:]]*=/)) {
+          key = substr($0, RSTART, RLENGTH)
+          sub(/^[[:space:]]*/, "", key)
+          sub(/[[:space:]]*=.*$/, "", key)
+          present[key] = 1
+        }
+      }
+      END {
+        for (old in map) {
+          if ((old in present) && (map[old] in present)) exit 1
+        }
+        exit 0
+      }
+    ' config/renames.conf config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  awk '
+    NR == FNR {
+      if ($0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*$/) next
+      eq = index($0, "=")
+      if (eq == 0) next
+      old = substr($0, 1, eq - 1)
+      new = substr($0, eq + 1)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+      if (old != "") map[old] = new
+      next
+    }
+    {
+      line = $0
+      if (match(line, /^[[:space:]]*[^[:space:]=]+[[:space:]]*=/)) {
+        pre = substr(line, RSTART, RLENGTH)
+        lead = pre
+        sub(/[^[:space:]].*$/, "", lead)
+        key = pre
+        sub(/^[[:space:]]*/, "", key)
+        sub(/[[:space:]]*=.*$/, "", key)
+        if (key in map) {
+          tail = pre
+          sub(/^[[:space:]]*[^[:space:]=]+/, "", tail)
+          rest = substr(line, RSTART + RLENGTH)
+          line = lead map[key] tail rest
+        }
+      }
+      print line
+    }
+  ' config/renames.conf config/settings.conf > .settings.conf.new
+  mv .settings.conf.new config/settings.conf
+  git add config/settings.conf
+  git commit -m "fix: rename stale config keys"
+steps: null
+postconditions:
+- name: no_stale_keys_remain
+  description: no old key from config/renames.conf remains in config/settings.conf
+  probe: |-
+    awk -F= '
+      FNR == NR {
+        if ($0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*$/) next
+        old = $1
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+        if (old != "") seen[old] = 1
+        next
+      }
+      {
+        if (match($0, /^[[:space:]]*[^[:space:]=]+[[:space:]]*=/)) {
+          key = substr($0, RSTART, RLENGTH)
+          sub(/^[[:space:]]*/, "", key)
+          sub(/[[:space:]]*=.*$/, "", key)
+          if (key in seen) found = 1
+        }
+      }
+      END { exit found ? 1 : 0 }
+    ' config/renames.conf config/settings.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: renamed_values_preserved
+  description: every old key that was present before the change now exists under its
+    new name with the same value
+  probe: |-
+    while IFS='=' read -r old new; do
+      old=$(printf '%s' "$old" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+      new=$(printf '%s' "$new" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+      case "$old" in ''|'#'*) continue;; esac
+      old_line=$(git show HEAD^:config/settings.conf 2>/dev/null | grep -E "^[[:space:]]*${old}[[:space:]]*=" | head -n 1)
+      if [ -n "$old_line" ]; then
+        old_val=$(printf '%s' "$old_line" | sed -E "s/^[[:space:]]*${old}[[:space:]]*=[[:space:]]*//")
+        new_line=$(git show HEAD:config/settings.conf 2>/dev/null | grep -E "^[[:space:]]*${new}[[:space:]]*=" | head -n 1)
+        [ -n "$new_line" ] || exit 1
+        new_val=$(printf '%s' "$new_line" | sed -E "s/^[[:space:]]*${new}[[:space:]]*=[[:space:]]*//")
+        [ "$old_val" = "$new_val" ] || exit 1
+      fi
+    done < config/renames.conf
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: settings_file_changed_in_head
+  description: the fix is committed in HEAD and touches config/settings.conf
+  probe: test -n "$(git diff HEAD^ HEAD -- config/settings.conf)"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after
+  description: the working tree is clean after committing the rename
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: Fix the stale config entry the app is warning about, without
+    losing any setting. Rename the old key in the project's settings and keep its
+    value.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Fix the stale config entry the app is warning about, without losing
+    any setting. Rename the old key in the project's settings and keep its value./seed-8-config_renamed-29979
+  fault: config_renamed
+status: admitted

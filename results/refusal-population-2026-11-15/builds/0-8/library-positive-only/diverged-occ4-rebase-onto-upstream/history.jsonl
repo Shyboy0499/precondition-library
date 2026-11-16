@@ -1,0 +1,2 @@
+{"episode_id": "Upstream moved ahead of me. Get me back in line with it. Replay my local commits on top of upstream so the history stays linear./seed-2-diverged-29979", "from": null, "program_id": "diverged-occ4-rebase-onto-upstream", "to": "candidate"}
+{"episode_id": "Upstream moved ahead of me. Get me back in line with it. Replay my local commits on top of upstream so the history stays linear./seed-2-diverged-29979", "from": "candidate", "program_id": "diverged-occ4-rebase-onto-upstream", "to": "admitted"}

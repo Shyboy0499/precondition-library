@@ -1,0 +1,90 @@
+id: dirty_tree-occ1-commit-dirty-rebase-upstream
+intent: Commit uncommitted working tree changes, then rebase the current branch onto
+  upstream so the branch is up to date and the changes are preserved.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_exists
+  description: The configured upstream remote exists.
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_exists
+  description: A remote-tracking ref for the upstream branch is already available
+    locally.
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: on_a_branch
+  description: HEAD is attached to a local branch.
+  probe: git symbolic-ref --quiet --short HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_is_dirty
+  description: The working tree has uncommitted tracked or untracked changes to commit.
+  probe: test -n "$(git status --porcelain --untracked-files=all)"
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_is_behind_upstream
+  description: The current branch is missing at least one commit from the upstream
+    branch.
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_files
+  description: There are no unresolved merge entries in the index.
+  probe: '! git ls-files -u | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: No merge is currently in progress.
+  probe: test ! -e "$(git rev-parse --git-path MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_rebase_in_progress
+  description: No rebase is currently in progress.
+  probe: test ! -d "$(git rev-parse --git-path rebase-merge)" && test ! -d "$(git
+    rev-parse --git-path rebase-apply)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git add -A
+  git commit -m "wip: local changes before syncing with upstream"
+  git fetch {upstream_remote}
+  git rebase {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: worktree_clean
+  description: No tracked or untracked changes remain in the working tree.
+  probe: test -z "$(git status --porcelain --untracked-files=all)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: The upstream branch tip is included in the current branch history.
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commit_created
+  description: The committed working-tree changes are the tip commit.
+  probe: git log -1 --format=%s
+  expect_exit: 0
+  expect_pattern: '^wip: local changes before syncing with upstream$'
+- name: no_unmerged_files_after
+  description: The index has no unresolved merge entries after the rebase.
+  probe: '! git ls-files -u | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+variant: commit
+provenance:
+  compiled_from_task: My working tree has changes and the branch is behind upstream.
+    Fix that and keep my changes. Commit my uncommitted work first, then bring the
+    branch up to date.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: My working tree has changes and the branch is behind upstream. Fix that
+    and keep my changes. Commit my uncommitted work first, then bring the branch up
+    to date./seed-0-dirty_tree-19837
+  fault: dirty_tree
+status: candidate

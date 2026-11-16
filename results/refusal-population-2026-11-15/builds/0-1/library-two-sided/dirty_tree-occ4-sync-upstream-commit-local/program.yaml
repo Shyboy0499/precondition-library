@@ -1,0 +1,84 @@
+id: dirty_tree-occ4-sync-upstream-commit-local
+intent: Commit all uncommitted work, then fetch and merge the latest upstream branch
+  into the current branch while preserving local changes.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: has_upstream_remote
+  description: the configured upstream remote exists
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_branch_is_known
+  description: the remote-tracking ref for the upstream branch exists
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: current_branch_is_attached
+  description: HEAD is attached to a local branch
+  probe: git symbolic-ref -q HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: the index has no unresolved merge entries
+  probe: '! git ls-files -u | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_has_uncommitted_changes
+  description: there are changes that need to be committed before updating
+  probe: test -n "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_upstream_collisions
+  description: untracked files do not collide with files changed upstream
+  probe: |-
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} \
+        | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ahead_of_local
+  description: the upstream branch has commits not yet in HEAD
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git add -A
+  git commit -m "wip: save local changes before updating from upstream"
+  git pull --no-rebase --no-edit {upstream_remote} {upstream_branch}
+steps: null
+postconditions:
+- name: working_tree_clean
+  description: no uncommitted changes remain
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: fetched_upstream_is_merged
+  description: HEAD contains the upstream commit fetched by the pull
+  probe: git merge-base --is-ancestor FETCH_HEAD HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_is_merged
+  description: HEAD contains the upstream tracking tip
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commit_is_retained
+  description: HEAD is ahead of the upstream branch after the merge
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+variant: commit
+provenance:
+  compiled_from_task: Get the latest from upstream here, and keep every change I have
+    not saved yet. Commit my uncommitted work first, then bring the branch up to date.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get the latest from upstream here, and keep every change I have not
+    saved yet. Commit my uncommitted work first, then bring the branch up to date./seed-1-dirty_tree-25587
+  fault: dirty_tree
+status: admitted

@@ -1,0 +1,88 @@
+id: branch_renamed-occ2-retrack-upstream-and-merge
+intent: Retarget the current branch to track upstream's renamed main branch and merge
+  that upstream branch into the local commits.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: clean_worktree
+  description: the working tree and index have no uncommitted changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: current_branch_tracks_the_upstream_remote
+  description: the current branch is configured to track a branch on the given remote
+  probe: test "$(git config --get "branch.$(git rev-parse --abbrev-ref HEAD).remote")"
+    = "{upstream_remote}"
+  expect_exit: 0
+  expect_pattern: null
+- name: tracking_target_is_stale
+  description: the current branch does not yet track the new upstream branch
+  probe: test "$(git config --get "branch.$(git rev-parse --abbrev-ref HEAD).merge")"
+    != "refs/heads/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_have_diverged
+  description: the local branch and the new upstream branch each contain commits the
+    other lacks
+  probe: |-
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0 &&
+      test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: there is no existing merge state to preserve
+  probe: test ! -e "$(git rev-parse --git-path MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_collisions_with_upstream_changes
+  description: no untracked local file would be overwritten by the upstream changes
+  probe: |-
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  branch=$(git rev-parse --abbrev-ref HEAD)
+  git fetch {upstream_remote}
+  git branch --set-upstream-to={upstream_remote}/{upstream_branch} "$branch"
+  git merge --no-edit --no-ff {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: tracks_new_upstream
+  description: the current branch now tracks the new upstream branch
+  probe: test "$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}')" = "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_merged
+  description: the new upstream branch is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_preserved
+  description: HEAD still contains local commits beyond the upstream branch
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_commit_created
+  description: the merge produced a commit with upstream and local ancestry
+  probe: git rev-parse -q --verify HEAD^2
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree_after_merge
+  description: the merge left no uncommitted changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: retrack
+provenance:
+  compiled_from_task: Make this branch follow upstream's current main line again,
+    and catch it up. Track upstream's new branch and merge it into my own commits.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Make this branch follow upstream's current main line again, and catch
+    it up. Track upstream's new branch and merge it into my own commits./seed-1-branch_renamed-17967
+  fault: branch_renamed
+status: admitted

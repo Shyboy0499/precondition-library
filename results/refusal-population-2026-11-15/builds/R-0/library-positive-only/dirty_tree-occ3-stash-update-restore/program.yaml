@@ -1,0 +1,86 @@
+id: dirty_tree-occ3-stash-update-restore
+intent: stash uncommitted work, fast-forward the current branch to upstream, and restore
+  the stashed work
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: worktree_dirty
+  description: the working tree has tracked or untracked changes that the stash must
+    preserve
+  probe: test -n "$(git status --porcelain -uall)"
+  expect_exit: 0
+  expect_pattern: null
+- name: on_a_branch
+  description: HEAD is a symbolic ref, so the fast-forward updates a branch
+  probe: git symbolic-ref --quiet HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_remote_exists
+  description: the configured upstream remote exists
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_exists
+  description: the upstream remote-tracking branch is present locally
+  probe: git rev-parse --verify --quiet "refs/remotes/{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ahead_and_fast_forwardable
+  description: the upstream branch is strictly ahead and HEAD can fast-forward to
+    it
+  probe: |-
+    test "$(git rev-list --count HEAD.."{upstream_remote}/{upstream_branch}")" -gt 0 &&
+    git merge-base --is-ancestor HEAD "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_local_upstream_path_overlap
+  description: no locally changed path is also changed between HEAD and upstream,
+    so restoring the stash cannot collide with the update
+  probe: |-
+    ! comm -12 \
+      <( { git diff --name-only -z --no-renames HEAD; git ls-files --others --exclude-standard -z; } | tr '\0' '\n' | sort -u ) \
+      <( git diff --name-only -z --no-renames HEAD "{upstream_remote}/{upstream_branch}" | tr '\0' '\n' | sort -u ) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: no_existing_marker_stash
+  description: no existing stash already uses this program's marker message
+  probe: '! git stash list | grep -q ''pre-upstream-update'''
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git stash push -u -m "pre-upstream-update"
+  git fetch {upstream_remote}
+  git merge --ff-only "{upstream_remote}/{upstream_branch}"
+  git stash pop
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is exactly the fetched upstream commit
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse "{upstream_remote}/{upstream_branch}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_dirty_again
+  description: the working tree again contains the uncommitted changes restored from
+    the stash
+  probe: test -n "$(git status --porcelain -uall)"
+  expect_exit: 0
+  expect_pattern: null
+- name: marker_stash_removed
+  description: the marker stash has been popped and is no longer in the stash list
+  probe: '! git stash list | grep -q ''pre-upstream-update'''
+  expect_exit: 0
+  expect_pattern: null
+variant: stash
+provenance:
+  compiled_from_task: I am in the middle of something and upstream moved on. Sort
+    it out without losing my edits. Stash my uncommitted work, update the branch,
+    then put my work back.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: I am in the middle of something and upstream moved on. Sort it out without
+    losing my edits. Stash my uncommitted work, update the branch, then put my work
+    back./seed-10-dirty_tree-28615
+  fault: dirty_tree
+status: admitted

@@ -1,0 +1,208 @@
+id: lockfile_conflict-occ1-merge-upstream-keep-local-edits
+intent: Merge upstream into the local branch and resolve dependency-file collisions
+  by keeping local removals removed, retaining local additions, and adding upstream's
+  additions while taking upstream where both sides changed the same line.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: is_git_worktree
+  description: the current directory is inside a git worktree
+  probe: test "$(git rev-parse --is-inside-work-tree)" = "true"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_exists
+  description: the upstream remote-tracking branch exists locally
+  probe: git rev-parse --verify --quiet "{upstream_remote}/{upstream_branch}^{commit}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ahead
+  description: upstream has at least one commit not on the local branch
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: local_ahead
+  description: the local branch has at least one commit not on upstream
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: common_changed_file
+  description: at least one file was changed on both the local branch and upstream
+  probe: base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) && test -n
+    "$base" && comm -12 <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort
+    -u) <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr
+    '\0' '\n' | sort -u) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_or_merge_in_progress
+  description: the tracked worktree is clean, or a conflicted merge is already in
+    progress
+  probe: |-
+    if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+      test -n "$(git diff --name-only --diff-filter=U -z | tr '\0' '\n')"
+    else
+      git diff --quiet && git diff --cached --quiet
+    fi
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -eu
+  upstream_ref="{upstream_remote}/{upstream_branch}"
+
+  if ! git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+    git fetch {upstream_remote} >/dev/null 2>&1 || true
+    git merge --no-edit "$upstream_ref" || true
+  fi
+
+  if ! git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+    exit 0
+  fi
+
+  tmpdir=$(mktemp -d)
+  trap 'rm -rf "$tmpdir"' EXIT
+
+  while IFS= read -r -d '' path; do
+    git show ":1:$path" > "$tmpdir/base" 2>/dev/null || : > "$tmpdir/base"
+    git show ":2:$path" > "$tmpdir/ours" 2>/dev/null || : > "$tmpdir/ours"
+    git show ":3:$path" > "$tmpdir/theirs" 2>/dev/null || : > "$tmpdir/theirs"
+    python3 - "$tmpdir/base" "$tmpdir/ours" "$tmpdir/theirs" > "$tmpdir/resolved" <<'PY'
+  import sys, difflib
+
+  base_path, ours_path, theirs_path = sys.argv[1:4]
+  with open(base_path, 'r', encoding='utf-8', errors='surrogateescape') as f:
+      base = f.readlines()
+  with open(ours_path, 'r', encoding='utf-8', errors='surrogateescape') as f:
+      ours = f.readlines()
+  with open(theirs_path, 'r', encoding='utf-8', errors='surrogateescape') as f:
+      theirs = f.readlines()
+
+  def get_opcodes(a, b):
+      return difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes()
+
+  n = len(base)
+  before = [None] * (n + 1)
+  after = [None] * (n + 1)
+  for tag, i1, i2, j1, j2 in get_opcodes(base, theirs):
+      if tag == 'equal':
+          for k in range(i1, i2):
+              pos = j1 + (k - i1)
+              if before[k] is None:
+                  before[k] = pos
+              after[k] = pos
+          before[i2] = j2
+          after[i2] = j2
+      elif tag == 'insert':
+          if before[i1] is None:
+              before[i1] = j1
+          after[i1] = j2
+      elif tag == 'delete':
+          if before[i1] is None:
+              before[i1] = j1
+          after[i1] = j1
+          for k in range(i1 + 1, i2 + 1):
+              before[k] = j1
+              after[k] = j1
+      elif tag == 'replace':
+          if before[i1] is None:
+              before[i1] = j1
+          after[i1] = j1
+          for k in range(i1 + 1, i2):
+              before[k] = j1
+              after[k] = j1
+          before[i2] = j2
+          after[i2] = j2
+
+  last_b = 0
+  last_a = 0
+  for k in range(n + 1):
+      if before[k] is None:
+          before[k] = last_b
+      else:
+          last_b = before[k]
+      if after[k] is None:
+          after[k] = last_a
+      else:
+          last_a = after[k]
+
+  theirs_ops = get_opcodes(base, theirs)
+  def upstream_changed(i1, i2):
+      if i1 == i2:
+          return False
+      for tag, a1, a2, b1, b2 in theirs_ops:
+          if tag == 'equal':
+              continue
+          if max(i1, a1) < min(i2, a2):
+              return True
+      return False
+
+  result = list(theirs)
+  for tag, i1, i2, j1, j2 in reversed(get_opcodes(base, ours)):
+      if tag == 'equal':
+          continue
+      if tag == 'insert':
+          pos = before[i1]
+          if pos is None:
+              pos = len(result)
+          result[pos:pos] = ours[j1:j2]
+      elif tag == 'delete':
+          start = after[i1]
+          end = before[i2]
+          if start is None:
+              start = len(result)
+          if end is None:
+              end = len(result)
+          if start < end:
+              del result[start:end]
+      elif tag == 'replace':
+          if not upstream_changed(i1, i2):
+              start = after[i1]
+              end = before[i2]
+              if start is None:
+                  start = len(result)
+              if end is None:
+                  end = len(result)
+              result[start:end] = ours[j1:j2]
+
+  sys.stdout.write(''.join(result))
+  PY
+    cat "$tmpdir/resolved" > "$path"
+    git add -- "$path"
+  done < <(git diff --name-only --diff-filter=U -z)
+
+  git commit --no-edit
+steps: null
+postconditions:
+- name: upstream_is_ancestor
+  description: the upstream branch is contained in HEAD after the merge
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_files
+  description: no unmerged index entries remain
+  probe: test -z "$(git diff --name-only --diff-filter=U -z | tr '\0' '\n')"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: no conflicted merge is still pending
+  probe: '! git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1'
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_worktree_clean
+  description: no tracked changes remain uncommitted
+  probe: git diff --quiet && git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+variant: keep_local
+provenance:
+  compiled_from_task: Get my fork current with upstream; our dependency changes collided.
+    Keep my dependency file, with what I removed still removed, and add what upstream
+    added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get my fork current with upstream; our dependency changes collided.
+    Keep my dependency file, with what I removed still removed, and add what upstream
+    added./seed-3-lockfile_conflict-12454
+  fault: lockfile_conflict
+status: admitted

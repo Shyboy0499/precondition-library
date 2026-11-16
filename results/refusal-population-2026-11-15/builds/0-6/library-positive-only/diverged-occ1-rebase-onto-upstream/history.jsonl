@@ -1,0 +1,2 @@
+{"episode_id": "I have local work and upstream has new commits. Untangle it. Replay my local commits on top of upstream so the history stays linear./seed-5-diverged-7488", "from": null, "program_id": "diverged-occ1-rebase-onto-upstream", "to": "candidate"}
+{"episode_id": "I have local work and upstream has new commits. Untangle it. Replay my local commits on top of upstream so the history stays linear./seed-5-diverged-7488", "from": "candidate", "program_id": "diverged-occ1-rebase-onto-upstream", "to": "admitted"}

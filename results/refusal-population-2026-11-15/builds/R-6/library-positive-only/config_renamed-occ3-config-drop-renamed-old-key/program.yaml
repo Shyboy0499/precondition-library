@@ -1,0 +1,202 @@
+id: config_renamed-occ3-config-drop-renamed-old-key
+intent: Delete an obsolete old-name config key line when the renamed key is already
+  present in the same file, and commit the cleanup.
+parameters: []
+preconditions:
+- name: has_stale_renamed_key_pair
+  description: a tracked config file contains both an old key and its renamed replacement
+  probe: |-
+    set -euo pipefail
+    renames=config/renames.conf
+    has_stale() {
+      local file
+      while IFS= read -r -d '' file; do
+        [ "$file" = "$renames" ] && continue
+        if awk -v mapfile="$renames" '
+          BEGIN {
+            while ((getline line < mapfile) > 0) {
+              sub(/#.*/, "", line)
+              if (line ~ /^[[:space:]]*$/) continue
+              eq = index(line, "=")
+              if (eq == 0) continue
+              old = substr(line, 1, eq - 1)
+              new = substr(line, eq + 1)
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+              if (old != "" && new != "" && old != new) rename_old[old] = new
+            }
+            close(mapfile)
+          }
+          {
+            line = $0
+            if (line ~ /^[[:space:]]*#/ || line ~ /^[[:space:]]*$/) next
+            eq = index(line, "=")
+            if (eq == 0) next
+            key = substr(line, 1, eq - 1)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+            if (key != "") present[key] = 1
+          }
+          END {
+            for (old in rename_old) {
+              if ((old in present) && (rename_old[old] in present)) {
+                exit 0
+              }
+            }
+            exit 1
+          }
+        ' "$file" >/dev/null; then
+          return 0
+        fi
+      done < <(git ls-files -z -- 'config/*')
+      return 1
+    }
+    has_stale
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_worktree_clean
+  description: no tracked file has uncommitted or staged changes
+  probe: git diff --quiet && git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+  renames=config/renames.conf
+  map="$(mktemp)"
+  trap 'rm -f "$map"' EXIT
+  awk '
+    {
+      line = $0
+      sub(/#.*/, "", line)
+      if (line ~ /^[[:space:]]*$/) next
+      eq = index(line, "=")
+      if (eq == 0) next
+      old = substr(line, 1, eq - 1)
+      new = substr(line, eq + 1)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+      if (old != "" && new != "" && old != new)
+        print old "\t" new
+    }
+  ' "$renames" > "$map"
+
+  changed=()
+  while IFS= read -r -d '' file; do
+    [ "$file" = "$renames" ] && continue
+    tmp="$(mktemp)"
+    awk -v mapfile="$map" '
+      BEGIN {
+        while ((getline line < mapfile) > 0) {
+          n = split(line, p, "\t")
+          if (n >= 2) rename_old[p[1]] = p[2]
+        }
+        close(mapfile)
+      }
+      {
+        raw[NR] = $0
+        line = $0
+        if (line ~ /^[[:space:]]*#/ || line ~ /^[[:space:]]*$/) next
+        eq = index(line, "=")
+        if (eq == 0) next
+        key = substr(line, 1, eq - 1)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+        if (key != "") {
+          present[key] = 1
+          key_of[NR] = key
+        }
+      }
+      END {
+        for (old in rename_old) {
+          if ((old in present) && (rename_old[old] in present)) stale[old] = 1
+        }
+        for (i = 1; i <= NR; i++) {
+          if ((i in key_of) && (key_of[i] in stale)) continue
+          print raw[i]
+        }
+      }
+    ' "$file" > "$tmp"
+    if ! cmp -s "$tmp" "$file"; then
+      cat "$tmp" > "$file"
+      changed+=("$file")
+    fi
+    rm -f "$tmp"
+  done < <(git ls-files -z -- 'config/*')
+
+  if [ "${#changed[@]}" -eq 0 ]; then
+    echo "no stale renamed config keys found" >&2
+    exit 1
+  fi
+
+  git add -- "${changed[@]}"
+  git commit -m "Remove obsolete renamed config keys"
+steps: null
+postconditions:
+- name: no_stale_renamed_key_pair
+  description: no tracked config file still contains both an old key and its renamed
+    replacement
+  probe: |-
+    set -euo pipefail
+    renames=config/renames.conf
+    has_stale() {
+      local file
+      while IFS= read -r -d '' file; do
+        [ "$file" = "$renames" ] && continue
+        if awk -v mapfile="$renames" '
+          BEGIN {
+            while ((getline line < mapfile) > 0) {
+              sub(/#.*/, "", line)
+              if (line ~ /^[[:space:]]*$/) continue
+              eq = index(line, "=")
+              if (eq == 0) continue
+              old = substr(line, 1, eq - 1)
+              new = substr(line, eq + 1)
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", old)
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", new)
+              if (old != "" && new != "" && old != new) rename_old[old] = new
+            }
+            close(mapfile)
+          }
+          {
+            line = $0
+            if (line ~ /^[[:space:]]*#/ || line ~ /^[[:space:]]*$/) next
+            eq = index(line, "=")
+            if (eq == 0) next
+            key = substr(line, 1, eq - 1)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+            if (key != "") present[key] = 1
+          }
+          END {
+            for (old in rename_old) {
+              if ((old in present) && (rename_old[old] in present)) {
+                exit 0
+              }
+            }
+            exit 1
+          }
+        ' "$file" >/dev/null; then
+          return 0
+        fi
+      done < <(git ls-files -z -- 'config/*')
+      return 1
+    }
+    if has_stale; then
+      exit 1
+    fi
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_worktree_clean
+  description: the edit has been committed and no tracked file is left modified
+  probe: git diff --quiet && git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+variant: drop_old
+provenance:
+  compiled_from_task: Some setting in my config has been renamed upstream. Sort the
+    config out. The new name is already set too, so delete the old key's line and
+    keep the new one.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Some setting in my config has been renamed upstream. Sort the config
+    out. The new name is already set too, so delete the old key's line and keep the
+    new one./seed-31-config_renamed-17967
+  fault: config_renamed
+status: admitted

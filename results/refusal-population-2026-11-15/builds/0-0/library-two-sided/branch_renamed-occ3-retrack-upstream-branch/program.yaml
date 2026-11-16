@@ -1,0 +1,100 @@
+id: branch_renamed-occ3-retrack-upstream-branch
+intent: Keep the current branch name, retarget its upstream tracking to the remote's
+  current branch, and fast-forward it to that branch.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_attached_branch
+  description: HEAD is on a local branch, not detached
+  probe: git symbolic-ref --quiet --short HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_remote_configured
+  description: the upstream remote has a URL configured
+  probe: git config --get "remote.{upstream_remote}.url"
+  expect_exit: 0
+  expect_pattern: null
+- name: tracks_other_upstream_branch
+  description: the current branch is configured to track a different branch on the
+    upstream remote
+  probe: |-
+    branch=$(git symbolic-ref --quiet --short HEAD) &&
+    old=$(git config --get "branch.$branch.merge") &&
+    test "$(git config --get "branch.$branch.remote")" = "{upstream_remote}" &&
+    test -n "$old" &&
+    test "$old" != "refs/heads/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_tracked
+  description: there are no staged or unstaged changes to tracked files
+  probe: test -z "$(git status --porcelain --untracked-files=no)"
+  expect_exit: 0
+  expect_pattern: null
+- name: fast_forward_possible_if_ref_known
+  description: if the new upstream tracking ref is already present, HEAD is an ancestor
+    of it
+  probe: |-
+    if git rev-parse --verify --quiet "refs/remotes/{upstream_remote}/{upstream_branch}" >/dev/null; then
+      git merge-base --is-ancestor HEAD "refs/remotes/{upstream_remote}/{upstream_branch}"
+    fi
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_collisions_if_ref_known
+  description: if the new upstream tracking ref is present, no untracked file collides
+    with an incoming path
+  probe: |-
+    if git rev-parse --verify --quiet "refs/remotes/{upstream_remote}/{upstream_branch}" >/dev/null; then
+      ! comm -12 \
+        <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+        <(git diff --name-only -z HEAD "refs/remotes/{upstream_remote}/{upstream_branch}" \
+          | tr '\0' '\n' | sort) | grep -q .
+    fi
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  set -e
+  git fetch "{upstream_remote}" --prune
+  branch=$(git symbolic-ref --quiet --short HEAD)
+  git merge-base --is-ancestor HEAD "refs/remotes/{upstream_remote}/{upstream_branch}"
+  if comm -12 \
+    <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+    <(git diff --name-only -z HEAD "refs/remotes/{upstream_remote}/{upstream_branch}" \
+      | tr '\0' '\n' | sort) | grep -q .; then
+    echo "untracked files would be overwritten by the fast-forward" >&2
+    exit 1
+  fi
+  git branch --set-upstream-to="{upstream_remote}/{upstream_branch}" "$branch"
+  git merge --ff-only "{upstream_remote}/{upstream_branch}"
+steps: null
+postconditions:
+- name: tracks_new_upstream
+  description: the current branch is configured to track the new upstream branch
+  probe: |-
+    branch=$(git symbolic-ref --quiet --short HEAD) &&
+    test "$(git config --get "branch.$branch.remote")" = "{upstream_remote}" &&
+    test "$(git config --get "branch.$branch.merge")" = "refs/heads/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: head_matches_new_upstream
+  description: HEAD is at the same commit as the new upstream branch
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/remotes/{upstream_remote}/{upstream_branch}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after
+  description: tracked files are clean after the update
+  probe: test -z "$(git status --porcelain --untracked-files=no)"
+  expect_exit: 0
+  expect_pattern: null
+variant: retrack
+provenance:
+  compiled_from_task: Make this branch follow upstream's current main line again,
+    and catch it up. Keep my branch's name, point its tracking at upstream's new branch
+    and catch up.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Make this branch follow upstream's current main line again, and catch
+    it up. Keep my branch's name, point its tracking at upstream's new branch and
+    catch up./seed-6-branch_renamed-25586
+  fault: branch_renamed
+status: admitted

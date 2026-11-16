@@ -1,0 +1,113 @@
+id: diverged-occ4-diverged-sync-fork-merge
+intent: merge upstream into the local branch to sync the fork while preserving both
+  histories
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_a_branch
+  description: HEAD is attached to a local branch, not detached
+  probe: git symbolic-ref -q HEAD >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_remote_configured
+  description: the named upstream remote exists
+  probe: git remote get-url {upstream_remote} >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_present
+  description: the upstream remote-tracking branch is available for comparison
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}^{commit}
+    >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+- name: local_branch_matches_upstream_branch
+  description: the current local branch has the same name as the upstream branch
+  probe: '[ "$(git symbolic-ref --short HEAD)" = "{upstream_branch}" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: local_branch_tracks_upstream
+  description: the current branch is configured to track the upstream branch
+  probe: |-
+    [ "$(git config --get "branch.$(git symbolic-ref --short HEAD).remote")" = "{upstream_remote}" ] &&
+    [ "$(git config --get "branch.$(git symbolic-ref --short HEAD).merge")" = "refs/heads/{upstream_branch}" ]
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_remote_head_matches
+  description: if the remote's HEAD is recorded, it points at the upstream branch
+    being merged
+  probe: |-
+    ref=$(git symbolic-ref --quiet refs/remotes/{upstream_remote}/HEAD) || exit 0
+    [ "$ref" = "refs/remotes/{upstream_remote}/{upstream_branch}" ]
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: there are no tracked or untracked changes before merging
+  probe: '[ -z "$(git status --porcelain)" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: no previous merge is left unresolved
+  probe: test ! -e "$(git rev-parse --git-path MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_index_entries
+  description: the index has no unresolved conflict stages
+  probe: '[ -z "$(git ls-files -u)" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: has_merge_base
+  description: local and upstream histories share a common ancestor
+  probe: git merge-base HEAD {upstream_remote}/{upstream_branch} >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+- name: histories_diverged
+  description: local branch and upstream each have commits the other lacks
+  probe: |-
+    [ "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0 ] &&
+    [ "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_would_be_clean
+  description: a three-way merge of the current remote-tracking branch would not conflict
+  probe: '! git merge-tree "$(git merge-base HEAD {upstream_remote}/{upstream_branch}
+    | head -n 1)" HEAD {upstream_remote}/{upstream_branch} | grep -q ''^<<<<<<<'''
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch {upstream_remote}
+  git merge --no-ff -m "Merge {upstream_remote}/{upstream_branch}" {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: upstream_merged
+  description: the upstream branch tip is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_commit_present
+  description: HEAD is a merge commit with at least two parents
+  probe: '[ "$(git rev-list --parents -n 1 HEAD | wc -w)" -ge 3 ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: local_history_preserved
+  description: the merge's first parent still contains local commits not in upstream
+  probe: '[ "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD^1)"
+    -gt 0 ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_merge
+  description: the merge left no uncommitted changes
+  probe: '[ -z "$(git status --porcelain)" ]'
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: Get this fork back in sync with upstream without losing my commits.
+    Merge upstream into my branch and keep both histories.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this fork back in sync with upstream without losing my commits.
+    Merge upstream into my branch and keep both histories./seed-4-diverged-25587
+  fault: diverged
+status: candidate

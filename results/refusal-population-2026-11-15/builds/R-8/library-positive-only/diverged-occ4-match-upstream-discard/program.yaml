@@ -1,0 +1,77 @@
+id: diverged-occ4-match-upstream-discard
+intent: Make the current branch match the upstream branch exactly, discarding local
+  commits.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_a_branch
+  description: HEAD is attached to a local branch, so reset moves a ref rather than
+    a detached HEAD
+  probe: git symbolic-ref -q HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_exists
+  description: the upstream remote-tracking ref is present and resolvable locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_not_upstream
+  description: the local branch has commits that are not on upstream, so there is
+    something to discard
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_commits_not_local
+  description: upstream has commits that the local branch lacks, so the branch has
+    genuinely diverged
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: no tracked modifications are pending that a hard reset would silently
+    discard
+  probe: test -z "$(git status --porcelain --untracked-files=no)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_upstream_collisions
+  description: no untracked file shares a path with a file upstream adds or changes
+  probe: |-
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote} --prune
+  git reset --hard {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is the same commit as the upstream branch
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_local_commits_ahead
+  description: the local branch has no commits beyond upstream
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -eq 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after
+  description: no tracked modifications remain after the reset
+  probe: test -z "$(git status --porcelain --untracked-files=no)"
+  expect_exit: 0
+  expect_pattern: null
+variant: discard
+provenance:
+  compiled_from_task: 'Upstream moved ahead of me. Get me back in line with it. My
+    local commits can go: make my branch match upstream exactly.'
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: 'Upstream moved ahead of me. Get me back in line with it. My local commits
+    can go: make my branch match upstream exactly./seed-3-diverged-3956'
+  fault: diverged
+status: admitted

@@ -1,0 +1,70 @@
+id: dirty_tree-occ2-stash-ff-upstream-restore
+intent: 'Get the latest from upstream while preserving all unsaved work: stash the
+  uncommitted and untracked changes, fast-forward the current branch to the upstream
+  branch, then reapply the stashed work.'
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: has_uncommitted_changes
+  description: the worktree or index has changes (tracked or untracked) that must
+    be preserved
+  probe: test -n "$(git status --porcelain -z --untracked-files=all)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ahead
+  description: the current branch is behind the upstream branch, so an update is needed
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: can_fast_forward
+  description: HEAD is an ancestor of the upstream branch, so the update can be a
+    fast-forward
+  probe: git merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_entries
+  description: the index has no unresolved merge conflicts
+  probe: '! git ls-files --unmerged | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch {upstream_remote}
+  git stash push --include-untracked -m "wip before upstream update"
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+  git stash pop
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: the current branch now points at the upstream branch tip
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: work_restored
+  description: the previously uncommitted work is back in the worktree
+  probe: test -n "$(git status --porcelain -z --untracked-files=all)"
+  expect_exit: 0
+  expect_pattern: null
+- name: stash_entry_consumed
+  description: the stash created for the update has been reapplied and dropped
+  probe: '! git stash list --format=%gs | grep -qF ''wip before upstream update'''
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflicts_left
+  description: reapplying the work left no unmerged index entries
+  probe: '! git ls-files --unmerged | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+variant: stash
+provenance:
+  compiled_from_task: Get the latest from upstream here, and keep every change I have
+    not saved yet. Stash my uncommitted work, update the branch, then put my work
+    back.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get the latest from upstream here, and keep every change I have not
+    saved yet. Stash my uncommitted work, update the branch, then put my work back./seed-5-dirty_tree-25587
+  fault: dirty_tree
+status: admitted

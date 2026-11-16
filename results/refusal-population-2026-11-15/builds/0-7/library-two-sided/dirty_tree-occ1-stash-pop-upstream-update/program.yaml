@@ -1,0 +1,75 @@
+id: dirty_tree-occ1-stash-pop-upstream-update
+intent: preserve uncommitted and untracked work by stashing it, fast-forward the current
+  branch onto the upstream branch, then restore the stashed work
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: branch_checked_out
+  description: HEAD is attached to a local branch, so a fast-forward advances a real
+    branch
+  probe: git symbolic-ref -q HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: dirty_worktree
+  description: the working tree carries uncommitted or untracked changes worth preserving
+  probe: test -n "$(git status --porcelain --untracked-files=all)"
+  expect_exit: 0
+  expect_pattern: null
+- name: behind_upstream
+  description: the current branch is a strict ancestor of the upstream branch, so
+    the update can be a pure fast-forward
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch} && test
+    "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" = 0 && test
+    "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0 && git
+    merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: no_path_collisions
+  description: no locally modified or untracked path is also changed by the upstream
+    commit, so restoring the stash after the fast-forward cannot conflict
+  probe: '! comm -12 <({ git diff --name-only -z HEAD; git ls-files --others --exclude-standard
+    -z; } | tr ''\0'' ''\n'' | sort -u) <(git diff --name-only -z HEAD {upstream_remote}/{upstream_branch}
+    | tr ''\0'' ''\n'' | sort -u) | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch {upstream_remote}
+  git stash push --include-untracked -m "wip: autostash before updating to {upstream_remote}/{upstream_branch}"
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+  git stash pop
+steps: null
+postconditions:
+- name: up_to_date_with_upstream
+  description: HEAD is exactly the upstream branch tip after the fast-forward
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: stash_empty
+  description: the autostash entry was restored and dropped, leaving no stash behind
+  probe: '! git stash list | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: work_restored
+  description: uncommitted or untracked work is present in the working tree again
+  probe: test -n "$(git status --porcelain --untracked-files=all)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflicts_left
+  description: restoring the stash left no unresolved index entries
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+variant: stash
+provenance:
+  compiled_from_task: I am in the middle of something and upstream moved on. Sort
+    it out without losing my edits. Stash my uncommitted work, update the branch,
+    then put my work back.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: I am in the middle of something and upstream moved on. Sort it out without
+    losing my edits. Stash my uncommitted work, update the branch, then put my work
+    back./seed-10-dirty_tree-12454
+  fault: dirty_tree
+status: admitted

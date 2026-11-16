@@ -1,0 +1,69 @@
+id: diverged-occ2-rebase-local-onto-upstream
+intent: Untangle diverged local and upstream history by replaying the local commits
+  on top of the upstream branch, keeping the history linear.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: worktree_clean
+  description: no tracked or untracked modifications are present before rewriting
+    history
+  probe: '[ -z "$(git status --porcelain)" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_ahead
+  description: HEAD has commits that are not yet in the upstream branch
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: upstream_commits_ahead
+  description: the upstream branch has commits that HEAD does not contain
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: no_rebase_in_progress
+  description: no rebase or merge is already mid-flight
+  probe: test ! -d "$(git rev-parse --git-path rebase-merge)" && test ! -d "$(git
+    rev-parse --git-path rebase-apply)" && test ! -e "$(git rev-parse --git-path MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git update-ref refs/backup/pre-rebase HEAD
+  git fetch {upstream_remote}
+  if ! git rebase {upstream_remote}/{upstream_branch}; then
+    git rebase --abort || true
+    exit 1
+  fi
+steps: null
+postconditions:
+- name: upstream_is_ancestor
+  description: the upstream tip is an ancestor of HEAD after the replay
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: fork_point_is_upstream
+  description: the common ancestor of HEAD and upstream is exactly the upstream tip
+  probe: test "$(git merge-base HEAD {upstream_remote}/{upstream_branch})" = "$(git
+    rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: history_linear
+  description: no merge commits were introduced above the upstream tip
+  probe: git rev-list --count --merges {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^0$
+- name: worktree_clean_after
+  description: the working tree remains clean after the rebase completed
+  probe: '[ -z "$(git status --porcelain)" ]'
+  expect_exit: 0
+  expect_pattern: null
+variant: rebase
+provenance:
+  compiled_from_task: I have local work and upstream has new commits. Untangle it.
+    Replay my local commits on top of upstream so the history stays linear.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: I have local work and upstream has new commits. Untangle it. Replay
+    my local commits on top of upstream so the history stays linear./seed-5-diverged-25587
+  fault: diverged
+status: admitted

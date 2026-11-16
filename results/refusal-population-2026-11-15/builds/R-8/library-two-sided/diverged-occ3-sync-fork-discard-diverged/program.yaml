@@ -1,0 +1,73 @@
+id: diverged-occ3-sync-fork-discard-diverged
+intent: Bring the current branch back in sync with upstream by fetching and hard-resetting
+  it to the upstream tip, discarding the local-only commits, but only when those local
+  commits are expendable (they carry no content of their own).
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: head_is_attached
+  description: HEAD points at a branch rather than a detached commit
+  probe: git symbolic-ref -q HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_exists
+  description: the upstream remote-tracking ref already exists locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_is_clean
+  description: there are no staged, unstaged or untracked changes to lose
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: has_local_only_commits
+  description: the current branch has commits that are not on the upstream branch
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: local_commits_are_expendable
+  description: the local-only commits change no file relative to the merge base (they
+    are empty commits, so nothing is lost by discarding them) or there are at least
+    three of them; otherwise a merge or a rebase, not a hard reset, is the right resolution
+  probe: test -z "$(git diff --name-only -z {upstream_remote}/{upstream_branch}...HEAD
+    | tr '\0' '\n')" || test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -ge 3
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote} --prune
+  git reset --hard {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is exactly the upstream branch tip
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_local_only_commits
+  description: no commits remain that are absent from upstream
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    = 0
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_still_clean
+  description: the working tree is clean after the reset
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: index_has_no_unmerged_paths
+  description: the index carries no conflict entries after the reset
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+variant: discard
+provenance:
+  compiled_from_task: 'Get this fork back in sync with upstream without losing my
+    commits. My local commits can go: make my branch match upstream exactly.'
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: 'Get this fork back in sync with upstream without losing my commits.
+    My local commits can go: make my branch match upstream exactly./seed-1-diverged-3956'
+  fault: diverged
+status: candidate

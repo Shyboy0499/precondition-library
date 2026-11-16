@@ -1,0 +1,259 @@
+id: config_renamed-occ3-config-key-migrate-local-override
+intent: Rename stale configuration keys in the repository's ignored local override
+  file according to the repository's rename map, leaving tracked configuration files
+  untouched and keeping the override file untracked and ignored.
+parameters: []
+preconditions:
+- name: local_override_untracked_and_ignored
+  description: the local override file exists, is not tracked, and is ignored by git
+  probe: |-
+    test -f config/local.conf &&
+    ! git ls-files --error-unmatch -- config/local.conf >/dev/null 2>&1 &&
+    git check-ignore -q -- config/local.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_key_present_in_local_override
+  description: the local override file contains at least one old key listed in the
+    repository rename map
+  probe: |-
+    awk '
+      function trim(s) {
+        sub(/^[[:space:]]+/, "", s)
+        sub(/[[:space:]]+$/, "", s)
+        return s
+      }
+      FNR == NR {
+        line = $0
+        sub(/#.*/, "", line)
+        if (line ~ /^[[:space:]]*$/) next
+        eq = index(line, "=")
+        if (eq == 0) next
+        old = trim(substr(line, 1, eq - 1))
+        new = trim(substr(line, eq + 1))
+        if (old != "" && new != "" && old != new) map[old] = new
+        next
+      }
+      {
+        line = $0
+        if (line ~ /^[[:space:]]*#/ || index(line, "=") == 0) next
+        eq = index(line, "=")
+        key = trim(substr(line, 1, eq - 1))
+        if (key in map) found = 1
+      }
+      END { exit(found ? 0 : 1) }
+    ' config/renames.conf config/local.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: no_stale_key_in_tracked_files
+  description: no tracked file other than the rename map still carries an old key
+    as a setting key
+  probe: |-
+    for f in $(git ls-files); do
+      case "$f" in
+        config/renames.conf) continue ;;
+        *.conf|*.ini|*.cfg) ;;
+        *) continue ;;
+      esac
+      git check-ignore -q -- "$f" && continue
+      awk '
+        function trim(s) {
+          sub(/^[[:space:]]+/, "", s)
+          sub(/[[:space:]]+$/, "", s)
+          return s
+        }
+        FNR == NR {
+          line = $0
+          sub(/#.*/, "", line)
+          if (line ~ /^[[:space:]]*$/) next
+          eq = index(line, "=")
+          if (eq == 0) next
+          old = trim(substr(line, 1, eq - 1))
+          new = trim(substr(line, eq + 1))
+          if (old != "" && new != "" && old != new) map[old] = new
+          next
+        }
+        {
+          line = $0
+          if (line ~ /^[[:space:]]*#/ || index(line, "=") == 0) next
+          eq = index(line, "=")
+          key = trim(substr(line, 1, eq - 1))
+          if (key in map) found = 1
+        }
+        END { exit(found ? 0 : 1) }
+      ' config/renames.conf "$f" || exit 1
+    done
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+  local_file=config/local.conf
+  renames_file=config/renames.conf
+  tmp=$(mktemp)
+  trap 'rm -f "$tmp"' EXIT
+  awk '
+    function trim(s) {
+      sub(/^[[:space:]]+/, "", s)
+      sub(/[[:space:]]+$/, "", s)
+      return s
+    }
+    FNR == NR {
+      line = $0
+      sub(/#.*/, "", line)
+      if (line ~ /^[[:space:]]*$/) next
+      eq = index(line, "=")
+      if (eq == 0) next
+      old = trim(substr(line, 1, eq - 1))
+      new = trim(substr(line, eq + 1))
+      if (old != "" && new != "" && old != new) map[old] = new
+      next
+    }
+    {
+      line = $0
+      if (line ~ /^[[:space:]]*#/ || index(line, "=") == 0) {
+        print line
+        next
+      }
+      eq = index(line, "=")
+      left = substr(line, 1, eq - 1)
+      right = substr(line, eq)
+      key = trim(left)
+      if (key in map) {
+        match(left, /^[[:space:]]*/)
+        lead = substr(left, 1, RLENGTH)
+        rest = substr(left, RLENGTH + 1)
+        match(rest, /[[:space:]]*$/)
+        trail = substr(rest, RSTART)
+        print lead map[key] trail right
+        next
+      }
+      print line
+    }
+  ' "$renames_file" "$local_file" > "$tmp"
+  cat "$tmp" > "$local_file"
+steps: null
+postconditions:
+- name: no_stale_keys_remain
+  description: no old key from the rename map remains as a key in the local override
+    file
+  probe: |-
+    awk '
+      function trim(s) {
+        sub(/^[[:space:]]+/, "", s)
+        sub(/[[:space:]]+$/, "", s)
+        return s
+      }
+      FNR == NR {
+        line = $0
+        sub(/#.*/, "", line)
+        if (line ~ /^[[:space:]]*$/) next
+        eq = index(line, "=")
+        if (eq == 0) next
+        old = trim(substr(line, 1, eq - 1))
+        new = trim(substr(line, eq + 1))
+        if (old != "" && new != "" && old != new) map[old] = new
+        next
+      }
+      {
+        line = $0
+        if (line ~ /^[[:space:]]*#/ || index(line, "=") == 0) next
+        eq = index(line, "=")
+        key = trim(substr(line, 1, eq - 1))
+        if (key in map) found = 1
+      }
+      END { exit(found ? 1 : 0) }
+    ' config/renames.conf config/local.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: renamed_key_present
+  description: the local override file now carries at least one new key from the rename
+    map
+  probe: |-
+    awk '
+      function trim(s) {
+        sub(/^[[:space:]]+/, "", s)
+        sub(/[[:space:]]+$/, "", s)
+        return s
+      }
+      FNR == NR {
+        line = $0
+        sub(/#.*/, "", line)
+        if (line ~ /^[[:space:]]*$/) next
+        eq = index(line, "=")
+        if (eq == 0) next
+        old = trim(substr(line, 1, eq - 1))
+        new = trim(substr(line, eq + 1))
+        if (old != "" && new != "" && old != new) map[new] = 1
+        next
+      }
+      {
+        line = $0
+        if (line ~ /^[[:space:]]*#/ || index(line, "=") == 0) next
+        eq = index(line, "=")
+        key = trim(substr(line, 1, eq - 1))
+        if (key in map) found = 1
+      }
+      END { exit(found ? 0 : 1) }
+    ' config/renames.conf config/local.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: local_override_stays_untracked_and_ignored
+  description: the local override file remains untracked and ignored by git
+  probe: |-
+    test -f config/local.conf &&
+    ! git ls-files --error-unmatch -- config/local.conf >/dev/null 2>&1 &&
+    git check-ignore -q -- config/local.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: no_stale_key_in_tracked_files
+  description: tracked configuration files were left alone, so none of them gained
+    or lost stale keys
+  probe: |-
+    for f in $(git ls-files); do
+      case "$f" in
+        config/renames.conf) continue ;;
+        *.conf|*.ini|*.cfg) ;;
+        *) continue ;;
+      esac
+      git check-ignore -q -- "$f" && continue
+      awk '
+        function trim(s) {
+          sub(/^[[:space:]]+/, "", s)
+          sub(/[[:space:]]+$/, "", s)
+          return s
+        }
+        FNR == NR {
+          line = $0
+          sub(/#.*/, "", line)
+          if (line ~ /^[[:space:]]*$/) next
+          eq = index(line, "=")
+          if (eq == 0) next
+          old = trim(substr(line, 1, eq - 1))
+          new = trim(substr(line, eq + 1))
+          if (old != "" && new != "" && old != new) map[old] = new
+          next
+        }
+        {
+          line = $0
+          if (line ~ /^[[:space:]]*#/ || index(line, "=") == 0) next
+          eq = index(line, "=")
+          key = trim(substr(line, 1, eq - 1))
+          if (key in map) found = 1
+        }
+        END { exit(found ? 0 : 1) }
+      ' config/renames.conf "$f" || exit 1
+    done
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+variant: migrate_local
+provenance:
+  compiled_from_task: Bring my configuration up to date with the setting names the
+    app uses now. Rename the old key in my own override file, and keep that file out
+    of git.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Bring my configuration up to date with the setting names the app uses
+    now. Rename the old key in my own override file, and keep that file out of git./seed-2-config_renamed-29016
+  fault: config_renamed
+status: candidate

@@ -1,0 +1,196 @@
+id: lockfile_conflict-occ3-merge-upstream-lockfile-take-upstream
+intent: Catch up with upstream without losing what either side added, or reviving
+  what either side removed. Start from upstream's dependency file and add back what
+  I added.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_exists
+  description: the upstream remote-tracking branch exists
+  probe: git rev-parse --verify {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_diverged
+  description: local and upstream have each diverged with commits the other lacks
+  probe: |-
+    [ "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0 ] &&
+    [ "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: common_modified_file
+  description: at least one file was modified on both sides relative to the merge
+    base
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch})
+    comm -12 \
+      <(git diff --name-only --diff-filter=M -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only --diff-filter=M -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) \
+      | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree_or_merge_in_progress
+  description: no tracked uncommitted changes, unless a merge is already in progress
+  probe: |-
+    if git rev-parse --verify MERGE_HEAD >/dev/null 2>&1; then
+      exit 0
+    fi
+    [ -z "$(git status --porcelain --untracked-files=no)" ]
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  python3 - "{upstream_remote}" "{upstream_branch}" <<'PY'
+  import sys, subprocess, os, difflib
+
+  remote = sys.argv[1]
+  branch = sys.argv[2]
+  target = remote + "/" + branch
+
+  def run(args, check=True):
+      return subprocess.run(['git'] + args, check=check, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+  def show(rev, path):
+      r = run(['show', rev + ':' + path], check=False)
+      if r.returncode != 0:
+          return b''
+      return r.stdout
+
+  def merge_lines(base_text, local_text, upstream_text):
+      base = base_text.splitlines(keepends=True)
+      local = local_text.splitlines(keepends=True)
+      upstream = upstream_text.splitlines(keepends=True)
+      def build(side):
+          n = len(base)
+          repl = [None] * n
+          adds = [[] for _ in range(n + 1)]
+          sm = difflib.SequenceMatcher(None, base, side, autojunk=False)
+          for tag, i1, i2, j1, j2 in sm.get_opcodes():
+              if tag == 'equal':
+                  continue
+              if i1 == i2:
+                  adds[i1].extend(side[j1:j2])
+              else:
+                  nb = i2 - i1
+                  ns = j2 - j1
+                  if ns == 0:
+                      for k in range(i1, i2):
+                          repl[k] = []
+                  else:
+                      m = min(nb, ns)
+                      for k in range(m):
+                          repl[i1 + k] = [side[j1 + k]]
+                      if ns > nb:
+                          adds[i2].extend(side[j1 + nb:j2])
+                      elif nb > ns:
+                          for k in range(i1 + ns, i2):
+                              repl[k] = []
+          return repl, adds
+      lrepl, ladd = build(local)
+      urepl, uadd = build(upstream)
+      out = []
+      n = len(base)
+      for i in range(n + 1):
+          adds = list(ladd[i])
+          for line in uadd[i]:
+              if line not in adds:
+                  adds.append(line)
+          out.extend(adds)
+          if i == n:
+              break
+          l = lrepl[i]
+          u = urepl[i]
+          if l == [] or u == []:
+              continue
+          if l is not None and u is not None:
+              if l == u:
+                  out.extend(l)
+              else:
+                  out.extend(u)
+          elif l is not None:
+              out.extend(l)
+          elif u is not None:
+              out.extend(u)
+          else:
+              out.append(base[i])
+      return ''.join(out)
+
+  merge_head_path = run(['rev-parse', '--git-path', 'MERGE_HEAD'], check=False).stdout.decode().strip()
+  in_merge = os.path.exists(merge_head_path)
+
+  if not in_merge:
+      res = run(['merge', '--no-commit', '--no-ff', target], check=False)
+      in_merge = os.path.exists(merge_head_path)
+      if not in_merge:
+          sys.stdout.buffer.write(res.stdout)
+          sys.stderr.buffer.write(res.stderr)
+          sys.exit(res.returncode)
+
+  base_res = run(['merge-base', 'HEAD', target], check=False)
+  if base_res.returncode != 0:
+      sys.exit(1)
+  base_rev = base_res.stdout.decode().strip()
+
+  def changed_files(rev):
+      r = run(['diff', '--name-only', '-z', base_rev, rev], check=True)
+      return set(x for x in r.stdout.decode('utf-8', 'surrogateescape').split('\0') if x)
+
+  local_files = changed_files('HEAD')
+  upstream_files = changed_files(target)
+  common = local_files & upstream_files
+
+  r = run(['diff', '--name-only', '--diff-filter=U', '-z'], check=True)
+  unmerged = set(x for x in r.stdout.decode('utf-8', 'surrogateescape').split('\0') if x)
+  paths_to_resolve = common | unmerged
+
+  for path in paths_to_resolve:
+      base_bytes = show(base_rev, path)
+      local_bytes = show('HEAD', path)
+      upstream_bytes = show(target, path)
+      if base_bytes and (not local_bytes or not upstream_bytes):
+          run(['rm', '-f', '--', path], check=False)
+          continue
+      if b'\0' in base_bytes or b'\0' in local_bytes or b'\0' in upstream_bytes:
+          run(['checkout', '--theirs', '--', path], check=False)
+          run(['add', '--', path], check=False)
+          continue
+      base_text = base_bytes.decode('utf-8', 'surrogateescape')
+      local_text = local_bytes.decode('utf-8', 'surrogateescape')
+      upstream_text = upstream_bytes.decode('utf-8', 'surrogateescape')
+      merged = merge_lines(base_text, local_text, upstream_text)
+      with open(path, 'w', encoding='utf-8', errors='surrogateescape', newline='') as f:
+          f.write(merged)
+      run(['add', '--', path], check=True)
+
+  run(['commit', '--no-edit'], check=True)
+  PY
+steps: null
+postconditions:
+- name: second_parent_is_upstream
+  description: the merge commit's second parent is the upstream branch tip
+  probe: '[ "$(git rev-parse HEAD^2)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+    ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: the index has no unmerged entries
+  probe: '[ -z "$(git diff --name-only --diff-filter=U)" ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_tracked_worktree
+  description: no tracked modifications or staged changes remain
+  probe: git diff --quiet && git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: Catch up with upstream without losing what either side added,
+    or reviving what either side removed. Start from upstream's dependency file and
+    add back what I added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Catch up with upstream without losing what either side added, or reviving
+    what either side removed. Start from upstream's dependency file and add back what
+    I added./seed-5-lockfile_conflict-19837
+  fault: lockfile_conflict
+status: admitted

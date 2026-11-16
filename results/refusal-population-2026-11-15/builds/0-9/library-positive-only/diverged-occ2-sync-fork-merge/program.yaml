@@ -1,0 +1,70 @@
+id: diverged-occ2-sync-fork-merge
+intent: Get a diverged fork back in sync with upstream without losing local commits,
+  by merging the upstream branch into the current branch so both histories are kept.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_tracking_ref_exists
+  description: the remote-tracking ref for the upstream branch is already present
+    locally
+  probe: git rev-parse --verify --quiet "{upstream_remote}/{upstream_branch}^{commit}"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: no staged, modified or untracked files are present
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_diverged
+  description: the current branch and upstream each have commits the other lacks
+  probe: |-
+    ahead=$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)
+    behind=$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})
+    [ "$ahead" -gt 0 ] && [ "$behind" -gt 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_or_rebase_in_progress
+  description: the repository is not already in the middle of a merge or rebase
+  probe: |-
+    ! test -e "$(git rev-parse --git-path MERGE_HEAD)" \
+      && ! test -d "$(git rev-parse --git-path rebase-merge)" \
+      && ! test -d "$(git rev-parse --git-path rebase-apply)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git merge --no-ff --no-edit -m "Merge {upstream_remote}/{upstream_branch}" {upstream_remote}/{upstream_branch} \
+    || { git merge --abort; exit 1; }
+steps: null
+postconditions:
+- name: upstream_is_ancestor
+  description: the upstream branch is now fully contained in the current branch
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: head_is_merge_commit
+  description: HEAD is a merge commit with two parents
+  probe: test "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 3
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_preserved
+  description: the pre-merge HEAD is still an ancestor of the new HEAD
+  probe: git merge-base --is-ancestor ORIG_HEAD HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_merge
+  description: the merge left no staged, modified or untracked files
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: Get this fork back in sync with upstream without losing my commits.
+    Merge upstream into my branch and keep both histories.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this fork back in sync with upstream without losing my commits.
+    Merge upstream into my branch and keep both histories./seed-4-diverged-29980
+  fault: diverged
+status: admitted

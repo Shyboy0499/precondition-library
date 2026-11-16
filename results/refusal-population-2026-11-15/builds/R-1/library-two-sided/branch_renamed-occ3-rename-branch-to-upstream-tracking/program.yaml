@@ -1,0 +1,97 @@
+id: branch_renamed-occ3-rename-branch-to-upstream-tracking
+intent: Rename the current local branch to the upstream branch's new name and make
+  it track that upstream branch, pruning the stale remote-tracking ref.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_exists
+  description: the upstream remote is configured
+  probe: git remote get-url "{upstream_remote}"
+  expect_exit: 0
+  expect_pattern: null
+- name: on_attached_branch
+  description: HEAD is attached to a local branch
+  probe: git symbolic-ref --quiet --short HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: target_upstream_branch_exists
+  description: the named branch exists on the upstream remote
+  probe: git ls-remote --exit-code --heads "{upstream_remote}" "{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: current_branch_not_target_name
+  description: the current local branch does not already use the upstream branch name
+  probe: test "$(git symbolic-ref --short HEAD)" != "{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: target_local_branch_absent
+  description: no local branch already uses the upstream branch name
+  probe: '! git show-ref --verify --quiet "refs/heads/{upstream_branch}"'
+  expect_exit: 0
+  expect_pattern: null
+- name: current_branch_tracks_removed_upstream_branch
+  description: the current branch tracks a different branch on upstream that no longer
+    exists there
+  probe: |-
+    current=$(git symbolic-ref --short HEAD) || exit 1
+    remote=$(git config --get "branch.$current.remote") || exit 1
+    merge=$(git config --get "branch.$current.merge") || exit 1
+    test "$remote" = "{upstream_remote}" || exit 1
+    test "$merge" != "refs/heads/{upstream_branch}" || exit 1
+    test "${merge#refs/heads/}" != "$merge" || exit 1
+    old=${merge#refs/heads/}
+    set +e
+    git ls-remote --exit-code --heads "{upstream_remote}" "$old" >/dev/null
+    test $? -eq 2
+  expect_exit: 0
+  expect_pattern: null
+- name: no_local_only_commits
+  description: the local branch carries no commits its upstream lacks, so only renaming
+    and retracking is needed (a diverged branch needs a merge instead)
+  probe: test "$(git rev-list --count '@{upstream}..HEAD' 2>/dev/null)" -eq 0
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch --prune "{upstream_remote}"
+  current_branch=$(git symbolic-ref --short HEAD)
+  git branch -m "$current_branch" "{upstream_branch}"
+  git branch --set-upstream-to="{upstream_remote}/{upstream_branch}" "{upstream_branch}"
+steps: null
+postconditions:
+- name: head_is_target_branch
+  description: HEAD is attached to the renamed local branch
+  probe: git symbolic-ref --short HEAD
+  expect_exit: 0
+  expect_pattern: ^{upstream_branch}$
+- name: target_remote_tracking_ref_fetched
+  description: the target upstream branch has a remote-tracking ref
+  probe: git show-ref --verify --quiet "refs/remotes/{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_tracks_target_upstream
+  description: the renamed branch tracks the target upstream branch
+  probe: git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}'
+  expect_exit: 0
+  expect_pattern: ^{upstream_remote}/{upstream_branch}$
+- name: branch_remote_config_is_upstream
+  description: the branch configuration names the upstream remote
+  probe: git config --get "branch.{upstream_branch}.remote"
+  expect_exit: 0
+  expect_pattern: ^{upstream_remote}$
+- name: branch_merge_config_is_target
+  description: the branch configuration merges the target upstream branch
+  probe: git config --get "branch.{upstream_branch}.merge"
+  expect_exit: 0
+  expect_pattern: ^refs/heads/{upstream_branch}$
+variant: rename
+provenance:
+  compiled_from_task: I think upstream renamed things. Get this fork following it
+    again. Rename my branch to upstream's new name and track it.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: I think upstream renamed things. Get this fork following it again. Rename
+    my branch to upstream's new name and track it./seed-4-branch_renamed-8327
+  fault: branch_renamed
+status: admitted

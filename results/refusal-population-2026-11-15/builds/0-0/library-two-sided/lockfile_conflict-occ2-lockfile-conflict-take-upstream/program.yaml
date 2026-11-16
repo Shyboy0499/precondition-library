@@ -1,0 +1,223 @@
+id: lockfile_conflict-occ2-lockfile-conflict-take-upstream
+intent: Merge the upstream branch into the current branch when both sides changed
+  the same dependency lockfile, resolving the conflict by starting from upstream's
+  version of the file and re-adding the lines the local side added, without reviving
+  any line either side removed, then commit the merge.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_ref_present
+  description: the upstream remote-tracking branch exists
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_diverged
+  description: local and upstream each carry at least one commit the other lacks
+  probe: |-
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -ge 1 &&
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -ge 1
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_and_no_merge
+  description: nothing modified or untracked, and no merge is already in progress
+  probe: |-
+    test -z "$(git status --porcelain)" &&
+    test -z "$(git rev-parse -q --verify MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_dropped_line_kept_locally
+  description: in a file both sides changed since the merge base, upstream deleted
+    a line that the local side still carries -- upstream regenerated that file, so
+    upstream's content is the base to start from and the local additions are what
+    gets re-applied
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    found=
+    while IFS= read -r f; do
+      b=$(git rev-parse -q --verify "$base:$f") || continue
+      o=$(git rev-parse -q --verify "HEAD:$f") || continue
+      t=$(git rev-parse -q --verify "{upstream_remote}/{upstream_branch}:$f") || continue
+      if comm -12 <(comm -23 <(git cat-file -p "$b" | sort -u) <(git cat-file -p "$t" | sort -u)) <(git cat-file -p "$o" | sort -u) | grep -q .; then
+        found=1
+        break
+      fi
+    done < <(comm -12 <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort -u) <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort -u))
+    test -n "$found"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_dropped_no_line_kept_upstream
+  description: the local side deleted no line that upstream still carries; if it had,
+    starting from upstream's file would revive that line and the local file would
+    instead be the base the merge has to start from
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    while IFS= read -r f; do
+      b=$(git rev-parse -q --verify "$base:$f") || continue
+      o=$(git rev-parse -q --verify "HEAD:$f") || continue
+      t=$(git rev-parse -q --verify "{upstream_remote}/{upstream_branch}:$f") || continue
+      if comm -12 <(comm -23 <(git cat-file -p "$b" | sort -u) <(git cat-file -p "$o" | sort -u)) <(git cat-file -p "$t" | sort -u) | grep -q .; then
+        exit 1
+      fi
+    done < <(comm -12 <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort -u) <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort -u))
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch {upstream_remote} >/dev/null 2>&1 || true
+  if git merge --no-edit {upstream_remote}/{upstream_branch}; then
+    exit 0
+  fi
+  git rev-parse -q --verify MERGE_HEAD >/dev/null
+  awkl=$(mktemp)
+  cat > "$awkl" <<'AWK'
+  function flush(   i,k) {
+    if (nadd > nrem) {
+      ng++
+      gctx[ng] = hasctx ? ctx : ""
+      ghas[ng] = hasctx
+      k = 0
+      for (i = nrem + 1; i <= nadd; i++) { k++; gl[ng,k] = add[i] }
+      gn[ng] = k
+    }
+    if (nrem > nadd) {
+      for (i = nadd + 1; i <= nrem; i++) rmset[rem[i]] = 1
+    }
+    nadd = 0
+    nrem = 0
+    split("", add)
+    split("", rem)
+  }
+  NR == FNR {
+    if (indiff == 0) {
+      if ($0 ~ /^@@/) { indiff = 1; flush() }
+      next
+    }
+    if ($0 ~ /^\\/) next
+    if ($0 ~ /^@@/) { flush(); next }
+    if ($0 ~ /^-/) { if (nadd > 0) flush(); rem[++nrem] = substr($0, 2); next }
+    if ($0 ~ /^\+/) { s = substr($0, 2); add[++nadd] = s; adset[s] = 1; next }
+    if ($0 ~ /^ /) { flush(); ctx = substr($0, 2); hasctx = 1; next }
+    next
+  }
+  { line[++ln] = $0 }
+  END {
+    flush()
+    m = 0
+    for (i = 1; i <= ln; i++) {
+      l = line[i]
+      if ((l in rmset) && !(l in adset)) continue
+      keep[++m] = l
+    }
+    idx = 0
+    outn = 0
+    for (g = 1; g <= ng; g++) {
+      pos = idx
+      if (ghas[g]) {
+        found = 0
+        start = (idx < 1) ? 1 : idx
+        for (i = start; i <= m; i++) if (keep[i] == gctx[g]) { pos = i; found = 1; break }
+        if (!found) pos = m
+      }
+      if (pos < idx) pos = idx
+      for (i = idx + 1; i <= pos; i++) out[++outn] = keep[i]
+      idx = pos
+      for (k = 1; k <= gn[g]; k++) {
+        l = gl[g,k]
+        present = 0
+        for (i = 1; i <= m; i++) if (keep[i] == l) { present = 1; break }
+        if (!present) out[++outn] = l
+      }
+    }
+    for (i = idx + 1; i <= m; i++) out[++outn] = keep[i]
+    for (i = 1; i <= outn; i++) print out[i]
+  }
+  AWK
+  empty=$(git hash-object -w -t blob /dev/null)
+  conf=$(mktemp)
+  git diff --name-only --diff-filter=U -z > "$conf"
+  while IFS= read -r -d '' f; do
+    base=$(git rev-parse -q --verify ":1:$f") || base="$empty"
+    ours=$(git rev-parse -q --verify ":2:$f") || ours=""
+    theirs=$(git rev-parse -q --verify ":3:$f") || theirs=""
+    if [ -z "$theirs" ]; then
+      git rm -q -f -- "$f" || true
+      continue
+    fi
+    git checkout --theirs -- "$f" >/dev/null 2>&1 || git show ":3:$f" > "$f"
+    if [ -n "$ours" ] && [ "$base" != "$ours" ]; then
+      d=$(mktemp)
+      git diff "$base" "$ours" > "$d"
+      if [ -s "$d" ]; then
+        t=$(mktemp)
+        awk -f "$awkl" "$d" "$f" > "$t"
+        cat "$t" > "$f"
+        rm -f "$t"
+      fi
+      rm -f "$d"
+    fi
+    git add -- "$f"
+  done < "$conf"
+  git add -A
+  git commit --no-edit
+steps: null
+postconditions:
+- name: no_merge_in_progress
+  description: the merge was concluded with a commit
+  probe: '! git rev-parse -q --verify MERGE_HEAD'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: upstream's tip is contained in HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: merged_upstream_tip
+  description: HEAD is a merge commit whose second parent is upstream's tip
+  probe: test "$(git rev-parse HEAD^2)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: no index stage is left unmerged
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: nothing modified or untracked after the merge commit
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: no file still carries a merge conflict marker
+  probe: '! git grep -q -e ''^<<<<<<< '' HEAD'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_removals_not_revived
+  description: no line upstream deleted from a file both sides changed survives in
+    the merge result
+  probe: |-
+    base=$(git merge-base HEAD^1 HEAD^2) || exit 1
+    while IFS= read -r f; do
+      b=$(git rev-parse -q --verify "$base:$f") || continue
+      t=$(git rev-parse -q --verify "HEAD^2:$f") || continue
+      r=$(git rev-parse -q --verify "HEAD:$f") || continue
+      if comm -12 <(comm -23 <(git cat-file -p "$b" | sort -u) <(git cat-file -p "$t" | sort -u)) <(git cat-file -p "$r" | sort -u) | grep -q .; then
+        exit 1
+      fi
+    done < <(comm -12 <(git diff --name-only -z "$base" HEAD^1 | tr '\0' '\n' | sort -u) <(git diff --name-only -z "$base" HEAD^2 | tr '\0' '\n' | sort -u))
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: Catch up with upstream without losing what either side added,
+    or reviving what either side removed. Start from upstream's dependency file and
+    add back what I added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Catch up with upstream without losing what either side added, or reviving
+    what either side removed. Start from upstream's dependency file and add back what
+    I added./seed-5-lockfile_conflict-25586
+  fault: lockfile_conflict
+status: admitted

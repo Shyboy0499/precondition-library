@@ -1,0 +1,209 @@
+id: config_renamed-occ5-config-migrate-settings-key-rename
+intent: Rename stale setting keys to their current names using the project's rename
+  map, preserving each value, then commit the migration.
+parameters: []
+preconditions:
+- name: rename_map_present
+  description: a tracked file holds a rename map with at least one old-to-new key
+    pair line
+  probe: |-
+    rf=$(git ls-files -z | tr '\0' '\n' | grep -i 'renames' | head -n1)
+    [ -n "$rf" ] || exit 1
+    [ -f "$rf" ] || exit 1
+    grep -qE '^[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*=[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*$' "$rf"
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_key_present
+  description: some tracked file other than the rename map still uses an old key at
+    line start
+  probe: |-
+    rf=$(git ls-files -z | tr '\0' '\n' | grep -i 'renames' | head -n1)
+    [ -n "$rf" ] || exit 1
+    stale=0
+    while IFS= read -r line || [ -n "$line" ]; do
+      case "$line" in
+        ''|\#*) continue;;
+      esac
+      case "$line" in
+        *=*) ;;
+        *) continue;;
+      esac
+      old=${line%%=*}
+      old=$(printf '%s' "$old" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+      [ -n "$old" ] || continue
+      while IFS= read -r f; do
+        [ "$f" = "$rf" ] && continue
+        [ -f "$f" ] || continue
+        if grep -qE "^${old}[[:space:]]*=" "$f" 2>/dev/null; then
+          stale=1
+          break
+        fi
+      done < <(git ls-files -z | tr '\0' '\n')
+      [ "$stale" -eq 1 ] && break
+    done < "$rf"
+    [ "$stale" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: no_key_set_twice
+  description: no tracked settings file already sets both an old key and its replacement,
+    the state that resolves to dropping the old key instead of renaming it
+  probe: |-
+    rf=$(git ls-files -z | tr '\0' '\n' | grep -i 'renames' | head -n1)
+    [ -n "$rf" ] || exit 1
+    dup=0
+    while IFS= read -r line || [ -n "$line" ]; do
+      case "$line" in
+        ''|\#*) continue;;
+      esac
+      case "$line" in
+        *=*) ;;
+        *) continue;;
+      esac
+      old=${line%%=*}
+      new=${line#*=}
+      old=$(printf '%s' "$old" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+      new=$(printf '%s' "$new" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+      if [ -z "$old" ] || [ -z "$new" ]; then continue; fi
+      while IFS= read -r f; do
+        [ "$f" = "$rf" ] && continue
+        [ -f "$f" ] || continue
+        if grep -qE "^${old}[[:space:]]*=" "$f" 2>/dev/null && grep -qE "^${new}[[:space:]]*=" "$f" 2>/dev/null; then
+          dup=1
+          break
+        fi
+      done < <(git ls-files -z | tr '\0' '\n')
+      [ "$dup" -eq 1 ] && break
+    done < "$rf"
+    [ "$dup" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: the working tree has no uncommitted or untracked changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+  mapfile -t tracked < <(git ls-files -z | tr '\0' '\n')
+  renames_file=""
+  for f in "${tracked[@]}"; do
+    case "$f" in
+      *renames*) renames_file="$f"; break;;
+    esac
+  done
+  if [ -z "$renames_file" ]; then
+    for f in "${tracked[@]}"; do
+      if grep -qE '^#[[:space:]]*keys the app has renamed' "$f" 2>/dev/null; then
+        renames_file="$f"
+        break
+      fi
+    done
+  fi
+  test -n "$renames_file"
+  sed_args=()
+  n=0
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      ''|\#*) continue;;
+    esac
+    case "$line" in
+      *=*) ;;
+      *) continue;;
+    esac
+    old=${line%%=*}
+    new=${line#*=}
+    old=$(printf '%s' "$old" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    new=$(printf '%s' "$new" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    if [ -z "$old" ] || [ -z "$new" ]; then continue; fi
+    sed_args+=(-e "s/^${old}[[:space:]]*=[[:space:]]*/${new} = /")
+    n=$((n + 1))
+  done < "$renames_file"
+  if [ "$n" -eq 0 ]; then
+    exit 0
+  fi
+  for f in "${tracked[@]}"; do
+    if [ "$f" = "$renames_file" ]; then continue; fi
+    if [ ! -f "$f" ]; then continue; fi
+    sed -i "${sed_args[@]}" "$f"
+  done
+  git add -A
+  if ! git diff --cached --quiet; then
+    git commit -m "Migrate settings to current key names"
+  fi
+  exit 0
+steps: null
+postconditions:
+- name: no_stale_keys_left
+  description: no tracked file outside the rename map still uses an old key at line
+    start
+  probe: |-
+    rf=$(git ls-files -z | tr '\0' '\n' | grep -i 'renames' | head -n1)
+    [ -n "$rf" ] || exit 1
+    while IFS= read -r line || [ -n "$line" ]; do
+      case "$line" in
+        ''|\#*) continue;;
+      esac
+      case "$line" in
+        *=*) ;;
+        *) continue;;
+      esac
+      old=${line%%=*}
+      old=$(printf '%s' "$old" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+      [ -n "$old" ] || continue
+      while IFS= read -r f; do
+        [ "$f" = "$rf" ] && continue
+        [ -f "$f" ] || continue
+        if grep -qE "^${old}[[:space:]]*=" "$f" 2>/dev/null; then
+          exit 1
+        fi
+      done < <(git ls-files -z | tr '\0' '\n')
+    done < "$rf"
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: new_key_keeps_value
+  description: every renamed key now appears under its new name with the value it
+    had before the migration commit
+  probe: |-
+    rf=$(git ls-files -z | tr '\0' '\n' | grep -i 'renames' | head -n1)
+    [ -n "$rf" ] || exit 1
+    found=0
+    while IFS= read -r line || [ -n "$line" ]; do
+      case "$line" in
+        ''|\#*) continue;;
+      esac
+      case "$line" in
+        *=*) ;;
+        *) continue;;
+      esac
+      old=${line%%=*}
+      new=${line#*=}
+      old=$(printf '%s' "$old" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+      new=$(printf '%s' "$new" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+      if [ -z "$old" ] || [ -z "$new" ]; then continue; fi
+      while IFS= read -r f; do
+        [ "$f" = "$rf" ] && continue
+        [ -f "$f" ] || continue
+        prev=$(git show "HEAD~1:$f" 2>/dev/null | grep -E "^${old}[[:space:]]*=" | head -n1)
+        [ -n "$prev" ] || continue
+        val=$(printf '%s' "$prev" | sed -E "s/^${old}[[:space:]]*=[[:space:]]*//")
+        if grep -qxF "${new} = ${val}" "$f"; then
+          found=1
+        else
+          exit 1
+        fi
+      done < <(git ls-files -z | tr '\0' '\n')
+    done < "$rf"
+    [ "$found" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: Migrate my settings to the current key names. Rename the old
+    key in the project's settings and keep its value.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Migrate my settings to the current key names. Rename the old key in
+    the project's settings and keep its value./seed-0-config_renamed-29016
+  fault: config_renamed
+status: admitted

@@ -1,0 +1,111 @@
+id: submodule_moved-occ3-remove-nested-submodule
+intent: Remove a nested repository (submodule) from the project, matching upstream's
+  removal.
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: gitmodules_declares_submodule
+  description: .gitmodules names the nested repository at the given path
+  probe: git config -f .gitmodules --get-regexp '^submodule\..*\.path$' 2>/dev/null
+    | cut -d' ' -f2- | grep -qxF '{submodule_path}'
+  expect_exit: 0
+  expect_pattern: null
+- name: index_has_gitlink
+  description: the index contains a gitlink (mode 160000) at the nested repository
+    path
+  probe: git ls-files --stage -- '{submodule_path}' | grep -q '^160000 '
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the superproject has no uncommitted changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_exists
+  description: the upstream remote-tracking branch is available for inspection
+  probe: git rev-parse --verify --quiet "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_dropped_gitlink
+  description: upstream's tree no longer contains an entry at the nested repository
+    path
+  probe: '! git cat-file -e "{upstream_remote}/{upstream_branch}:{submodule_path}"
+    2>/dev/null'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_dropped_gitmodules_entry
+  description: upstream's .gitmodules no longer declares the nested repository
+  probe: '! git config --blob "{upstream_remote}/{upstream_branch}:.gitmodules" --get-regexp
+    ''^submodule\..*\.path$'' 2>/dev/null | cut -d'' '' -f2- | grep -qxF ''{submodule_path}'''
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+
+  # Remove the nested checkout from the index and the working tree.
+  git rm -f --cached -- "{submodule_path}" >/dev/null
+  rm -rf -- "{submodule_path}"
+
+  # Drop every .gitmodules section whose path is the nested repository.
+  if [ -f .gitmodules ]; then
+    git config -f .gitmodules --get-regexp '^submodule\..*\.path$' 2>/dev/null \
+      | while read -r key path; do
+          if [ "$path" = "{submodule_path}" ]; then
+            git config -f .gitmodules --remove-section "${key%.path}" || true
+          fi
+        done || true
+  fi
+
+  # Upstream leaves an empty .gitmodules behind when the last entry goes away.
+  if [ ! -e .gitmodules ] || [ ! -s .gitmodules ]; then
+    : > .gitmodules
+  fi
+
+  # Stage and commit the removal, reusing upstream's rationale when available.
+  git add -A
+  if ! git diff --cached --quiet; then
+    msg="$(git log -1 --format=%s "{upstream_remote}/{upstream_branch}" 2>/dev/null || true)"
+    [ -n "$msg" ] || msg="chore: remove nested submodule"
+    git commit -m "$msg" >/dev/null
+  fi
+steps: null
+postconditions:
+- name: index_entry_gone
+  description: the nested repository path is no longer in the index
+  probe: '! git ls-files --stage -- ''{submodule_path}'' | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: gitmodules_entry_gone
+  description: .gitmodules no longer declares the nested repository
+  probe: '! git config -f .gitmodules --get-regexp ''^submodule\..*\.path$'' 2>/dev/null
+    | cut -d'' '' -f2- | grep -qxF ''{submodule_path}'''
+  expect_exit: 0
+  expect_pattern: null
+- name: head_gitlink_gone
+  description: HEAD's tree no longer contains an entry at the nested repository path
+  probe: '! git cat-file -e "HEAD:{submodule_path}" 2>/dev/null'
+  expect_exit: 0
+  expect_pattern: null
+- name: head_gitmodules_entry_gone
+  description: HEAD's .gitmodules no longer declares the nested repository
+  probe: '! git config --blob "HEAD:.gitmodules" --get-regexp ''^submodule\..*\.path$''
+    2>/dev/null | cut -d'' '' -f2- | grep -qxF ''{submodule_path}'''
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the superproject is clean after the removal is committed
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: remove
+provenance:
+  compiled_from_task: A nested repository in this project needs bringing into line.
+    Remove the nested checkout, the way upstream did.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: A nested repository in this project needs bringing into line. Remove
+    the nested checkout, the way upstream did./seed-8-submodule_moved-29977
+  fault: submodule_moved
+status: admitted

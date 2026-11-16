@@ -1,0 +1,19 @@
+{
+  "scorer": "lexical",
+  "source": "results/refusal-population-2026-11-15/builds/R-8",
+  "library_root": "results/refusal-population-2026-11-15/builds/R-8/library-two-sided",
+  "library_hash": "9daeaffb37f686149046114f4461ffaeb187f7436b928ec1fb735327c5ca7da4",
+  "faults": [
+    "lockfile_conflict"
+  ],
+  "seeds": {
+    "first": 3000,
+    "last": 3039,
+    "count": 40
+  },
+  "pairs": 80,
+  "arm3": {
+    "fires": 0,
+    "wrong": 0
+  }
+}

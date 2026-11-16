@@ -1,0 +1,88 @@
+id: branch_renamed-occ1-retarget-branch-tracking
+intent: keep the current local branch's name, repoint its upstream tracking at the
+  remote's current mainline branch, and fast-forward it to that branch
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_local_branch
+  description: HEAD is attached to a local branch, so its name can be preserved and
+    its tracking retargeted
+  probe: git symbolic-ref --quiet --short HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: remote_tracking_branch_exists
+  description: the remote-tracking ref for the new upstream mainline is already present
+    locally
+  probe: git rev-parse --verify --quiet 'refs/remotes/{upstream_remote}/{upstream_branch}^{commit}'
+  expect_exit: 0
+  expect_pattern: null
+- name: tracking_points_elsewhere
+  description: the current branch is not already tracking the new upstream mainline
+  probe: '! git rev-parse --abbrev-ref --symbolic-full-name ''@{upstream}'' 2>/dev/null
+    | grep -qx ''{upstream_remote}/{upstream_branch}'''
+  expect_exit: 0
+  expect_pattern: null
+- name: strictly_behind_upstream
+  description: the new upstream mainline has commits the current branch lacks
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: fast_forwardable
+  description: HEAD is an ancestor of the new upstream mainline, so no merge commit
+    is needed
+  probe: git merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: no_tracked_changes
+  description: no staged or unstaged changes to tracked files
+  probe: '! git status --porcelain --untracked-files=no | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_collisions
+  description: no untracked file would be overwritten by the fast-forward
+  probe: |-
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch --prune {upstream_remote}
+  git branch --set-upstream-to={upstream_remote}/{upstream_branch}
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: tracks_new_upstream
+  description: the current branch now tracks the remote's current mainline
+  probe: git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}'
+  expect_exit: 0
+  expect_pattern: ^{upstream_remote}/{upstream_branch}$
+- name: caught_up
+  description: HEAD is exactly the tip of the new upstream mainline
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse '{upstream_remote}/{upstream_branch}^{commit}')"
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_name_preserved
+  description: HEAD is still attached to a local branch rather than detached
+  probe: git symbolic-ref --quiet HEAD
+  expect_exit: 0
+  expect_pattern: ^refs/heads/
+- name: worktree_clean
+  description: the fast-forward left no unresolved or dirty tracked state
+  probe: '! git status --porcelain --untracked-files=no | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+variant: retrack
+provenance:
+  compiled_from_task: Make this branch follow upstream's current main line again,
+    and catch it up. Keep my branch's name, point its tracking at upstream's new branch
+    and catch up.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Make this branch follow upstream's current main line again, and catch
+    it up. Keep my branch's name, point its tracking at upstream's new branch and
+    catch up./seed-6-branch_renamed-29980
+  fault: branch_renamed
+status: admitted

@@ -1,0 +1,78 @@
+id: dirty_tree-occ3-commit-local-then-merge-upstream
+intent: Preserve the user's uncommitted work by committing it on the current branch,
+  then fetch upstream and merge it in so the branch is up to date with both changes
+  kept.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_a_local_branch
+  description: HEAD points at a local branch, so a commit can be made on it
+  probe: git symbolic-ref -q HEAD
+  expect_exit: 0
+  expect_pattern: ^refs/heads/
+- name: worktree_dirty
+  description: there is at least one uncommitted change to save
+  probe: test -n "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: the repository is not in the middle of an unresolved merge
+  probe: git rev-parse -q --verify MERGE_HEAD
+  expect_exit: 1
+  expect_pattern: null
+- name: upstream_tracking_ref_present
+  description: the remote-tracking ref for the upstream branch already exists locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ahead_of_head
+  description: upstream has commits the local branch does not have
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: no_untracked_collisions
+  description: no untracked file sits at a path that upstream changes, so saving everything
+    cannot create an add/add clash
+  probe: |-
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} \
+        | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git add -A
+  git commit -m "chore: save local work in progress"
+  git merge --no-edit {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: worktree_clean
+  description: every uncommitted change has been committed and the merge left no pending
+    edits
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: HEAD contains the upstream commit, so the branch is up to date with
+    upstream
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_work_commit_preserved
+  description: HEAD still carries at least one commit beyond upstream, namely the
+    saved local work
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+variant: commit
+provenance:
+  compiled_from_task: Get the latest from upstream here, and keep every change I have
+    not saved yet. Commit my uncommitted work first, then bring the branch up to date.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get the latest from upstream here, and keep every change I have not
+    saved yet. Commit my uncommitted work first, then bring the branch up to date./seed-1-dirty_tree-3956
+  fault: dirty_tree
+status: admitted

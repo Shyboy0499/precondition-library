@@ -1,0 +1,95 @@
+id: branch_renamed-occ2-branch-renamed-occ2-retrack-renamed-upstream
+intent: Retarget the current local branch at upstream's renamed branch and merge it
+  into the local commits.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: branch_checked_out
+  description: HEAD points at a local branch, not a detached commit
+  probe: git symbolic-ref --quiet --short HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the working tree has no modified, staged, or untracked files
+  probe: test -z "$(git --no-optional-locks status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_head_points_at_new_branch
+  description: the remote-tracking HEAD points at the renamed upstream branch
+  probe: git symbolic-ref refs/remotes/{upstream_remote}/HEAD
+  expect_exit: 0
+  expect_pattern: ^refs/remotes/{upstream_remote}/{upstream_branch}$
+- name: upstream_branch_available
+  description: the new upstream branch exists as a remote-tracking ref
+  probe: git rev-parse --verify --quiet refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: tracks_upstream_remote
+  description: the current branch is configured against the upstream remote
+  probe: test "$(git config --get "branch.$(git symbolic-ref --short HEAD).remote")"
+    = "{upstream_remote}"
+  expect_exit: 0
+  expect_pattern: null
+- name: not_already_tracking_new_branch
+  description: the current branch still tracks a different upstream branch
+  probe: test "$(git config --get "branch.$(git symbolic-ref --short HEAD).merge")"
+    != "refs/heads/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: diverged_from_new_upstream
+  description: both the local branch and the new upstream branch have unique commits
+  probe: |-
+    upstream_only="$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    local_only="$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    test "$upstream_only" -gt 0 && test "$local_only" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: no merge is already in progress
+  probe: test ! -e "$(git rev-parse --git-path MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch --prune {upstream_remote}
+  git branch --set-upstream-to={upstream_remote}/{upstream_branch}
+  git merge {upstream_remote}/{upstream_branch} --no-edit
+steps: null
+postconditions:
+- name: tracks_new_upstream_branch
+  description: the current branch now tracks the renamed upstream branch
+  probe: test "$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}')" =
+    "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_branch_merged
+  description: the new upstream branch is an ancestor of HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_preserved
+  description: HEAD still contains commits that are not in the upstream branch
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_completed
+  description: no merge is left in progress
+  probe: test ! -e "$(git rev-parse --git-path MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after_merge
+  description: the working tree is clean after the merge
+  probe: test -z "$(git --no-optional-locks status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: Upstream changed something about its branches and my checkout
+    is lost. Sort it out. Track upstream's new branch and merge it into my own commits.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Upstream changed something about its branches and my checkout is lost.
+    Sort it out. Track upstream's new branch and merge it into my own commits./seed-2-branch_renamed-28615
+  fault: branch_renamed
+status: admitted

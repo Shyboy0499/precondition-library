@@ -1,0 +1,209 @@
+id: lockfile_conflict-occ1-merge-upstream-keep-local-deps
+intent: Merge the upstream branch into the current local branch and resolve the dependency-file
+  collision by keeping the local file content (including the lines the local side
+  removed) while adding the lines upstream added.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_a_local_branch
+  description: HEAD is attached to a local branch that the merge commit can advance
+  probe: git symbolic-ref -q HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_exists
+  description: the upstream remote-tracking branch is present in the local repository
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: shared_history
+  description: HEAD and upstream share a merge base
+  probe: git merge-base HEAD {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_diverged
+  description: each side has at least one commit the other lacks
+  probe: '[ "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt
+    0 ] && [ "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt
+    0 ]'
+  expect_exit: 0
+  expect_pattern: null
+- name: same_path_changed_on_both_sides
+  description: at least one path was modified by both local and upstream since the
+    merge base
+  probe: |
+    mb=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    comm -12 \
+      <(git diff --name-only -z "$mb" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$mb" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_ready
+  description: the worktree is clean, or a merge is already in progress with unmerged
+    paths, so the merge can proceed
+  probe: |
+    if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+      git diff --name-only --diff-filter=U | grep -q .
+    else
+      test -z "$(git status --porcelain)"
+    fi
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  tmp=$(mktemp -d)
+  trap 'rm -rf "$tmp"' EXIT
+
+  if ! git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+    git merge --no-commit --no-ff {upstream_remote}/{upstream_branch} || true
+  fi
+
+  git diff --name-only --diff-filter=U -z | tr '\0' '\n' > "$tmp/conflicts"
+
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    if ! git cat-file -e ":2:$path" 2>/dev/null; then
+      git rm -q -f -- "$path"
+      continue
+    fi
+    if ! git cat-file -e ":3:$path" 2>/dev/null; then
+      git checkout --ours -- "$path"
+      git add -- "$path"
+      continue
+    fi
+    if ! git cat-file -e ":1:$path" 2>/dev/null; then
+      git checkout --ours -- "$path"
+      git add -- "$path"
+      continue
+    fi
+    git show ":1:$path" > "$tmp/base"
+    git show ":2:$path" > "$tmp/ours"
+    git show ":3:$path" > "$tmp/theirs"
+    git diff --no-color --no-index -U0 "$tmp/base" "$tmp/theirs" > "$tmp/patch" 2>/dev/null || true
+    awk '
+      function flush(   i) {
+        if (nadd > 0 && !hasminus)
+          for (i = 1; i <= nadd; i++) print anchor "\t" add[i]
+        nadd = 0
+        hasminus = 0
+      }
+      /^@@ / {
+        flush()
+        split($2, a, ",")
+        start = a[1]
+        sub(/^-/, "", start)
+        cnt = (length(a) > 1) ? a[2] : "1"
+        base = start + 0
+        anchor = base
+        next
+      }
+      /^[^-+@ ]/ { next }
+      /^--- / { next }
+      /^\+\+\+ / { next }
+      {
+        c = substr($0, 1, 1)
+        if (c == " ") {
+          flush()
+          base++
+        } else if (c == "-") {
+          hasminus = 1
+          base++
+        } else if (c == "+") {
+          if (!hasminus) {
+            if (nadd == 0) anchor = base
+            nadd++
+            add[nadd] = substr($0, 2)
+          }
+        }
+      }
+      END { flush() }
+    ' "$tmp/patch" > "$tmp/inserts"
+    awk '
+      FILENAME == ARGV[1] {
+        tab = index($0, "\t")
+        k = substr($0, 1, tab - 1)
+        v = substr($0, tab + 1)
+        n[k]++
+        line[k, n[k]] = v
+        next
+      }
+      {
+        if (FNR == 1)
+          for (i = 1; i <= n[0]; i++) print line[0, i]
+        print
+        for (i = 1; i <= n[FNR]; i++) print line[FNR, i]
+      }
+      END {
+        if (FNR == 0)
+          for (i = 1; i <= n[0]; i++) print line[0, i]
+      }
+    ' "$tmp/inserts" "$tmp/base" > "$tmp/theirs_add"
+    git merge-file -p --union "$tmp/ours" "$tmp/base" "$tmp/theirs_add" > "$tmp/resolved" || true
+    cp "$tmp/resolved" "$path"
+    git add -- "$path"
+  done < "$tmp/conflicts"
+
+  if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+    git commit --no-edit
+  fi
+steps: null
+postconditions:
+- name: upstream_is_ancestor
+  description: the upstream tip is now contained in the local history
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_commit_created
+  description: HEAD is a merge commit that has a second parent
+  probe: git rev-parse --verify --quiet HEAD^2
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: the merge has been committed
+  probe: test ! -e "$(git rev-parse --git-path MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: no staged, unstaged or unmerged changes remain
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: conflict_resolution_policy
+  description: for every path both sides changed since the merge base, lines the local
+    side deleted are absent from the result and lines upstream added without a matching
+    local edit are present
+  probe: |-
+    set -e
+    ours=$(git rev-parse HEAD^1)
+    theirs=$(git rev-parse HEAD^2)
+    mb=$(git merge-base "$ours" "$theirs")
+    while IFS= read -r p; do
+      [ -n "$p" ] || continue
+      git cat-file -e "HEAD:$p" 2>/dev/null || continue
+      if grep -q -e '^<<<<<<< ' -e '^>>>>>>> ' -- "$p"; then exit 1; fi
+      while IFS= read -r line; do
+        if grep -Fxq -e "$line" -- "$p"; then exit 1; fi
+      done < <(git diff --no-color "$mb" "$ours" -- "$p" | sed -n '/^@@/,$p' | awk '/^-/ {print substr($0, 2)}')
+      while IFS= read -r line; do
+        if ! grep -Fxq -e "$line" -- "$p"; then exit 1; fi
+      done < <(git diff --no-color -U0 "$mb" "$theirs" -- "$p" | awk '
+        /^@@ / { pure = ($2 ~ /^-[0-9]+,0$/); next }
+        pure && /^\+/ && !/^\+\+\+/ { print substr($0, 2) }
+      ')
+    done < <(comm -12 \
+      <(git diff --name-only -z "$mb" "$ours" | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$mb" "$theirs" | tr '\0' '\n' | sort))
+  expect_exit: 0
+  expect_pattern: null
+variant: keep_local
+provenance:
+  compiled_from_task: Get my fork current with upstream; our dependency changes collided.
+    Keep my dependency file, with what I removed still removed, and add what upstream
+    added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get my fork current with upstream; our dependency changes collided.
+    Keep my dependency file, with what I removed still removed, and add what upstream
+    added./seed-3-lockfile_conflict-212
+  fault: lockfile_conflict
+status: admitted

@@ -1,0 +1,111 @@
+id: diverged-occ1-diverged-merge-upstream-into-branch
+intent: Merge the upstream branch into the current branch so that both histories and
+  both sides' changes are preserved.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_local_branch
+  description: HEAD is attached to a local branch
+  probe: git symbolic-ref --quiet --short HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: the working tree and index have no uncommitted changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_remote_configured
+  description: the upstream remote exists
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_have_diverged
+  description: both the current branch and the upstream branch have commits the other
+    lacks
+  probe: |-
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0 \
+      && test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: no_operation_in_progress
+  description: no merge, rebase, cherry-pick or revert is currently in progress
+  probe: |-
+    test ! -e "$(git rev-parse --git-path MERGE_HEAD)" \
+      && test ! -e "$(git rev-parse --git-path CHERRY_PICK_HEAD)" \
+      && test ! -e "$(git rev-parse --git-path REVERT_HEAD)" \
+      && test ! -d "$(git rev-parse --git-path rebase-merge)" \
+      && test ! -d "$(git rev-parse --git-path rebase-apply)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_default_branch_matches
+  description: the default branch of the upstream remote is the current local branch
+    and the branch being merged, not a branch renamed upstream
+  probe: |-
+    cur=$(git symbolic-ref --quiet --short HEAD) || exit 1
+    h=$(git symbolic-ref --quiet refs/remotes/{upstream_remote}/HEAD 2>/dev/null) || h=
+    if [ -n "$h" ] && [ "$h" != "refs/remotes/{upstream_remote}/{upstream_branch}" ]; then exit 1; fi
+    sym=$(git ls-remote --symref {upstream_remote} HEAD 2>/dev/null | sed -n 's|^ref: refs/heads/||p' | cut -f1)
+    if [ -z "$sym" ]; then exit 0; fi
+    if [ "$sym" != "{upstream_branch}" ]; then
+      if git ls-remote --heads {upstream_remote} "refs/heads/$sym" 2>/dev/null | grep -q .; then exit 1; fi
+      exit 0
+    fi
+    if [ "$sym" != "$cur" ]; then exit 1; fi
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_merges_without_conflicts
+  description: a three-way merge of the upstream branch into HEAD has no conflicted
+    hunks
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    merged=$(git merge-tree "$base" HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    printf '%s\n' "$merged" | grep -q '<<<<<<<' && exit 1
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch {upstream_remote}
+  if ! git merge --no-edit {upstream_remote}/{upstream_branch}; then
+    git merge --abort || true
+    exit 1
+  fi
+steps: null
+postconditions:
+- name: no_unmerged_paths
+  description: no path is left in an unmerged state
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree_after_merge
+  description: the merge left no uncommitted changes behind
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_commit_created
+  description: HEAD is a merge commit carrying a second parent
+  probe: git rev-parse --verify --quiet HEAD^2
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tip_merged
+  description: the tip of the upstream branch is contained in the merged history
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: no_operation_left_in_progress
+  description: no merge is still in progress after the run
+  probe: test ! -e "$(git rev-parse --git-path MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: This branch and upstream have both changed. Bring it back into
+    line. Merge upstream into my branch and keep both histories.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: This branch and upstream have both changed. Bring it back into line.
+    Merge upstream into my branch and keep both histories./seed-0-diverged-7516
+  fault: diverged
+status: candidate

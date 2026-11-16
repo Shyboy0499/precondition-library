@@ -1,0 +1,55 @@
+id: dirty_tree-occ2-sync-upstream-commit-dirty
+intent: Preserve the user's uncommitted work by committing it, then bring the local
+  branch up to date with the upstream remote so the upstream commits become ancestors
+  of HEAD.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_configured
+  description: the named upstream remote exists in this repository
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_has_uncommitted_work
+  description: there are uncommitted tracked, staged or untracked changes to save
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_has_new_commits
+  description: the fetched upstream branch is ahead of HEAD
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: '[1-9][0-9]*'
+body: |
+  git fetch {upstream_remote}
+  git add -A
+  git commit -m "wip: save local changes before updating from {upstream_remote}/{upstream_branch}"
+  git merge --no-edit {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: worktree_clean
+  description: no uncommitted or untracked changes remain after the sync
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_is_ancestor
+  description: the upstream branch is now contained in HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commit_preserved
+  description: HEAD still carries the local commit made from the unsaved work
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: '[1-9][0-9]*'
+variant: commit
+provenance:
+  compiled_from_task: Get the latest from upstream here, and keep every change I have
+    not saved yet. Commit my uncommitted work first, then bring the branch up to date.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get the latest from upstream here, and keep every change I have not
+    saved yet. Commit my uncommitted work first, then bring the branch up to date./seed-1-dirty_tree-19837
+  fault: dirty_tree
+status: candidate

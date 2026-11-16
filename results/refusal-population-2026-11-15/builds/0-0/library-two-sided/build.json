@@ -1,0 +1,146 @@
+{
+  "admission_gate": "two_sided",
+  "faults": [
+    "branch_renamed",
+    "config_renamed",
+    "dirty_tree",
+    "diverged",
+    "lockfile_conflict",
+    "submodule_moved"
+  ],
+  "episodes": {
+    "branch_renamed": [
+      {
+        "resolution": "rename",
+        "seeds": [
+          0,
+          4
+        ]
+      },
+      {
+        "resolution": "merge",
+        "seeds": [
+          2,
+          1
+        ]
+      },
+      {
+        "resolution": "retrack",
+        "seeds": [
+          6,
+          10
+        ]
+      }
+    ],
+    "config_renamed": [
+      {
+        "resolution": "migrate_local",
+        "seeds": [
+          12,
+          2
+        ]
+      },
+      {
+        "resolution": "rename",
+        "seeds": [
+          0,
+          8
+        ]
+      },
+      {
+        "resolution": "drop_old",
+        "seeds": [
+          31,
+          23
+        ]
+      }
+    ],
+    "dirty_tree": [
+      {
+        "resolution": "aside",
+        "seeds": [
+          7,
+          2
+        ]
+      },
+      {
+        "resolution": "commit",
+        "seeds": [
+          0,
+          1
+        ]
+      },
+      {
+        "resolution": "stash",
+        "seeds": [
+          10,
+          5
+        ]
+      }
+    ],
+    "diverged": [
+      {
+        "resolution": "rebase",
+        "seeds": [
+          2,
+          5
+        ]
+      },
+      {
+        "resolution": "discard",
+        "seeds": [
+          3,
+          1
+        ]
+      },
+      {
+        "resolution": "merge",
+        "seeds": [
+          4,
+          0
+        ]
+      }
+    ],
+    "lockfile_conflict": [
+      {
+        "resolution": "keep_local",
+        "seeds": [
+          2,
+          3
+        ]
+      },
+      {
+        "resolution": "take_upstream",
+        "seeds": [
+          5,
+          6
+        ]
+      }
+    ],
+    "submodule_moved": [
+      {
+        "resolution": "init",
+        "seeds": [
+          4,
+          5
+        ]
+      },
+      {
+        "resolution": "remove",
+        "seeds": [
+          0,
+          8
+        ]
+      },
+      {
+        "resolution": "repin",
+        "seeds": [
+          1,
+          2
+        ]
+      }
+    ]
+  },
+  "order": 0,
+  "refusal_set": null
+}

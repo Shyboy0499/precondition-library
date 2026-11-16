@@ -1,0 +1,101 @@
+id: diverged-occ2-diverged-occ2-rebase-onto-upstream
+intent: Replay local commits on top of upstream so history stays linear.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: attached_to_branch
+  description: HEAD is attached to a local branch
+  probe: git symbolic-ref --quiet HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: The working tree and index have no changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_exists
+  description: The remote-tracking branch for upstream exists locally
+  probe: git rev-parse --verify --quiet "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_ahead_of_upstream
+  description: The current branch has at least one commit not in upstream
+  probe: git rev-list --count "{upstream_remote}/{upstream_branch}..HEAD"
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: upstream_has_new_commits
+  description: Upstream has at least one commit not in the current branch
+  probe: git rev-list --count "HEAD..{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: no_rebase_in_progress
+  description: No rebase is already in progress
+  probe: test ! -d "$(git rev-parse --git-path rebase-merge)" && test ! -d "$(git
+    rev-parse --git-path rebase-apply)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: The index has no unresolved merge entries
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_and_upstream_changes_do_not_overlap
+  description: No file is modified both locally and upstream, so the rebase cannot
+    conflict
+  probe: |-
+    mb=$(git merge-base HEAD "{upstream_remote}/{upstream_branch}") || exit 1
+    overlap=$(comm -12 \
+      <(git diff --name-only -z "$mb" HEAD | tr '\0' '\n' | sort -u) \
+      <(git diff --name-only -z "$mb" "{upstream_remote}/{upstream_branch}" | tr '\0' '\n' | sort -u))
+    test -z "$overlap"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_branch_matches_upstream_branch
+  description: The checked-out branch is the upstream branch being rebased onto
+  probe: test "$(git symbolic-ref --short HEAD)" = "{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: remote_head_agrees_with_upstream_branch
+  description: If the remote-tracking HEAD is present, it points at the branch being
+    rebased onto
+  probe: |-
+    ref=$(git symbolic-ref --quiet "refs/remotes/{upstream_remote}/HEAD") || exit 0
+    test "$ref" = "refs/remotes/{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch "{upstream_remote}"
+  git rebase "{upstream_remote}/{upstream_branch}"
+steps: null
+postconditions:
+- name: upstream_is_ancestor_of_head
+  description: HEAD contains the upstream tip
+  probe: git merge-base --is-ancestor "{upstream_remote}/{upstream_branch}" HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: history_is_linear
+  description: No merge commits were introduced above upstream
+  probe: test -z "$(git rev-list --merges "{upstream_remote}/{upstream_branch}..HEAD")"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_replayed
+  description: The branch is ahead of upstream after the rebase
+  probe: git rev-list --count "{upstream_remote}/{upstream_branch}..HEAD"
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: worktree_clean_after_rebase
+  description: The working tree is clean after the rebase
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: rebase
+provenance:
+  compiled_from_task: Upstream moved ahead of me. Get me back in line with it. Replay
+    my local commits on top of upstream so the history stays linear.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Upstream moved ahead of me. Get me back in line with it. Replay my local
+    commits on top of upstream so the history stays linear./seed-2-diverged-211
+  fault: diverged
+status: admitted

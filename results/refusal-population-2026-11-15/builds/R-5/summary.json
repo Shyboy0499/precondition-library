@@ -1,0 +1,295 @@
+{
+  "model": "deepseek-flash",
+  "plan": {
+    "faults": [
+      "branch_renamed",
+      "config_renamed",
+      "dirty_tree",
+      "diverged",
+      "lockfile_conflict",
+      "submodule_moved"
+    ],
+    "build_seeds": null,
+    "tune_seeds": [
+      1000,
+      1001,
+      1002,
+      1003,
+      1004,
+      1005,
+      1006,
+      1007,
+      1008,
+      1009,
+      1010,
+      1011,
+      1012,
+      1013,
+      1014,
+      1015
+    ],
+    "pair_seeds": [
+      2000,
+      2001,
+      2002,
+      2003,
+      2004,
+      2005,
+      2006,
+      2007,
+      2008,
+      2009,
+      2010,
+      2011,
+      2012,
+      2013,
+      2014,
+      2015,
+      2016,
+      2017,
+      2018,
+      2019,
+      2020,
+      2021,
+      2022,
+      2023,
+      2024,
+      2025,
+      2026,
+      2027,
+      2028,
+      2029,
+      2030,
+      2031,
+      2032,
+      2033,
+      2034,
+      2035,
+      2036,
+      2037,
+      2038,
+      2039
+    ],
+    "episode_seeds": [
+      2000,
+      2001,
+      2002,
+      2003
+    ],
+    "online": false,
+    "episodes": false,
+    "replicates": 1,
+    "build_order": 5,
+    "refusal_set": "results/refusal-population-2026-11-01/R"
+  },
+  "admitted_two_sided": 14,
+  "admitted_positive_only": 18,
+  "compiled": 20,
+  "library_hash": "1f59e563db9f4989e8a79e8603328a9ac09a8581b17acfcbc0509fabe81d2e4c",
+  "build": [
+    {
+      "fault": "branch_renamed",
+      "seed": 2,
+      "outcome": "fallback",
+      "tool_calls": 12,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "branch_renamed",
+      "seed": 0,
+      "outcome": "fallback",
+      "tool_calls": 14,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "branch_renamed",
+      "seed": 6,
+      "outcome": "fallback",
+      "tool_calls": 11,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "config_renamed",
+      "seed": 8,
+      "outcome": "fallback",
+      "tool_calls": 12,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "config_renamed",
+      "seed": 2,
+      "outcome": "fallback",
+      "tool_calls": 15,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "config_renamed",
+      "seed": 23,
+      "outcome": "fallback",
+      "tool_calls": 12,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "dirty_tree",
+      "seed": 0,
+      "outcome": "fallback",
+      "tool_calls": 12,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "dirty_tree",
+      "seed": 10,
+      "outcome": "fallback",
+      "tool_calls": 13,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "dirty_tree",
+      "seed": 7,
+      "outcome": "fallback",
+      "tool_calls": 14,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "diverged",
+      "seed": 0,
+      "outcome": "fallback",
+      "tool_calls": 12,
+      "ground_truth_ok": true,
+      "admitted": false,
+      "reason": "refusal side failed: preconditions accepted 1 of 35 real conflicts no resolution can express (refusal-tested admission, configuration R): saleor/saleor@1fef436c133c"
+    },
+    {
+      "fault": "diverged",
+      "seed": 4,
+      "outcome": "fallback",
+      "tool_calls": 14,
+      "ground_truth_ok": true,
+      "admitted": false,
+      "reason": "refusal side failed: preconditions accepted 1 of 35 real conflicts no resolution can express (refusal-tested admission, configuration R): saleor/saleor@1fef436c133c"
+    },
+    {
+      "fault": "diverged",
+      "seed": 3,
+      "outcome": "fallback",
+      "tool_calls": 8,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "diverged",
+      "seed": 5,
+      "outcome": "fallback",
+      "tool_calls": 9,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "lockfile_conflict",
+      "seed": 3,
+      "outcome": "fallback",
+      "tool_calls": 21,
+      "ground_truth_ok": true,
+      "admitted": false,
+      "reason": "positive side failed on lockfile_conflict seed 3: guard refused git config override: git config override 'merge.conflictStyle=diff3'; only ['protocol.file.allow=always'] may be set per invocation"
+    },
+    {
+      "fault": "lockfile_conflict",
+      "seed": 2,
+      "outcome": "fallback",
+      "tool_calls": 18,
+      "ground_truth_ok": true,
+      "admitted": false,
+      "reason": "negative side failed: preconditions accepted 1 of 2 same-intent states (lockfile_conflict seed 5 resolves to 'take_upstream', which accepts ['take_upstream'], but the program implements 'keep_local'); firing where a sibling resolution is correct is the mismatch this gate exists to refuse"
+    },
+    {
+      "fault": "lockfile_conflict",
+      "seed": 5,
+      "outcome": "fallback",
+      "tool_calls": 17,
+      "ground_truth_ok": true,
+      "admitted": false,
+      "reason": "refusal side failed: preconditions accepted 2 of 35 real conflicts no resolution can express (refusal-tested admission, configuration R): saleor/saleor@e3c62ad985ed, saleor/saleor@4fb40d636d2b"
+    },
+    {
+      "fault": "lockfile_conflict",
+      "seed": 6,
+      "outcome": "fallback",
+      "tool_calls": 17,
+      "ground_truth_ok": true,
+      "admitted": false,
+      "reason": "refusal side failed: preconditions accepted 18 of 35 real conflicts no resolution can express (refusal-tested admission, configuration R): saleor/saleor@f1f268d21153, saleor/saleor@b5efc1343e14, saleor/saleor@e3c62ad985ed, saleor/saleor@ad2c9ccff7d9, saleor/saleor@1fef436c133c, saleor/saleor@4fb40d636d2b, saleor/saleor@0e0efbc30033, saleor/saleor@9221056ea321, openfoodfoundation/openfoodnetwork@df0c98d013c6, openfoodfoundation/openfoodnetwork@db809923264a, openfoodfoundation/openfoodnetwork@983bed3c4e8c, openfoodfoundation/openfoodnetwork@cce26cb45334, openfoodfoundation/openfoodnetwork@c9a7a6e89704, openfoodfoundation/openfoodnetwork@f34f6936203b, openfoodfoundation/openfoodnetwork@19da0ba969e6, openfoodfoundation/openfoodnetwork@839b373b5cd1, openfoodfoundation/openfoodnetwork@384ca310a34d, openfoodfoundation/openfoodnetwork@1c628fac5824"
+    },
+    {
+      "fault": "submodule_moved",
+      "seed": 4,
+      "outcome": "fallback",
+      "tool_calls": 8,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "submodule_moved",
+      "seed": 2,
+      "outcome": "fallback",
+      "tool_calls": 16,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "submodule_moved",
+      "seed": 8,
+      "outcome": "fallback",
+      "tool_calls": 16,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    }
+  ],
+  "stopped_after": null,
+  "stop_reason": null,
+  "soft_threshold": 1.0,
+  "claim2": "at matched dispatch coverage, executable-precondition dispatch mis-fires less often than text-similarity dispatch",
+  "claim2_reason": "at arm 3's coverage the soft vote's matched point is the hard rule itself (threshold >= 1.0), so it makes arm 3's decisions and cannot show that requiring every probe adds nothing; the registered claim keeps its wording",
+  "figure1": "Primary metric, uninformed regime, 480 labelled pairs (spec §7 item 1, ADR-0008)\n  arm 3 (pre-registered coverage point): coverage 191/480, mismatch 0/191\n  arm 2 curve: 89 operating point(s), each with a 95% Wilson interval in figure1.csv\n  at matched coverage arm 2 (threshold 0.14285714285714285) has mismatch 162/191; coverage gap +0.000; mismatch difference (arm 2 - arm 3) +0.8482\n  power (item 3): with 191 and 191 fires, alpha 0.05 two-sided and power 0.8, the smallest detectable mismatch difference is 0.143 at a 50% base rate and 0.142 at the observed 0.424\n  baseline arm 2b (soft vote): curve, 3 operating point(s) -- context, not part of the claim\n  baseline arm 2c (intent key): point, 1 operating point(s) -- context, not part of the claim\n",
+  "arm2_floor": {
+    "decided": 0,
+    "decidable": 0,
+    "chance": 0.3333333333333333,
+    "lower_bound": null,
+    "usable": false,
+    "reason": "not measurable, so not usable: an intent needs two or more candidate resolutions for arm 2 to choose between, and the library's admitted programs give sync_through_a_conflicting_lockfile has none"
+  },
+  "bootstrap": null,
+  "replicate_ledgers": {},
+  "factorial": [],
+  "artifacts": {
+    "build_ledger": "build.jsonl",
+    "build_transcripts": "build.transcripts.jsonl",
+    "library_two_sided": "library-two-sided",
+    "library_positive_only": "library-positive-only",
+    "primary": "primary"
+  }
+}

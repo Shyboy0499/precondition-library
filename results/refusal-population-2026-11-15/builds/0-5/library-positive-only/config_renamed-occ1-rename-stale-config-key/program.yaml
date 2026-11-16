@@ -1,0 +1,179 @@
+id: config_renamed-occ1-rename-stale-config-key
+intent: Rename every stale configuration key listed in the project's renames map to
+  its current name in the sibling settings files, preserving each value, and commit
+  the change.
+parameters: []
+preconditions:
+- name: renames_map_tracked
+  description: a tracked renames.conf file exists and is present in the working tree
+  probe: |-
+    map=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1)
+    [ -n "$map" ] && [ -f "$map" ]
+  expect_exit: 0
+  expect_pattern: null
+- name: sibling_settings_present
+  description: at least one tracked .conf file other than the renames map lives next
+    to it
+  probe: |-
+    map=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1)
+    dir=$(dirname "$map")
+    git ls-files -z -- "$dir" | tr '\0' '\n' | grep -E '\.conf$' | grep -v -F -x "$map" | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_key_present
+  description: at least one key from the renames map appears as an old key in one
+    of the settings files
+  probe: |-
+    map=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1)
+    dir=$(dirname "$map")
+    found=0
+    while IFS= read -r -d '' f; do
+      case "$f" in *.conf) ;; *) continue ;; esac
+      if [ "$f" = "$map" ]; then continue; fi
+      if [ ! -f "$f" ]; then continue; fi
+      if awk -v mapfile="$map" 'BEGIN{while((getline l<mapfile)>0){sub(/#.*/,"",l);e=index(l,"=");if(e==0)continue;o=substr(l,1,e-1);n=substr(l,e+1);gsub(/^[ \t]+|[ \t]+$/,"",o);gsub(/^[ \t]+|[ \t]+$/,"",n);if(o!=""&&n!="")m[o]=n}} /^[ \t]*#/{next} {e=index($0,"=");if(e==0)next;k=substr($0,1,e-1);gsub(/^[ \t]+|[ \t]+$/,"",k);if(k in m)f=1} END{exit (f?0:1)}' "$f"; then
+        found=1
+      fi
+    done < <(git ls-files -z -- "$dir")
+    [ "$found" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: no_target_key_collision
+  description: no settings file already contains the new key of a stale key it holds
+  probe: |-
+    map=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1)
+    dir=$(dirname "$map")
+    bad=0
+    while IFS= read -r -d '' f; do
+      case "$f" in *.conf) ;; *) continue ;; esac
+      if [ "$f" = "$map" ]; then continue; fi
+      if [ ! -f "$f" ]; then continue; fi
+      if awk -v mapfile="$map" 'BEGIN{while((getline l<mapfile)>0){sub(/#.*/,"",l);e=index(l,"=");if(e==0)continue;o=substr(l,1,e-1);n=substr(l,e+1);gsub(/^[ \t]+|[ \t]+$/,"",o);gsub(/^[ \t]+|[ \t]+$/,"",n);if(o!=""&&n!="")m[o]=n}} {lines[NR]=$0;e=index($0,"=");if(e>0){k=substr($0,1,e-1);gsub(/^[ \t]+|[ \t]+$/,"",k);keys[k]=1}} END{for(i=1;i<=NR;i++){if(lines[i]~/^[ \t]*#/)continue;e=index(lines[i],"=");if(e==0)continue;k=substr(lines[i],1,e-1);gsub(/^[ \t]+|[ \t]+$/,"",k);if((k in m)&&(m[k] in keys))b=1} exit (b?0:1)}' "$f"; then
+        bad=1
+      fi
+    done < <(git ls-files -z -- "$dir")
+    [ "$bad" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: config_clean
+  description: the settings directory has no uncommitted or untracked changes
+  probe: |-
+    map=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1)
+    dir=$(dirname "$map")
+    [ -z "$(git status --porcelain -- "$dir")" ]
+  expect_exit: 0
+  expect_pattern: null
+- name: parent_commit_present
+  description: HEAD has a parent commit, so the rename can be inspected against the
+    pre-change state
+  probe: git rev-parse --verify -q HEAD^ >/dev/null
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  map=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1)
+  dir=$(dirname "$map")
+  while IFS= read -r -d '' f; do
+    case "$f" in *.conf) ;; *) continue ;; esac
+    if [ "$f" = "$map" ]; then continue; fi
+    if [ ! -f "$f" ]; then continue; fi
+    tmp="$f.rename.tmp"
+    awk -v mapfile="$map" '
+      BEGIN {
+        while ((getline l < mapfile) > 0) {
+          sub(/#.*/, "", l)
+          e = index(l, "=")
+          if (e == 0) continue
+          o = substr(l, 1, e-1); n = substr(l, e+1)
+          gsub(/^[ \t]+|[ \t]+$/, "", o)
+          gsub(/^[ \t]+|[ \t]+$/, "", n)
+          if (o != "" && n != "") m[o] = n
+        }
+        close(mapfile)
+      }
+      /^[ \t]*#/ { print; next }
+      {
+        e = index($0, "=")
+        if (e > 0) {
+          k = substr($0, 1, e-1)
+          t = k
+          gsub(/^[ \t]+|[ \t]+$/, "", t)
+          if (t in m) {
+            match(k, /^[ \t]*/)
+            print substr(k, 1, RLENGTH) m[t] substr($0, e)
+            next
+          }
+        }
+        print
+      }
+    ' "$f" > "$tmp"
+    if cmp -s "$f" "$tmp"; then
+      rm -f "$tmp"
+    else
+      mv "$tmp" "$f"
+    fi
+  done < <(git ls-files -z -- "$dir")
+  git add -u -- "$dir"
+  if ! git diff --cached --quiet; then
+    git commit -m "config: rename stale config keys to current names"
+  fi
+steps: null
+postconditions:
+- name: stale_keys_absent
+  description: no old key from the renames map is left in any settings file
+  probe: |-
+    map=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1)
+    dir=$(dirname "$map")
+    stale=0
+    while IFS= read -r -d '' f; do
+      case "$f" in *.conf) ;; *) continue ;; esac
+      if [ "$f" = "$map" ]; then continue; fi
+      if [ ! -f "$f" ]; then continue; fi
+      if awk -v mapfile="$map" 'BEGIN{while((getline l<mapfile)>0){sub(/#.*/,"",l);e=index(l,"=");if(e==0)continue;o=substr(l,1,e-1);n=substr(l,e+1);gsub(/^[ \t]+|[ \t]+$/,"",o);gsub(/^[ \t]+|[ \t]+$/,"",n);if(o!=""&&n!="")m[o]=n}} /^[ \t]*#/{next} {e=index($0,"=");if(e==0)next;k=substr($0,1,e-1);gsub(/^[ \t]+|[ \t]+$/,"",k);if(k in m)f=1} END{exit (f?0:1)}' "$f"; then
+        stale=1
+      fi
+    done < <(git ls-files -z -- "$dir")
+    [ "$stale" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: values_preserved
+  description: the set of setting values in every changed file is identical to the
+    pre-change commit
+  probe: |-
+    map=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1)
+    dir=$(dirname "$map")
+    ok=1
+    while IFS= read -r -d '' f; do
+      before=$(git show "HEAD^:$f" | sed -n 's/^[^#=]*=//p' | sort)
+      after=$(sed -n 's/^[^#=]*=//p' "$f" | sort)
+      if [ "$before" != "$after" ]; then ok=0; fi
+    done < <(git diff --name-only -z HEAD^ HEAD -- "$dir")
+    [ "$ok" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: rename_in_head
+  description: the rename is recorded in a new commit touching the settings directory
+  probe: |-
+    map=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1)
+    dir=$(dirname "$map")
+    [ -n "$(git diff --name-only HEAD^ HEAD -- "$dir")" ]
+  expect_exit: 0
+  expect_pattern: null
+- name: config_committed_clean
+  description: the settings directory has no remaining uncommitted or untracked changes
+  probe: |-
+    map=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1)
+    dir=$(dirname "$map")
+    [ -z "$(git status --porcelain -- "$dir")" ]
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: Fix the stale config entry the app is warning about, without
+    losing any setting. Rename the old key in the project's settings and keep its
+    value.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Fix the stale config entry the app is warning about, without losing
+    any setting. Rename the old key in the project's settings and keep its value./seed-8-config_renamed-19837
+  fault: config_renamed
+status: admitted

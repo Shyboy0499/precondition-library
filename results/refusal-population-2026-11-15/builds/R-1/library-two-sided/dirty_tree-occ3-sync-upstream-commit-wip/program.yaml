@@ -1,0 +1,80 @@
+id: dirty_tree-occ3-sync-upstream-commit-wip
+intent: Save uncommitted local work by committing it, then bring the current branch
+  up to date with the latest upstream branch by rebasing onto it.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: has_upstream_remote
+  description: the repository has the named upstream remote configured
+  probe: git remote | grep -qx -- '{upstream_remote}'
+  expect_exit: 0
+  expect_pattern: null
+- name: has_upstream_tracking_ref
+  description: the remote-tracking ref for the upstream branch already exists locally
+  probe: git rev-parse --verify --quiet 'refs/remotes/{upstream_remote}/{upstream_branch}^{commit}'
+  expect_exit: 0
+  expect_pattern: null
+- name: branch_is_behind_upstream
+  description: HEAD is an ancestor of the upstream tip and strictly behind it, so
+    the branch can be brought up to date
+  probe: git merge-base --is-ancestor HEAD 'refs/remotes/{upstream_remote}/{upstream_branch}'
+    && test "$(git rev-list --count HEAD..'refs/remotes/{upstream_remote}/{upstream_branch}')"
+    -ge 1
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_has_uncommitted_changes
+  description: there is unsaved work in the working tree or index that must be committed
+    first
+  probe: test -n "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_upstream_collision
+  description: no untracked file would be overwritten by the incoming upstream changes
+  probe: |-
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD 'refs/remotes/{upstream_remote}/{upstream_branch}' | tr '\0' '\n' | sort) \
+      | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch --prune {upstream_remote}
+  git add -A
+  if ! git diff --cached --quiet; then
+    git commit -m 'chore: save uncommitted local work in progress'
+  fi
+  if ! git rebase 'refs/remotes/{upstream_remote}/{upstream_branch}'; then
+    git rebase --abort 2>/dev/null || true
+    exit 1
+  fi
+steps: null
+postconditions:
+- name: upstream_is_ancestor_of_head
+  description: the upstream tip is contained in the current branch's history
+  probe: git merge-base --is-ancestor 'refs/remotes/{upstream_remote}/{upstream_branch}'
+    HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: local_commits_on_top_of_upstream
+  description: at least one local commit (the saved work) sits on top of the upstream
+    tip
+  probe: git rev-list --count 'refs/remotes/{upstream_remote}/{upstream_branch}..HEAD'
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: worktree_clean
+  description: no uncommitted or conflicted changes remain, so the saved work is fully
+    committed
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: commit
+provenance:
+  compiled_from_task: Get the latest from upstream here, and keep every change I have
+    not saved yet. Commit my uncommitted work first, then bring the branch up to date.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get the latest from upstream here, and keep every change I have not
+    saved yet. Commit my uncommitted work first, then bring the branch up to date./seed-1-dirty_tree-8327
+  fault: dirty_tree
+status: admitted

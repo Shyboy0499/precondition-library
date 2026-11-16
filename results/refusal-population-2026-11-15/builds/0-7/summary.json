@@ -1,0 +1,295 @@
+{
+  "model": "deepseek-flash",
+  "plan": {
+    "faults": [
+      "branch_renamed",
+      "config_renamed",
+      "dirty_tree",
+      "diverged",
+      "lockfile_conflict",
+      "submodule_moved"
+    ],
+    "build_seeds": null,
+    "tune_seeds": [
+      1000,
+      1001,
+      1002,
+      1003,
+      1004,
+      1005,
+      1006,
+      1007,
+      1008,
+      1009,
+      1010,
+      1011,
+      1012,
+      1013,
+      1014,
+      1015
+    ],
+    "pair_seeds": [
+      2000,
+      2001,
+      2002,
+      2003,
+      2004,
+      2005,
+      2006,
+      2007,
+      2008,
+      2009,
+      2010,
+      2011,
+      2012,
+      2013,
+      2014,
+      2015,
+      2016,
+      2017,
+      2018,
+      2019,
+      2020,
+      2021,
+      2022,
+      2023,
+      2024,
+      2025,
+      2026,
+      2027,
+      2028,
+      2029,
+      2030,
+      2031,
+      2032,
+      2033,
+      2034,
+      2035,
+      2036,
+      2037,
+      2038,
+      2039
+    ],
+    "episode_seeds": [
+      2000,
+      2001,
+      2002,
+      2003
+    ],
+    "online": false,
+    "episodes": false,
+    "replicates": 1,
+    "build_order": 7,
+    "refusal_set": null
+  },
+  "admitted_two_sided": 16,
+  "admitted_positive_only": 17,
+  "compiled": 20,
+  "library_hash": "c0af64794f83eef4e64a2f8a51a6901ec1ef0c9f113f158be3852b4e3bab9d68",
+  "build": [
+    {
+      "fault": "branch_renamed",
+      "seed": 10,
+      "outcome": "fallback",
+      "tool_calls": 12,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "branch_renamed",
+      "seed": 0,
+      "outcome": "fallback",
+      "tool_calls": 13,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "branch_renamed",
+      "seed": 1,
+      "outcome": "fallback",
+      "tool_calls": 11,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "config_renamed",
+      "seed": 23,
+      "outcome": "fallback",
+      "tool_calls": 14,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "config_renamed",
+      "seed": 8,
+      "outcome": "fallback",
+      "tool_calls": 14,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "config_renamed",
+      "seed": 12,
+      "outcome": "fallback",
+      "tool_calls": 15,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "dirty_tree",
+      "seed": 10,
+      "outcome": "fallback",
+      "tool_calls": 14,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "dirty_tree",
+      "seed": 7,
+      "outcome": "fallback",
+      "tool_calls": 19,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "dirty_tree",
+      "seed": 1,
+      "outcome": "fallback",
+      "tool_calls": 13,
+      "ground_truth_ok": true,
+      "admitted": false,
+      "reason": "negative side failed: preconditions accepted 1 of 2 same-intent states (dirty_tree seed 2 resolves to 'aside', which accepts ['aside'], but the program implements 'commit'); firing where a sibling resolution is correct is the mismatch this gate exists to refuse; the revision did not parse: the reply was not a YAML mapping, so it is not a Program: mapping values are not allowed here in \"<unicode string>\", line 48, column 47: ... log --format=%s | grep -qx 'wip: save local work in progress' ^"
+    },
+    {
+      "fault": "dirty_tree",
+      "seed": 0,
+      "outcome": "fallback",
+      "tool_calls": 11,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "diverged",
+      "seed": 3,
+      "outcome": "fallback",
+      "tool_calls": 7,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "diverged",
+      "seed": 5,
+      "outcome": "fallback",
+      "tool_calls": 12,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "diverged",
+      "seed": 4,
+      "outcome": "fallback",
+      "tool_calls": 12,
+      "ground_truth_ok": true,
+      "admitted": false,
+      "reason": "negative side failed: preconditions accepted 1 of 15 unrelated states (lockfile_conflict seed 0 resolves to 'take_upstream'); a precondition set that accepts unrelated states is a defect. It also accepted 2 more state(s) it must refuse: preconditions accepted 1 of 15 unrelated states (lockfile_conflict seed 2 resolves to 'keep_local'); a precondition set that accepts unrelated states is a defect; preconditions accepted 1 of 15 unrelated states (lockfile_conflict seed 5 resolves to 'take_upstream'); a precondition set that accepts unrelated states is a defect"
+    },
+    {
+      "fault": "diverged",
+      "seed": 0,
+      "outcome": "fallback",
+      "tool_calls": 12,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "lockfile_conflict",
+      "seed": 3,
+      "outcome": "fallback",
+      "tool_calls": 17,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "lockfile_conflict",
+      "seed": 6,
+      "outcome": "fallback",
+      "tool_calls": 17,
+      "ground_truth_ok": true,
+      "admitted": false,
+      "reason": "negative side failed: preconditions accepted 1 of 1 same-intent states (lockfile_conflict seed 2 resolves to 'keep_local', which accepts ['keep_local'], but the program implements 'take_upstream'); firing where a sibling resolution is correct is the mismatch this gate exists to refuse"
+    },
+    {
+      "fault": "lockfile_conflict",
+      "seed": 5,
+      "outcome": "fallback",
+      "tool_calls": 17,
+      "ground_truth_ok": true,
+      "admitted": false,
+      "reason": "negative side failed: preconditions accepted 1 of 15 unrelated states (diverged seed 0 resolves to 'merge'); a precondition set that accepts unrelated states is a defect. It also accepted 1 more state(s) it must refuse: preconditions accepted 1 of 1 same-intent states (lockfile_conflict seed 2 resolves to 'keep_local', which accepts ['keep_local'], but the program implements 'take_upstream'); firing where a sibling resolution is correct is the mismatch this gate exists to refuse"
+    },
+    {
+      "fault": "submodule_moved",
+      "seed": 4,
+      "outcome": "fallback",
+      "tool_calls": 10,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "submodule_moved",
+      "seed": 2,
+      "outcome": "fallback",
+      "tool_calls": 13,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    },
+    {
+      "fault": "submodule_moved",
+      "seed": 8,
+      "outcome": "fallback",
+      "tool_calls": 17,
+      "ground_truth_ok": true,
+      "admitted": true,
+      "reason": null
+    }
+  ],
+  "stopped_after": null,
+  "stop_reason": null,
+  "soft_threshold": 1.0,
+  "claim2": "at matched dispatch coverage, executable-precondition dispatch mis-fires less often than text-similarity dispatch",
+  "claim2_reason": "at arm 3's coverage the soft vote's matched point is the hard rule itself (threshold >= 1.0), so it makes arm 3's decisions and cannot show that requiring every probe adds nothing; the registered claim keeps its wording",
+  "figure1": "Primary metric, uninformed regime, 480 labelled pairs (spec §7 item 1, ADR-0008)\n  arm 3 (pre-registered coverage point): coverage 213/480, mismatch 0/213\n  arm 2 curve: 102 operating point(s), each with a 95% Wilson interval in figure1.csv\n  at matched coverage arm 2 (threshold 0.1346153846153846) has mismatch 181/214; coverage gap +0.002; mismatch difference (arm 2 - arm 3) +0.8458\n  power (item 3): with 214 and 213 fires, alpha 0.05 two-sided and power 0.8, the smallest detectable mismatch difference is 0.136 at a 50% base rate and 0.134 at the observed 0.424\n  baseline arm 2b (soft vote): curve, 3 operating point(s) -- context, not part of the claim\n  baseline arm 2c (intent key): point, 1 operating point(s) -- context, not part of the claim\n",
+  "arm2_floor": {
+    "decided": 0,
+    "decidable": 0,
+    "chance": 0.3333333333333333,
+    "lower_bound": null,
+    "usable": false,
+    "reason": "not measurable, so not usable: an intent needs two or more candidate resolutions for arm 2 to choose between, and the library's admitted programs give sync_through_a_conflicting_lockfile has ['keep_local']"
+  },
+  "bootstrap": null,
+  "replicate_ledgers": {},
+  "factorial": [],
+  "artifacts": {
+    "build_ledger": "build.jsonl",
+    "build_transcripts": "build.transcripts.jsonl",
+    "library_two_sided": "library-two-sided",
+    "library_positive_only": "library-positive-only",
+    "primary": "primary"
+  }
+}

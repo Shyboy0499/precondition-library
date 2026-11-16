@@ -1,0 +1,188 @@
+id: lockfile_conflict-occ3-lockfile-conflict-occ3-catch-up-lockfile-take-upstream
+intent: Catch up with upstream without losing additions or reviving removals by taking
+  upstream's dependency file and re-adding local dependency additions.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: clean_worktree
+  description: the working tree is clean and no merge or rebase is in progress
+  probe: |-
+    ! git status --porcelain -z | tr '\0' '\n' | grep -q . &&
+    ! git ls-files -u -z | tr '\0' '\n' | grep -q . &&
+    [ ! -e .git/MERGE_HEAD ] &&
+    [ ! -e .git/rebase-merge ] &&
+    [ ! -e .git/rebase-apply ]
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_exists
+  description: the upstream remote-tracking branch exists locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}^{commit}
+  expect_exit: 0
+  expect_pattern: ^[0-9a-f]{40,64}$
+- name: branches_diverged
+  description: both local and upstream have commits the other lacks
+  probe: |-
+    [ "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0 ] &&
+    [ "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: common_changed_file
+  description: at least one file was modified on both sides since the merge base
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    common=$(comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort))
+    [ -n "$common" ]
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -euo pipefail
+
+  git fetch {upstream_remote} {upstream_branch}
+  upstream_ref="{upstream_remote}/{upstream_branch}"
+  base=$(git merge-base HEAD "$upstream_ref")
+
+  if git merge --no-edit "$upstream_ref"; then
+    exit 0
+  fi
+
+  if ! git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+    echo "merge failed without starting a merge" >&2
+    exit 1
+  fi
+
+  while IFS= read -r -d '' path; do
+    python3 - "$base" "$upstream_ref" "$path" <<'PY'
+  import subprocess, sys, difflib
+  from collections import defaultdict
+
+  base_rev, theirs_rev, path = sys.argv[1], sys.argv[2], sys.argv[3]
+
+  def show(rev, p):
+      try:
+          return subprocess.check_output(
+              ["git", "show", f"{rev}:{p}"],
+              stderr=subprocess.DEVNULL,
+          )
+      except subprocess.CalledProcessError:
+          return None
+
+  base = show(base_rev, path)
+  ours = show("HEAD", path)
+  theirs = show(theirs_rev, path)
+
+  if ours is None or theirs is None:
+      subprocess.check_call(["git", "rm", "-f", "--", path])
+      sys.exit(0)
+
+  if base is None:
+      with open(path, "wb") as f:
+          f.write(theirs)
+      sys.exit(0)
+
+  B = base.splitlines(keepends=True)
+  O = ours.splitlines(keepends=True)
+  T = theirs.splitlines(keepends=True)
+
+  matcher_t = difflib.SequenceMatcher(None, B, T)
+  base_to_theirs = {}
+  for a, b, size in matcher_t.get_matching_blocks():
+      for k in range(size):
+          base_to_theirs[a + k] = b + k
+
+  remove_t = set()
+  insertions = []
+
+  matcher_o = difflib.SequenceMatcher(None, B, O)
+  for tag, i1, i2, j1, j2 in matcher_o.get_opcodes():
+      if tag == "insert":
+          insertions.append((i1, O[j1:j2]))
+      elif tag == "delete":
+          for bi in range(i1, i2):
+              ti = base_to_theirs.get(bi)
+              if ti is not None:
+                  remove_t.add(ti)
+
+  insert_at = defaultdict(list)
+  for i, block in insertions:
+      if not block:
+          continue
+      already = False
+      n = len(block)
+      if n <= len(T):
+          for k in range(len(T) - n + 1):
+              if T[k:k + n] == block:
+                  already = True
+                  break
+      if already:
+          continue
+      anchor = None
+      for j in range(i, len(B)):
+          if j in base_to_theirs:
+              anchor = base_to_theirs[j]
+              break
+      if anchor is None:
+          for j in range(i - 1, -1, -1):
+              if j in base_to_theirs:
+                  anchor = base_to_theirs[j] + 1
+                  break
+      if anchor is None:
+          anchor = len(T)
+      insert_at[anchor].append(block)
+
+  result = []
+  for idx, line in enumerate(T):
+      if idx in insert_at:
+          for block in insert_at[idx]:
+              result.extend(block)
+      if idx not in remove_t:
+          result.append(line)
+  if len(T) in insert_at:
+      for block in insert_at[len(T)]:
+          result.extend(block)
+
+  with open(path, "wb") as f:
+      f.write(b"".join(result))
+  PY
+    git add -A -- "$path"
+  done < <(git diff --name-only --diff-filter=U -z)
+
+  git commit --no-edit -m "Merge {upstream_remote}/{upstream_branch} resolving dependency file conflicts"
+steps: null
+postconditions:
+- name: merge_committed
+  description: the upstream branch is an ancestor and no merge is still in progress
+  probe: |-
+    ! git rev-parse -q --verify MERGE_HEAD &&
+    git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_entries
+  description: the index has no unmerged entries
+  probe: '! git ls-files -u -z | tr ''\0'' ''\n'' | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the working tree is clean after the merge
+  probe: '! git status --porcelain -z | tr ''\0'' ''\n'' | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_conflict_markers
+  description: no conflict markers remain in tracked files
+  probe: '! git grep -n -E ''^(<<<<<<<|>>>>>>>)( |$)'' -- .'
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: Catch up with upstream without losing what either side added,
+    or reviving what either side removed. Start from upstream's dependency file and
+    add back what I added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Catch up with upstream without losing what either side added, or reviving
+    what either side removed. Start from upstream's dependency file and add back what
+    I added./seed-5-lockfile_conflict-29977
+  fault: lockfile_conflict
+status: candidate

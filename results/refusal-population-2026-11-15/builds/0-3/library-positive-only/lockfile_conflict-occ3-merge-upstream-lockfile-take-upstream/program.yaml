@@ -1,0 +1,173 @@
+id: lockfile_conflict-occ3-merge-upstream-lockfile-take-upstream
+intent: Catch up with upstream without losing either side's added dependencies or
+  reviving removed ones; start from upstream's dependency file and re-add local package
+  entries.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_configured
+  description: the named upstream remote exists
+  probe: git remote | grep -Fxq '{upstream_remote}'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_present
+  description: the upstream branch has a remote-tracking ref
+  probe: git rev-parse --verify --quiet '{upstream_remote}/{upstream_branch}'
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: there are no uncommitted changes to merge around
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: no merge is already in progress
+  probe: test -z "$(git rev-parse -q --verify MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_ahead
+  description: local branch has at least one commit not in upstream
+  probe: git rev-list --count '{upstream_remote}/{upstream_branch}..HEAD'
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: upstream_ahead
+  description: upstream has at least one commit not in local
+  probe: git rev-list --count 'HEAD..{upstream_remote}/{upstream_branch}'
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: deps_lock_tracked
+  description: deps.lock is tracked in the repository
+  probe: git ls-files --error-unmatch deps.lock
+  expect_exit: 0
+  expect_pattern: null
+- name: deps_lock_changed_locally
+  description: local branch changed deps.lock since the merge base
+  probe: '! git diff --quiet "$(git merge-base HEAD ''{upstream_remote}/{upstream_branch}'')"
+    HEAD -- deps.lock'
+  expect_exit: 0
+  expect_pattern: null
+- name: deps_lock_changed_upstream
+  description: upstream changed deps.lock since the merge base
+  probe: '! git diff --quiet "$(git merge-base HEAD ''{upstream_remote}/{upstream_branch}'')"
+    ''{upstream_remote}/{upstream_branch}'' -- deps.lock'
+  expect_exit: 0
+  expect_pattern: null
+- name: only_deps_lock_changed_by_both
+  description: deps.lock is the only path both sides changed since the merge base
+  probe: |-
+    base=$(git merge-base HEAD "{upstream_remote}/{upstream_branch}")
+    test "$(comm -12 \
+      <(git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$base" "{upstream_remote}/{upstream_branch}" | tr '\0' '\n' | sort))" = deps.lock
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch "{upstream_remote}"
+  git merge --no-ff --no-edit "{upstream_remote}/{upstream_branch}" || true
+
+  if git ls-files -u -- deps.lock | grep -q .; then
+    base=$(git merge-base HEAD "{upstream_remote}/{upstream_branch}")
+    tmp=$(mktemp)
+    added=$(mktemp)
+    removed=$(mktemp)
+    git show "{upstream_remote}/{upstream_branch}:deps.lock" > "$tmp"
+    git diff --no-color -U0 "$base" HEAD -- deps.lock \
+      | sed -n 's/^+\([^+].*\)$/\1/p' \
+      | grep -E '^[[:space:]]*"[^"]+"[[:space:]]*,?[[:space:]]*$' > "$added" || true
+    git diff --no-color -U0 "$base" HEAD -- deps.lock \
+      | sed -n 's/^-\([^-].*\)$/\1/p' \
+      | grep -E '^[[:space:]]*"[^"]+"[[:space:]]*,?[[:space:]]*$' > "$removed" || true
+    awk -v added_file="$added" -v removed_file="$removed" '
+    BEGIN {
+      while ((getline line < removed_file) > 0) removed[line] = 1
+      while ((getline line < added_file) > 0) { n++; additions[n] = line; is_added[line] = 1 }
+    }
+    {
+      if ($0 in removed) next
+      if (($0 in is_added) && ($0 in printed)) next
+      if (!inserted && $0 ~ /^[[:space:]]*\][[:space:]]*$/) {
+        for (i = 1; i <= n; i++) {
+          if (!(additions[i] in printed)) {
+            print additions[i]
+            printed[additions[i]] = 1
+          }
+        }
+        inserted = 1
+      }
+      print $0
+      printed[$0] = 1
+      if ($0 ~ /^[[:space:]]*packages[[:space:]]*=[[:space:]]*\[[[:space:]]*$/) {
+        for (i = 1; i <= n; i++) {
+          if (!(additions[i] in printed)) {
+            print additions[i]
+            printed[additions[i]] = 1
+          }
+        }
+        inserted = 1
+      }
+    }
+    ' "$tmp" > "$tmp.new"
+    mv "$tmp.new" deps.lock
+    rm -f "$tmp" "$added" "$removed"
+    git add deps.lock
+    git commit --no-edit
+  fi
+steps: null
+postconditions:
+- name: upstream_is_ancestor
+  description: HEAD includes upstream's tip
+  probe: git merge-base --is-ancestor '{upstream_remote}/{upstream_branch}' HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: every conflicted path has been resolved
+  probe: test -z "$(git ls-files -u)"
+  expect_exit: 0
+  expect_pattern: null
+- name: deps_lock_no_conflict_markers
+  description: deps.lock contains no conflict markers
+  probe: test -z "$(git grep -E '^(<<<<<<<|=======|>>>>>>>)' HEAD -- deps.lock)"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the merge resolution was committed
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_package_additions_kept
+  description: package entries added locally survive the merge
+  probe: |-
+    base=$(git merge-base HEAD^1 HEAD^2)
+    git diff --no-color -U0 "$base" HEAD^1 -- deps.lock \
+      | sed -n 's/^+\([^+].*\)$/\1/p' \
+      | grep -E '^[[:space:]]*"[^"]+"[[:space:]]*,?[[:space:]]*$' \
+      | while IFS= read -r line; do
+          grep -Fqx -- "$line" <(git show HEAD:deps.lock) || exit 1
+        done
+  expect_exit: 0
+  expect_pattern: null
+- name: local_package_removals_kept
+  description: package entries removed locally are not revived
+  probe: |-
+    base=$(git merge-base HEAD^1 HEAD^2)
+    git diff --no-color -U0 "$base" HEAD^1 -- deps.lock \
+      | sed -n 's/^-\([^-].*\)$/\1/p' \
+      | grep -E '^[[:space:]]*"[^"]+"[[:space:]]*,?[[:space:]]*$' \
+      | while IFS= read -r line; do
+          ! grep -Fqx -- "$line" <(git show HEAD:deps.lock) || exit 1
+        done
+  expect_exit: 0
+  expect_pattern: null
+variant: take_upstream
+provenance:
+  compiled_from_task: Catch up with upstream without losing what either side added,
+    or reviving what either side removed. Start from upstream's dependency file and
+    add back what I added.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Catch up with upstream without losing what either side added, or reviving
+    what either side removed. Start from upstream's dependency file and add back what
+    I added./seed-5-lockfile_conflict-28874
+  fault: lockfile_conflict
+status: admitted

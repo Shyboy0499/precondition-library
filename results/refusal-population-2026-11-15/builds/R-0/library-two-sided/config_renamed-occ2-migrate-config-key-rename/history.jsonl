@@ -1,0 +1,2 @@
+{"episode_id": "Migrate my settings to the current key names. Rename the old key in the project's settings and keep its value./seed-0-config_renamed-28615", "from": null, "program_id": "config_renamed-occ2-migrate-config-key-rename", "to": "candidate"}
+{"episode_id": "config_renamed/seed-0/occurrence-2", "from": "candidate", "program_id": "config_renamed-occ2-migrate-config-key-rename", "to": "admitted"}

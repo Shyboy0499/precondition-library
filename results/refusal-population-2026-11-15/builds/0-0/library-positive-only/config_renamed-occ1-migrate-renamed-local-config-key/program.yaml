@@ -1,0 +1,210 @@
+id: config_renamed-occ1-migrate-renamed-local-config-key
+intent: Rename an old configuration key in the user's ignored local override file
+  according to config/renames.conf, leaving the override file untracked.
+parameters:
+- work_dir
+preconditions:
+- name: tracked_worktree_clean
+  description: no tracked file is modified or staged, so the rewrite is confined to
+    ignored local files
+  probe: |-
+    git rev-parse --verify HEAD >/dev/null &&
+    git diff --quiet &&
+    git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+- name: work_dir_has_renames_file
+  description: the repository contains the rename mapping file under the working directory
+  probe: test -f "{work_dir}/config/renames.conf"
+  expect_exit: 0
+  expect_pattern: null
+- name: renames_file_has_mapping
+  description: config/renames.conf contains at least one non-comment old = new mapping
+  probe: |-
+    awk '
+      { line=$0; sub(/#.*/, "", line); if (line ~ /^[[:space:]]*$/) next; if (index(line, "=") > 0) { found=1; exit } }
+      END { exit(found ? 0 : 1) }
+    ' config/renames.conf
+  expect_exit: 0
+  expect_pattern: null
+- name: stale_key_in_ignored_config
+  description: at least one ignored untracked config file uses an old key from config/renames.conf
+  probe: |-
+    found=0
+    while IFS= read -r -d '' f; do
+      [ -n "$f" ] || continue
+      [ "$f" = "config/renames.conf" ] && continue
+      [ -f "$f" ] || continue
+      if awk '
+        function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
+        NR == FNR {
+          line = $0
+          sub(/#.*/, "", line)
+          if (line ~ /^[[:space:]]*$/) next
+          eq = index(line, "=")
+          if (eq == 0) next
+          old = trim(substr(line, 1, eq - 1))
+          new = trim(substr(line, eq + 1))
+          if (old != "" && new != "" && old != new) map[old] = new
+          next
+        }
+        {
+          eq = index($0, "=")
+          if (eq == 0) next
+          left = substr($0, 1, eq - 1)
+          key = trim(left)
+          if (key in map) { found = 1; exit 0 }
+        }
+        END { exit(found ? 0 : 1) }
+      ' config/renames.conf "$f"; then
+        found=1
+        break
+      fi
+    done < <(git ls-files --others --ignored --exclude-standard -z -- 'config/*.conf')
+    [ "$found" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  set -eu
+
+  cd "{work_dir}"
+
+  renames=config/renames.conf
+  [ -f "$renames" ] || exit 1
+
+  tmp=$(mktemp)
+  trap 'rm -f "$tmp"' EXIT
+
+  while IFS= read -r -d '' f; do
+    [ -n "$f" ] || continue
+    [ "$f" = "config/renames.conf" ] && continue
+    [ -f "$f" ] || continue
+
+    if awk '
+      function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
+      NR == FNR {
+        line = $0
+        sub(/#.*/, "", line)
+        if (line ~ /^[[:space:]]*$/) next
+        eq = index(line, "=")
+        if (eq == 0) next
+        old = trim(substr(line, 1, eq - 1))
+        new = trim(substr(line, eq + 1))
+        if (old != "" && new != "" && old != new) map[old] = new
+        next
+      }
+      {
+        eq = index($0, "=")
+        if (eq == 0) next
+        left = substr($0, 1, eq - 1)
+        key = trim(left)
+        if (key in map) { found = 1; exit 0 }
+      }
+      END { exit(found ? 0 : 1) }
+    ' "$renames" "$f"; then
+      awk '
+        function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
+        NR == FNR {
+          line = $0
+          sub(/#.*/, "", line)
+          if (line ~ /^[[:space:]]*$/) next
+          eq = index(line, "=")
+          if (eq == 0) next
+          old = trim(substr(line, 1, eq - 1))
+          new = trim(substr(line, eq + 1))
+          if (old != "" && new != "" && old != new) map[old] = new
+          next
+        }
+        {
+          eq = index($0, "=")
+          if (eq == 0) { print; next }
+          left = substr($0, 1, eq - 1)
+          right = substr($0, eq)
+          match(left, /^[[:space:]]*/)
+          lead = substr(left, RSTART, RLENGTH)
+          keypart = substr(left, RLENGTH + 1)
+          key = keypart
+          sub(/[[:space:]]+$/, "", key)
+          if (key in map) {
+            trail = substr(keypart, length(key) + 1)
+            $0 = lead map[key] trail right
+          }
+          print
+        }
+      ' "$renames" "$f" > "$tmp"
+      cat "$tmp" > "$f"
+    fi
+  done < <(git ls-files --others --ignored --exclude-standard -z -- 'config/*.conf')
+steps: null
+postconditions:
+- name: no_stale_keys_in_ignored_config
+  description: no ignored config file still contains an old key from config/renames.conf
+  probe: |-
+    found=0
+    while IFS= read -r -d '' f; do
+      [ -n "$f" ] || continue
+      [ "$f" = "config/renames.conf" ] && continue
+      [ -f "$f" ] || continue
+      if awk '
+        function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
+        NR == FNR {
+          line = $0
+          sub(/#.*/, "", line)
+          if (line ~ /^[[:space:]]*$/) next
+          eq = index(line, "=")
+          if (eq == 0) next
+          old = trim(substr(line, 1, eq - 1))
+          new = trim(substr(line, eq + 1))
+          if (old != "" && new != "" && old != new) map[old] = new
+          next
+        }
+        {
+          eq = index($0, "=")
+          if (eq == 0) next
+          left = substr($0, 1, eq - 1)
+          key = trim(left)
+          if (key in map) { found = 1; exit 0 }
+        }
+        END { exit(found ? 0 : 1) }
+      ' config/renames.conf "$f"; then
+        found=1
+        break
+      fi
+    done < <(git ls-files --others --ignored --exclude-standard -z -- 'config/*.conf')
+    [ "$found" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+- name: no_tracked_changes
+  description: the rewrite left every tracked file untouched and staged nothing
+  probe: |-
+    git diff --quiet &&
+    git diff --cached --quiet
+  expect_exit: 0
+  expect_pattern: null
+- name: ignored_config_files_remain_untracked
+  description: ignored config files still exist, are ignored, and are not tracked
+  probe: |-
+    found=0
+    while IFS= read -r -d '' f; do
+      [ -n "$f" ] || continue
+      [ "$f" = "config/renames.conf" ] && continue
+      git check-ignore -q -- "$f" || exit 1
+      if git ls-files --error-unmatch -- "$f" >/dev/null 2>&1; then
+        exit 1
+      fi
+      found=1
+    done < <(git ls-files --others --ignored --exclude-standard -z -- 'config/*.conf')
+    [ "$found" -eq 1 ]
+  expect_exit: 0
+  expect_pattern: null
+variant: migrate_local
+provenance:
+  compiled_from_task: Some setting in my config has been renamed upstream. Sort the
+    config out. Rename the old key in my own override file, and keep that file out
+    of git.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Some setting in my config has been renamed upstream. Sort the config
+    out. Rename the old key in my own override file, and keep that file out of git./seed-12-config_renamed-25586
+  fault: config_renamed
+status: admitted

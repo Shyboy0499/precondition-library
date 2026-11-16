@@ -1,0 +1,240 @@
+id: config_renamed-occ3-drop-deprecated-config-key
+intent: Delete lines that set a deprecated config key when the replacement key is
+  already set in the same tracked config file, preserving behavior, and commit the
+  change.
+parameters: []
+preconditions:
+- name: has_rename_declaration
+  description: a tracked key=key mapping file declares old-to-new config key renames
+  probe: |-
+    set -uo pipefail
+    KEY='[A-Za-z_][A-Za-z0-9_]*'
+    is_decl() {
+      local f="$1" base bad
+      [ -f "$f" ] || return 1
+      grep -qE "^[[:space:]]*${KEY}[[:space:]]*=[[:space:]]*${KEY}[[:space:]]*(#.*)?$" "$f" || return 1
+      bad=$(grep -vE '^[[:space:]]*(#|$)' "$f" | grep -vcE "^[[:space:]]*${KEY}[[:space:]]*=[[:space:]]*${KEY}[[:space:]]*(#.*)?$" || true)
+      [ "${bad:-1}" -eq 0 ] || return 1
+      base=$(basename "$f")
+      if printf '%s' "$base" | grep -qiE 'renam|deprecat|alias'; then
+        return 0
+      fi
+      grep -qiE '^#.*renam' "$f"
+    }
+    found=$(git ls-files -z | tr '\0' '\n' | while IFS= read -r f; do
+      is_decl "$f" || continue
+      printf '%s\n' "$f"
+    done || true)
+    if [ -z "$found" ]; then
+      exit 1
+    fi
+    printf '%s\n' "$found"
+  expect_exit: 0
+  expect_pattern: null
+- name: deprecated_key_set_alongside_new_name
+  description: a tracked non-declaration config file sets both a deprecated key and
+    its replacement
+  probe: |-
+    set -uo pipefail
+    KEY='[A-Za-z_][A-Za-z0-9_]*'
+    is_decl() {
+      local f="$1" base bad
+      [ -f "$f" ] || return 1
+      grep -qE "^[[:space:]]*${KEY}[[:space:]]*=[[:space:]]*${KEY}[[:space:]]*(#.*)?$" "$f" || return 1
+      bad=$(grep -vE '^[[:space:]]*(#|$)' "$f" | grep -vcE "^[[:space:]]*${KEY}[[:space:]]*=[[:space:]]*${KEY}[[:space:]]*(#.*)?$" || true)
+      [ "${bad:-1}" -eq 0 ] || return 1
+      base=$(basename "$f")
+      if printf '%s' "$base" | grep -qiE 'renam|deprecat|alias'; then
+        return 0
+      fi
+      grep -qiE '^#.*renam' "$f"
+    }
+    pairs=$(git ls-files -z | tr '\0' '\n' | while IFS= read -r f; do
+      is_decl "$f" || continue
+      grep -E "^[[:space:]]*${KEY}[[:space:]]*=[[:space:]]*${KEY}[[:space:]]*(#.*)?$" "$f" \
+        | sed -E "s/^[[:space:]]*(${KEY})[[:space:]]*=[[:space:]]*(${KEY})[[:space:]]*(#.*)?$/\1 \2/"
+    done || true)
+    if [ -z "$pairs" ]; then
+      exit 1
+    fi
+    out=$(git ls-files -z | tr '\0' '\n' | while IFS= read -r f; do
+      [ -f "$f" ] || continue
+      if is_decl "$f"; then
+        continue
+      fi
+      keys=$(grep -oE "^[[:space:]]*${KEY}" "$f" 2>/dev/null | sed -E 's/^[[:space:]]*//' || true)
+      [ -n "$keys" ] || continue
+      while read -r old new; do
+        [ -n "$old" ] || continue
+        [ "$old" != "$new" ] || continue
+        if printf '%s\n' "$keys" | grep -qxF -- "$old" && printf '%s\n' "$keys" | grep -qxF -- "$new"; then
+          printf '%s: %s -> %s\n' "$f" "$old" "$new"
+        fi
+      done <<< "$pairs"
+    done || true)
+    if [ -z "$out" ]; then
+      exit 1
+    fi
+    printf '%s\n' "$out"
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  set -euo pipefail
+  KEY='[A-Za-z_][A-Za-z0-9_]*'
+  is_decl() {
+    local f="$1" base bad
+    [ -f "$f" ] || return 1
+    grep -qE "^[[:space:]]*${KEY}[[:space:]]*=[[:space:]]*${KEY}[[:space:]]*(#.*)?$" "$f" || return 1
+    bad=$(grep -vE '^[[:space:]]*(#|$)' "$f" | grep -vcE "^[[:space:]]*${KEY}[[:space:]]*=[[:space:]]*${KEY}[[:space:]]*(#.*)?$" || true)
+    [ "${bad:-1}" -eq 0 ] || return 1
+    base=$(basename "$f")
+    if printf '%s' "$base" | grep -qiE 'renam|deprecat|alias'; then
+      return 0
+    fi
+    grep -qiE '^#.*renam' "$f"
+  }
+  pairs=$(git ls-files -z | tr '\0' '\n' | while IFS= read -r f; do
+    is_decl "$f" || continue
+    grep -E "^[[:space:]]*${KEY}[[:space:]]*=[[:space:]]*${KEY}[[:space:]]*(#.*)?$" "$f" \
+      | sed -E "s/^[[:space:]]*(${KEY})[[:space:]]*=[[:space:]]*(${KEY})[[:space:]]*(#.*)?$/\1 \2/"
+  done || true)
+  if [ -z "$pairs" ]; then
+    echo "no rename declaration found" >&2
+    exit 1
+  fi
+  changed=0
+  changed_files=()
+  while IFS= read -r f; do
+    [ -f "$f" ] || continue
+    if is_decl "$f"; then
+      continue
+    fi
+    keys=$(grep -oE "^[[:space:]]*${KEY}" "$f" 2>/dev/null | sed -E 's/^[[:space:]]*//' || true)
+    [ -n "$keys" ] || continue
+    while read -r old new; do
+      [ -n "$old" ] || continue
+      [ "$old" != "$new" ] || continue
+      if printf '%s\n' "$keys" | grep -qxF -- "$old" && printf '%s\n' "$keys" | grep -qxF -- "$new"; then
+        sed -i -E "/^[[:space:]]*${old}[[:space:]]*=/d" "$f"
+        changed=1
+        changed_files+=("$f")
+      fi
+    done <<< "$pairs"
+  done < <(git ls-files -z | tr '\0' '\n')
+  if [ "$changed" -eq 0 ]; then
+    echo "no deprecated keys to drop" >&2
+    exit 1
+  fi
+  git commit -m "fix: drop deprecated config key aliases" -- "${changed_files[@]}"
+steps: null
+postconditions:
+- name: no_deprecated_keys_remain
+  description: no tracked config file still sets a deprecated key whose replacement
+    is also set
+  probe: |-
+    set -uo pipefail
+    KEY='[A-Za-z_][A-Za-z0-9_]*'
+    is_decl() {
+      local f="$1" base bad
+      [ -f "$f" ] || return 1
+      grep -qE "^[[:space:]]*${KEY}[[:space:]]*=[[:space:]]*${KEY}[[:space:]]*(#.*)?$" "$f" || return 1
+      bad=$(grep -vE '^[[:space:]]*(#|$)' "$f" | grep -vcE "^[[:space:]]*${KEY}[[:space:]]*=[[:space:]]*${KEY}[[:space:]]*(#.*)?$" || true)
+      [ "${bad:-1}" -eq 0 ] || return 1
+      base=$(basename "$f")
+      if printf '%s' "$base" | grep -qiE 'renam|deprecat|alias'; then
+        return 0
+      fi
+      grep -qiE '^#.*renam' "$f"
+    }
+    pairs=$(git ls-files -z | tr '\0' '\n' | while IFS= read -r f; do
+      is_decl "$f" || continue
+      grep -E "^[[:space:]]*${KEY}[[:space:]]*=[[:space:]]*${KEY}[[:space:]]*(#.*)?$" "$f" \
+        | sed -E "s/^[[:space:]]*(${KEY})[[:space:]]*=[[:space:]]*(${KEY})[[:space:]]*(#.*)?$/\1 \2/"
+    done || true)
+    if [ -z "$pairs" ]; then
+      exit 1
+    fi
+    out=$(git ls-files -z | tr '\0' '\n' | while IFS= read -r f; do
+      [ -f "$f" ] || continue
+      if is_decl "$f"; then
+        continue
+      fi
+      keys=$(grep -oE "^[[:space:]]*${KEY}" "$f" 2>/dev/null | sed -E 's/^[[:space:]]*//' || true)
+      [ -n "$keys" ] || continue
+      while read -r old new; do
+        [ -n "$old" ] || continue
+        [ "$old" != "$new" ] || continue
+        if printf '%s\n' "$keys" | grep -qxF -- "$old" && printf '%s\n' "$keys" | grep -qxF -- "$new"; then
+          printf '%s: %s -> %s\n' "$f" "$old" "$new"
+        fi
+      done <<< "$pairs"
+    done || true)
+    if [ -n "$out" ]; then
+      printf '%s\n' "$out"
+      exit 1
+    fi
+    exit 0
+  expect_exit: 0
+  expect_pattern: null
+- name: replacement_keys_still_set
+  description: each file that had an old key with its replacement still sets the replacement
+    in HEAD
+  probe: |-
+    set -uo pipefail
+    KEY='[A-Za-z_][A-Za-z0-9_]*'
+    is_decl() {
+      local f="$1" base bad
+      [ -f "$f" ] || return 1
+      grep -qE "^[[:space:]]*${KEY}[[:space:]]*=[[:space:]]*${KEY}[[:space:]]*(#.*)?$" "$f" || return 1
+      bad=$(grep -vE '^[[:space:]]*(#|$)' "$f" | grep -vcE "^[[:space:]]*${KEY}[[:space:]]*=[[:space:]]*${KEY}[[:space:]]*(#.*)?$" || true)
+      [ "${bad:-1}" -eq 0 ] || return 1
+      base=$(basename "$f")
+      if printf '%s' "$base" | grep -qiE 'renam|deprecat|alias'; then
+        return 0
+      fi
+      grep -qiE '^#.*renam' "$f"
+    }
+    pairs=$(git ls-files -z | tr '\0' '\n' | while IFS= read -r f; do
+      is_decl "$f" || continue
+      grep -E "^[[:space:]]*${KEY}[[:space:]]*=[[:space:]]*${KEY}[[:space:]]*(#.*)?$" "$f" \
+        | sed -E "s/^[[:space:]]*(${KEY})[[:space:]]*=[[:space:]]*(${KEY})[[:space:]]*(#.*)?$/\1 \2/"
+    done || true)
+    if [ -z "$pairs" ]; then
+      exit 1
+    fi
+    if ! git rev-parse -q --verify HEAD~1 >/dev/null 2>&1; then
+      exit 0
+    fi
+    if [ -z "$(git diff --name-only HEAD~1 HEAD)" ]; then
+      exit 1
+    fi
+    mapfile -t changed < <(git diff --name-only -z HEAD~1 HEAD | tr '\0' '\n')
+    missing=0
+    for f in "${changed[@]}"; do
+      [ -n "$f" ] || continue
+      while read -r old new; do
+        [ -n "$old" ] || continue
+        [ "$old" != "$new" ] || continue
+        if git show "HEAD~1:$f" 2>/dev/null | grep -qE "^[[:space:]]*${old}[[:space:]]*=" && git show "HEAD~1:$f" 2>/dev/null | grep -qE "^[[:space:]]*${new}[[:space:]]*="; then
+          if ! git show "HEAD:$f" 2>/dev/null | grep -qE "^[[:space:]]*${new}[[:space:]]*="; then
+            printf 'missing %s in %s\n' "$new" "$f"
+            missing=1
+          fi
+        fi
+      done <<< "$pairs"
+    done
+    [ "$missing" -eq 0 ]
+  expect_exit: 0
+  expect_pattern: null
+variant: drop_old
+provenance:
+  compiled_from_task: The app keeps warning that my config uses old setting names.
+    Make the warning go away without changing what the settings do. The new name is
+    already set too, so delete the old key's line and keep the new one.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: The app keeps warning that my config uses old setting names. Make the
+    warning go away without changing what the settings do. The new name is already
+    set too, so delete the old key's line and keep the new one./seed-23-config_renamed-28874
+  fault: config_renamed
+status: admitted

@@ -1,0 +1,54 @@
+id: submodule_moved-occ1-init-submodule-pin
+intent: Initialise the repository's declared submodule and check it out at the commit
+  recorded by the current upstream-matching tree.
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: submodule_gitlink_present
+  description: HEAD records a gitlink at the declared submodule path
+  probe: git ls-tree HEAD -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: ^160000 commit [0-9a-f]{40}[[:space:]]
+- name: submodule_declared_in_gitmodules
+  description: .gitmodules declares the submodule path
+  probe: git config --file .gitmodules --get-regexp '^submodule\..*\.path$' | grep
+    -qF -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: null
+- name: pin_matches_upstream
+  description: the gitlink at HEAD matches the gitlink at upstream
+  probe: test "$(git rev-parse "HEAD:{submodule_path}")" = "$(git rev-parse "{upstream_remote}/{upstream_branch}:{submodule_path}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_not_initialised
+  description: the submodule has not yet been initialised
+  probe: git submodule status -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: ^-
+body: |
+  git submodule update --init -- "{submodule_path}"
+steps: null
+postconditions:
+- name: submodule_initialised_at_recorded_commit
+  description: the submodule is checked out at the commit recorded in HEAD
+  probe: test "$(git -C "{submodule_path}" rev-parse HEAD)" = "$(git rev-parse "HEAD:{submodule_path}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_status_clean
+  description: git submodule status reports an initialised submodule at the recorded
+    commit
+  probe: git submodule status -- "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: ^ [0-9a-f]{40}[[:space:]]
+variant: init
+provenance:
+  compiled_from_task: Get this repo's nested dependency consistent with upstream.
+    Initialise the nested repository and check it out.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this repo's nested dependency consistent with upstream. Initialise
+    the nested repository and check it out./seed-5-submodule_moved-27083
+  fault: submodule_moved
+status: admitted

@@ -1,0 +1,2 @@
+{"episode_id": "I am in the middle of something and upstream moved on. Sort it out without losing my edits. Stash my uncommitted work, update the branch, then put my work back./seed-10-dirty_tree-25586", "from": null, "program_id": "dirty_tree-occ3-stash-update-pop", "to": "candidate"}
+{"episode_id": "I am in the middle of something and upstream moved on. Sort it out without losing my edits. Stash my uncommitted work, update the branch, then put my work back./seed-10-dirty_tree-25586", "from": "candidate", "program_id": "dirty_tree-occ3-stash-update-pop", "to": "admitted"}

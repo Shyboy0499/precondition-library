@@ -1,0 +1,2 @@
+{"episode_id": "A nested repository in this project needs bringing into line. Remove the nested checkout, the way upstream did./seed-8-submodule_moved-214", "from": null, "program_id": "submodule_moved-occ2-remove-nested-checkout", "to": "candidate"}
+{"episode_id": "submodule_moved/seed-8/occurrence-2", "from": "candidate", "program_id": "submodule_moved-occ2-remove-nested-checkout", "to": "admitted"}

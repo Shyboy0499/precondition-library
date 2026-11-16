@@ -1,0 +1,76 @@
+id: branch_renamed-occ2-rename-branch-follow-upstream
+intent: Rename the local branch to the upstream branch name, set it to track the upstream
+  remote-tracking branch, and fast-forward to upstream.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_remote_configured
+  description: the named upstream remote exists
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: on_a_different_local_branch
+  description: HEAD is attached to a local branch whose name differs from the upstream
+    branch name
+  probe: current=$(git symbolic-ref --short HEAD) && test -n "$current" && test "$current"
+    != "{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: new_branch_name_is_free
+  description: no local branch already uses the upstream branch name
+  probe: test -z "$(git for-each-ref --format='%(refname)' refs/heads/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_exists
+  description: the upstream branch is present as a remote-tracking ref
+  probe: git show-ref --verify --quiet refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: fast_forward_possible
+  description: HEAD is an ancestor of the upstream branch, so it can be fast-forwarded
+  probe: git merge-base --is-ancestor HEAD refs/remotes/{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the index and working tree have no changes
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch --prune {upstream_remote}
+  git branch -m {upstream_branch}
+  git branch --set-upstream-to={upstream_remote}/{upstream_branch} {upstream_branch}
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: on_upstream_branch
+  description: HEAD is attached to the branch named after the upstream branch
+  probe: git symbolic-ref --short HEAD
+  expect_exit: 0
+  expect_pattern: ^{upstream_branch}$
+- name: tracks_upstream_branch
+  description: the local branch's upstream is the upstream remote-tracking branch
+  probe: git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}'
+  expect_exit: 0
+  expect_pattern: ^{upstream_remote}/{upstream_branch}$
+- name: matches_upstream_head
+  description: the local branch points at the same commit as the upstream branch
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse refs/remotes/{upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean_after
+  description: the index and working tree remain clean
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: I think upstream renamed things. Get this fork following it
+    again. Rename my branch to upstream's new name and track it.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: I think upstream renamed things. Get this fork following it again. Rename
+    my branch to upstream's new name and track it./seed-0-branch_renamed-19837
+  fault: branch_renamed
+status: admitted

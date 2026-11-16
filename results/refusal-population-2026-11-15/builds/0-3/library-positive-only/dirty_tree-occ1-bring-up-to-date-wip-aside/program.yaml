@@ -1,0 +1,103 @@
+id: dirty_tree-occ1-bring-up-to-date-wip-aside
+intent: Fast-forward the current branch to the upstream tracking ref while preserving
+  every piece of local work in progress as an untracked `<path>.local` copy beside
+  the updated upstream files.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: upstream_tracking_ref_exists
+  description: the upstream remote-tracking ref the body merges is already present
+    locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: behind_upstream
+  description: HEAD is strictly behind the upstream tip, so an update is due
+  probe: test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})"
+    -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: fast_forwardable
+  description: the branch has no commits the upstream tip lacks, so the update is
+    a fast-forward
+  probe: test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)"
+    -eq 0
+  expect_exit: 0
+  expect_pattern: null
+- name: work_in_progress_present
+  description: the worktree holds uncommitted tracked changes or untracked files that
+    must survive
+  probe: '[ -n "$(git diff --name-only -z HEAD)$(git ls-files --others --exclude-standard
+    -z)" ]'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  set -e
+  git fetch {upstream_remote}
+  manifest="$(git rev-parse --git-dir)/wip-aside-manifest"
+  : > "$manifest"
+  tracked="$(mktemp)"
+  untracked="$(mktemp)"
+  git diff --name-only -z HEAD > "$tracked"
+  git ls-files --others --exclude-standard -z > "$untracked"
+  while IFS= read -r -d '' p; do
+    if [ -f "$p" ] || [ -L "$p" ]; then
+      cp -p -- "$p" "$p.local"
+      printf '%s\0%s\0' "$p" "$(git hash-object -- "$p")" >> "$manifest"
+    fi
+  done < "$tracked"
+  while IFS= read -r -d '' p; do
+    if [ -f "$p" ] || [ -L "$p" ]; then
+      cp -p -- "$p" "$p.local"
+      printf '%s\0%s\0' "$p" "$(git hash-object -- "$p")" >> "$manifest"
+    fi
+  done < "$untracked"
+  git reset --hard --quiet HEAD
+  while IFS= read -r -d '' p; do
+    rm -f -- "$p"
+  done < "$untracked"
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+  rm -f -- "$tracked" "$untracked"
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is exactly the upstream tip after the update
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_worktree_clean
+  description: no tracked file differs from HEAD any more
+  probe: git diff --quiet HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: wip_preserved_as_local_copies
+  description: every set-aside path has a `<path>.local` copy whose content matches
+    the work in progress it preserved
+  probe: |-
+    manifest="$(git rev-parse --git-dir)/wip-aside-manifest"
+    while IFS= read -r -d '' p; do
+      IFS= read -r -d '' h
+      [ "$(git hash-object -- "$p.local")" = "$h" ] || exit 1
+    done < "$manifest"
+  expect_exit: 0
+  expect_pattern: null
+- name: only_local_copies_untracked
+  description: the untracked files are exactly the `<path>.local` copies of the work
+    in progress
+  probe: '! git ls-files --others --exclude-standard -z | tr ''\0'' ''\n'' | grep
+    -qv ''\.local$'''
+  expect_exit: 0
+  expect_pattern: null
+variant: aside
+provenance:
+  compiled_from_task: Bring this branch up to date with upstream, but my work in progress
+    must survive. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Bring this branch up to date with upstream, but my work in progress
+    must survive. Keep my unsaved file beside upstream's version, as `<name>.local`,
+    and update./seed-2-dirty_tree-28874
+  fault: dirty_tree
+status: admitted

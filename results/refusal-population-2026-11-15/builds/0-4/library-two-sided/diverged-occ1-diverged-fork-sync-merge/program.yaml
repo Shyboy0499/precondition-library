@@ -1,0 +1,104 @@
+id: diverged-occ1-diverged-fork-sync-merge
+intent: Bring a diverged fork back in sync with upstream by merging upstream into
+  the current branch, preserving both local and upstream history.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: on_a_branch
+  description: HEAD is attached to a local branch, so a merge commit can advance it
+  probe: git symbolic-ref --quiet HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: clean_worktree
+  description: there are no uncommitted, staged, or untracked changes that a merge
+    could clobber
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_exists
+  description: the remote-tracking ref for the upstream branch is already known locally
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}^{commit}
+  expect_exit: 0
+  expect_pattern: null
+- name: local_branch_name_matches_upstream_branch
+  description: the checked-out branch has the same name as the upstream branch being
+    merged
+  probe: test "$(git symbolic-ref --quiet --short HEAD)" = "{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_branch_tracks_upstream_branch
+  description: the current branch is configured to track the remote-tracking branch
+    being merged
+  probe: |-
+    current=$(git symbolic-ref --quiet --short HEAD) || exit 1
+    test "$(git for-each-ref --format='%(upstream:short)' "refs/heads/$current")" = "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: local_branch_matches_remote_default
+  description: the checked-out branch is not an old branch left behind after an upstream
+    default-branch rename
+  probe: |-
+    remote_head=$(git symbolic-ref --quiet --short "refs/remotes/{upstream_remote}/HEAD") || exit 0
+    test "$(printf '%s\n' "$remote_head" | sed 's|^[^/]*/||')" = "$(git symbolic-ref --quiet --short HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_has_new_commits
+  description: upstream carries at least one commit that HEAD does not have
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: local_has_own_commits
+  description: the branch has diverged, carrying commits upstream does not have
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: no_common_lockfile_changes
+  description: no lockfile was modified on both sides, so the merge is not a lockfile-conflict
+    resolution
+  probe: |-
+    mb=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    ! comm -12 \
+      <(git diff --name-only -z "$mb" HEAD | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z "$mb" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) \
+      | grep -Eiq '(^|/)(deps\.lock|package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb|Cargo\.lock|poetry\.lock|Pipfile\.lock|uv\.lock|go\.sum|Gemfile\.lock|composer\.lock|mix\.lock|pubspec\.lock|Podfile\.lock)$'
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  if ! git merge --no-edit {upstream_remote}/{upstream_branch}; then
+    git merge --abort || true
+    exit 1
+  fi
+steps: null
+postconditions:
+- name: upstream_is_ancestor
+  description: the upstream tip is reachable from HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: head_is_a_merge_commit
+  description: HEAD has two parents, recording both histories
+  probe: git rev-list --parents -1 HEAD
+  expect_exit: 0
+  expect_pattern: ^[0-9a-f]+ [0-9a-f]+ [0-9a-f]+$
+- name: first_parent_keeps_local_commits
+  description: the pre-merge branch tip still carries commits upstream does not have
+  probe: git rev-list --count {upstream_remote}/{upstream_branch}..HEAD^1
+  expect_exit: 0
+  expect_pattern: ^[1-9][0-9]*$
+- name: worktree_left_clean
+  description: the merge completed without leaving changes or conflicts behind
+  probe: test -z "$(git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: Get this fork back in sync with upstream without losing my commits.
+    Merge upstream into my branch and keep both histories.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this fork back in sync with upstream without losing my commits.
+    Merge upstream into my branch and keep both histories./seed-4-diverged-4812
+  fault: diverged
+status: admitted

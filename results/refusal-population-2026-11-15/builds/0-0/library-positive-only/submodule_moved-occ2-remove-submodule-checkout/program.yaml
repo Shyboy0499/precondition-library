@@ -1,0 +1,88 @@
+id: submodule_moved-occ2-remove-submodule-checkout
+intent: Make the repository consistent with upstream by fast-forwarding to the upstream
+  branch and removing the submodule checkout that upstream dropped, leaving no submodule
+  entry, no nested checkout, and no leftover files behind.
+parameters:
+- upstream_remote
+- upstream_branch
+- submodule_path
+preconditions:
+- name: submodule_declared_here
+  description: HEAD records a gitlink at {submodule_path}
+  probe: git ls-tree HEAD -- "{submodule_path}" | grep -Eq '^160000 commit '
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ref_present
+  description: the remote-tracking ref for {upstream_remote}/{upstream_branch} exists
+    locally
+  probe: git rev-parse --verify --quiet "{upstream_remote}/{upstream_branch}"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_dropped_submodule
+  description: upstream's tree no longer has an entry at {submodule_path}
+  probe: '! git ls-tree "{upstream_remote}/{upstream_branch}" -- "{submodule_path}"
+    | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: behind_upstream_fast_forwardable
+  description: HEAD is an ancestor of {upstream_remote}/{upstream_branch} and strictly
+    behind it
+  probe: |-
+    git merge-base --is-ancestor HEAD "{upstream_remote}/{upstream_branch}" &&
+      test "$(git rev-list --count HEAD.."{upstream_remote}/{upstream_branch}")" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_checkout_present
+  description: a nested checkout directory exists on disk at {submodule_path}
+  probe: test -d "{submodule_path}"
+  expect_exit: 0
+  expect_pattern: null
+- name: tracked_worktree_clean
+  description: no tracked or staged modifications would block the fast-forward that
+    drops the submodule
+  probe: test -z "$(git status --porcelain --untracked-files=no)"
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch "{upstream_remote}"
+  git merge --ff-only "{upstream_remote}/{upstream_branch}"
+  rm -rf -- "{submodule_path}"
+  d=$(dirname -- "{submodule_path}")
+  while [ "$d" != "." ] && [ -d "$d" ] && [ -z "$(git ls-files -- "$d")" ] && [ -z "$(ls -A -- "$d")" ]; do
+    rmdir -- "$d" || break
+    d=$(dirname -- "$d")
+  done
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is the commit that {upstream_remote}/{upstream_branch} points
+    at
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse "{upstream_remote}/{upstream_branch}")"
+  expect_exit: 0
+  expect_pattern: null
+- name: submodule_entry_removed
+  description: HEAD has no gitlink at {submodule_path}
+  probe: '! git ls-tree HEAD -- "{submodule_path}" | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: nested_checkout_removed
+  description: nothing remains on disk at {submodule_path}
+  probe: '! test -e "{submodule_path}"'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_left_under_submodule
+  description: no untracked files remain under {submodule_path}
+  probe: '! git ls-files --others --exclude-standard -- "{submodule_path}" | grep
+    -q .'
+  expect_exit: 0
+  expect_pattern: null
+variant: remove
+provenance:
+  compiled_from_task: Get this repo's nested dependency consistent with upstream.
+    Remove the nested checkout, the way upstream did.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get this repo's nested dependency consistent with upstream. Remove the
+    nested checkout, the way upstream did./seed-0-submodule_moved-25586
+  fault: submodule_moved
+status: admitted

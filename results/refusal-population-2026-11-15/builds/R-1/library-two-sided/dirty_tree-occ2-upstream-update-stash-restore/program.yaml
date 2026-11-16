@@ -1,0 +1,78 @@
+id: dirty_tree-occ2-upstream-update-stash-restore
+intent: Fetch and fast-forward the current branch to the upstream branch while preserving
+  all uncommitted and untracked work by stashing it first and popping it back afterwards
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: worktree_dirty
+  description: there is uncommitted or untracked work in the tree that must survive
+    the update
+  probe: git status --porcelain -uall | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+- name: no_unmerged_paths
+  description: the index has no conflicted entries, so the work can be stashed and
+    restored cleanly
+  probe: '! git ls-files -u | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: no_prior_stash
+  description: the stash list is empty, so the entry created by the body is the one
+    popped and none is left behind
+  probe: '! git stash list | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_ahead
+  description: the upstream-tracking branch has at least one commit that HEAD does
+    not
+  probe: git rev-list --count HEAD..{upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: ^[1-9]
+- name: fast_forwardable
+  description: HEAD is an ancestor of the upstream-tracking branch, so the update
+    is a fast-forward
+  probe: git merge-base --is-ancestor HEAD {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_collision
+  description: no untracked file sits on a path that the upstream commit changes
+  probe: |-
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git diff --name-only -z HEAD {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git stash push -u -m "wip before upstream update"
+  git fetch {upstream_remote}
+  git merge --ff-only {upstream_remote}/{upstream_branch}
+  git stash pop
+steps: null
+postconditions:
+- name: head_matches_upstream
+  description: HEAD is the same commit as the upstream-tracking branch
+  probe: test "$(git rev-parse HEAD)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: stash_consumed
+  description: the stash created for the update has been popped, leaving none behind
+  probe: '! git stash list | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+- name: work_restored
+  description: the working tree again holds uncommitted work
+  probe: git status --porcelain -uall | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+variant: stash
+provenance:
+  compiled_from_task: Get the latest from upstream here, and keep every change I have
+    not saved yet. Stash my uncommitted work, update the branch, then put my work
+    back.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Get the latest from upstream here, and keep every change I have not
+    saved yet. Stash my uncommitted work, update the branch, then put my work back./seed-5-dirty_tree-8327
+  fault: dirty_tree
+status: admitted

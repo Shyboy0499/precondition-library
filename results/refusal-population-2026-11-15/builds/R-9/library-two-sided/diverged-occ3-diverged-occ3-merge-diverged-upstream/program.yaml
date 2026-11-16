@@ -1,0 +1,132 @@
+id: diverged-occ3-diverged-occ3-merge-diverged-upstream
+intent: Merge the upstream branch into the current branch so both histories are preserved.
+parameters:
+- upstream_remote
+- upstream_branch
+preconditions:
+- name: clean_worktree
+  description: the working tree has no tracked or untracked changes
+  probe: test -z "$(GIT_OPTIONAL_LOCKS=0 git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+- name: head_is_branch
+  description: HEAD is attached to a local branch
+  probe: git symbolic-ref --quiet HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_remote_configured
+  description: the upstream remote is configured
+  probe: git remote get-url {upstream_remote}
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_tracking_ref_present
+  description: the upstream branch has a remote-tracking ref
+  probe: git rev-parse --verify --quiet {upstream_remote}/{upstream_branch}
+  expect_exit: 0
+  expect_pattern: null
+- name: branches_diverged
+  description: the local branch and upstream each have commits the other lacks
+  probe: |-
+    test "$(git rev-list --count {upstream_remote}/{upstream_branch}..HEAD)" -gt 0 &&
+    test "$(git rev-list --count HEAD..{upstream_remote}/{upstream_branch})" -gt 0
+  expect_exit: 0
+  expect_pattern: null
+- name: no_merge_in_progress
+  description: no merge is currently in progress
+  probe: test ! -e "$(git rev-parse --git-path MERGE_HEAD)"
+  expect_exit: 0
+  expect_pattern: null
+- name: upstream_default_branch_matches
+  description: the upstream remote's default branch is the current branch, not a renamed
+    one
+  probe: |-
+    out=$(git ls-remote --symref {upstream_remote} HEAD 2>/dev/null)
+    remote_head=
+    if printf '%s\n' "$out" | grep -qE '^[0-9a-f]+[[:space:]]+HEAD$'; then
+      remote_head=$(printf '%s\n' "$out" | sed -n 's|^ref: refs/heads/\([^[:space:]]*\)[[:space:]]*HEAD$|\1|p' | head -n 1)
+    fi
+    if [ -n "$remote_head" ]; then
+      test "$remote_head" = "$(git symbolic-ref --short HEAD)"
+    fi
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_is_conflict_free
+  description: a trial merge of the two histories produces no content conflicts
+  probe: |-
+    base=$(git merge-base HEAD {upstream_remote}/{upstream_branch}) || exit 1
+    tmp=$(mktemp -d) || exit 1
+    trap 'rm -rf "$tmp"' EXIT
+    git diff --name-only -z "$base" HEAD | tr '\0' '\n' | sort > "$tmp/ours"
+    git diff --name-only -z "$base" {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort > "$tmp/theirs"
+    status=0
+    while IFS= read -r path; do
+      [ -n "$path" ] || continue
+      if ! git cat-file -e "HEAD:$path" 2>/dev/null; then
+        if git cat-file -e "{upstream_remote}/{upstream_branch}:$path" 2>/dev/null; then
+          status=1
+          break
+        fi
+        continue
+      fi
+      if ! git cat-file -e "{upstream_remote}/{upstream_branch}:$path" 2>/dev/null; then
+        status=1
+        break
+      fi
+      if git cat-file -e "$base:$path" 2>/dev/null; then
+        git show "$base:$path" > "$tmp/base" 2>/dev/null || { status=1; break; }
+      else
+        : > "$tmp/base"
+      fi
+      git show "HEAD:$path" > "$tmp/current" 2>/dev/null || { status=1; break; }
+      git show "{upstream_remote}/{upstream_branch}:$path" > "$tmp/other" 2>/dev/null || { status=1; break; }
+      if ! git merge-file -p -q "$tmp/current" "$tmp/base" "$tmp/other" > /dev/null 2>&1; then
+        status=1
+        break
+      fi
+    done < <(comm -12 "$tmp/ours" "$tmp/theirs")
+    exit "$status"
+  expect_exit: 0
+  expect_pattern: null
+- name: no_untracked_collisions
+  description: no untracked file would be overwritten by the upstream tree
+  probe: |-
+    ! comm -12 \
+      <(git ls-files --others --exclude-standard -z | tr '\0' '\n' | sort) \
+      <(git ls-tree -r --name-only -z {upstream_remote}/{upstream_branch} | tr '\0' '\n' | sort) | grep -q .
+  expect_exit: 0
+  expect_pattern: null
+body: |
+  git fetch {upstream_remote}
+  git merge --no-edit {upstream_remote}/{upstream_branch}
+steps: null
+postconditions:
+- name: upstream_is_ancestor
+  description: the upstream tip is contained in HEAD
+  probe: git merge-base --is-ancestor {upstream_remote}/{upstream_branch} HEAD
+  expect_exit: 0
+  expect_pattern: null
+- name: merge_commit_has_second_parent
+  description: HEAD is a merge commit with an upstream parent
+  probe: git rev-parse --verify --quiet HEAD^2
+  expect_exit: 0
+  expect_pattern: null
+- name: second_parent_is_upstream
+  description: the upstream tip is the merge commit's second parent
+  probe: test "$(git rev-parse HEAD^2)" = "$(git rev-parse {upstream_remote}/{upstream_branch})"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: the working tree is clean after the merge
+  probe: test -z "$(GIT_OPTIONAL_LOCKS=0 git status --porcelain)"
+  expect_exit: 0
+  expect_pattern: null
+variant: merge
+provenance:
+  compiled_from_task: This branch and upstream have both changed. Bring it back into
+    line. Merge upstream into my branch and keep both histories.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: This branch and upstream have both changed. Bring it back into line.
+    Merge upstream into my branch and keep both histories./seed-0-diverged-12721
+  fault: diverged
+status: admitted

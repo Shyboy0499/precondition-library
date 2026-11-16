@@ -1,0 +1,225 @@
+id: config_renamed-occ3-config-rename-ignored-key
+intent: Rename keys that were renamed upstream inside the user's own git-ignored config
+  override files, keeping those files out of git.
+parameters: []
+preconditions:
+- name: has_rename_map
+  description: A tracked renames.conf exists and lists at least one old = new key
+    pair.
+  probe: |-
+    map=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1)
+    [ -n "$map" ] || exit 1
+    awk -F= '!/^[[:space:]]*#/ && NF>=2 {k=$1; gsub(/^[[:space:]]+|[[:space:]]+$/,"",k); if (k != "") found=1} END {exit !found}' "$map"
+  expect_exit: 0
+  expect_pattern: null
+- name: has_stale_key_in_ignored_file
+  description: At least one git-ignored file still contains a key that the rename
+    map says was replaced.
+  probe: |-
+    map=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1)
+    [ -n "$map" ] || exit 1
+    files=()
+    while IFS= read -r -d '' f; do
+      [ -f "$f" ] && files+=("$f")
+    done < <(git ls-files --others --ignored --exclude-standard -z)
+    [ ${#files[@]} -gt 0 ] || exit 1
+    awk -v mapfile="$map" '
+      BEGIN {
+        while ((getline line < mapfile) > 0) {
+          sub(/#.*/, "", line)
+          eq = index(line, "=")
+          if (eq == 0) continue
+          old = substr(line, 1, eq - 1)
+          gsub(/^[ \t]+|[ \t]+$/, "", old)
+          if (old != "") oldset[old] = 1
+        }
+        close(mapfile)
+      }
+      {
+        if (match($0, /^[ \t]*[^ \t=]+[ \t]*=/)) {
+          key = substr($0, 1, RLENGTH)
+          sub(/^[ \t]*/, "", key)
+          sub(/[ \t]*=[ \t]*$/, "", key)
+          if (key in oldset) { found = 1; exit }
+        }
+      }
+      END { exit (found ? 0 : 1) }
+    ' "${files[@]}"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_clean
+  description: No tracked modifications and no non-ignored untracked files, so the
+    only files the program touches are ignored ones.
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+body: |-
+  set -e
+
+  map=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1)
+  if [ -z "$map" ]; then
+    echo "no rename map found" >&2
+    exit 1
+  fi
+
+  files=()
+  while IFS= read -r -d '' f; do
+    [ -f "$f" ] && files+=("$f")
+  done < <(git ls-files --others --ignored --exclude-standard -z)
+
+  stale_files=()
+  for f in "${files[@]}"; do
+    if awk -v mapfile="$map" '
+      BEGIN {
+        while ((getline line < mapfile) > 0) {
+          sub(/#.*/, "", line)
+          eq = index(line, "=")
+          if (eq == 0) continue
+          old = substr(line, 1, eq - 1)
+          gsub(/^[ \t]+|[ \t]+$/, "", old)
+          if (old != "") oldset[old] = 1
+        }
+        close(mapfile)
+      }
+      {
+        if (match($0, /^[ \t]*[^ \t=]+[ \t]*=/)) {
+          key = substr($0, 1, RLENGTH)
+          sub(/^[ \t]*/, "", key)
+          sub(/[ \t]*=[ \t]*$/, "", key)
+          if (key in oldset) { found = 1; exit }
+        }
+      }
+      END { exit (found ? 0 : 1) }
+    ' "$f"; then
+      stale_files+=("$f")
+    fi
+  done
+
+  for f in "${stale_files[@]}"; do
+    tmp=$(mktemp "${f}.XXXXXX")
+    awk -v mapfile="$map" '
+      BEGIN {
+        while ((getline line < mapfile) > 0) {
+          sub(/#.*/, "", line)
+          eq = index(line, "=")
+          if (eq == 0) continue
+          old = substr(line, 1, eq - 1)
+          new = substr(line, eq + 1)
+          gsub(/^[ \t]+|[ \t]+$/, "", old)
+          gsub(/^[ \t]+|[ \t]+$/, "", new)
+          if (old != "" && new != "") rename_map[old] = new
+        }
+        close(mapfile)
+      }
+      {
+        if (match($0, /^[ \t]*[^ \t=]+[ \t]*=/)) {
+          head = substr($0, 1, RLENGTH)
+          rest = substr($0, RLENGTH + 1)
+          key = head
+          sub(/^[ \t]*/, "", key)
+          sub(/[ \t]*=[ \t]*$/, "", key)
+          if (key in rename_map) {
+            lead = head
+            sub(/[^ \t].*$/, "", lead)
+            sub(/^[ \t]+/, "", rest)
+            print lead rename_map[key] " = " rest
+            next
+          }
+        }
+        print
+      }
+    ' "$f" > "$tmp"
+    if cmp -s "$f" "$tmp"; then
+      rm -f "$tmp"
+    else
+      cat "$tmp" > "$f"
+      rm -f "$tmp"
+    fi
+  done
+steps: null
+postconditions:
+- name: no_stale_keys_in_ignored_files
+  description: No git-ignored file still uses an old key name from the rename map.
+  probe: |-
+    map=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1)
+    [ -n "$map" ] || exit 1
+    files=()
+    while IFS= read -r -d '' f; do
+      [ -f "$f" ] && files+=("$f")
+    done < <(git ls-files --others --ignored --exclude-standard -z)
+    [ ${#files[@]} -gt 0 ] || exit 0
+    awk -v mapfile="$map" '
+      BEGIN {
+        while ((getline line < mapfile) > 0) {
+          sub(/#.*/, "", line)
+          eq = index(line, "=")
+          if (eq == 0) continue
+          old = substr(line, 1, eq - 1)
+          gsub(/^[ \t]+|[ \t]+$/, "", old)
+          if (old != "") oldset[old] = 1
+        }
+        close(mapfile)
+      }
+      {
+        if (match($0, /^[ \t]*[^ \t=]+[ \t]*=/)) {
+          key = substr($0, 1, RLENGTH)
+          sub(/^[ \t]*/, "", key)
+          sub(/[ \t]*=[ \t]*$/, "", key)
+          if (key in oldset) { stale = 1; exit }
+        }
+      }
+      END { exit (stale ? 1 : 0) }
+    ' "${files[@]}"
+  expect_exit: 0
+  expect_pattern: null
+- name: renamed_keys_present_in_ignored_files
+  description: A git-ignored file now uses a new key name from the rename map.
+  probe: |-
+    map=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)renames\.conf$' | head -n 1)
+    [ -n "$map" ] || exit 1
+    files=()
+    while IFS= read -r -d '' f; do
+      [ -f "$f" ] && files+=("$f")
+    done < <(git ls-files --others --ignored --exclude-standard -z)
+    [ ${#files[@]} -gt 0 ] || exit 1
+    awk -v mapfile="$map" '
+      BEGIN {
+        while ((getline line < mapfile) > 0) {
+          sub(/#.*/, "", line)
+          eq = index(line, "=")
+          if (eq == 0) continue
+          new = substr(line, eq + 1)
+          gsub(/^[ \t]+|[ \t]+$/, "", new)
+          if (new != "") newset[new] = 1
+        }
+        close(mapfile)
+      }
+      {
+        if (match($0, /^[ \t]*[^ \t=]+[ \t]*=/)) {
+          key = substr($0, 1, RLENGTH)
+          sub(/^[ \t]*/, "", key)
+          sub(/[ \t]*=[ \t]*$/, "", key)
+          if (key in newset) { found = 1; exit }
+        }
+      }
+      END { exit (found ? 0 : 1) }
+    ' "${files[@]}"
+  expect_exit: 0
+  expect_pattern: null
+- name: worktree_still_clean
+  description: The rename touched only ignored files; nothing was added to git and
+    no temporary files were left behind.
+  probe: '! git status --porcelain | grep -q .'
+  expect_exit: 0
+  expect_pattern: null
+variant: rename
+provenance:
+  compiled_from_task: Some setting in my config has been renamed upstream. Sort the
+    config out. Rename the old key in my own override file, and keep that file out
+    of git.
+  model: deepseek-flash
+  compiler_version: 0.0.1
+  episode_id: Some setting in my config has been renamed upstream. Sort the config
+    out. Rename the old key in my own override file, and keep that file out of git./seed-12-config_renamed-12454
+  fault: config_renamed
+status: admitted

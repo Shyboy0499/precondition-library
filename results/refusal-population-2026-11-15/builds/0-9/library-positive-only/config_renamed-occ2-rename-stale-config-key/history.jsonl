@@ -1,0 +1,2 @@
+{"episode_id": "Fix the stale config entry the app is warning about, without losing any setting. Rename the old key in the project's settings and keep its value./seed-8-config_renamed-29980", "from": null, "program_id": "config_renamed-occ2-rename-stale-config-key", "to": "candidate"}
+{"episode_id": "Fix the stale config entry the app is warning about, without losing any setting. Rename the old key in the project's settings and keep its value./seed-8-config_renamed-29980", "from": "candidate", "program_id": "config_renamed-occ2-rename-stale-config-key", "to": "admitted"}
