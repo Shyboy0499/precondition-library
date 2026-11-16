@@ -494,3 +494,51 @@ def test_deciding_on_several_processes_writes_the_same_files(run: dict[str, obje
     study.evaluate(again, refusal_dir, zero, refusal, jobs=3)
     for name in ("manifest.json", "labels.jsonl", "decisions.jsonl", "report.json", "summary.txt"):
         assert (again / name).read_bytes() == (out / name).read_bytes(), name
+
+
+def test_an_interrupted_repository_resumes_from_its_journal(
+    run: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A run stopped after one case decides only the rest when restarted, on the same pin.
+
+    Study 2's evaluation lost a repository's progress twice to a restarted worker, because
+    only a whole repository was saved. Each decided case is now journaled as it finishes.
+    """
+    out, refusal_dir, zero, refusal = run["args"]  # type: ignore[misc]
+    again = out.parent / "out-resumed"
+    real = study._decide_case
+    first: list[str] = []
+
+    def stopped_after_one(case: Case) -> object:
+        if first:
+            raise KeyboardInterrupt
+        first.append(case.merge)
+        return real(case)
+
+    monkeypatch.setattr(study, "_decide_case", stopped_after_one)
+    with pytest.raises(KeyboardInterrupt):
+        study.evaluate(again, refusal_dir, zero, refusal)
+    stem = again / "repos" / "example__first"
+    journal = stem.with_name(stem.name + ".journal.jsonl")
+    pinned = stem.with_name(stem.name + ".pin.json")
+    assert len(journal.read_text("utf-8").splitlines()) == 1
+    assert pinned.is_file()
+
+    def no_pin(repo: str) -> tuple[str, str]:
+        raise AssertionError("a resumed repository reads its pin, it does not pin again")
+
+    monkeypatch.setattr(study, "pin", no_pin)
+    resumed: list[str] = []
+
+    def counting(case: Case) -> object:
+        resumed.append(case.merge)
+        return real(case)
+
+    monkeypatch.setattr(study, "_decide_case", counting)
+    study.evaluate(again, refusal_dir, zero, refusal)
+    manifest = study.EvaluationManifest.model_validate_json((out / "manifest.json").read_text())
+    decided = len(manifest.cases) + sum(e.reason == "state not built" for e in manifest.exclusions)
+    assert first[0] not in resumed and len(resumed) == decided - 1
+    for name in ("manifest.json", "labels.jsonl", "decisions.jsonl", "report.json", "summary.txt"):
+        assert (again / name).read_bytes() == (out / name).read_bytes(), name
+    assert not journal.exists() and not pinned.exists(), "the repository's file replaces both"

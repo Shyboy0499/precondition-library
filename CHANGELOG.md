@@ -12,6 +12,9 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Changed
 
+- **Study 2's evaluation resumes inside a repository (spec revision 161).** Each decided case is
+  journaled as it finishes, and the repository's pinned tip is kept, so a restarted worker
+  loses at most the cases in flight, not a repository's hours. Outputs are byte-identical.
 - **Precondition probing is faster on real repositories, with every verdict unchanged (spec
   revision 160).**
   - **Why:** study 2's evaluation took about 28 minutes per real merge, 89% of it the read-only

@@ -239,16 +239,79 @@ def _decide_case(case: Case) -> _Decided:
     return case, decisions, label(case, ctx.cache, amendment=1), state
 
 
-def _decide_all(kept: Sequence[Case], jobs: int) -> list[_Decided]:
+class _Journaled(BaseModel):
+    """One decided case, as `_decide_all` appends it to a repository's journal."""
+
+    merge: str
+    exclusion: Exclusion | None = None
+    case: Case | None = None
+    decisions: StudyDecisions | None = None
+    label: Label | None = None
+    state: StateFingerprint | None = None
+
+    @classmethod
+    def of(cls, merge: str, result: _Decided) -> _Journaled:
+        if isinstance(result, Exclusion):
+            return cls(merge=merge, exclusion=result)
+        case, decisions, lab, state = result
+        return cls(merge=merge, case=case, decisions=decisions, label=lab, state=state)
+
+    def result(self) -> _Decided:
+        if self.exclusion is not None:
+            return self.exclusion
+        assert self.case and self.decisions and self.label and self.state
+        return self.case, self.decisions, self.label, self.state
+
+
+def _read_journal(journal: Path, kept: Sequence[Case]) -> dict[str, _Decided]:
+    """The cases already decided, by merge. A record whose case is not the one mining kept
+    now is an error, not a cache miss: it means the repository was mined differently."""
+    if not journal.is_file():
+        return {}
+    by_merge = {case.merge: case for case in kept}
+    done: dict[str, _Decided] = {}
+    for line in journal.read_text("utf-8").splitlines():
+        if not line.strip():
+            continue  # a line cut short by the interruption that the journal exists for
+        try:
+            record = _Journaled.model_validate_json(line)
+        except ValueError:
+            continue
+        if record.merge not in by_merge or (
+            record.case is not None and record.case != by_merge[record.merge]
+        ):
+            raise ValueError(f"{journal}: {record.merge} is not a case this mining kept")
+        done[record.merge] = record.result()
+    return done
+
+
+def _decide_all(kept: Sequence[Case], jobs: int, journal: Path | None = None) -> list[_Decided]:
     """`_decide_case` on every case, in the cases' order, on `jobs` processes.
 
     The order of the results, and so of every file written from them, is the cases' order
     whatever `jobs` is: a case's decision depends only on its own state.
+
+    With a `journal`, each case is appended to it as soon as it is decided, and a case
+    already there is not decided again, so an interrupted repository resumes where it
+    stopped instead of from its first case.
     """
-    if jobs <= 1 or len(kept) <= 1:
-        return [_decide_case(case) for case in kept]
-    with multiprocessing.get_context("fork").Pool(min(jobs, len(kept))) as pool:
-        return list(pool.imap(_decide_case, kept))
+    done = _read_journal(journal, kept) if journal is not None else {}
+    todo = [case for case in kept if case.merge not in done]
+
+    def keep(case_merge: str, result: _Decided) -> None:
+        done[case_merge] = result
+        if journal is not None:
+            with journal.open("a", encoding="utf-8") as handle:
+                handle.write(_Journaled.of(case_merge, result).model_dump_json() + "\n")
+
+    if jobs <= 1 or len(todo) <= 1:
+        for case in todo:
+            keep(case.merge, _decide_case(case))
+    else:
+        with multiprocessing.get_context("fork").Pool(min(jobs, len(todo))) as pool:
+            for case, result in zip(todo, pool.imap(_decide_case, todo), strict=True):
+                keep(case.merge, result)
+    return [done[case.merge] for case in kept]
 
 
 def _decide_repository(
@@ -259,9 +322,23 @@ def _decide_repository(
     control_zero: StateClassifier,
     control_refusal: StateClassifier,
     jobs: int = 1,
+    resume: Path | None = None,
 ) -> _RepositoryPart:
+    """Mine `repo`, decide its kept cases and label them.
+
+    `resume`, a path stem, keeps what a restart needs: `<stem>.pin.json`, the branch and tip
+    pinned when the repository was first mined, so a resumed run mines the same history even
+    on a later day (§3.1), and `<stem>.journal.jsonl`, the cases decided so far.
+    """
     global _DECIDING
-    branch, tip = pin(repo)
+    pinned = resume.with_name(resume.name + ".pin.json") if resume is not None else None
+    if pinned is not None and pinned.is_file():
+        branch, tip = json.loads(pinned.read_text("utf-8"))
+    else:
+        branch, tip = pin(repo)
+        if pinned is not None:
+            pinned.write_text(json.dumps([branch, tip]) + "\n", "utf-8")
+    journal = resume.with_name(resume.name + ".journal.jsonl") if resume is not None else None
     cache = fetch_real_host(host(repo, tip))
     try:
         summary, mined, excluded = mine(repo, cache, branch, tip)
@@ -280,7 +357,7 @@ def _decide_repository(
             branch=branch,
         )
         try:
-            results = _decide_all(kept, jobs)
+            results = _decide_all(kept, jobs, journal)
         finally:
             _DECIDING = None
         for result in results:
@@ -498,10 +575,14 @@ def evaluate(
         if written.is_file():
             part = _RepositoryPart.model_validate_json(written.read_text("utf-8"))
         else:
+            stem = written.with_suffix("")
             part = _decide_repository(
-                repo, len(so_far), zero, refusal, control_zero, control_refusal, jobs
+                repo, len(so_far), zero, refusal, control_zero, control_refusal, jobs, stem
             )
             written.write_text(part.model_dump_json() + "\n", "utf-8")
+            # The repository's file now holds everything; what a resume needed goes.
+            stem.with_name(stem.name + ".journal.jsonl").unlink(missing_ok=True)
+            stem.with_name(stem.name + ".pin.json").unlink(missing_ok=True)
         parts.append(part)
     cases = [case for part in parts for case in part.cases]
     labels = [lab for part in parts for lab in part.labels]
