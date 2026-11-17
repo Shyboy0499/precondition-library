@@ -1,0 +1,209 @@
+{"index":0,"acceptable":[],"descriptive":"other"}
+{"index":1,"acceptable":[],"descriptive":"other"}
+{"index":2,"acceptable":[],"descriptive":"took local"}
+{"index":3,"acceptable":[],"descriptive":"took local"}
+{"index":4,"acceptable":[],"descriptive":"took local"}
+{"index":5,"acceptable":["take_upstream"],"descriptive":"matches take_upstream"}
+{"index":6,"acceptable":[],"descriptive":"took upstream"}
+{"index":7,"acceptable":[],"descriptive":"regenerated"}
+{"index":8,"acceptable":[],"descriptive":"other"}
+{"index":9,"acceptable":[],"descriptive":"took upstream"}
+{"index":10,"acceptable":[],"descriptive":"other"}
+{"index":11,"acceptable":["take_upstream"],"descriptive":"matches take_upstream"}
+{"index":12,"acceptable":[],"descriptive":"matches take_upstream"}
+{"index":13,"acceptable":[],"descriptive":"other"}
+{"index":14,"acceptable":[],"descriptive":"took local"}
+{"index":15,"acceptable":[],"descriptive":"took upstream"}
+{"index":16,"acceptable":[],"descriptive":"took local"}
+{"index":17,"acceptable":[],"descriptive":"other"}
+{"index":18,"acceptable":[],"descriptive":"other"}
+{"index":19,"acceptable":[],"descriptive":"regenerated"}
+{"index":20,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":21,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":22,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":23,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":24,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":25,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":26,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":27,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":28,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":29,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":30,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":31,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":32,"acceptable":[],"descriptive":"clean merge changed"}
+{"index":33,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":34,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":35,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":36,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":37,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":38,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":39,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":40,"acceptable":[],"descriptive":"regenerated"}
+{"index":41,"acceptable":[],"descriptive":"regenerated"}
+{"index":42,"acceptable":[],"descriptive":"regenerated"}
+{"index":43,"acceptable":[],"descriptive":"regenerated"}
+{"index":44,"acceptable":[],"descriptive":"regenerated"}
+{"index":45,"acceptable":[],"descriptive":"regenerated"}
+{"index":46,"acceptable":[],"descriptive":"took local"}
+{"index":47,"acceptable":[],"descriptive":"regenerated"}
+{"index":48,"acceptable":[],"descriptive":"regenerated"}
+{"index":49,"acceptable":[],"descriptive":"regenerated"}
+{"index":50,"acceptable":[],"descriptive":"took local"}
+{"index":51,"acceptable":[],"descriptive":"other"}
+{"index":52,"acceptable":[],"descriptive":"took local"}
+{"index":53,"acceptable":[],"descriptive":"other"}
+{"index":54,"acceptable":[],"descriptive":"other"}
+{"index":55,"acceptable":[],"descriptive":"took upstream"}
+{"index":56,"acceptable":[],"descriptive":"other"}
+{"index":57,"acceptable":[],"descriptive":"other"}
+{"index":58,"acceptable":[],"descriptive":"took local"}
+{"index":59,"acceptable":[],"descriptive":"regenerated"}
+{"index":60,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":61,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":62,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":63,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":64,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":65,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":66,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":67,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":68,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":69,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":70,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":71,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":72,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":73,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":74,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":75,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":76,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":77,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":78,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":79,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":80,"acceptable":[],"descriptive":"took local"}
+{"index":81,"acceptable":[],"descriptive":"took local"}
+{"index":82,"acceptable":[],"descriptive":"took local"}
+{"index":83,"acceptable":[],"descriptive":"took local"}
+{"index":84,"acceptable":[],"descriptive":"took local"}
+{"index":85,"acceptable":[],"descriptive":"took local"}
+{"index":86,"acceptable":[],"descriptive":"took local"}
+{"index":87,"acceptable":[],"descriptive":"other"}
+{"index":88,"acceptable":[],"descriptive":"took local"}
+{"index":89,"acceptable":[],"descriptive":"took local"}
+{"index":90,"acceptable":[],"descriptive":"took local"}
+{"index":91,"acceptable":[],"descriptive":"took local"}
+{"index":92,"acceptable":[],"descriptive":"took local"}
+{"index":93,"acceptable":[],"descriptive":"took local"}
+{"index":94,"acceptable":[],"descriptive":"took local"}
+{"index":95,"acceptable":[],"descriptive":"regenerated"}
+{"index":96,"acceptable":[],"descriptive":"took upstream"}
+{"index":97,"acceptable":[],"descriptive":"took upstream"}
+{"index":98,"acceptable":[],"descriptive":"other"}
+{"index":99,"acceptable":[],"descriptive":"regenerated"}
+{"index":100,"acceptable":[],"descriptive":"regenerated"}
+{"index":101,"acceptable":[],"descriptive":"took upstream"}
+{"index":102,"acceptable":[],"descriptive":"matches take_upstream"}
+{"index":103,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":104,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":105,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":106,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":107,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":108,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":109,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":110,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":111,"acceptable":[],"descriptive":"regenerated"}
+{"index":112,"acceptable":[],"descriptive":"other"}
+{"index":113,"acceptable":[],"descriptive":"other"}
+{"index":114,"acceptable":[],"descriptive":"regenerated"}
+{"index":115,"acceptable":[],"descriptive":"regenerated"}
+{"index":116,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":117,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":118,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":119,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":120,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":121,"acceptable":[],"descriptive":"regenerated"}
+{"index":122,"acceptable":[],"descriptive":"other"}
+{"index":123,"acceptable":[],"descriptive":"other"}
+{"index":124,"acceptable":[],"descriptive":"matches take_upstream"}
+{"index":125,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":126,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":127,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":128,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":129,"acceptable":[],"descriptive":"other"}
+{"index":130,"acceptable":[],"descriptive":"other"}
+{"index":131,"acceptable":[],"descriptive":"other"}
+{"index":132,"acceptable":[],"descriptive":"regenerated"}
+{"index":133,"acceptable":[],"descriptive":"other"}
+{"index":134,"acceptable":[],"descriptive":"other"}
+{"index":135,"acceptable":[],"descriptive":"other"}
+{"index":136,"acceptable":[],"descriptive":"other"}
+{"index":137,"acceptable":[],"descriptive":"other"}
+{"index":138,"acceptable":[],"descriptive":"other"}
+{"index":139,"acceptable":[],"descriptive":"took upstream"}
+{"index":140,"acceptable":[],"descriptive":"regenerated"}
+{"index":141,"acceptable":[],"descriptive":"other"}
+{"index":142,"acceptable":[],"descriptive":"regenerated"}
+{"index":143,"acceptable":[],"descriptive":"took upstream"}
+{"index":144,"acceptable":[],"descriptive":"other"}
+{"index":145,"acceptable":[],"descriptive":"other"}
+{"index":146,"acceptable":[],"descriptive":"other"}
+{"index":147,"acceptable":[],"descriptive":"other"}
+{"index":148,"acceptable":[],"descriptive":"other"}
+{"index":149,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":150,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":151,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":152,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":153,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":154,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":155,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":156,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":157,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":158,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":159,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":160,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":161,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":162,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":163,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":164,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":165,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":166,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":167,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":168,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":169,"acceptable":["take_upstream"],"descriptive":"matches take_upstream"}
+{"index":170,"acceptable":[],"descriptive":"took local"}
+{"index":171,"acceptable":[],"descriptive":"took local"}
+{"index":172,"acceptable":[],"descriptive":"matches take_upstream"}
+{"index":173,"acceptable":[],"descriptive":"matches take_upstream"}
+{"index":174,"acceptable":[],"descriptive":"took upstream"}
+{"index":175,"acceptable":[],"descriptive":"regenerated"}
+{"index":176,"acceptable":[],"descriptive":"regenerated"}
+{"index":177,"acceptable":[],"descriptive":"regenerated"}
+{"index":178,"acceptable":[],"descriptive":"took local"}
+{"index":179,"acceptable":[],"descriptive":"took local"}
+{"index":180,"acceptable":[],"descriptive":"other"}
+{"index":181,"acceptable":[],"descriptive":"other"}
+{"index":182,"acceptable":[],"descriptive":"regenerated"}
+{"index":183,"acceptable":[],"descriptive":"other"}
+{"index":184,"acceptable":[],"descriptive":"regenerated"}
+{"index":185,"acceptable":[],"descriptive":"other"}
+{"index":186,"acceptable":[],"descriptive":"took upstream"}
+{"index":187,"acceptable":[],"descriptive":"regenerated"}
+{"index":188,"acceptable":[],"descriptive":"took upstream"}
+{"index":189,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":190,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":191,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":192,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":193,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":194,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":195,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":196,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":197,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":198,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":199,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":200,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":201,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":202,"acceptable":[],"descriptive":"clean merge changed"}
+{"index":203,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":204,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":205,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":206,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":207,"acceptable":["merge"],"descriptive":"clean merge reproduced"}
+{"index":208,"acceptable":["merge"],"descriptive":"clean merge reproduced"}

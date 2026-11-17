@@ -1,0 +1,416 @@
+{
+  "counts": {
+    "inexpressible": 109,
+    "clean": 97,
+    "other": 3,
+    "repositories_with_a_case": 8
+  },
+  "valid_builds": {
+    "0": 10,
+    "R": 10
+  },
+  "underpowered": false,
+  "underpowered_because": [],
+  "refusal_set": "044a77da17c06b39335dc4e7b8c7a442994fd0f3eb6ace4c6ee0435c19fc46b5",
+  "refusal_collisions": 0,
+  "control_zero_fire_rate": 1.0,
+  "control_refusal_fire_rate": 0.08256880733944955,
+  "hypotheses": {
+    "h1": {
+      "statistic": 0.059633027522935776,
+      "interval": {
+        "low": -0.008791208791208791,
+        "high": 0.15344827586206894
+      },
+      "resamples": 2000,
+      "skipped": 0
+    },
+    "h2": {
+      "statistic": 0.4614678899082569,
+      "interval": {
+        "low": 0.19099099099099098,
+        "high": 0.7412280701754386
+      },
+      "resamples": 2000,
+      "skipped": 0
+    },
+    "h3": {
+      "statistic": 0.5155963302752293,
+      "interval": {
+        "low": 0.25523809523809526,
+        "high": 0.7742647058823529
+      },
+      "resamples": 2000,
+      "skipped": 0
+    },
+    "h4": {
+      "statistic": -0.2958762886597939,
+      "interval": {
+        "low": -0.6870967741935484,
+        "high": 0.09765625
+      },
+      "resamples": 2000,
+      "skipped": 0
+    }
+  },
+  "decisions": [
+    {
+      "rule": "1 power",
+      "outcome": "powered"
+    },
+    {
+      "rule": "2 applicability",
+      "outcome": "both configurations fire"
+    },
+    {
+      "rule": "3 H1",
+      "outcome": "not supported: executing checks does not decline better than a state reader given the same evidence"
+    },
+    {
+      "rule": "4 H2",
+      "outcome": "supported: lower bound above 0"
+    },
+    {
+      "rule": "5 H3 and H4",
+      "outcome": "H3 supported, H4 not shown: refusal-tested admission lowers the fire rate, and its effect on clean merges is not resolved at this size"
+    }
+  ],
+  "builds": [
+    {
+      "configuration": "0",
+      "order": 0,
+      "fire_rate": 0.981651376146789,
+      "clean_right_rate": 0.9690721649484536,
+      "against_control": {
+        "statistic": 0.01834862385321101,
+        "interval": {
+          "low": 0.0,
+          "high": 0.03676470588235292
+        },
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "beats_control": false
+    },
+    {
+      "configuration": "0",
+      "order": 1,
+      "fire_rate": 0.8807339449541285,
+      "clean_right_rate": 0.0,
+      "against_control": {
+        "statistic": 0.11926605504587151,
+        "interval": {
+          "low": 0.027272727272727226,
+          "high": 0.22680412371134018
+        },
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "beats_control": true
+    },
+    {
+      "configuration": "0",
+      "order": 2,
+      "fire_rate": 0.8440366972477065,
+      "clean_right_rate": 0.979381443298969,
+      "against_control": {
+        "statistic": 0.15596330275229353,
+        "interval": {
+          "low": 0.0490196078431373,
+          "high": 0.28971962616822433
+        },
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "beats_control": true
+    },
+    {
+      "configuration": "0",
+      "order": 3,
+      "fire_rate": 0.009174311926605505,
+      "clean_right_rate": 0.9690721649484536,
+      "against_control": {
+        "statistic": 0.9908256880733946,
+        "interval": {
+          "low": 0.9722222222222222,
+          "high": 1.0
+        },
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "beats_control": true
+    },
+    {
+      "configuration": "0",
+      "order": 4,
+      "fire_rate": 0.10091743119266056,
+      "clean_right_rate": 0.0,
+      "against_control": {
+        "statistic": 0.8990825688073394,
+        "interval": {
+          "low": 0.8426966292134832,
+          "high": 0.9484536082474226
+        },
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "beats_control": true
+    },
+    {
+      "configuration": "0",
+      "order": 5,
+      "fire_rate": 1.0,
+      "clean_right_rate": 0.979381443298969,
+      "against_control": {
+        "statistic": 0.0,
+        "interval": {
+          "low": 0.0,
+          "high": 0.0
+        },
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "beats_control": false
+    },
+    {
+      "configuration": "0",
+      "order": 6,
+      "fire_rate": 0.926605504587156,
+      "clean_right_rate": 0.979381443298969,
+      "against_control": {
+        "statistic": 0.07339449541284404,
+        "interval": {
+          "low": 0.009009009009009028,
+          "high": 0.17500000000000004
+        },
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "beats_control": true
+    },
+    {
+      "configuration": "0",
+      "order": 7,
+      "fire_rate": 0.5871559633027523,
+      "clean_right_rate": 0.9690721649484536,
+      "against_control": {
+        "statistic": 0.4128440366972477,
+        "interval": {
+          "low": 0.26956521739130435,
+          "high": 0.55
+        },
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "beats_control": true
+    },
+    {
+      "configuration": "0",
+      "order": 8,
+      "fire_rate": 0.045871559633027525,
+      "clean_right_rate": 0.0,
+      "against_control": {
+        "statistic": 0.9541284403669725,
+        "interval": {
+          "low": 0.91,
+          "high": 1.0
+        },
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "beats_control": true
+    },
+    {
+      "configuration": "0",
+      "order": 9,
+      "fire_rate": 0.009174311926605505,
+      "clean_right_rate": 0.9690721649484536,
+      "against_control": {
+        "statistic": 0.9908256880733946,
+        "interval": {
+          "low": 0.9722222222222222,
+          "high": 1.0
+        },
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "beats_control": true
+    },
+    {
+      "configuration": "R",
+      "order": 0,
+      "fire_rate": 0.01834862385321101,
+      "clean_right_rate": 0.0,
+      "against_control": {
+        "statistic": 0.06422018348623854,
+        "interval": {
+          "low": 0.0,
+          "high": 0.16363636363636364
+        },
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "beats_control": false
+    },
+    {
+      "configuration": "R",
+      "order": 1,
+      "fire_rate": 0.027522935779816515,
+      "clean_right_rate": 0.0,
+      "against_control": {
+        "statistic": 0.05504587155963303,
+        "interval": {
+          "low": -0.020833333333333332,
+          "high": 0.16216216216216217
+        },
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "beats_control": false
+    },
+    {
+      "configuration": "R",
+      "order": 2,
+      "fire_rate": 0.0,
+      "clean_right_rate": 0.979381443298969,
+      "against_control": {
+        "statistic": 0.08256880733944955,
+        "interval": {
+          "low": 0.012658227848101266,
+          "high": 0.1826086956521739
+        },
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "beats_control": true
+    },
+    {
+      "configuration": "R",
+      "order": 3,
+      "fire_rate": 0.06422018348623854,
+      "clean_right_rate": 0.0,
+      "against_control": {
+        "statistic": 0.01834862385321101,
+        "interval": {
+          "low": -0.05357142857142857,
+          "high": 0.08823529411764706
+        },
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "beats_control": false
+    },
+    {
+      "configuration": "R",
+      "order": 4,
+      "fire_rate": 0.06422018348623854,
+      "clean_right_rate": 0.979381443298969,
+      "against_control": {
+        "statistic": 0.01834862385321101,
+        "interval": {
+          "low": -0.06956521739130435,
+          "high": 0.10743801652892562
+        },
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "beats_control": false
+    },
+    {
+      "configuration": "R",
+      "order": 5,
+      "fire_rate": 0.0,
+      "clean_right_rate": 0.0,
+      "against_control": {
+        "statistic": 0.08256880733944955,
+        "interval": {
+          "low": 0.012658227848101266,
+          "high": 0.1826086956521739
+        },
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "beats_control": true
+    },
+    {
+      "configuration": "R",
+      "order": 6,
+      "fire_rate": 0.03669724770642202,
+      "clean_right_rate": 0.0,
+      "against_control": {
+        "statistic": 0.045871559633027525,
+        "interval": {
+          "low": -0.03669724770642202,
+          "high": 0.14545454545454545
+        },
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "beats_control": false
+    },
+    {
+      "configuration": "R",
+      "order": 7,
+      "fire_rate": 0.0,
+      "clean_right_rate": 0.0,
+      "against_control": {
+        "statistic": 0.08256880733944955,
+        "interval": {
+          "low": 0.012658227848101266,
+          "high": 0.1826086956521739
+        },
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "beats_control": true
+    },
+    {
+      "configuration": "R",
+      "order": 8,
+      "fire_rate": 0.0,
+      "clean_right_rate": 0.9484536082474226,
+      "against_control": {
+        "statistic": 0.08256880733944955,
+        "interval": {
+          "low": 0.012658227848101266,
+          "high": 0.1826086956521739
+        },
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "beats_control": true
+    },
+    {
+      "configuration": "R",
+      "order": 9,
+      "fire_rate": 0.01834862385321101,
+      "clean_right_rate": 0.9484536082474226,
+      "against_control": {
+        "statistic": 0.06422018348623854,
+        "interval": {
+          "low": 0.006802721088435374,
+          "high": 0.15000000000000002
+        },
+        "resamples": 2000,
+        "skipped": 0
+      },
+      "beats_control": true
+    }
+  ],
+  "spread": {
+    "0": {
+      "mean": 0.5385321100917431,
+      "sd": 0.4431413201553272,
+      "min": 0.009174311926605505,
+      "max": 1.0,
+      "iqr": 0.8555045871559633
+    },
+    "R": {
+      "mean": 0.022935779816513763,
+      "sd": 0.025310314001906496,
+      "min": 0.0,
+      "max": 0.06422018348623854,
+      "iqr": 0.034403669724770644
+    }
+  }
+}

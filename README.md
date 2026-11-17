@@ -68,7 +68,12 @@ Read [Results graded outside this project](#results-graded-outside-this-project)
 > dispatch still mis-fired on none of its fires (0/215 and 0/238), one build each
 > ([six-family replicates](results/replicates-2026-11-15/README.md)).
 >
-> **Now running, on the owner's DeepSeek key:** study 2's 20 library builds (#307).
+> **Study 2** (#307, registered before its data) tested 20 builds on 209 real merges from 8
+> repositories. Its primary hypothesis was **not supported**: a state reader taught the same
+> refusal evidence declines inexpressible conflicts about as often as the refusal-tested builds,
+> 0.083 against 0.023 fired, interval [−0.009, +0.153], and is right on more clean merges. Under
+> the current admission, the 10 builds fire on anywhere from 1% to 100% of those conflicts. Refusal-tested admission makes every build decline, at a cost on clean merges that this
+> size cannot resolve ([study 2](results/refusal-population-2026-11-15/README.md)).
 >
 > **Graded by this project's own labels.** On states its own injectors build, judged by its own
 > rules, precondition dispatch mis-fired on **0 of 563** fires, against text similarity's
@@ -404,6 +409,8 @@ did not make. This is the answer as of the studies below; each line links to whe
 | A merge computed from a conflict's three sides, read as package sets, reproduces the maintainer on most real lock-file conflicts | Coverage 0.686, 0.760 and 0.643 in studies 3, 4 and 5, on 67 repositories nobody here had mined ([3](results/lock-oracle-2026-11-02/README.md), [4](results/ecosystem-unify-2026-11-02/README.md), [5](results/divergence-gate-2026-11-08/README.md)). |
 | The ecosystem's resolver predicts which package-level merge maintainers keep | Study 4: 91 of 91 discordant files, 17 repositories to 0. |
 | A precondition over the conflict's sides ("no package diverges") roughly halves the merge's error, and is not enough | Study 5: mean mismatch 0.352 [0.178, 0.527] with the gate, against an always-firing merge wrong on 0.57 of conflicts. |
+| Precondition dispatch declines inexpressible conflicts more often than a state reader fitted as study 1 fitted it | Study 2, H2: +0.461 [+0.191, +0.741] over 10 builds. That reader fires on every one of them; the builds' own rates range from 1% to 100% ([study 2](results/refusal-population-2026-11-15/README.md)). |
+| Admission that requires declining known inexpressible states makes builds decline new ones | Study 2, H3: the fire rate falls from 0.54 to 0.02, a difference of +0.516 [+0.255, +0.774]. Whether it costs clean merges (H4) is not resolved: [−0.687, +0.098] against a −0.10 margin. |
 | The graders do what their tests say | 138 of 138 verdict-changing mutants killed, and property-based tests on generated states ([report §7](paper/main.tex)). |
 | The maintainer's-set labels agree with the ecosystem's own consistency check | npm, pnpm and Composer checked each side's lock file against the merged manifests on 610 conflicted files of studies 3–5 ([lock-tool-check](results/lock-tool-check-2026-11-08/README.md), descriptive). The tool rejects 61 sides that are the maintainer's set; in 60 of them it rejects the maintainer's own merged file too. |
 | Resolving a lock-file conflict leaves the lock file inconsistent more often than an ordinary commit does | Study 6, H1, on 25 repositories nobody here had mined: mean gap 0.067 [0.003, 0.130], narrowly. Pooled, the check rejects 0.16 of merged files and 0.08 of ordinary commits' lock files: twice the rate, not the five times found exploratorily. Leaving out any one of seven repositories puts the interval's lower end below 0 ([study 6](results/tool-precondition-2026-11-09/README.md)). |
@@ -415,6 +422,8 @@ did not make. This is the answer as of the studies below; each line links to whe
 | --- | --- |
 | Precondition dispatch rarely mis-fires (0 of 563 on this project's states) | **Falsified** on real merges: wrong on 62/150 and 132/244 fires in two of three libraries (study 1, rule 2). |
 | Executing checks is what beats text similarity | On this project's states a decision tree reading the state, and one reading only the library's own precondition verdicts, matched it. On real merges the only difference left was refusal. |
+| Executing checks declines better than reading the state, given the same evidence | Study 2's primary hypothesis, H1: **not supported**, +0.060 [−0.009, +0.153]. Control-R, a state reader taught the refusal set, fires on 8% of inexpressible conflicts and is right on 94 of 97 clean merges; the refusal-tested builds fire on 0–6% and are right on 38% of clean merges on average ([study 2](results/refusal-population-2026-11-15/README.md)). |
+| Refusal is a property of the method | Study 2: under the current admission, ten builds fire on 1% to 100% of inexpressible conflicts (SD 0.44). It is a property of the build. |
 | The lock-file task's line-level resolutions express what maintainers do | They express 1 of 161 real conflicts (study 1); package sets replaced them (studies 3–5). |
 | Compiled probes generalise to unseen states | On held-out paths, absence probes failed open: 41 of 101 lock-file fires wrong. On the 22 libraries built since the compile prompt asked for `-z`, the quoting defect is gone: 0 wrong in 205 fires on the spaced and non-ASCII paths. But one library failed open another way, recognising lock files by a fixed list of names: 20 of 403 fires wrong ([held-out, 22 new libraries](results/heldout-2026-11-16/README.md), exploratory). |
 | The ecosystem's tool, held to the merge's date, labels what the computed merge cannot | It recovers 30 of 156 such files: npm 14 of 52, Composer 11 of 84, pnpm 5 of 20 ([npm](results/lock-tool-dated-2026-11-03/README.md), [pnpm and Composer](results/lock-tool-dated-2026-11-08/README.md), exploratory). Composer cannot replay branch dependencies, and maintainers changed more than their manifests required. No study is registered on it. |
@@ -425,8 +434,7 @@ did not make. This is the answer as of the studies below; each line links to whe
 
 | question | blocked on |
 | --- | --- |
-| Is refusal a property of the method or of one build? (#307, study 2, registered before its data) | running: the 20 builds are frozen ([builds](results/refusal-population-2026-11-15/builds/README.md)), and the registered analysis is mining the evaluation repositories |
-| Does it hold outside this provider, or across several builds per compiling model? (#266) | One build each of two DeepSeek models agreed with runs 11–13 ([six-family replicates](results/replicates-2026-11-15/README.md)). A second provider needs its key; several builds per model need study 2's spread first (ADR-0061) |
+| Does it hold outside this provider, or across several builds per compiling model? (#266) | One build each of two DeepSeek models agreed with runs 11–13 ([six-family replicates](results/replicates-2026-11-15/README.md)). A second provider needs its key; study 2 has now measured the spread between builds of one model (SD 0.44 under the current admission), which sizes that study (ADR-0061) |
 | Does a stronger judge, or one shown the probes, match arm 3? | ADR-0034 ran one model without the probe strings ([LLM judge](results/judge-2026-11-15/README.md)); either is a new registration |
 | Do people agree with the labelling rules? (#299 step 3) | independent raters; the kit is built |
 | Do the projects' own tests accept a resolution? (#297's third oracle) | Piloted, sandboxed ([project-tests pilot](results/project-tests-pilot-2026-11-14/README.md)). Where a suite ran (2 repositories), the wrong side's lock file was refused by `npm ci` before any test ran, so the tests added nothing beyond the check. The next cases are those where both sides pass the check. Composer projects need a host this session cannot reach. |

@@ -16,7 +16,7 @@ maintainers committed. Code: `src/precondition_library/studies/`.
 | study | question | folder |
 | --- | --- | --- |
 | 1 | Does precondition dispatch reproduce maintainers' lock-file merges better than text similarity? | [real-merges-2026-10-26](real-merges-2026-10-26/) |
-| 2 | Is refusal a property of the method or of one build? | registration and refusal set R: [refusal-population-2026-11-01](refusal-population-2026-11-01/); the 20 builds and, when it finishes, the analysis: [refusal-population-2026-11-15](refusal-population-2026-11-15/) |
+| 2 | Is refusal a property of the method or of one build? | registration and refusal set R: [refusal-population-2026-11-01](refusal-population-2026-11-01/); the 20 builds and the registered result (H1 not supported): [refusal-population-2026-11-15](refusal-population-2026-11-15/) |
 | 3 | Which computed action reproduces a maintainer's lock file? | [lock-oracle-2026-11-02](lock-oracle-2026-11-02/) |
 | 4 | Does the ecosystem's resolver predict which package-level merge maintainers kept? | [ecosystem-unify-2026-11-02](ecosystem-unify-2026-11-02/) |
 | 5 | Does refusing where a package diverges make the merge rarely wrong? | [divergence-gate-2026-11-08](divergence-gate-2026-11-08/) |
