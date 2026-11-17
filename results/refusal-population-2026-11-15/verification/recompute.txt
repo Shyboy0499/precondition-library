@@ -1,0 +1,37 @@
+cases: {'inexpressible': 109, 'clean': 97, 'other': 3}, from 8 repositories
+valid builds: 0 10, R 10
+Control-0 fire rate on inexpressible conflicts: 1.000
+Control-R fire rate on inexpressible conflicts: 0.083
+H1: +0.060 [-0.009, +0.153] (2000 resamples, 0 skipped)
+H2: +0.461 [+0.191, +0.741] (2000 resamples, 0 skipped)
+H3: +0.516 [+0.255, +0.774] (2000 resamples, 0 skipped)
+H4: -0.296 [-0.687, +0.098] (2000 resamples, 0 skipped)
+build 0-0: f 0.982, clean right 0.969, fires on clean 1.000, margin +0.018 [+0.000, +0.037]
+build 0-1: f 0.881, clean right 0.000, fires on clean 0.866, margin +0.119 [+0.027, +0.227] beats its control
+build 0-2: f 0.844, clean right 0.979, fires on clean 1.000, margin +0.156 [+0.049, +0.290] beats its control
+build 0-3: f 0.009, clean right 0.969, fires on clean 0.990, margin +0.991 [+0.972, +1.000] beats its control
+build 0-4: f 0.101, clean right 0.000, fires on clean 0.000, margin +0.899 [+0.843, +0.948] beats its control
+build 0-5: f 1.000, clean right 0.979, fires on clean 1.000, margin +0.000 [+0.000, +0.000]
+build 0-6: f 0.927, clean right 0.979, fires on clean 1.000, margin +0.073 [+0.009, +0.175] beats its control
+build 0-7: f 0.587, clean right 0.969, fires on clean 1.000, margin +0.413 [+0.270, +0.550] beats its control
+build 0-8: f 0.046, clean right 0.000, fires on clean 0.361, margin +0.954 [+0.910, +1.000] beats its control
+build 0-9: f 0.009, clean right 0.969, fires on clean 0.990, margin +0.991 [+0.972, +1.000] beats its control
+build R-0: f 0.018, clean right 0.000, fires on clean 0.155, margin +0.064 [+0.000, +0.164]
+build R-1: f 0.028, clean right 0.000, fires on clean 0.062, margin +0.055 [-0.021, +0.162]
+build R-2: f 0.000, clean right 0.979, fires on clean 1.000, margin +0.083 [+0.013, +0.183] beats its control
+build R-3: f 0.064, clean right 0.000, fires on clean 0.000, margin +0.018 [-0.054, +0.088]
+build R-4: f 0.064, clean right 0.979, fires on clean 1.000, margin +0.018 [-0.070, +0.107]
+build R-5: f 0.000, clean right 0.000, fires on clean 0.000, margin +0.083 [+0.013, +0.183] beats its control
+build R-6: f 0.037, clean right 0.000, fires on clean 0.062, margin +0.046 [-0.037, +0.145]
+build R-7: f 0.000, clean right 0.000, fires on clean 0.000, margin +0.083 [+0.013, +0.183] beats its control
+build R-8: f 0.000, clean right 0.948, fires on clean 0.969, margin +0.083 [+0.013, +0.183] beats its control
+build R-9: f 0.018, clean right 0.948, fires on clean 0.969, margin +0.064 [+0.007, +0.150] beats its control
+spread of f in configuration 0: mean 0.539, sd 0.443, min 0.009, max 1.000, iqr 0.856
+spread of f in configuration R: mean 0.023, sd 0.025, min 0.000, max 0.064, iqr 0.034
+§9:
+  1 power: powered
+  3 H1: not supported
+  4 H2: supported
+  5 H3: supported; H4: not shown
+
+every figure matches report.json

@@ -1,0 +1,36 @@
+Study 2: refusal over a population of builds (refusal-population)
+cases: 109 inexpressible, 97 clean, 3 other, from 8 repositories
+valid builds: 10 in configuration 0, 10 in configuration R
+refusal set 044a77da17c0; 0 of its states repeat a training state's features
+fire rate on inexpressible conflicts: Control-0 1.000, Control-R 0.083
+H1 f(Control-R) - f(R's builds): +0.060 [-0.009, +0.153]
+H2 f(Control-0) - f(0's builds): +0.461 [+0.191, +0.741]
+H3 f(0) - f(R): +0.516 [+0.255, +0.774]
+H4 right(R) - right(0) on clean cases: -0.296 [-0.687, +0.098] (margin -0.1)
+spread of f in configuration 0: mean 0.539, SD 0.443, range 0.009-1.000, IQR 0.856
+spread of f in configuration R: mean 0.023, SD 0.025, range 0.000-0.064, IQR 0.034
+build 00: f 0.982, clean right 0.969, margin over its control +0.018 [+0.000, +0.037]
+build 01: f 0.881, clean right 0.000, margin over its control +0.119 [+0.027, +0.227] (beats it)
+build 02: f 0.844, clean right 0.979, margin over its control +0.156 [+0.049, +0.290] (beats it)
+build 03: f 0.009, clean right 0.969, margin over its control +0.991 [+0.972, +1.000] (beats it)
+build 04: f 0.101, clean right 0.000, margin over its control +0.899 [+0.843, +0.948] (beats it)
+build 05: f 1.000, clean right 0.979, margin over its control +0.000 [+0.000, +0.000]
+build 06: f 0.927, clean right 0.979, margin over its control +0.073 [+0.009, +0.175] (beats it)
+build 07: f 0.587, clean right 0.969, margin over its control +0.413 [+0.270, +0.550] (beats it)
+build 08: f 0.046, clean right 0.000, margin over its control +0.954 [+0.910, +1.000] (beats it)
+build 09: f 0.009, clean right 0.969, margin over its control +0.991 [+0.972, +1.000] (beats it)
+build R0: f 0.018, clean right 0.000, margin over its control +0.064 [+0.000, +0.164]
+build R1: f 0.028, clean right 0.000, margin over its control +0.055 [-0.021, +0.162]
+build R2: f 0.000, clean right 0.979, margin over its control +0.083 [+0.013, +0.183] (beats it)
+build R3: f 0.064, clean right 0.000, margin over its control +0.018 [-0.054, +0.088]
+build R4: f 0.064, clean right 0.979, margin over its control +0.018 [-0.070, +0.107]
+build R5: f 0.000, clean right 0.000, margin over its control +0.083 [+0.013, +0.183] (beats it)
+build R6: f 0.037, clean right 0.000, margin over its control +0.046 [-0.037, +0.145]
+build R7: f 0.000, clean right 0.000, margin over its control +0.083 [+0.013, +0.183] (beats it)
+build R8: f 0.000, clean right 0.948, margin over its control +0.083 [+0.013, +0.183] (beats it)
+build R9: f 0.018, clean right 0.948, margin over its control +0.064 [+0.007, +0.150] (beats it)
+rule 1 power: powered
+rule 2 applicability: both configurations fire
+rule 3 H1: not supported: executing checks does not decline better than a state reader given the same evidence
+rule 4 H2: supported: lower bound above 0
+rule 5 H3 and H4: H3 supported, H4 not shown: refusal-tested admission lowers the fire rate, and its effect on clean merges is not resolved at this size

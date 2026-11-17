@@ -1,0 +1,3060 @@
+{
+  "repositories": [
+    {
+      "repo": "opf/openproject",
+      "url": "https://github.com/opf/openproject",
+      "default_branch": "dev",
+      "tip": "f9a728e3035be24a3977cc02336720b79dea42c8",
+      "licence": "LICENSE: GPL",
+      "two_parent_merges": 24586,
+      "positives": 20,
+      "negatives": 20,
+      "exclusions": 4
+    },
+    {
+      "repo": "PrestaShop/PrestaShop",
+      "url": "https://github.com/PrestaShop/PrestaShop",
+      "default_branch": "develop",
+      "tip": "6297dba61fc43de28f15e3057d3d18eb5ccd68fd",
+      "licence": "LICENSE.md: unrecognised",
+      "two_parent_merges": 19793,
+      "positives": 20,
+      "negatives": 20,
+      "exclusions": 2
+    },
+    {
+      "repo": "home-assistant/frontend",
+      "url": "https://github.com/home-assistant/frontend",
+      "default_branch": "dev",
+      "tip": "d08b734afde98cdd77bd065f5ddecc35411a5e3a",
+      "licence": "LICENSE.md: Apache",
+      "two_parent_merges": 819,
+      "positives": 15,
+      "negatives": 0,
+      "exclusions": 0
+    },
+    {
+      "repo": "rust-lang/rust-analyzer",
+      "url": "https://github.com/rust-lang/rust-analyzer",
+      "default_branch": "master",
+      "tip": "15d97b98eacfad690e81757e867ca0800f1c9e07",
+      "licence": "LICENSE-APACHE: Apache; LICENSE-MIT: MIT",
+      "two_parent_merges": 17442,
+      "positives": 8,
+      "negatives": 8,
+      "exclusions": 0
+    },
+    {
+      "repo": "getredash/redash",
+      "url": "https://github.com/getredash/redash",
+      "default_branch": "master",
+      "tip": "f561a53dc55eeb3f20615be951560dc78bb23f4c",
+      "licence": "LICENSE: unrecognised; LICENSE.borders: unrecognised",
+      "two_parent_merges": 1488,
+      "positives": 0,
+      "negatives": 0,
+      "exclusions": 0
+    },
+    {
+      "repo": "zellij-org/zellij",
+      "url": "https://github.com/zellij-org/zellij",
+      "default_branch": "main",
+      "tip": "dd0dd4aaa376fcbce194e6b8691c51cad461a22d",
+      "licence": "LICENSE.md: MIT",
+      "two_parent_merges": 200,
+      "positives": 5,
+      "negatives": 5,
+      "exclusions": 0
+    },
+    {
+      "repo": "forem/forem",
+      "url": "https://github.com/forem/forem",
+      "default_branch": "main",
+      "tip": "affaeff18a7a7bb05ef6075b1f0ce355b6474056",
+      "licence": "LICENSE.md: AGPL",
+      "two_parent_merges": 24,
+      "positives": 0,
+      "negatives": 0,
+      "exclusions": 0
+    },
+    {
+      "repo": "zulip/zulip",
+      "url": "https://github.com/zulip/zulip",
+      "default_branch": "main",
+      "tip": "afcd0cae679ed84eecd3570d072c93e50a71d865",
+      "licence": "LICENSE: Apache",
+      "two_parent_merges": 2,
+      "positives": 0,
+      "negatives": 0,
+      "exclusions": 0
+    },
+    {
+      "repo": "lapce/lapce",
+      "url": "https://github.com/lapce/lapce",
+      "default_branch": "master",
+      "tip": "f66ffaa95387794205c35864517de70958b9ea8d",
+      "licence": "LICENSE: Apache",
+      "two_parent_merges": 489,
+      "positives": 4,
+      "negatives": 4,
+      "exclusions": 0
+    },
+    {
+      "repo": "magento/magento2",
+      "url": "https://github.com/magento/magento2",
+      "default_branch": "2.4-develop",
+      "tip": "90f60c1e8ae5d3b54415e70c931c2eacb2a031d8",
+      "licence": "COPYING.txt: unrecognised; LICENSE.txt: unrecognised; LICENSE_AFL.txt: unrecognised",
+      "two_parent_merges": 72612,
+      "positives": 20,
+      "negatives": 20,
+      "exclusions": 35
+    },
+    {
+      "repo": "microsoft/vscode",
+      "url": "https://github.com/microsoft/vscode",
+      "default_branch": "main",
+      "tip": "4fb5428f5a82389a72688911d3868add1bdd964c",
+      "licence": "LICENSE.txt: MIT",
+      "two_parent_merges": 18490,
+      "positives": 20,
+      "negatives": 20,
+      "exclusions": 0
+    }
+  ],
+  "cases": [
+    {
+      "index": 0,
+      "repo": "opf/openproject",
+      "kind": "positive",
+      "merge": "a32dca61a32c13df1b944d55d339a6be01800ebd",
+      "first": "a9d4c018e2bc475dbba5354f934442f99298d28f",
+      "second": "3ce06f9dc3f209f104f4b7a113eea3e1bd56f5ec",
+      "base": "62f4bc52bedd8e298c3733cf5534fdb62337e341",
+      "conflicted": [
+        "Gemfile.lock",
+        "app/models/custom_field.rb",
+        "config/locales/en.yml",
+        "spec/models/custom_field_spec.rb"
+      ]
+    },
+    {
+      "index": 1,
+      "repo": "opf/openproject",
+      "kind": "positive",
+      "merge": "ab1eab9cdc9a2e0720d864470153622b195dcc2e",
+      "first": "2baae6810e1b77d8f9b2b4de49bb301dbbd32d96",
+      "second": "2f5750852094aa7644b963bf8950794dac83c611",
+      "base": "dbc7fdf0966fd5282bd8335919d4a0361d9ac253",
+      "conflicted": [
+        "Gemfile.lock",
+        "app/components/open_project/common/inplace_edit_field_component.rb",
+        "app/components/open_project/common/inplace_edit_fields/base_field_component.rb",
+        "app/components/open_project/common/inplace_edit_fields/display_fields/display_field_component.rb",
+        "app/controllers/inplace_edit_fields_controller.rb",
+        "app/services/custom_fields/project_specific_values/set_service.rb",
+        "lib/open_project/patches/message_pack_safe_buffer.rb",
+        "lib/open_project/rate_limiting/login.rb",
+        "spec/controllers/inplace_edit_fields_controller_spec.rb",
+        "spec/requests/rate_limiting/login_rate_limiting_spec.rb",
+        "spec/requests/work_packages/date_picker_focused_field_spec.rb"
+      ]
+    },
+    {
+      "index": 2,
+      "repo": "opf/openproject",
+      "kind": "positive",
+      "merge": "aa23eb5e13bc897faa714fedf8c348341da3b4af",
+      "first": "9dab102068d6d5aa6d54f399aef3eb8cfa9b0046",
+      "second": "76c37a3e14867fa8c1764e9492dd1e97e4b54f4e",
+      "base": "ac6f9a3c80c94304e2577dfb506cdf29c8b7a265",
+      "conflicted": [
+        "Gemfile.lock",
+        "app/models/work_package/exports/macros/attributes.rb",
+        "modules/calendar/spec/services/create_ical_service_spec.rb"
+      ]
+    },
+    {
+      "index": 3,
+      "repo": "opf/openproject",
+      "kind": "positive",
+      "merge": "3050f16a637addc9e5f8d2f7140cacf147386156",
+      "first": "ac6f9a3c80c94304e2577dfb506cdf29c8b7a265",
+      "second": "ee6984a64872f9cd3064ba24b29dfa9fd45f45a1",
+      "base": "cde9d647e87d6ded8e4cef404cb8bbf7467b035e",
+      "conflicted": [
+        "Gemfile",
+        "Gemfile.lock",
+        "spec/requests/work_packages/date_picker_focused_field_spec.rb"
+      ]
+    },
+    {
+      "index": 4,
+      "repo": "opf/openproject",
+      "kind": "positive",
+      "merge": "22818d94aab256d9de27f7a714702bb2354cb18e",
+      "first": "cde9d647e87d6ded8e4cef404cb8bbf7467b035e",
+      "second": "27906906914e8b338e8dc7a3633bd850aecd2048",
+      "base": "f8453c1c93da6f42ded513a389cbf81ef203a428",
+      "conflicted": [
+        "Gemfile.lock",
+        "spec/mailers/project_artifacts_mailer_spec.rb",
+        "spec/mailers/project_mailer_spec.rb"
+      ]
+    },
+    {
+      "index": 5,
+      "repo": "opf/openproject",
+      "kind": "positive",
+      "merge": "e04f9155bc8867b5b25fb9cb5931070fa3c06997",
+      "first": "68975eb7a3e84eb991c5161bc6d7af08e815c680",
+      "second": "de281d89d0825c520a16c07eb83436a80dde451f",
+      "base": "8df84d2615b45d9b2519f37f07327034936fa9ce",
+      "conflicted": [
+        "extensions/blocknote-extensions/package-lock.json"
+      ]
+    },
+    {
+      "index": 6,
+      "repo": "opf/openproject",
+      "kind": "positive",
+      "merge": "81841bdbbd3185374aa9b76dec2c8f973a38d378",
+      "first": "0bff137092b1b2fa49bc20d61090de277930b35f",
+      "second": "867f0059f7965f6ecd3752f938f4f6cbcfdc9ee5",
+      "base": "8c39aba31a1f2e1ba6000b9727898291a055af06",
+      "conflicted": [
+        "Gemfile",
+        "Gemfile.lock"
+      ]
+    },
+    {
+      "index": 7,
+      "repo": "opf/openproject",
+      "kind": "positive",
+      "merge": "6e3f0d6ea77a34d76fa40fe1850a0765970b1f52",
+      "first": "bc875595af9861c028ebed0899f6e0746aa62c92",
+      "second": "3e1d654a87dc9e1623cc958130fae823c084ff4b",
+      "base": "4ce959d05316cf6c0ac6f00defac72e1067ac56d",
+      "conflicted": [
+        ".github/workflows/brakeman-scan-core.yml",
+        ".github/workflows/crowdin.yml",
+        ".github/workflows/danger.yml",
+        ".github/workflows/docs.yaml",
+        ".github/workflows/erb-lint-core.yml",
+        ".github/workflows/i18n-tasks.yml",
+        ".github/workflows/openapi.yaml",
+        ".github/workflows/rubocop-core.yml",
+        ".github/workflows/seed-all-locales.yml",
+        ".github/workflows/work-package-check.yml",
+        ".ruby-version",
+        "AGENTS.md",
+        "Gemfile.lock",
+        "docker/dev/backend/Dockerfile",
+        "docker/prod/Dockerfile",
+        "docs/development/development-environment/linux/README.md",
+        "docs/development/development-environment/macos/README.md",
+        "docs/installation-and-operations/installation/manual/README.md",
+        "extensions/op-blocknote-hocuspocus/package-lock.json",
+        "frontend/package-lock.json",
+        "frontend/package.json"
+      ]
+    },
+    {
+      "index": 8,
+      "repo": "opf/openproject",
+      "kind": "positive",
+      "merge": "d4984d43d13f91ddfb7538c67f4df8d12d1043fa",
+      "first": "8582d582a516f19a37eba49a25fda087645113b2",
+      "second": "9ef0e0211f3d0c906255e300b9b6e9735627c90e",
+      "base": "6400f5479f58b0ea00402221f3e00fea0d25162a",
+      "conflicted": [
+        "AGENTS.md",
+        "frontend/AGENTS.md",
+        "package-lock.json",
+        "package.json"
+      ]
+    },
+    {
+      "index": 9,
+      "repo": "opf/openproject",
+      "kind": "positive",
+      "merge": "7be54faaf1055f862ea00dac395426dcbb23ccdf",
+      "first": "ebc5a934d65c3398a70413f0cf2bde16591dac71",
+      "second": "3c167d7be60ceff384b8d08a73a356ad7bdfbf56",
+      "base": "968b8dbd2346e1d68a2bd1a5d54740a510476a0c",
+      "conflicted": [
+        "Gemfile.lock"
+      ]
+    },
+    {
+      "index": 10,
+      "repo": "opf/openproject",
+      "kind": "positive",
+      "merge": "368e4526cf059b87501d6d44351d759359249ac6",
+      "first": "88cfa9b6e1ac9ad98d38bea5cfa999567b66dfde",
+      "second": "a5be9bf3a2c9ea55aeab2d184b26a67176f9cb31",
+      "base": "9236c124fe24d9bbfa72d27ea92df4648c61ed8f",
+      "conflicted": [
+        "extensions/op-blocknote-hocuspocus/package-lock.json",
+        "extensions/op-blocknote-hocuspocus/package.json"
+      ]
+    },
+    {
+      "index": 11,
+      "repo": "opf/openproject",
+      "kind": "positive",
+      "merge": "4d4ee8fa0cac0fb4562143df0b2b6de5f313027a",
+      "first": "109deb23223ab928137d65d730bb392d4fbd92bd",
+      "second": "17e1fc822d5ab875a8285ba1fb14f1795e9f8edf",
+      "base": "5b520e35750ddb151c407a91863a01942a9365fb",
+      "conflicted": [
+        "Gemfile.lock"
+      ]
+    },
+    {
+      "index": 12,
+      "repo": "opf/openproject",
+      "kind": "positive",
+      "merge": "588e3d3294f060de9d32adc997180e094901f0bc",
+      "first": "db4a314e9896c106908963d4c0fdfe7917387429",
+      "second": "a591b7d5ad9fbf8c88f97e11aba62f5961fb304f",
+      "base": "c4a4357ef640002055e340d7fcc80d40021eac91",
+      "conflicted": [
+        "Gemfile.lock",
+        "config/initializers/feature_decisions.rb"
+      ]
+    },
+    {
+      "index": 13,
+      "repo": "opf/openproject",
+      "kind": "positive",
+      "merge": "21ee1dab38bbf3ed6a6463efd531944bd7d442f7",
+      "first": "cea8761145f00c2e63eb5ef393d3af558c351dcf",
+      "second": "c4a4357ef640002055e340d7fcc80d40021eac91",
+      "base": "9579995645b707626b8de36fbaf33dfda6c04b9e",
+      "conflicted": [
+        "Gemfile.lock",
+        "config/initializers/feature_decisions.rb"
+      ]
+    },
+    {
+      "index": 14,
+      "repo": "opf/openproject",
+      "kind": "positive",
+      "merge": "8e262a31aba6e9ceb6b2e65963018d0e2a960826",
+      "first": "cb4d710917b3e7000cb3b949738deff0e13b6e15",
+      "second": "2ad0186cf7f079f13c6b6698f7b9e79b065ec1e3",
+      "base": "0abce7a302f72391b8d8e41d87727c9c9bd44899",
+      "conflicted": [
+        "app/controllers/work_package_types/details_tab_controller.rb",
+        "app/forms/work_package_types/details_form.rb",
+        "app/services/work_package_types/update_service.rb",
+        "frontend/package-lock.json",
+        "spec/features/types/crud_spec.rb"
+      ]
+    },
+    {
+      "index": 15,
+      "repo": "opf/openproject",
+      "kind": "positive",
+      "merge": "312a3ee5cb8b43ab46225a71a32206b11524a13c",
+      "first": "29b02802b9a69a64b4f5ab5a07e9b9f4f9b7f940",
+      "second": "8157085f9d29c828b08fa289e3cfa30b55fb043b",
+      "base": "53ac6b0b4f747e818d919ba9015736c4caed4f1f",
+      "conflicted": [
+        "Gemfile.lock"
+      ]
+    },
+    {
+      "index": 16,
+      "repo": "opf/openproject",
+      "kind": "positive",
+      "merge": "b85a8bc7ab1b71393e1596c0495406d19fc8551d",
+      "first": "0b2e5e7ca5b826e8e5c7203f7661b6c6f4af373d",
+      "second": "8a45ba88f3592966c1f9a6011a1024bac9ffc23d",
+      "base": "0b2e0b9b310b4e841a021447edfc967353a350a7",
+      "conflicted": [
+        "Gemfile",
+        "Gemfile.lock",
+        "modules/backlogs/app/controllers/backlogs/sprints_controller.rb"
+      ]
+    },
+    {
+      "index": 17,
+      "repo": "opf/openproject",
+      "kind": "positive",
+      "merge": "f94267742f37daf8f7ef84aa289aaa505b26589e",
+      "first": "05fc0743fa9a3d026d46e3ffb4a17e96dda55094",
+      "second": "d262d2ac07008392539dac2d39c7d3a9ad12e016",
+      "base": "edab018228963cb1162bfb371f8726c9bf3e2c9c",
+      "conflicted": [
+        "Gemfile.lock"
+      ]
+    },
+    {
+      "index": 18,
+      "repo": "opf/openproject",
+      "kind": "positive",
+      "merge": "d991b8983574ac6e87e0c389d3d4eb54b6f4c6da",
+      "first": "520707f165d2e933c5e91ab4c2c504da915f98d4",
+      "second": "a2c640ff631633be53c9d1e703a7b80aabdc1f36",
+      "base": "0cfb5e1545fe47fc0d838de95f0f979e5e182f16",
+      "conflicted": [
+        "Gemfile",
+        "Gemfile.lock",
+        "frontend/package-lock.json",
+        "frontend/package.json"
+      ]
+    },
+    {
+      "index": 19,
+      "repo": "opf/openproject",
+      "kind": "positive",
+      "merge": "19a531becc212cd462d2ce2ec8342f83ab902972",
+      "first": "f5036051959d70a60a1f61535e80c83a2f821a8a",
+      "second": "e0e6a07f71185219086d89d2674fd87cff1b6c90",
+      "base": "ad40d4f03dbf50091d78036fe34f406cfc78f483",
+      "conflicted": [
+        "frontend/package-lock.json",
+        "frontend/package.json"
+      ]
+    },
+    {
+      "index": 20,
+      "repo": "opf/openproject",
+      "kind": "negative",
+      "merge": "5faf70ea8435fad6bb9d912009de6552e8a175f3",
+      "first": "4ac72b245faa88d8377b135bb93f5c5e592aa14f",
+      "second": "a8f5ac8c294c00cd2beb47540098610741335dd1",
+      "base": "b714ba6caf3f616bf39ac9623d36b5e83b89a8f9",
+      "conflicted": []
+    },
+    {
+      "index": 21,
+      "repo": "opf/openproject",
+      "kind": "negative",
+      "merge": "a247108a79b232ac16169a1910a9653bcd6d11e9",
+      "first": "b9c41cd322b82f748e7259f6a5a06ef976839dc2",
+      "second": "fbc8b16360ca849cd71374c080361a9390e5d575",
+      "base": "3e579535a3ae914bb45d4232f72fb8b6562a66d3",
+      "conflicted": []
+    },
+    {
+      "index": 22,
+      "repo": "opf/openproject",
+      "kind": "negative",
+      "merge": "fd9a6c409ba9e2935108921af2326e915566a50c",
+      "first": "21a3b25949bff1f31fb5a62283db8dece9a932ce",
+      "second": "89f55c1854c96a31732f0a6bd773fd38f2d23293",
+      "base": "8ffa72d949da19fe1649011165555da8a434cb10",
+      "conflicted": []
+    },
+    {
+      "index": 23,
+      "repo": "opf/openproject",
+      "kind": "negative",
+      "merge": "59a0b22d61b90e1cc71b66dc5ed5846c6fbd71d0",
+      "first": "405d9a9dfa34ac9383121da9f620026ec1d1b0ee",
+      "second": "8d1e4ea0e2647d07285aafe43a7c19dab1f85d6f",
+      "base": "5fc23285e3e0c04ec4633849f1d2de7a48bb2701",
+      "conflicted": []
+    },
+    {
+      "index": 24,
+      "repo": "opf/openproject",
+      "kind": "negative",
+      "merge": "4d61fea1b2e40cd169a58708803a0471be18b918",
+      "first": "4c89af1030596fbc3ef81e2a1fb1bff97ac08fe8",
+      "second": "902ba3a868fd846b989443cb41b2e4b77230e48b",
+      "base": "8ab31a6289fd8fb3869657b117c2c9f8423f4587",
+      "conflicted": []
+    },
+    {
+      "index": 25,
+      "repo": "opf/openproject",
+      "kind": "negative",
+      "merge": "0fc038d5604a3a29530e99a079904ed24108adf3",
+      "first": "b714ba6caf3f616bf39ac9623d36b5e83b89a8f9",
+      "second": "5fc23285e3e0c04ec4633849f1d2de7a48bb2701",
+      "base": "2f9d9fdab2620ece34e54765f21981a6150b7440",
+      "conflicted": []
+    },
+    {
+      "index": 26,
+      "repo": "opf/openproject",
+      "kind": "negative",
+      "merge": "8e917bef72c80365961644bc478b42b98ddb1eda",
+      "first": "57c8213c09b7448930cc4c7d93d6f78ff3ac59bc",
+      "second": "6a0f8a45b57b4f9dae495dbbe1a5c8d670f8cedd",
+      "base": "af368077ba7649c378ff990baa776292adfdb6ef",
+      "conflicted": []
+    },
+    {
+      "index": 27,
+      "repo": "opf/openproject",
+      "kind": "negative",
+      "merge": "ccc8a3e5f02e3b6087c4419df2a52442421a9eeb",
+      "first": "5be79c349f38e113c9d7f9eb9563ddaaaf7d1442",
+      "second": "c12311061939a57941d57d3ecbe7e1473df55106",
+      "base": "af368077ba7649c378ff990baa776292adfdb6ef",
+      "conflicted": []
+    },
+    {
+      "index": 28,
+      "repo": "opf/openproject",
+      "kind": "negative",
+      "merge": "5be79c349f38e113c9d7f9eb9563ddaaaf7d1442",
+      "first": "07f5d407626e7bdd7b02fd2bd2a3f0fa5ce2ea95",
+      "second": "fa8fb7fb8f0ff0cd9ff0f2c929e9446737c807ac",
+      "base": "af368077ba7649c378ff990baa776292adfdb6ef",
+      "conflicted": []
+    },
+    {
+      "index": 29,
+      "repo": "opf/openproject",
+      "kind": "negative",
+      "merge": "07f5d407626e7bdd7b02fd2bd2a3f0fa5ce2ea95",
+      "first": "946e189eb26ea41a1a350acfce197983792f6192",
+      "second": "6c291fdf2b5989ced47791af1b0f58b5bf5e3ce7",
+      "base": "66840828c93fa05652bcc49c8488fdf8218c70bb",
+      "conflicted": []
+    },
+    {
+      "index": 30,
+      "repo": "opf/openproject",
+      "kind": "negative",
+      "merge": "946e189eb26ea41a1a350acfce197983792f6192",
+      "first": "b56d79f67ba62193f36771ee4c3dbf53631f7609",
+      "second": "84adf75484678395f5fb250e8718a04c30ac7615",
+      "base": "af368077ba7649c378ff990baa776292adfdb6ef",
+      "conflicted": []
+    },
+    {
+      "index": 31,
+      "repo": "opf/openproject",
+      "kind": "negative",
+      "merge": "b27342134c31c98997c97988f46dd1dbde2e401f",
+      "first": "2ceb3b72cd618ee58db2c068efb5cf6d29cef6a7",
+      "second": "be9068d618e29bf13cf3c40366df423b94274f79",
+      "base": "4ec7ac85025c44895ae826507d0c52691fc45972",
+      "conflicted": []
+    },
+    {
+      "index": 32,
+      "repo": "opf/openproject",
+      "kind": "negative",
+      "merge": "fa8fb7fb8f0ff0cd9ff0f2c929e9446737c807ac",
+      "first": "af368077ba7649c378ff990baa776292adfdb6ef",
+      "second": "2f9d9fdab2620ece34e54765f21981a6150b7440",
+      "base": "44975e0caccbc66f20093508e67b73518728e27a",
+      "conflicted": []
+    },
+    {
+      "index": 33,
+      "repo": "opf/openproject",
+      "kind": "negative",
+      "merge": "f174e5976f20847c7015a5c13e5bc74bf90b7c16",
+      "first": "350e0f5561875399b848e9f1063dd5f9b25dbd9a",
+      "second": "44975e0caccbc66f20093508e67b73518728e27a",
+      "base": "70facbb35388917b04e77677d5693f7b961bc3ec",
+      "conflicted": []
+    },
+    {
+      "index": 34,
+      "repo": "opf/openproject",
+      "kind": "negative",
+      "merge": "245541c29065c9a2e1b2bf3a15aa00c00373614a",
+      "first": "65db917f7f3f06022e4ed240921b3b7c809f5e81",
+      "second": "f3664f3907d35f298514c046bb8b4154a95cd8fb",
+      "base": "e7d4207110961938e10eb49441b712046f443003",
+      "conflicted": []
+    },
+    {
+      "index": 35,
+      "repo": "opf/openproject",
+      "kind": "negative",
+      "merge": "b790599472c691c2e59a48a7b2536b848748f815",
+      "first": "2fd1ca53a41fdbdd43e1b0a7fe483bbdb3ba048d",
+      "second": "8d8f010cb0bd7f4c09ce9c13cdeb634cdf91bbcd",
+      "base": "6526be5f09d3c4b38845b23e9ab68c346ba3e8a9",
+      "conflicted": []
+    },
+    {
+      "index": 36,
+      "repo": "opf/openproject",
+      "kind": "negative",
+      "merge": "d1935885b28f03fbd2236ecf7472c2f5366cbf8a",
+      "first": "8e47fa90cd12a5dd9af08e67bba87027028362bc",
+      "second": "6021638388ac6e89ac6b99efe9fc294b10e8bf94",
+      "base": "fc0343dc1c7dc46c7f3b036400d2e7b2c8d11934",
+      "conflicted": []
+    },
+    {
+      "index": 37,
+      "repo": "opf/openproject",
+      "kind": "negative",
+      "merge": "7a0eb2121e0213fec40d677226ea3dfadfc25c9c",
+      "first": "4ea70685b90d92ce52115dc65a1f88cfe025f5b1",
+      "second": "6526be5f09d3c4b38845b23e9ab68c346ba3e8a9",
+      "base": "583db02a3ce57cbfadf28d99541c9dd23b4a36df",
+      "conflicted": []
+    },
+    {
+      "index": 38,
+      "repo": "opf/openproject",
+      "kind": "negative",
+      "merge": "7ea4b22852aaf23ea911bf2ec5a4c5b55e2c3deb",
+      "first": "288e9bb15601aa04810c806b7c153b3636ab345f",
+      "second": "ed538b1b50088cd430cc537ad4c475e74c549304",
+      "base": "99a1660adbb9fd76ea0d4077884567e6ed22fa2b",
+      "conflicted": []
+    },
+    {
+      "index": 39,
+      "repo": "opf/openproject",
+      "kind": "negative",
+      "merge": "ebf8f54d0a2e42e8bd70c8d2b355492f3d5bdc47",
+      "first": "d3d4ccd276104ee0c86be9249e4e31a8e46c56b1",
+      "second": "25077fdc769ac875050381c3e6f09d0bcebc40c4",
+      "base": "be47b640f0d26f3cdcb0b7300414e669566f648c",
+      "conflicted": []
+    },
+    {
+      "index": 40,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "positive",
+      "merge": "772aeccfd5008d24f97cd30decb89da3453b5df5",
+      "first": "debbb203238eedc8cee7125f9fd6e931359ddd82",
+      "second": "7179bb77bbf2518e8fd67e0030bd12fa74e1e341",
+      "base": "338e55dcc099cdd7d26fc30794d05ceb35cdc736",
+      "conflicted": [
+        ".github/workflows/api-module.yml",
+        "admin-dev/themes/new-theme/package-lock.json",
+        "composer.lock",
+        "install-dev/install_version.php",
+        "phpstan-baseline.neon",
+        "src/Core/Version.php"
+      ]
+    },
+    {
+      "index": 41,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "positive",
+      "merge": "add8dd89eb825685602a3234df58b6072deb8558",
+      "first": "29b9bbea194aa67cbe30b4aaeb8a5ac43e307505",
+      "second": "384f714c3fc1329b97a581d0bf79ec330b4078f6",
+      "base": "84db6bd3a3c1612535b15b9df934afd609085423",
+      "conflicted": [
+        "composer.json",
+        "composer.lock"
+      ]
+    },
+    {
+      "index": 42,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "positive",
+      "merge": "e5ab16936e085f864b924ffbe1812b1a22df9eda",
+      "first": "3e420b5210b23b88117252c0db418cc8ebc3c487",
+      "second": "1d7cc14b6e90ca65579f8cbd8b9499f7e2cbf359",
+      "base": "2c2f3a822d07d2ae30a985d086230cc6c638f35e",
+      "conflicted": [
+        "composer.lock",
+        "tests/UI/package-lock.json",
+        "tests/UI/package.json"
+      ]
+    },
+    {
+      "index": 43,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "positive",
+      "merge": "153e4b0d1b306d4e7517df322571628a7b8a0a10",
+      "first": "6d78ac503209f6dc86488644abe7cf15c01d348c",
+      "second": "12018f6b1eb657bceeb56d7b893ea0aebc87a7a3",
+      "base": "46b2b075a69fa5344dd5ab571bc6a1b8155e7a8d",
+      "conflicted": [
+        "composer.lock"
+      ]
+    },
+    {
+      "index": 44,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "positive",
+      "merge": "af69d194cfe0fee3a0f0e194bd0e47e67f7fe999",
+      "first": "8cc8750d0c76f4d189a7091176bbdade5c9115d8",
+      "second": "db9ecafba84c8ecc47e822ec5be8d630461ac83f",
+      "base": "8e6d82c0f1a52f955c943ebbc80b547c5c6f2194",
+      "conflicted": [
+        "composer.lock"
+      ]
+    },
+    {
+      "index": 45,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "positive",
+      "merge": "cc7246afb3fb95aee0a7ec184ef6e24f2df7288b",
+      "first": "63a1a63ea9548a733a62197f8f59894e91076388",
+      "second": "8e6d82c0f1a52f955c943ebbc80b547c5c6f2194",
+      "base": "78f7bc2b5a6a8458d546b2f232703bab0ab3cba0",
+      "conflicted": [
+        "composer.lock",
+        "install-dev/install_version.php",
+        "src/Core/Version.php"
+      ]
+    },
+    {
+      "index": 46,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "positive",
+      "merge": "79ff36a515f42c5a9c3a0f9caabe79ee9afa2c2c",
+      "first": "1eb626b4ea149a3a1c339b19783993b0f0419955",
+      "second": "84db6bd3a3c1612535b15b9df934afd609085423",
+      "base": "452c756fbc02ef11ddd78823d5933b2a8752e7c0",
+      "conflicted": [
+        "composer.lock"
+      ]
+    },
+    {
+      "index": 47,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "positive",
+      "merge": "aebb37813b1234ce3a64d282ae5dde3fcd6fa2db",
+      "first": "38abaac32d54efea9f8fdc2b419367d8fec99452",
+      "second": "756c1ce2c3859bc81a589d253f15413946f2eb8d",
+      "base": "4572b0018603c2b6a9c02ee9cd9f5cc8470747af",
+      "conflicted": [
+        "composer.lock"
+      ]
+    },
+    {
+      "index": 48,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "positive",
+      "merge": "d6a94e1a9b7c982e39f774a0009b32d55ccec313",
+      "first": "4549658d2496504885664971fa0502dda244e30b",
+      "second": "4572b0018603c2b6a9c02ee9cd9f5cc8470747af",
+      "base": "68ca49ab31c07620e6a83655a08498d819d64b4d",
+      "conflicted": [
+        "composer.lock",
+        "tests/UI/package-lock.json",
+        "tests/UI/package.json"
+      ]
+    },
+    {
+      "index": 49,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "positive",
+      "merge": "8d66bb49a790b1a531d66a788699c314adae88b3",
+      "first": "b046e3ca119e52c48911ce6973cc24daf527bc2e",
+      "second": "68ca49ab31c07620e6a83655a08498d819d64b4d",
+      "base": "e4be82aa31b67227e9d0fc01069fd08af85996ac",
+      "conflicted": [
+        "composer.lock"
+      ]
+    },
+    {
+      "index": 50,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "positive",
+      "merge": "de5cec7bbf44043a47291b30bf34a728eeb03d8a",
+      "first": "c525d357dd3be7933ae6c2cf46fca62b96f497cf",
+      "second": "38f039960f06e87d711069be625530a729bac0ab",
+      "base": "109969fac6a33bb8c3f8334d4be540b022dc7389",
+      "conflicted": [
+        "composer.json",
+        "composer.lock",
+        "docs/CHANGELOG.txt",
+        "tests/UI/campaigns/functional/API/02_checkEndpoints.ts",
+        "tests/UI/package-lock.json"
+      ]
+    },
+    {
+      "index": 51,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "positive",
+      "merge": "7a4de54988ab73aa20236c4b1b420e0ccfc550ee",
+      "first": "28181b3c8e77bad0d1ab834871a358913be92cf2",
+      "second": "1538cab198fb3037167de2ec31a927501d3781f7",
+      "base": "412ee3d450b1ab08082d68789b49e4b398335961",
+      "conflicted": [
+        "tests/UI/package-lock.json"
+      ]
+    },
+    {
+      "index": 52,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "positive",
+      "merge": "dfe6b8637005e6830048fc734be1d12c7d69b712",
+      "first": "abf99aa5d2668ec5dbcdff87b1e5096b1df4de0f",
+      "second": "109969fac6a33bb8c3f8334d4be540b022dc7389",
+      "base": "bd4aad2e169d1f88c049c6b93298cabc5d1f5ae9",
+      "conflicted": [
+        "admin-dev/themes/new-theme/js/pages/discount/discount-map.ts",
+        "admin-dev/themes/new-theme/js/pages/discount/form/index.ts",
+        "install-dev/data/xml/hook.xml",
+        "src/Core/Grid/Definition/Factory/DiscountGridDefinitionFactory.php",
+        "src/Core/Grid/Query/DiscountQueryBuilder.php",
+        "tests/UI/package-lock.json"
+      ]
+    },
+    {
+      "index": 53,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "positive",
+      "merge": "3e12f6366d2b45bf43c60aa7e4fbfce4d27c4d3a",
+      "first": "8d004f03a59894e7120079ef317505d5e4718b03",
+      "second": "72d6d086ead9220887a514e7c4773b3695e1f9eb",
+      "base": "47bd757cf7f58d9a2fa2793400ab138588cf3c1e",
+      "conflicted": [
+        "composer.lock",
+        "src/PrestaShopBundle/Utils/HTMLPurifier.php",
+        "tests/UI/campaigns/functional/BO/14_advancedParameters/09_webservice/04_filterSortPagination.ts",
+        "tests/UI/package-lock.json"
+      ]
+    },
+    {
+      "index": 54,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "positive",
+      "merge": "86d933ece5f2a2a39caf5d7e740432d6629df446",
+      "first": "bab7abecec15acb745f0568a65868b1f4720bf5b",
+      "second": "47bd757cf7f58d9a2fa2793400ab138588cf3c1e",
+      "base": "40a345c753fe2f243b4415e1d1ba3b1d500c8b83",
+      "conflicted": [
+        "tests/UI/package-lock.json"
+      ]
+    },
+    {
+      "index": 55,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "positive",
+      "merge": "ca78a56db04f7c9ee6a8ab1586ccea006a7c1c26",
+      "first": "a770e782567832d62af5f224fc43769fcdf06494",
+      "second": "f9039d9432a0e41da5071b12b28b191412eb91fd",
+      "base": "1dfe8ec6949739f69bfdcaa79fa14a1e23c16534",
+      "conflicted": [
+        "tests/UI/package-lock.json"
+      ]
+    },
+    {
+      "index": 56,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "positive",
+      "merge": "39dc592994ef17077073056b1aca228a3ba547bd",
+      "first": "07f1dd5f74fd008af9e6199c9164f900cbf979a2",
+      "second": "e441b79373a9b207a5e8cbd1b6f7a01298ca6d1c",
+      "base": "d140e1ea0ff7f63838503ed8cf13b252144134e0",
+      "conflicted": [
+        "tests/UI/package-lock.json"
+      ]
+    },
+    {
+      "index": 57,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "positive",
+      "merge": "07f1dd5f74fd008af9e6199c9164f900cbf979a2",
+      "first": "d140e1ea0ff7f63838503ed8cf13b252144134e0",
+      "second": "958410fa15a67602a93486ad75be0cb093819e67",
+      "base": "d6cf580f8ccdfedcafbc3eebbcf26bc93d2df642",
+      "conflicted": [
+        "tests/UI/package-lock.json"
+      ]
+    },
+    {
+      "index": 58,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "positive",
+      "merge": "7a18c80a6c874cf5e9e662cb1751e2f0ec222e9c",
+      "first": "02d07b2e373743e645b209c3ffc2da613f41e67c",
+      "second": "c489f1b7f34e073e4a1689c738dd47f274ab1366",
+      "base": "637143d87bfa6525c4b2a912d77ce8876fc27ecf",
+      "conflicted": [
+        "composer.lock",
+        "install-dev/install_version.php",
+        "src/Core/Version.php",
+        "tests/UI/package-lock.json"
+      ]
+    },
+    {
+      "index": 59,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "positive",
+      "merge": "610e477b6d1a069bc4e83c32b33a8169f19f491e",
+      "first": "e46837f8bec0aaff961fdfc42761f388d1f1b738",
+      "second": "4ae7c8fcd10509f02dcb0c3cede5618b4beae469",
+      "base": "094e4ed718287004445f77d08cf8347cc99fcd58",
+      "conflicted": [
+        "admin-dev/themes/new-theme/js/fos_js_routes.json",
+        "composer.lock",
+        "install-dev/install_version.php",
+        "src/Core/Version.php",
+        "src/PrestaShopBundle/Controller/Admin/Sell/Order/OrderController.php",
+        "tests/UI/campaigns/functional/API/02_checkEndpoints.ts",
+        "tests/UI/package-lock.json"
+      ]
+    },
+    {
+      "index": 60,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "negative",
+      "merge": "32e0661c3dafabdca8970b68f859b19c3197a93e",
+      "first": "8b7ddab8f6b9efad4714c826a2d914fe40f02153",
+      "second": "efede281a4d5267267d07f538bb4610da32aabf9",
+      "base": "2bae259d431c64bbc8d8934288f128115cb56106",
+      "conflicted": []
+    },
+    {
+      "index": 61,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "negative",
+      "merge": "29b9bbea194aa67cbe30b4aaeb8a5ac43e307505",
+      "first": "2414bdf43a2b1a486a5a3611c45d01ada4684fc8",
+      "second": "a931b21e617abb9688f32e658b3cbfdcc7f6386b",
+      "base": "92a68e882554c49b0f155710dfdf47ed5b575607",
+      "conflicted": []
+    },
+    {
+      "index": 62,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "negative",
+      "merge": "61b9a27db1a3d5c762335675593cefdfa47b243a",
+      "first": "6a6652168f485304b4ecd9ba4bfa7685a5f04395",
+      "second": "40d033fd4c5aca71d4565e69fa173b4258302c0b",
+      "base": "fb1d54cd4611fa31286277a05323472fb420b824",
+      "conflicted": []
+    },
+    {
+      "index": 63,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "negative",
+      "merge": "db9ecafba84c8ecc47e822ec5be8d630461ac83f",
+      "first": "aee6608d42643049213c7183423b918d8fe99a49",
+      "second": "8be1ee2a6572749f7d96687375e1480c0a2c6357",
+      "base": "01a4d8af072a4d82396e1ddb931d570aad4886a2",
+      "conflicted": []
+    },
+    {
+      "index": 64,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "negative",
+      "merge": "c04ec35e44cf77a4746938e9b4e69a31287b5856",
+      "first": "c1a7dafd77fe57b6c961a7cc09985a90f65d7cb9",
+      "second": "e4be82aa31b67227e9d0fc01069fd08af85996ac",
+      "base": "0549812b26a3d88090ec64b59ff70281cc2eadcb",
+      "conflicted": []
+    },
+    {
+      "index": 65,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "negative",
+      "merge": "e4be82aa31b67227e9d0fc01069fd08af85996ac",
+      "first": "698da4f7a4f0d4d417999fa7f85b203f79ad614e",
+      "second": "6ec95c5d3f09f91154de78bcf2c458d5fb3fb189",
+      "base": "50a6fa97200ad05164568d1fd6643d173b648afb",
+      "conflicted": []
+    },
+    {
+      "index": 66,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "negative",
+      "merge": "1f2b378d263249915c70c23323b32fd1d2e0ef82",
+      "first": "cf1726fbb22f8ada2535ad89a1a572b2e79e12fe",
+      "second": "50a6fa97200ad05164568d1fd6643d173b648afb",
+      "base": "ee5a797e5044279bf1e40584ed4267db8c6854e3",
+      "conflicted": []
+    },
+    {
+      "index": 67,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "negative",
+      "merge": "d330f351abb5a6868da9dd456f0621397a792c84",
+      "first": "fedbf109e725cc81117f4633fdf75cbffaaab3df",
+      "second": "1eb268d670260fab23bd5afef73c54883ed196e7",
+      "base": "eaad890797c8b349b4a9506d28e21aa38c9567f5",
+      "conflicted": []
+    },
+    {
+      "index": 68,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "negative",
+      "merge": "f9039d9432a0e41da5071b12b28b191412eb91fd",
+      "first": "1dfe8ec6949739f69bfdcaa79fa14a1e23c16534",
+      "second": "bf4648ccff16b2e814e9f630830224e24d047c54",
+      "base": "62a6f35e9a756d26099f3de5c6c9ba79b9c91e0e",
+      "conflicted": []
+    },
+    {
+      "index": 69,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "negative",
+      "merge": "01ec25b8ed0768874bdefd1d88e2151c2940cb36",
+      "first": "ce90b40efd0663b796dd78d7750716a392b458b8",
+      "second": "4f7653032a0605d8dfc16515a5f3aea62dcef9b1",
+      "base": "403864627b051279a09e14bea676fc2cfc549ab1",
+      "conflicted": []
+    },
+    {
+      "index": 70,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "negative",
+      "merge": "d18417efae991ed077c3dfb40ac6dd4d4f9f3f41",
+      "first": "7208693ea60657b4be91154b0cc7df4e807cd7b7",
+      "second": "952c446b65f64b7fb695ba8b71caa4c4c638e9f5",
+      "base": "42efe272e0a2d35c1c4ae4291714e9597c452936",
+      "conflicted": []
+    },
+    {
+      "index": 71,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "negative",
+      "merge": "f69daeaf64cf3543e285750635b58cb36d0de617",
+      "first": "27c86fb659ef881b3f3169e904a28618b703b3b7",
+      "second": "85852e9978be777b50193384c40be936301ba2de",
+      "base": "7693541b08cbd5bbbe508a6b3510c54c59e1dbf2",
+      "conflicted": []
+    },
+    {
+      "index": 72,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "negative",
+      "merge": "42efe272e0a2d35c1c4ae4291714e9597c452936",
+      "first": "d43a0a79d471c6769cba637abeb3c2cf8e710fa8",
+      "second": "ade7120e376752406128ec56a143ee87c5840bdb",
+      "base": "e46837f8bec0aaff961fdfc42761f388d1f1b738",
+      "conflicted": []
+    },
+    {
+      "index": 73,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "negative",
+      "merge": "b6689411a70377cde2e2b95ca9efc247bc300763",
+      "first": "19b903d68cc4aecc1e703e2cb736024f4ebc3f3f",
+      "second": "ca8a33f23607f47332575ee1ff1c67b1cfb07ce8",
+      "base": "ba29cf3e874db27b8a03ffebc0f9b47cb5aee876",
+      "conflicted": []
+    },
+    {
+      "index": 74,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "negative",
+      "merge": "97004b1e43173dd95561bd8efd1b73afedb31c10",
+      "first": "ffc1430757c3ceaf7eba1fe170c90b75b1885502",
+      "second": "8a86d43dc6d10bc29c7761505d83e68bbcf36b81",
+      "base": "b9ec2b5138f7c355bb2b45150c5adadd1010b050",
+      "conflicted": []
+    },
+    {
+      "index": 75,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "negative",
+      "merge": "b9ec2b5138f7c355bb2b45150c5adadd1010b050",
+      "first": "543d06d771c30951ae431d209d4a6d57e68d0543",
+      "second": "f83d4d7c13d8831923144ee370edceb7544ed378",
+      "base": "b1b04586dc92e2bbdc8ada4657dfa677a9fea3ac",
+      "conflicted": []
+    },
+    {
+      "index": 76,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "negative",
+      "merge": "1cea57c639dd28babc82afae8dd8e9856220b6b9",
+      "first": "5920bc25f529c0cee60d60a457ac10f7004ccf4f",
+      "second": "d802396de4ceae13d00a85bd65c6fc84252b3fcb",
+      "base": "aaac4937c7c3bdaaec82a95542e4e6ae31d930a6",
+      "conflicted": []
+    },
+    {
+      "index": 77,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "negative",
+      "merge": "6aecd2dd1272d64fef77afdc4a943ef87892d789",
+      "first": "ec5a2c5be2a120660658535ff3fddd6d92a8ca75",
+      "second": "dd11225c1957af927391ea4e83a52235c916a6c3",
+      "base": "3ea9518c047e02cb2b25235d23da1243f91e3069",
+      "conflicted": []
+    },
+    {
+      "index": 78,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "negative",
+      "merge": "690b14991151e5336eff5585e4b19325ffd82446",
+      "first": "d9597e51b29e6a11e94982ba8d6db37ec4520a7f",
+      "second": "5a477f98dffe585dc979d9deb1d00d1835427220",
+      "base": "4c04fdeed2aff9f677c687abe42430431c2b485b",
+      "conflicted": []
+    },
+    {
+      "index": 79,
+      "repo": "PrestaShop/PrestaShop",
+      "kind": "negative",
+      "merge": "42efa4df2e3c66f952f34d32ce99edbebdff2775",
+      "first": "d7448eca4562a01e66aa162f135d9352109d7774",
+      "second": "17e700b01c1188198dd554cc52b80808f6a36b30",
+      "base": "594ce1caf3537ae6faeecef81c9e1a31168130f2",
+      "conflicted": []
+    },
+    {
+      "index": 80,
+      "repo": "home-assistant/frontend",
+      "kind": "positive",
+      "merge": "33615bc5dc231e72796ed31b5c7f0d198b5a7213",
+      "first": "87105ea76afdcd68e3a85b4d18cc85655b883b93",
+      "second": "380e9b5a81ada29a1d187b4123c54fb3d6fbcc89",
+      "base": "a406abfdcdfd074e3f31fd9741e3e7febf71bb1d",
+      "conflicted": [
+        "build-scripts/gulp/gather-static.js",
+        "build-scripts/gulp/index.mjs",
+        "build-scripts/gulp/map-assets.js",
+        "package.json",
+        "src/common/dom/setup-leaflet-map.ts",
+        "src/common/map/base-layer.ts",
+        "src/components/chart/ha-chart-base.ts",
+        "src/components/chart/state-history-chart-timeline.ts",
+        "src/components/chart/state-history-charts.ts",
+        "src/components/ha-camera-stream.ts",
+        "src/components/ha-form/get-selector-fallback-value.ts",
+        "src/components/ha-form/get-selector-initial-value.ts",
+        "src/components/ha-selector/ha-selector-object.ts",
+        "src/components/map/ha-map.ts",
+        "src/data/map_tiles.ts",
+        "src/dialogs/more-info/controls/more-info-update.ts",
+        "src/dialogs/more-info/ha-more-info-dialog.ts",
+        "src/dialogs/more-info/ha-more-info-related.ts",
+        "src/dialogs/voice-assistant-setup/cloud/cloud-step-signin.ts",
+        "src/panels/config/connectivity/ha-config-connectivity.ts",
+        "src/panels/config/ha-panel-config.ts",
+        "src/panels/config/integrations/integration-panels/serial/serial-config-dashboard.ts",
+        "src/panels/config/scene/ha-scene-editor.ts",
+        "src/panels/history/ha-panel-history.ts",
+        "src/panels/lovelace/cards/energy/hui-energy-usage-graph-card.ts",
+        "src/panels/lovelace/strategies/home/home-overview-view-strategy.ts",
+        "src/panels/lovelace/strategies/usage_prediction/common-controls-section-strategy.ts",
+        "src/translations/en.json",
+        "test/common/map/base-layer.test.ts",
+        "test/components/ha-form/compute-initial-ha-form-data.test.ts",
+        "test/components/ha-selector/ha-selector-object.test.ts",
+        "test/data/map_tiles.test.ts",
+        "test/e2e/app.spec.ts",
+        "test/e2e/app/src/helpers.ts",
+        "yarn.lock"
+      ]
+    },
+    {
+      "index": 81,
+      "repo": "home-assistant/frontend",
+      "kind": "positive",
+      "merge": "7da090aec58dbfa38ccdaea2a77d3a151907a742",
+      "first": "f216d973159bfcd90caa37eb11ec38629c570e9c",
+      "second": "978c600236d876ea7e2e1967abb2f7748b8f5713",
+      "base": "e39e1b3f5b7a1753de35150f34eab6d3e5b259c1",
+      "conflicted": [
+        "pyproject.toml",
+        "src/components/automation/ha-automation-row-live-test.ts",
+        "src/components/chart/ha-sunburst-chart.ts",
+        "src/components/chart/state-history-chart-line.ts",
+        "src/components/chart/statistics-chart.ts",
+        "src/dialogs/more-info/controls/more-info-image.ts",
+        "src/dialogs/more-info/ha-more-info-dialog.ts",
+        "src/panels/config/areas/ha-config-area-page.ts",
+        "src/panels/config/automation/ha-automation-picker.ts",
+        "src/panels/config/devices/device-detail/ha-device-add-to-dialog.ts",
+        "src/panels/config/devices/ha-config-device-page.ts",
+        "src/panels/lovelace/cards/energy/common/energy-chart-options.ts",
+        "src/panels/lovelace/cards/energy/hui-energy-gas-graph-card.ts",
+        "src/panels/lovelace/cards/energy/hui-energy-solar-graph-card.ts",
+        "src/panels/lovelace/cards/energy/hui-energy-usage-graph-card.ts",
+        "src/panels/lovelace/cards/energy/hui-power-sources-graph-card.ts",
+        "src/util/brands-url.ts",
+        "yarn.lock"
+      ]
+    },
+    {
+      "index": 82,
+      "repo": "home-assistant/frontend",
+      "kind": "positive",
+      "merge": "962e941ec9d8c1ca78713591933b16ad85274b43",
+      "first": "31495b2de99bbec9ea44cdcac445b623f5f23c5d",
+      "second": "b95fce5f248204f08128e9887f17f647b8f3fca5",
+      "base": "87758cc228880315bf15705fc4aa350fe612c6f8",
+      "conflicted": [
+        "build-scripts/gulp/download-translations.js",
+        "pyproject.toml",
+        "src/components/chart/ha-network-graph.ts",
+        "src/components/date-picker/date-range-picker.ts",
+        "src/components/date-picker/styles.ts",
+        "src/components/entity/ha-entity-name-picker.ts",
+        "src/components/ha-gauge.ts",
+        "src/components/ha-selector/ha-selector-numeric-threshold.ts",
+        "src/components/ha-toast.ts",
+        "src/components/input/ha-input.ts",
+        "src/data/icons.ts",
+        "src/dialogs/make-dialog-manager.ts",
+        "src/panels/config/automation/action/ha-automation-action-row.ts",
+        "src/panels/config/automation/add-automation-element-dialog.ts",
+        "src/panels/config/automation/condition/ha-automation-condition-row.ts",
+        "src/panels/config/automation/condition/types/ha-automation-condition-platform.ts",
+        "src/panels/config/automation/target/ha-automation-row-targets.ts",
+        "src/panels/config/automation/trigger/ha-automation-trigger-row.ts",
+        "src/panels/config/automation/trigger/types/ha-automation-trigger-platform.ts",
+        "src/panels/config/developer-tools/action/developer-tools-action.ts",
+        "src/panels/config/devices/ha-config-device-page.ts",
+        "src/panels/config/entities/entity-registry-settings-editor.ts",
+        "src/panels/config/ha-panel-config.ts",
+        "src/panels/config/integrations/integration-panels/zha/zha-device-card.ts",
+        "src/panels/lovelace/card-features/hui-trend-graph-card-feature.ts",
+        "src/panels/lovelace/cards/hui-gauge-card.ts",
+        "src/panels/lovelace/cards/hui-history-graph-card.ts",
+        "src/panels/lovelace/cards/hui-map-card.ts",
+        "src/panels/lovelace/sections/hui-section.ts",
+        "src/panels/lovelace/views/hui-view-footer.ts",
+        "src/state/quick-bar-mixin.ts",
+        "yarn.lock"
+      ]
+    },
+    {
+      "index": 83,
+      "repo": "home-assistant/frontend",
+      "kind": "positive",
+      "merge": "e7e4407a09b90c3c5b85556de67ff99af5e843ae",
+      "first": "3f0c9538bd34d530a56a164a220b062032e8a75c",
+      "second": "ccc48d158a418b7446cd93de24c9e1d473e4e6af",
+      "base": "8f5875c30f005c537e41b1e014a585572ff7cfe8",
+      "conflicted": [
+        "src/components/ha-target-picker.ts",
+        "src/components/target-picker/ha-target-picker-selector.ts",
+        "src/panels/config/automation/add-automation-element-dialog.ts",
+        "src/panels/config/automation/trigger/ha-automation-trigger-editor.ts",
+        "src/panels/config/lovelace/dashboards/ha-config-lovelace-dashboards.ts",
+        "src/panels/lovelace/common/handle-action.ts",
+        "src/panels/lovelace/components/hui-generic-entity-row.ts",
+        "src/panels/lovelace/editor/config-elements/hui-logbook-card-editor.ts",
+        "src/panels/lovelace/strategies/home/home-overview-view-strategy.ts",
+        "src/panels/security/strategies/security-view-strategy.ts",
+        "src/translations/en.json",
+        "yarn.lock"
+      ]
+    },
+    {
+      "index": 84,
+      "repo": "home-assistant/frontend",
+      "kind": "positive",
+      "merge": "8f5875c30f005c537e41b1e014a585572ff7cfe8",
+      "first": "517cd49f35adc16945c5d61894b19f98a1b928ed",
+      "second": "3e749ec085d70c39a715511c9dba0d5399e1fd2d",
+      "base": "e42c5a3254478f2508a21408e2e8fb73df6fddee",
+      "conflicted": [
+        "package.json",
+        "pyproject.toml",
+        "src/components/chart/ha-chart-base.ts",
+        "src/components/ha-bottom-sheet.ts",
+        "src/components/ha-resizable-bottom-sheet.ts",
+        "src/components/ha-slider.ts",
+        "src/panels/config/automation/ha-automation-editor.ts",
+        "src/panels/config/automation/ha-automation-sidebar.ts",
+        "src/panels/config/script/ha-script-editor.ts",
+        "src/panels/lovelace/cards/energy/common/energy-chart-options.ts",
+        "src/panels/lovelace/cards/energy/hui-energy-devices-graph-card.ts",
+        "yarn.lock"
+      ]
+    },
+    {
+      "index": 85,
+      "repo": "home-assistant/frontend",
+      "kind": "positive",
+      "merge": "c013c5ec64daf6ea17ecc72bc7c821e7d2930f7b",
+      "first": "3577991553423e030fb10371480a1cb34471041c",
+      "second": "53d5d0efbd1043d78b39c08b0228ff15ab7ddb33",
+      "base": "df2523a6a2df43c8feebf4173ecb65f4a4bd76e0",
+      "conflicted": [
+        "pyproject.toml",
+        "src/panels/config/devices/ha-config-device-page.ts",
+        "src/panels/lovelace/strategies/areas/areas-overview-view-strategy.ts",
+        "src/panels/lovelace/strategies/areas/editor/hui-areas-dashboard-strategy-editor.ts",
+        "src/translations/en.json",
+        "yarn.lock"
+      ]
+    },
+    {
+      "index": 86,
+      "repo": "home-assistant/frontend",
+      "kind": "positive",
+      "merge": "b95e87845f807058e58fd54f2465ce9cf8944a84",
+      "first": "bc49ebc489b325228a5a1b9f86602145ece096ca",
+      "second": "fd1f9662164112523a99718a76666de92c59c916",
+      "base": "6a345d86a6a556a295688502f4733fd27fd9dd20",
+      "conflicted": [
+        "hassio/src/update-available/update-available-card.ts",
+        "pyproject.toml",
+        "src/common/array/ensure-array.ts",
+        "src/components/chart/ha-chart-base.ts",
+        "src/components/chart/state-history-chart-line.ts",
+        "src/components/chart/state-history-chart-timeline.ts",
+        "src/components/chart/statistics-chart.ts",
+        "src/components/entity/state-info.ts",
+        "src/components/ha-button-toggle-group.ts",
+        "src/components/trace/hat-graph-node.ts",
+        "src/data/automation_i18n.ts",
+        "src/data/backup.ts",
+        "src/data/hassio/addon.ts",
+        "src/data/supervisor/core.ts",
+        "src/dialogs/more-info/ha-more-info-dialog.ts",
+        "src/dialogs/more-info/ha-more-info-history-and-logbook.ts",
+        "src/dialogs/more-info/ha-more-info-info.ts",
+        "src/panels/config/automation/ha-automation-editor.ts",
+        "src/panels/config/backup/components/config/ha-backup-config-agents.ts",
+        "src/panels/config/backup/components/config/ha-backup-config-schedule.ts",
+        "src/panels/config/backup/components/overview/ha-backup-overview-settings.ts",
+        "src/panels/config/backup/components/overview/ha-backup-overview-summary.ts",
+        "src/panels/config/backup/dialogs/dialog-generate-backup.ts",
+        "src/panels/config/backup/dialogs/dialog-restore-backup.ts",
+        "src/panels/config/backup/dialogs/dialog-set-backup-encryption-key.ts",
+        "src/panels/config/backup/dialogs/dialog-show-backup-encryption-key.ts",
+        "src/panels/config/backup/ha-config-backup-backups.ts",
+        "src/panels/config/backup/ha-config-backup-details.ts",
+        "src/panels/config/backup/ha-config-backup-settings.ts",
+        "src/panels/config/backup/ha-config-backup.ts",
+        "src/panels/config/helpers/dialog-helper-detail.ts",
+        "src/panels/config/script/ha-script-editor.ts",
+        "src/panels/lovelace/cards/hui-history-graph-card.ts",
+        "src/panels/lovelace/cards/hui-statistics-graph-card.ts",
+        "src/panels/lovelace/create-element/create-element-base.ts",
+        "src/translations/en.json",
+        "yarn.lock"
+      ]
+    },
+    {
+      "index": 87,
+      "repo": "home-assistant/frontend",
+      "kind": "positive",
+      "merge": "8b79fc5848cddbd10d1539ae6181d20dfae26f54",
+      "first": "5513da51a8d54b32636872266cc275fd2852876c",
+      "second": "cd44b332017709c860cf7f4c713b4f14d82a4bfc",
+      "base": "e0e158b64c8a1d5ec2c29656e580a9e3b8409e7a",
+      "conflicted": [
+        ".github/workflows/release.yaml",
+        "package.json",
+        "pyproject.toml",
+        "src/components/ha-target-picker.ts",
+        "src/dialogs/voice-command-dialog/ha-voice-command-dialog.ts",
+        "src/panels/config/voice-assistants/assist-pref.ts",
+        "src/types.ts",
+        "yarn.lock"
+      ]
+    },
+    {
+      "index": 88,
+      "repo": "home-assistant/frontend",
+      "kind": "positive",
+      "merge": "55c85898416a043f1f6921c4f374481e242f1625",
+      "first": "4687add37a9f9ff5798ceab7bde2663855eb3a4f",
+      "second": "298cebe17f3e813c608d6ccd6936eb27371e0dfd",
+      "base": "52870616993c9676476d7cbb1b2115cfaad370ec",
+      "conflicted": [
+        "package.json",
+        "pyproject.toml",
+        "src/components/ha-sortable.ts",
+        "src/panels/lovelace/cards/energy/hui-energy-devices-detail-graph-card.ts",
+        "src/panels/lovelace/editor/view-editor/hui-view-editor.ts",
+        "src/panels/lovelace/sections/hui-grid-section.ts",
+        "src/panels/lovelace/views/hui-sections-view.ts",
+        "yarn.lock"
+      ]
+    },
+    {
+      "index": 89,
+      "repo": "home-assistant/frontend",
+      "kind": "positive",
+      "merge": "d9fa148c49ab0edbe29fd3d63ee4e6b194580105",
+      "first": "462ac7989015b05c512420f15632f939808f64d1",
+      "second": "7ce9a937b1c1bedcce1c2f4f99936806bdf0c126",
+      "base": "d0c1481f76688a4fe836330e0972b04299b251bf",
+      "conflicted": [
+        "package.json",
+        "pyproject.toml",
+        "src/components/ha-service-control.ts",
+        "src/panels/config/automation/action/ha-automation-action-row.ts",
+        "src/panels/config/automation/add-automation-element-dialog.ts",
+        "src/translations/en.json",
+        "yarn.lock"
+      ]
+    },
+    {
+      "index": 90,
+      "repo": "home-assistant/frontend",
+      "kind": "positive",
+      "merge": "d2caed2b68eacce60a8c2e1306ed4131d0ede46a",
+      "first": "402d44384351353370c2a7c4fe10e4ca8dcef70a",
+      "second": "9a84ce7b81d8bc1f7430573b3f26569fcd471911",
+      "base": "e288b003d89d6cd67516612ab9e64b18be5c69fa",
+      "conflicted": [
+        "package.json",
+        "pyproject.toml",
+        "src/resources/locale-data-polyfill.ts",
+        "yarn.lock"
+      ]
+    },
+    {
+      "index": 91,
+      "repo": "home-assistant/frontend",
+      "kind": "positive",
+      "merge": "bdfdab439ac2fe19861f74086c3e68dc55e48511",
+      "first": "8c59537032824120ce1711fd52475a38ed14f446",
+      "second": "7b2afa3df9f6a666b01ba700aec1538da7f8e7f7",
+      "base": "9602c686402d5f225a4812ecbebd127531a7ff72",
+      "conflicted": [
+        "pyproject.toml",
+        "yarn.lock"
+      ]
+    },
+    {
+      "index": 92,
+      "repo": "home-assistant/frontend",
+      "kind": "positive",
+      "merge": "1838f6184b144218533b09350a194f78c7f317dd",
+      "first": "ca20a251b5aab60fa0439cb2edd49604c1208ee8",
+      "second": "819366243fadc2a6e7d57d0bbaf7cf8add9e0fb2",
+      "base": "ffd7a0c15388700a756fea9381afb4b3ef73d6f7",
+      "conflicted": [
+        "package.json",
+        "pyproject.toml",
+        "yarn.lock"
+      ]
+    },
+    {
+      "index": 93,
+      "repo": "home-assistant/frontend",
+      "kind": "positive",
+      "merge": "d8153ac8fc15bc6c61d97c850b6e357b3635896d",
+      "first": "27d9f82f7da5ff57195261465b8496990a328602",
+      "second": "9bdda77e8945ac89e9271d3aeb321f0abba91956",
+      "base": "d8cdbac15e59bb270caa1a6f989241f744e69a83",
+      "conflicted": [
+        "package.json",
+        "setup.py",
+        "src/data/script.ts",
+        "src/resources/codemirror.ts",
+        "yarn.lock"
+      ]
+    },
+    {
+      "index": 94,
+      "repo": "home-assistant/frontend",
+      "kind": "positive",
+      "merge": "351ba3e701f55f46924a3599f8b8e463c6d6b163",
+      "first": "260f428bc64c8caf14603770c313bbc9c38af847",
+      "second": "7c793c1cdb7503412446a4e4cd8f799ac4dd8c90",
+      "base": "4ef5a8da70b849bce1e24a1e8c4a1f50ddc9afbd",
+      "conflicted": [
+        "setup.py",
+        "yarn.lock"
+      ]
+    },
+    {
+      "index": 95,
+      "repo": "rust-lang/rust-analyzer",
+      "kind": "positive",
+      "merge": "6225bb9c4436a9bb48412c1ab34165f902dab855",
+      "first": "11558f972fde332bf91b7dcce486b9c085de2035",
+      "second": "520054681ab50fa3c6c5cf9fb638ef8c0db3fd24",
+      "base": "be4899335135db60f0b12cb0d802c7fc5872aab9",
+      "conflicted": [
+        "Cargo.lock",
+        "Cargo.toml",
+        "crates/hir-ty/src/chalk_db.rs",
+        "crates/hir-ty/src/dyn_compatibility.rs",
+        "crates/hir-ty/src/dyn_compatibility/tests.rs",
+        "crates/hir-ty/src/infer.rs",
+        "crates/hir-ty/src/lib.rs",
+        "crates/hir-ty/src/method_resolution.rs",
+        "crates/hir/src/attrs.rs",
+        "crates/hir/src/lib.rs",
+        "crates/ide-assists/src/handlers/extract_function.rs",
+        "crates/ide-db/src/syntax_helpers/node_ext.rs",
+        "crates/proc-macro-srv/src/dylib/version.rs",
+        "crates/proc-macro-srv/src/server_impl/rust_analyzer_span.rs",
+        "crates/syntax/Cargo.toml",
+        "crates/syntax/src/ast/token_ext.rs",
+        "crates/syntax/src/lib.rs",
+        "crates/syntax/src/validation.rs"
+      ]
+    },
+    {
+      "index": 96,
+      "repo": "rust-lang/rust-analyzer",
+      "kind": "positive",
+      "merge": "26a413e015b7fef4c0edb51bda0d39ab499f4950",
+      "first": "4b61e5ecc8d08b617a666e506b34b92398d42ce1",
+      "second": "a99a48e78600b5dfd39dec730d7fedfae8f48ff6",
+      "base": "8536eb016cba13d333574c0d6ba2f2b0b21792ac",
+      "conflicted": [
+        "Cargo.lock",
+        "crates/rust-analyzer/Cargo.toml",
+        "crates/test-utils/src/minicore.rs",
+        "lib/lsp-server/Cargo.toml"
+      ]
+    },
+    {
+      "index": 97,
+      "repo": "rust-lang/rust-analyzer",
+      "kind": "positive",
+      "merge": "9ba81bb3d64a708f4be03df91adb735236985ae1",
+      "first": "5b1207e1374ec9370424b0c83fc0e76976f6f9b6",
+      "second": "0531aab522f25d6aae30b2cc23a09f4b9257eedc",
+      "base": "61504c8d951c566eb03037dcb300c96f4bd9a8b6",
+      "conflicted": [
+        "Cargo.lock"
+      ]
+    },
+    {
+      "index": 98,
+      "repo": "rust-lang/rust-analyzer",
+      "kind": "positive",
+      "merge": "7bbca7a1b3f9293d2f5cc5745199bc5f8396f2f0",
+      "first": "ca464650eeaca6195891199a93f4f76cf3e7e697",
+      "second": "e65d48d1fb3d4d91d9dc1148a7a836ff5c9a3c87",
+      "base": "6b7cb8b5ab539fc4333ce34bc29bf77c976f232a",
+      "conflicted": [
+        "Cargo.lock",
+        "crates/hir/src/code_model.rs",
+        "crates/hir/src/lib.rs",
+        "crates/hir/src/link_rewrite.rs",
+        "crates/ide/src/link_rewrite.rs",
+        "crates/ra_hir/Cargo.toml",
+        "crates/ra_ide/Cargo.toml"
+      ]
+    },
+    {
+      "index": 99,
+      "repo": "rust-lang/rust-analyzer",
+      "kind": "positive",
+      "merge": "f05d7b41a719d848844b054a16477b29d0f063c6",
+      "first": "73ff610e41959e3e7c78a2b4b25b086883132956",
+      "second": "6b7cb8b5ab539fc4333ce34bc29bf77c976f232a",
+      "base": "2bd717139918e15e537dcd833bb003e85d24b3d1",
+      "conflicted": [
+        "Cargo.lock",
+        "crates/ra_hir/src/lib.rs",
+        "crates/ra_ide/Cargo.toml",
+        "crates/ra_ide/src/hover.rs"
+      ]
+    },
+    {
+      "index": 100,
+      "repo": "rust-lang/rust-analyzer",
+      "kind": "positive",
+      "merge": "76a530242a12f75e2a8456f952cef07e2d564f67",
+      "first": "78e94e4570f09c8cbe1f8c6802df9b112ca37f08",
+      "second": "6e81c9a921b975be7f2efb927dab4f3cfd505ebc",
+      "base": "0262dba97ef114bd7664a4e32be21caef2d63f0a",
+      "conflicted": [
+        "Cargo.lock",
+        "crates/ra_ide/Cargo.toml",
+        "crates/rust-analyzer/src/global_state.rs",
+        "crates/rust-analyzer/src/lsp_utils.rs",
+        "crates/rust-analyzer/src/main_loop.rs",
+        "crates/rust-analyzer/tests/heavy_tests/support.rs"
+      ]
+    },
+    {
+      "index": 101,
+      "repo": "rust-lang/rust-analyzer",
+      "kind": "positive",
+      "merge": "b21d9337d9200e2cfdc90b386591c72c302dc03e",
+      "first": "18a0937585b836ec5ed054b9ae48e0156ab6d9ef",
+      "second": "ce07a2daa9e53aa86a769f8641b14c2878444fbc",
+      "base": "484acc8a61d599662ed63a4cbda091d38a982551",
+      "conflicted": [
+        "editors/code/package-lock.json",
+        "editors/code/package.json",
+        "editors/code/src/config.ts",
+        "editors/code/src/highlighting.ts"
+      ]
+    },
+    {
+      "index": 102,
+      "repo": "rust-lang/rust-analyzer",
+      "kind": "positive",
+      "merge": "b74449e9952846a8ea66c3507e52c24348d6dbc9",
+      "first": "9b73f809596e955216dde24fcf921d6985a1a767",
+      "second": "849d7428aa6b733d452b2ebc55ec322d96345f49",
+      "base": "afe96b75eae99fe2dcd7fb7c99e15507290b3d5f",
+      "conflicted": [
+        "Cargo.lock",
+        "crates/ra_hir/src/nameres.rs"
+      ]
+    },
+    {
+      "index": 103,
+      "repo": "rust-lang/rust-analyzer",
+      "kind": "negative",
+      "merge": "56976c0e65e4784a10909427abee81852a69f620",
+      "first": "5c7b55ffdceacf7c4907c00b6bbc459f6cd1686c",
+      "second": "b6b2233d1187bad0622317a4c0c7a24b29fffed5",
+      "base": "a6fb56ed96043a7aa6563e22018258de05eec3be",
+      "conflicted": []
+    },
+    {
+      "index": 104,
+      "repo": "rust-lang/rust-analyzer",
+      "kind": "negative",
+      "merge": "aa0f5105f3ba1da60c87cb92e5297d71e9338c50",
+      "first": "0a0200f36c930c01d5edd9b2868541a8956b1da6",
+      "second": "4dbc6fb4f3a94a06c5b41a4bed2ed892f99670b4",
+      "base": "72bedfcae8c71adbfe3bf72d7fa494ec3bf4dc5d",
+      "conflicted": []
+    },
+    {
+      "index": 105,
+      "repo": "rust-lang/rust-analyzer",
+      "kind": "negative",
+      "merge": "d5cb64b3bbc9e88354c02e97182047a977fbe464",
+      "first": "b98172d80f0da12bbde3d6733c274e17cb6417aa",
+      "second": "4e00aaea8aaff4ff52b9059b72b2f1efddb21617",
+      "base": "9e0d1ec24eb81de12160ecfa7f31c89735bda951",
+      "conflicted": []
+    },
+    {
+      "index": 106,
+      "repo": "rust-lang/rust-analyzer",
+      "kind": "negative",
+      "merge": "b98172d80f0da12bbde3d6733c274e17cb6417aa",
+      "first": "84e25a76a6bb077783fd5218c89f2fc8b0f392b7",
+      "second": "030df4ca462ef10e70950811354892c96cd9d1ea",
+      "base": "d670b25f77d49c3ddc56b78d595a68d83dbb3492",
+      "conflicted": []
+    },
+    {
+      "index": 107,
+      "repo": "rust-lang/rust-analyzer",
+      "kind": "negative",
+      "merge": "0f5ab5cbdb026f41751d981e982f83a7c84fcaf8",
+      "first": "38bd7480281a11980565eda8741c76aafd88bed0",
+      "second": "acfdd30e2c4a904ee577f6bc8b7b23821ac89b72",
+      "base": "5f8813d64fff2e293dcc99d54a21f6f4edc88d50",
+      "conflicted": []
+    },
+    {
+      "index": 108,
+      "repo": "rust-lang/rust-analyzer",
+      "kind": "negative",
+      "merge": "9f4667f303a80ad33457d914f93991242c057c87",
+      "first": "5f8813d64fff2e293dcc99d54a21f6f4edc88d50",
+      "second": "695bee97e4436f77c6c40dd541b33da586184ae2",
+      "base": "a6e4073294f430b5bc8e21e7dad24a4fa51cf383",
+      "conflicted": []
+    },
+    {
+      "index": 109,
+      "repo": "rust-lang/rust-analyzer",
+      "kind": "negative",
+      "merge": "eedfe66ee6fc8d727bc99e7e2c264226416cfd57",
+      "first": "620b857044a86e639b524be0c48ca005d3c8e3e0",
+      "second": "a0b32c69b060116b7bf894504984be5d73f30121",
+      "base": "3f98c4dfcf765d096148401d423eabb3a8611f9f",
+      "conflicted": []
+    },
+    {
+      "index": 110,
+      "repo": "rust-lang/rust-analyzer",
+      "kind": "negative",
+      "merge": "17a08208b732ec9fa497322bcdfd5961e13925e1",
+      "first": "ad33cfb2441bb9ff8a3a4f80071b7b0875a4061a",
+      "second": "4d59eee403e1866d3b5c8d2336f921dacab5717f",
+      "base": "02591b2f05e8f700333f49165c524a11bafdb44d",
+      "conflicted": []
+    },
+    {
+      "index": 111,
+      "repo": "zellij-org/zellij",
+      "kind": "positive",
+      "merge": "808458ec7b14275fabbf8b9c2bc7e1b1e81578dd",
+      "first": "b955dc6a4f1bda4a75aa5d9ebda8f7ffe47daa6f",
+      "second": "4acb2458d2e0da1d0459114f45123841e2fca741",
+      "base": "03e62eb91c4f53a5be1548fecacc1fd5173adf47",
+      "conflicted": [
+        "CHANGELOG.md",
+        "Cargo.lock",
+        "zellij-utils/Cargo.toml"
+      ]
+    },
+    {
+      "index": 112,
+      "repo": "zellij-org/zellij",
+      "kind": "positive",
+      "merge": "8d98ca7da0bc278a832e4e7de23ff63a84deb529",
+      "first": "b2139f4f3472b0cae18a106479e8a1ef92f7115e",
+      "second": "80e1f2927007347d540107b2aa8de7ffac7751b5",
+      "base": "313ac9f41474222133b344c1c0d8827b4dc2fa50",
+      "conflicted": [
+        "Cargo.lock",
+        "Cargo.toml",
+        "default-plugins/status-bar/src/second_line.rs",
+        "src/common/mod.rs"
+      ]
+    },
+    {
+      "index": 113,
+      "repo": "zellij-org/zellij",
+      "kind": "positive",
+      "merge": "0e73227fe2418c3a4945f493afbc64ab66dcb763",
+      "first": "d2a7d100acdbcf85664fb10a04805325abd10a6c",
+      "second": "313ac9f41474222133b344c1c0d8827b4dc2fa50",
+      "base": "138ba850ebf7df02526990f428207e0f8ec48ece",
+      "conflicted": [
+        "Cargo.lock",
+        "README.md"
+      ]
+    },
+    {
+      "index": 114,
+      "repo": "zellij-org/zellij",
+      "kind": "positive",
+      "merge": "7774edd45aa872aacbea2c7b0e0ae9d483747056",
+      "first": "a6ad8e6f157ef8800eb692e520fa52a1bd314e4e",
+      "second": "d6a17f54fd3b5653357e624577dc69ba211dea2e",
+      "base": "138ba850ebf7df02526990f428207e0f8ec48ece",
+      "conflicted": [
+        "Cargo.lock",
+        "src/client/tab.rs"
+      ]
+    },
+    {
+      "index": 115,
+      "repo": "zellij-org/zellij",
+      "kind": "positive",
+      "merge": "b71315b03638c630b2e70dac1b464dd79d84d781",
+      "first": "2c402b0b1d6a21220dca65835335bacfe3fe43e6",
+      "second": "d818661c727a59312e1a43432e84fbeec79fc145",
+      "base": "e1e1f2104353ca021fe9b5261314ab6248c3b77c",
+      "conflicted": [
+        "Cargo.lock",
+        "Cargo.toml",
+        "default-tiles/status-bar/src/first_line.rs",
+        "default-tiles/status-bar/src/main.rs",
+        "default-tiles/status-bar/src/second_line.rs",
+        "default-tiles/tab-bar/src/main.rs",
+        "src/client/boundaries.rs",
+        "src/client/tab.rs",
+        "src/common/input/handler.rs",
+        "src/common/mod.rs",
+        "src/common/screen.rs",
+        "zellij-tile/src/shim.rs"
+      ]
+    },
+    {
+      "index": 116,
+      "repo": "zellij-org/zellij",
+      "kind": "negative",
+      "merge": "2bca7e007aad9a74e6c48191b8a7a3edf85808d4",
+      "first": "6755b6a88defe30c63fa3bc6d25aa89e545180c9",
+      "second": "df6d6cb3a70cbea9d088c7af47f3540896b98089",
+      "base": "d13fc7cafab760d3e69528a71c60e94785699709",
+      "conflicted": []
+    },
+    {
+      "index": 117,
+      "repo": "zellij-org/zellij",
+      "kind": "negative",
+      "merge": "d5433f8f8995c155f231c823d49813882b6212bf",
+      "first": "b18f5c9510b2dd5dd31cd5aa1a40f2fa08eca457",
+      "second": "7982636741df86e7323f73726631ef15745b15fc",
+      "base": "03f8e7220c86ef5e7c9f80553808f8e12c6d6ade",
+      "conflicted": []
+    },
+    {
+      "index": 118,
+      "repo": "zellij-org/zellij",
+      "kind": "negative",
+      "merge": "452940fb6530bc508d26c9ebaf6dd784751f6351",
+      "first": "61bb74ebbd16503a385d0345508abb6b0adaf2fb",
+      "second": "099861ff5b0f83773ca0af4c70e6e39be3b0336c",
+      "base": "325fc5620f07412381dd47dcf7cf9e141a3d66bf",
+      "conflicted": []
+    },
+    {
+      "index": 119,
+      "repo": "zellij-org/zellij",
+      "kind": "negative",
+      "merge": "448c426c2b8ca925f2a8016171988a5c824f66d3",
+      "first": "922440a952792c5603dfca7f08ede45b887a294d",
+      "second": "46c9802f6fd7cf37dab6c775554a9b7b9aa39bfd",
+      "base": "845478fe111eaf93af261ce4f5066ce0e7b39b89",
+      "conflicted": []
+    },
+    {
+      "index": 120,
+      "repo": "zellij-org/zellij",
+      "kind": "negative",
+      "merge": "bd1e3d2d7b25bf3d5f0feb77801c18e70da1c936",
+      "first": "09b1e038431f5348d5b4d66cccc58f950ab40934",
+      "second": "c32b837df772cbfb53ccd3b5434aefcbe7aaaf0b",
+      "base": "7efc435bdaf1aa29d72cda11105dd72c0fc1a891",
+      "conflicted": []
+    },
+    {
+      "index": 121,
+      "repo": "lapce/lapce",
+      "kind": "positive",
+      "merge": "b998c1f3a50fcb3198c801c4c8643f857c9684bf",
+      "first": "0c92aecfbb3abe51d43b695ea81527ce0583c91e",
+      "second": "7b981773b20762e0211ce77c51004afba7c48e32",
+      "base": "b12677287784e3fb1e192d781451a8bd3b30760f",
+      "conflicted": [
+        "Cargo.lock",
+        "lapce-core/Cargo.toml",
+        "lapce-core/src/language.rs",
+        "lapce-ui/Cargo.toml"
+      ]
+    },
+    {
+      "index": 122,
+      "repo": "lapce/lapce",
+      "kind": "positive",
+      "merge": "155a1dea9a966bb765f7801282b769b7f6d85fd6",
+      "first": "a46fb40e8b9aabf7dcf2ea593ea68e3e025892b6",
+      "second": "c0b20a74cf20b12ed721071e584e12d8533317a6",
+      "base": "a10a071148014d37229f348e6f6e0ac98f4c2088",
+      "conflicted": [
+        "Cargo.lock",
+        "lapce-data/src/data.rs",
+        "lapce-ui/src/terminal.rs"
+      ]
+    },
+    {
+      "index": 123,
+      "repo": "lapce/lapce",
+      "kind": "positive",
+      "merge": "e0739a060a946cbc31ab365eb6387d4329e474bf",
+      "first": "dd7d3b0a8be18d92e33fae1e79ad138753001372",
+      "second": "95c4cf2d87083e348c0b621d0be0ea17f79ed703",
+      "base": "b13ac74b6f9129b2dcdb9fd772ea42f5d335e58d",
+      "conflicted": [
+        "Cargo.lock"
+      ]
+    },
+    {
+      "index": 124,
+      "repo": "lapce/lapce",
+      "kind": "positive",
+      "merge": "edc71c6e397eb8963f281dad426e56bce8922b5c",
+      "first": "2f6ee97b6c3299004091a6776253b99db6d92d04",
+      "second": "7b3f6a389de43c37d7bde3f507bbedf35f850699",
+      "base": "1baaa041581e4a514033b50b91624860c5b97096",
+      "conflicted": [
+        "Cargo.lock",
+        "lapce-core/src/language.rs"
+      ]
+    },
+    {
+      "index": 125,
+      "repo": "lapce/lapce",
+      "kind": "negative",
+      "merge": "354a23c4708574d7367e351abe335e3ab26739b9",
+      "first": "716125ddb644aef62383f440e5735a85609179f1",
+      "second": "5dceb340dc296d1acab78ab955088a2cf3311a66",
+      "base": "3873b88b1068bc7de4685d1e60406388c8235465",
+      "conflicted": []
+    },
+    {
+      "index": 126,
+      "repo": "lapce/lapce",
+      "kind": "negative",
+      "merge": "849ac6753fe9a55888186a09507f1e007c31e9da",
+      "first": "4f77923124ec1c37d5327c732654996e40e99ccf",
+      "second": "c94607e5db3a2da761c1f966da37ef935f46f4a5",
+      "base": "631eebfb563f18402eff10421570deb0d8f07882",
+      "conflicted": []
+    },
+    {
+      "index": 127,
+      "repo": "lapce/lapce",
+      "kind": "negative",
+      "merge": "4f77923124ec1c37d5327c732654996e40e99ccf",
+      "first": "4e5ed2bef0adf49c0f053633c1dc852ca081dc2a",
+      "second": "1eefaf49ba3890be921c739f833929958748fbe0",
+      "base": "631eebfb563f18402eff10421570deb0d8f07882",
+      "conflicted": []
+    },
+    {
+      "index": 128,
+      "repo": "lapce/lapce",
+      "kind": "negative",
+      "merge": "4e5ed2bef0adf49c0f053633c1dc852ca081dc2a",
+      "first": "fbe37339ae5e2a1be59fbaefc790b732064e496b",
+      "second": "a8b6e2d324b13a275cc98612272f8476c3067103",
+      "base": "631eebfb563f18402eff10421570deb0d8f07882",
+      "conflicted": []
+    },
+    {
+      "index": 129,
+      "repo": "magento/magento2",
+      "kind": "positive",
+      "merge": "4113d4933bdd68fadf92d2e0e7e74e8c12a0307a",
+      "first": "40b80d4770be4dd3ea30846afc748642a3d8f913",
+      "second": "c69ec9c57446c07ad3be4d341e56300f9e3b8428",
+      "base": "76d2f4591178b14e6c530a94646bb9d360af538e",
+      "conflicted": [
+        "composer.lock"
+      ]
+    },
+    {
+      "index": 130,
+      "repo": "magento/magento2",
+      "kind": "positive",
+      "merge": "e9813ffc3e1990d66400e2e702e708cf02e460ef",
+      "first": "b0763304bf99134d2d3d2f51aaabdc473c1c9bcb",
+      "second": "af7b0788fe1edaedfe519fc1e82ba55d4f66f3f2",
+      "base": "28348c39fe7c9a47121509bf591493d2d56d1354",
+      "conflicted": [
+        "composer.lock"
+      ]
+    },
+    {
+      "index": 131,
+      "repo": "magento/magento2",
+      "kind": "positive",
+      "merge": "684961a65caf597d64db24ed839fb7164d7c7ee3",
+      "first": "5343ab4e4938f193f1f8f6603f493db34ddac7ea",
+      "second": "602f6b78a4cf94a27a3b9f39b098755e50e5ad50",
+      "base": "0dc42d83906a32aab5642c21b85a9084b6f5a03a",
+      "conflicted": [
+        "composer.lock"
+      ]
+    },
+    {
+      "index": 132,
+      "repo": "magento/magento2",
+      "kind": "positive",
+      "merge": "64c678cf2a8ff3ed76df483ce6694c5e8c0aeaeb",
+      "first": "7145463533d7953bcf12371d4473c10ff6770441",
+      "second": "070e65ed555ac53112988fdc11071e7d95be6ae2",
+      "base": "f7bbcb4eb0d25f4ef87e740cb5a29c0b101d71b0",
+      "conflicted": [
+        "app/code/Magento/Catalog/Test/Unit/Model/ResourceModel/CategoryTest.php",
+        "composer.lock",
+        "dev/tests/api-functional/testsuite/Magento/Quote/Api/CartRepositoryTest.php",
+        "dev/tests/integration/testsuite/Magento/Customer/Model/ResourceModel/CustomerRepositoryTest.php",
+        "lib/internal/Magento/Framework/DB/Test/Unit/AbstractMapperTest.php"
+      ]
+    },
+    {
+      "index": 133,
+      "repo": "magento/magento2",
+      "kind": "positive",
+      "merge": "2a76eca03ead8ce56d9dddf691c88ef96e4eb16d",
+      "first": "152ed41da6e05f745263e681aa11a890f758871e",
+      "second": "4e98d0b55ad0ce6dadf5f5fd0f38492b366ac5fd",
+      "base": "6f286f4f227d6f8213e33b37f9926ba4881b5b06",
+      "conflicted": [
+        "composer.lock"
+      ]
+    },
+    {
+      "index": 134,
+      "repo": "magento/magento2",
+      "kind": "positive",
+      "merge": "7a4e45c3576b1043199b602e5d0392f155b0ffd6",
+      "first": "65db1c1e5b87dc8a1dddd53c23ba8841c24aab61",
+      "second": "848d25a65619be1d30dad3facbab770d1c4998c3",
+      "base": "65e5484adaa08ba17620c36248e7a71f517f6888",
+      "conflicted": [
+        "composer.lock"
+      ]
+    },
+    {
+      "index": 135,
+      "repo": "magento/magento2",
+      "kind": "positive",
+      "merge": "11052ef5b4e0fce8305aada92845066726be9d46",
+      "first": "60a86cba4ecd1f1644efa059bfde50bd30964290",
+      "second": "2bac8114001483c3b86a1f4c3b6a0436fde3f662",
+      "base": "8ac55c4e7b76181aaace58dcb69e738345399af6",
+      "conflicted": [
+        "composer.json",
+        "composer.lock",
+        "lib/internal/Magento/Framework/composer.json"
+      ]
+    },
+    {
+      "index": 136,
+      "repo": "magento/magento2",
+      "kind": "positive",
+      "merge": "ca52869b2656e4f586426b59d895414263fe06b3",
+      "first": "0ea3dce06ce01046cb9f8b846093fa21e36fb4be",
+      "second": "c127d10bc1734ee43ecea6c0990ed05be35922f7",
+      "base": "01cee3c3c8a94599cb0b541ad29d64f82d66cad9",
+      "conflicted": [
+        "composer.json",
+        "composer.lock",
+        "lib/internal/Magento/Framework/composer.json"
+      ]
+    },
+    {
+      "index": 137,
+      "repo": "magento/magento2",
+      "kind": "positive",
+      "merge": "f219ed4cc4f900544d0d72b1c219f7f262845569",
+      "first": "56b0fc50ab3ea5dd128b9ef6b55f29686bdb584b",
+      "second": "c127d10bc1734ee43ecea6c0990ed05be35922f7",
+      "base": "01cee3c3c8a94599cb0b541ad29d64f82d66cad9",
+      "conflicted": [
+        "app/code/Magento/Catalog/Console/Command/ProductAttributesCleanUp.php",
+        "app/code/Magento/Developer/Console/Command/DevTestsRunCommand.php",
+        "app/code/Magento/Developer/Console/Command/XmlConverterCommand.php",
+        "app/code/Magento/MessageQueue/Console/ConsumerListCommand.php",
+        "app/code/Magento/Store/Console/Command/WebsiteListCommand.php",
+        "app/code/Magento/Theme/Console/Command/ThemeUninstallCommand.php",
+        "composer.json",
+        "composer.lock",
+        "lib/internal/Magento/Framework/composer.json",
+        "setup/src/Magento/Setup/Console/Command/AbstractDependenciesCommand.php",
+        "setup/src/Magento/Setup/Console/Command/AbstractModuleManageCommand.php",
+        "setup/src/Magento/Setup/Console/Style/MagentoStyle.php",
+        "setup/src/Magento/Setup/Test/Unit/Console/Style/TestOutput.php"
+      ]
+    },
+    {
+      "index": 138,
+      "repo": "magento/magento2",
+      "kind": "positive",
+      "merge": "d99030bcd83d845dedec5455dbcb86c0e337902f",
+      "first": "2c78c5d6751e4109d130ba81c82b05ad0379626e",
+      "second": "b31996975c8273e479769930fa097808cb402345",
+      "base": "48da5ddf7677088a79133481a729e61fa762270f",
+      "conflicted": [
+        "app/code/Magento/Deploy/Console/Command/App/ConfigStatusCommand.php",
+        "app/code/Magento/Developer/Console/Command/TemplateHintsStatusCommand.php",
+        "app/code/Magento/JwtFrameworkAdapter/Model/JweCompressionManagerFactory.php",
+        "app/code/Magento/MessageQueue/Console/ConsumerListCommand.php",
+        "app/code/Magento/MessageQueue/Console/StartConsumerCommand.php",
+        "app/code/Magento/NewRelicReporting/Console/Command/DeployMarker.php",
+        "composer.json",
+        "composer.lock",
+        "lib/internal/Magento/Framework/App/Utility/Files.php"
+      ]
+    },
+    {
+      "index": 139,
+      "repo": "magento/magento2",
+      "kind": "positive",
+      "merge": "16ba5c5b37d67e7361b5adabf6feab14b9ca73fc",
+      "first": "194e0114cfca46472591802b9e1365baef7a2926",
+      "second": "0680434cb7360735790d8af5e775acf46c9feb2f",
+      "base": "e3f780be657b7b370dcfd3d0342b936e54006942",
+      "conflicted": [
+        "composer.json",
+        "composer.lock",
+        "lib/internal/Magento/Framework/Acl/Data/Cache.php",
+        "lib/internal/Magento/Framework/App/Cache.php",
+        "lib/internal/Magento/Framework/App/Cache/FlushCacheByTags.php",
+        "lib/internal/Magento/Framework/App/Cache/Frontend/Factory.php",
+        "lib/internal/Magento/Framework/App/Cache/Proxy.php",
+        "lib/internal/Magento/Framework/App/Cache/Type/AccessProxy.php",
+        "lib/internal/Magento/Framework/App/Test/Unit/Cache/ManagerTest.php",
+        "lib/internal/Magento/Framework/App/Test/Unit/Cache/Type/AccessProxyTest.php",
+        "lib/internal/Magento/Framework/App/Test/Unit/Cache/Type/ConfigTest.php",
+        "lib/internal/Magento/Framework/App/Test/Unit/CacheTest.php",
+        "lib/internal/Magento/Framework/Cache/Core.php",
+        "lib/internal/Magento/Framework/Cache/Frontend/Adapter/Symfony.php",
+        "lib/internal/Magento/Framework/Cache/Frontend/Decorator/Bare.php",
+        "lib/internal/Magento/Framework/Cache/Frontend/Decorator/Logger.php",
+        "lib/internal/Magento/Framework/Cache/Frontend/Decorator/Profiler.php",
+        "lib/internal/Magento/Framework/Cache/Frontend/Decorator/TagScope.php",
+        "lib/internal/Magento/Framework/Cache/FrontendInterface.php",
+        "lib/internal/Magento/Framework/Cache/Test/Unit/Backend/DatabaseTest.php",
+        "lib/internal/Magento/Framework/Cache/Test/Unit/Backend/MongoDbTest.php",
+        "lib/internal/Magento/Framework/Cache/Test/Unit/Frontend/Decorator/BareTest.php",
+        "lib/internal/Magento/Framework/Cache/Test/Unit/Frontend/Decorator/ProfilerTest.php",
+        "lib/internal/Magento/Framework/Cache/Test/Unit/Frontend/Decorator/TagScopeTest.php",
+        "lib/internal/Magento/Framework/Currency/Data/Currency.php",
+        "lib/internal/Magento/Framework/DB/Adapter/Pdo/Mysql.php",
+        "lib/internal/Magento/Framework/Test/Unit/CurrencyTest.php"
+      ]
+    },
+    {
+      "index": 140,
+      "repo": "magento/magento2",
+      "kind": "positive",
+      "merge": "34f26d5c8d7bfe5f1d5287a4a33df0956f7c7bcc",
+      "first": "5ab3dd8eaedf7da194d3d4df4625e0e7b2517b7a",
+      "second": "6e1344096af6daa8060c1c5e31875c5a63000ba7",
+      "base": "a6933f32b394d0e6c27819feb8f4e8d1590ebac1",
+      "conflicted": [
+        "app/code/Magento/Developer/Console/Command/QueryLogEnableCommand.php",
+        "composer.json",
+        "composer.lock",
+        "setup/src/Magento/Setup/Test/Unit/Console/Command/AdminUserCreateCommandTest.php"
+      ]
+    },
+    {
+      "index": 141,
+      "repo": "magento/magento2",
+      "kind": "positive",
+      "merge": "4e77a62439857a65c327d03ac2020bb8219e4845",
+      "first": "80d7785b0de663ab517d9951d1cef71218fd54cf",
+      "second": "36d4d6fb4088f92810166b26aa2e065a817c068a",
+      "base": "30267341bdaf7ac8497dbb48f0c9aaacf6a8406e",
+      "conflicted": [
+        "composer.lock"
+      ]
+    },
+    {
+      "index": 142,
+      "repo": "magento/magento2",
+      "kind": "positive",
+      "merge": "d519b44aefb32460fbfe416a3171eaa2c3e030cc",
+      "first": "701a0a67070110e014ccac94f46afbe4c6872f53",
+      "second": "4f82be7a0647afe93b287951bc7605c67e91c546",
+      "base": "1e14bd72dbf70a70ac82e51a4120cb5cbc6605d2",
+      "conflicted": [
+        "composer.lock"
+      ]
+    },
+    {
+      "index": 143,
+      "repo": "magento/magento2",
+      "kind": "positive",
+      "merge": "8c9ef060d0b8854f0b33161184b4117775e474d8",
+      "first": "0750ef2c82add2b131a82d761e8e6add60e19136",
+      "second": "e7856d49b98ddeacb060bcd3a27960c39da8ca1e",
+      "base": "239d4993f311df0b5bfe050787239784ae9d777e",
+      "conflicted": [
+        "composer.lock"
+      ]
+    },
+    {
+      "index": 144,
+      "repo": "magento/magento2",
+      "kind": "positive",
+      "merge": "2acea7aaf105fb1b19f8e668734717c7b399527e",
+      "first": "4b0669ed87b456ec368da88614bb48a259f80208",
+      "second": "7b8064f73a6465ced0a85c0ad73254471d8dbbaa",
+      "base": "768b4442c6a04626e775f9b5955b5a48b96453b3",
+      "conflicted": [
+        "composer.json",
+        "composer.lock"
+      ]
+    },
+    {
+      "index": 145,
+      "repo": "magento/magento2",
+      "kind": "positive",
+      "merge": "157fb8042cd79b9db9c0dbdc49638fcee40a3acb",
+      "first": "4d81f13acff3da09175183160512d0f2fe2e851f",
+      "second": "89b4e2e1a36d3d2cf6be81c0005bb7d96131b395",
+      "base": "7d69f6d9d3804ff062e02b4f77659dc707df3504",
+      "conflicted": [
+        "composer.lock"
+      ]
+    },
+    {
+      "index": 146,
+      "repo": "magento/magento2",
+      "kind": "positive",
+      "merge": "23ed0deec0a4cbe4631482026c1a4d6371d88bb7",
+      "first": "48e392adb83f0b24f4cf4139393f838aa0e8dbdf",
+      "second": "73a9cfe6b0bdcb074ea39466326f87adfcb18b56",
+      "base": "7d69f6d9d3804ff062e02b4f77659dc707df3504",
+      "conflicted": [
+        "composer.lock"
+      ]
+    },
+    {
+      "index": 147,
+      "repo": "magento/magento2",
+      "kind": "positive",
+      "merge": "50efd7801bd66e98fc93f2f6153351b5e4fe9860",
+      "first": "ff420f4036f5eec12d91d6bf401ab67696b0b648",
+      "second": "7d69f6d9d3804ff062e02b4f77659dc707df3504",
+      "base": "71bfd9a0c7442424b5727038fbaa69d319330146",
+      "conflicted": [
+        "composer.lock"
+      ]
+    },
+    {
+      "index": 148,
+      "repo": "magento/magento2",
+      "kind": "positive",
+      "merge": "7aeb85898d89b715f3b5e242d4fa7263971270a8",
+      "first": "df33d05e768f27f0500106cb393099e7fa1b735b",
+      "second": "7d69f6d9d3804ff062e02b4f77659dc707df3504",
+      "base": "71bfd9a0c7442424b5727038fbaa69d319330146",
+      "conflicted": [
+        "composer.lock"
+      ]
+    },
+    {
+      "index": 149,
+      "repo": "magento/magento2",
+      "kind": "negative",
+      "merge": "fcc7f05d30e1109c58db94b91fe74f8bedaa96b8",
+      "first": "884bef946be5fad465e202c62a754facf259a499",
+      "second": "57bad41393a2769eca1b674b19cdf4f1f7bd0a06",
+      "base": "aa2e16d14028294c0904e37b36adeee988bf4d66",
+      "conflicted": []
+    },
+    {
+      "index": 150,
+      "repo": "magento/magento2",
+      "kind": "negative",
+      "merge": "97425eb71938a2f9f75a654ac5759406ea8539ab",
+      "first": "98966f5ab18f136d1178f97ad367dc378afb4e03",
+      "second": "f096fe1bd249be1191a607f97d0327ecf09169b9",
+      "base": "602f6b78a4cf94a27a3b9f39b098755e50e5ad50",
+      "conflicted": []
+    },
+    {
+      "index": 151,
+      "repo": "magento/magento2",
+      "kind": "negative",
+      "merge": "b4caa182306e6d1f9f4ac0dfdf514e96ef7c4d16",
+      "first": "6251f61ad6eb67030b3996f996d673dd62fa0793",
+      "second": "dee2145cf0f402799df04b475439e7ac88d4c9bc",
+      "base": "c4accab9574c597c02ced3abcbc1f37b473e4e60",
+      "conflicted": []
+    },
+    {
+      "index": 152,
+      "repo": "magento/magento2",
+      "kind": "negative",
+      "merge": "cf3cdfefd57dfc8cd147d448636023c98ecc9064",
+      "first": "d3d6c648dd9f4db673f6acf94a54c318dab1b2ad",
+      "second": "33b81f28d33ae57688be79f3067f6d53844a5af6",
+      "base": "09b36ebbef3a08814ec0ca76272f11f4870c8b2a",
+      "conflicted": []
+    },
+    {
+      "index": 153,
+      "repo": "magento/magento2",
+      "kind": "negative",
+      "merge": "976524f572c282cf12c24be79cef074d14e6ced5",
+      "first": "3d18a880aca98927a0061ecb6f1827671a4c16ce",
+      "second": "ec9459d0366e7312d8cbbd06dacf548e9c22729c",
+      "base": "30267341bdaf7ac8497dbb48f0c9aaacf6a8406e",
+      "conflicted": []
+    },
+    {
+      "index": 154,
+      "repo": "magento/magento2",
+      "kind": "negative",
+      "merge": "689adcfa178b712b62a1b2a6a8cc8a0f70ae2a17",
+      "first": "7cd91a2a99f0570abf7f4184fbc6839ceaf0fabf",
+      "second": "ebd6774d6952cdd0a4168c50d3211eef988ad711",
+      "base": "f0c808800fae2a7cfdd01a815852c4b70bb27928",
+      "conflicted": []
+    },
+    {
+      "index": 155,
+      "repo": "magento/magento2",
+      "kind": "negative",
+      "merge": "25364ecda5fb0fc67fe34dd9be2a756761d5101d",
+      "first": "61250cdb83bcbffb533d68a4fe0fd435e0d6b13c",
+      "second": "597e991a9554695785250f11ccc27a0ef8120279",
+      "base": "9a7352b7dce3225b0313f0be150c2d4895256cec",
+      "conflicted": []
+    },
+    {
+      "index": 156,
+      "repo": "magento/magento2",
+      "kind": "negative",
+      "merge": "34efe104f19f48b5104928873cf3a7e05008abb2",
+      "first": "56e5609409fdf040e055615e1aa1382faa95ae1a",
+      "second": "8eb936fc251f660b15971e4c94a5eedc40f70eba",
+      "base": "239d4993f311df0b5bfe050787239784ae9d777e",
+      "conflicted": []
+    },
+    {
+      "index": 157,
+      "repo": "magento/magento2",
+      "kind": "negative",
+      "merge": "1cbbf187ec502e2933e495826c11c56b20f67d91",
+      "first": "3f6214680459b062d00156a2c86e7377ffc0ac22",
+      "second": "ab25007cd749451c1ef325d35eee3583734c21ce",
+      "base": "7b8064f73a6465ced0a85c0ad73254471d8dbbaa",
+      "conflicted": []
+    },
+    {
+      "index": 158,
+      "repo": "magento/magento2",
+      "kind": "negative",
+      "merge": "41dbf5dcd6a0fc6a77f70c74da4ac77a1adef5b2",
+      "first": "0188cbaab06ca0649f17597642da38ee4b428d9e",
+      "second": "eb3b201db5784eb330213625a58070008301493f",
+      "base": "344fce23c0b67843e393e3519b41b76238f3cbc8",
+      "conflicted": []
+    },
+    {
+      "index": 159,
+      "repo": "magento/magento2",
+      "kind": "negative",
+      "merge": "f321b2edac5d0ad3c2dea2ccbab5e8d1d206c03b",
+      "first": "0188cbaab06ca0649f17597642da38ee4b428d9e",
+      "second": "96dec499651b287d831327bbc2c42dbbd6d062a6",
+      "base": "344fce23c0b67843e393e3519b41b76238f3cbc8",
+      "conflicted": []
+    },
+    {
+      "index": 160,
+      "repo": "magento/magento2",
+      "kind": "negative",
+      "merge": "10c7f0e7e2e734af5db8ff30708960b0837f990a",
+      "first": "6777df7a2dcfbc5666f8dd8002428c267aed82ef",
+      "second": "d220f78d58b0b2401be922e983af386d04730b68",
+      "base": "5d745d773d859be9b57ba4ca691f1a021cc740c2",
+      "conflicted": []
+    },
+    {
+      "index": 161,
+      "repo": "magento/magento2",
+      "kind": "negative",
+      "merge": "6a81ec7f6d4f9e64a4c0983789d08d8ab8b4f1fb",
+      "first": "0279ab2fe6519c3259e0c17131b740dfe8eb0eb8",
+      "second": "d220f78d58b0b2401be922e983af386d04730b68",
+      "base": "b2b7b3267902bd7a91bc0939fe7f51c07daec3ca",
+      "conflicted": []
+    },
+    {
+      "index": 162,
+      "repo": "magento/magento2",
+      "kind": "negative",
+      "merge": "88ad049ca3a3574c75b0ac64236a1e15dfb19d36",
+      "first": "3c9a0196697a5ee3e4b47580a910bfdda80aef83",
+      "second": "5d745d773d859be9b57ba4ca691f1a021cc740c2",
+      "base": "9c48c556c7c7f07ebee95ce12af541e356abc200",
+      "conflicted": []
+    },
+    {
+      "index": 163,
+      "repo": "magento/magento2",
+      "kind": "negative",
+      "merge": "3972d374da51526f9629b615090673e96739d37d",
+      "first": "6acfd6aa744c905f7694f2cddd5b0add5bf202b7",
+      "second": "c581b44be847a1cfed409a1e54c4c1de08b601d8",
+      "base": "fd5cf3af7fe8af6635c38059d0e21cee8ad3071a",
+      "conflicted": []
+    },
+    {
+      "index": 164,
+      "repo": "magento/magento2",
+      "kind": "negative",
+      "merge": "82a088fdf7c1f9b2365113d943ac6729aa12b262",
+      "first": "5fc29ee8d8555a88c9ceb6fa0007a63cc69b18ee",
+      "second": "5a2037c35de89ce2c50e230164ff3ea7b67ac127",
+      "base": "fd5cf3af7fe8af6635c38059d0e21cee8ad3071a",
+      "conflicted": []
+    },
+    {
+      "index": 165,
+      "repo": "magento/magento2",
+      "kind": "negative",
+      "merge": "66b6e0830a1a0cc580d3036aaddaf402389ebb27",
+      "first": "422d7074dc831621c3d6b90b32bde40a50397399",
+      "second": "0cfe4a36b72cde1ecd9613b70bac0d34a2f8f1ed",
+      "base": "a321acd02db7dea507f39a7c391c67ae4682ce7c",
+      "conflicted": []
+    },
+    {
+      "index": 166,
+      "repo": "magento/magento2",
+      "kind": "negative",
+      "merge": "d1c51dc05980781b719745fefc6adb975cdaa89d",
+      "first": "96cd829d0a0042a73ecc5e9509b00612ad81c16a",
+      "second": "0cfe4a36b72cde1ecd9613b70bac0d34a2f8f1ed",
+      "base": "a321acd02db7dea507f39a7c391c67ae4682ce7c",
+      "conflicted": []
+    },
+    {
+      "index": 167,
+      "repo": "magento/magento2",
+      "kind": "negative",
+      "merge": "bba05f15328b17d6ee14d52661a1375a8adb66f6",
+      "first": "c8b40a9686ffcf816bc4859d4db340247e4d7e93",
+      "second": "3c83d94a1cabb15985b567c33ce925edbdd6f86f",
+      "base": "a321acd02db7dea507f39a7c391c67ae4682ce7c",
+      "conflicted": []
+    },
+    {
+      "index": 168,
+      "repo": "magento/magento2",
+      "kind": "negative",
+      "merge": "7a69afbbd9528a816ca58926d3b88082fa6eb209",
+      "first": "5d6f3dbe074e6ce52ac7dae577033f8b17c52669",
+      "second": "9b5f07d9fd866270e56156e498d5ba7c131575b9",
+      "base": "53a3005d3f1330013fd7cc4b034d861e951e93a9",
+      "conflicted": []
+    },
+    {
+      "index": 169,
+      "repo": "microsoft/vscode",
+      "kind": "positive",
+      "merge": "baeca138da134cb59622265cad45bf76e1f8e24b",
+      "first": "80fde7e50906de6280aed82f37bedae832cd17ce",
+      "second": "c6ce5fb6029a7f43fe2ac7f062bf557ff6165e5c",
+      "base": "6cde0f16b142b8563a6affd39357f3dd53ac73bb",
+      "conflicted": [
+        "pnpm-lock.yaml"
+      ]
+    },
+    {
+      "index": 170,
+      "repo": "microsoft/vscode",
+      "kind": "positive",
+      "merge": "91e0e6e5faef5fedbcc8657adb827a72706e04a4",
+      "first": "b96bd00718ef5304e81a3d07b355e35d4fceeca6",
+      "second": "b74b34d66ba638faf2ec709af138718c4fbc73d9",
+      "base": "50be8d6e50987c11bf6a016ef554b96730094cbc",
+      "conflicted": [
+        "extensions/markdown-language-features/package-lock.json",
+        "extensions/markdown-language-features/package.json"
+      ]
+    },
+    {
+      "index": 171,
+      "repo": "microsoft/vscode",
+      "kind": "positive",
+      "merge": "0711b2ab236f162dd9a35a13f5a7653f1ebef466",
+      "first": "e1ca373cef1b069e8a19fa6b827969ddb601ebe9",
+      "second": "7151ef01a8ddf294266858b3039c37f124d6bc64",
+      "base": "85cfd5b02e4b7283aa719d39c85de9fe7f8f8562",
+      "conflicted": [
+        "extensions/markdown-language-features/package-lock.json",
+        "extensions/markdown-language-features/package.json"
+      ]
+    },
+    {
+      "index": 172,
+      "repo": "microsoft/vscode",
+      "kind": "positive",
+      "merge": "b4ea3f3eafeec18b2f937ea43e11aeff24309c2a",
+      "first": "9b23e17fb49cd30c21e92ddbb51e03175e89525a",
+      "second": "90c581236a85cae04047ff72d7483989bbd59506",
+      "base": "2fcde0acde2b4fa6da9893b1779b986922d8cd9d",
+      "conflicted": [
+        "package-lock.json",
+        "package.json",
+        "src/vs/sessions/contrib/providers/agentHost/test/browser/localAgentHostSessionsProvider.test.ts"
+      ]
+    },
+    {
+      "index": 173,
+      "repo": "microsoft/vscode",
+      "kind": "positive",
+      "merge": "abcefef9fb61a894f908204b193c485b44e693d7",
+      "first": "19adcf99b48f0a1343c14ba8be492a5e7e1c4973",
+      "second": "2fcde0acde2b4fa6da9893b1779b986922d8cd9d",
+      "base": "8232b19a9e898b5f90b4b6ea6fccc6aa359a38e2",
+      "conflicted": [
+        "package-lock.json",
+        "src/vs/sessions/contrib/providers/agentHost/AGENT_HOST_SESSIONS_PROVIDER.md",
+        "src/vs/sessions/contrib/providers/agentHost/test/browser/agentHost/agentHostSessionConfigPicker.test.ts",
+        "src/vs/sessions/contrib/providers/remoteAgentHost/REMOTE_AGENT_HOST_SESSIONS_PROVIDER.md",
+        "src/vs/sessions/contrib/sessions/test/browser/sessionsRename.test.ts",
+        "src/vs/sessions/services/sessions/browser/sessionsManagementService.ts",
+        "src/vs/sessions/services/sessions/test/browser/sessionsManagementService.test.ts"
+      ]
+    },
+    {
+      "index": 174,
+      "repo": "microsoft/vscode",
+      "kind": "positive",
+      "merge": "0edf2a069322807b4fecdb78a60b89517e40cec5",
+      "first": "57217002d009ed20a6223fd476d24cbce240be23",
+      "second": "5aba02430445ba730ce85814aa0d38f785116577",
+      "base": "0dcbac460f96d93eddfd99b2355a5b76c86a3d87",
+      "conflicted": [
+        "package-lock.json"
+      ]
+    },
+    {
+      "index": 175,
+      "repo": "microsoft/vscode",
+      "kind": "positive",
+      "merge": "0f15f3b85942816654f9a44d30b2a9311466bb15",
+      "first": "062d81fead9862aa1d189467e7d3686a3e30b196",
+      "second": "f5e05a0253c0ebba6510947e92694b1b505791d0",
+      "base": "6691e8199328c1473f2258d4cb7ca88c60b3a16b",
+      "conflicted": [
+        "extensions/copilot/package-lock.json",
+        "extensions/copilot/package.json"
+      ]
+    },
+    {
+      "index": 176,
+      "repo": "microsoft/vscode",
+      "kind": "positive",
+      "merge": "e8825bfd053cbf35953d96865609ce0dade8635b",
+      "first": "75ec86b07f2485913631a1a76e9cdc765321f8e8",
+      "second": "8ee6428137ee07741f7ee504cb486e290d7fe58a",
+      "base": "47b95823d2f0f834743832cbead757adac12347b",
+      "conflicted": [
+        "package-lock.json",
+        "package.json",
+        "remote/package-lock.json",
+        "remote/package.json",
+        "src/vs/platform/agentHost/node/copilot/copilotAgent.ts",
+        "src/vs/platform/agentHost/node/copilot/copilotAgentSession.ts",
+        "src/vs/platform/agentHost/test/node/copilotAgentSession.test.ts"
+      ]
+    },
+    {
+      "index": 177,
+      "repo": "microsoft/vscode",
+      "kind": "positive",
+      "merge": "75d676cce950a0b99f7a5d2b1f1f9fc30546163b",
+      "first": "02893233bafab56a987660986d5c3d5d8dffb62c",
+      "second": "19b3119b33abe84b1db20da870ce7a1e2c34fece",
+      "base": "83cbe7469949ff8c1d145fb46870f764e2f733d4",
+      "conflicted": [
+        "extensions/copilot/lint-staged.config.js",
+        "extensions/copilot/package-lock.json",
+        "extensions/copilot/package.json"
+      ]
+    },
+    {
+      "index": 178,
+      "repo": "microsoft/vscode",
+      "kind": "positive",
+      "merge": "fa43a70d5848c8298110b7ac9b642f8dbad703a8",
+      "first": "f8e1706349c5d152c571e6f18acc21cbc3eae2e3",
+      "second": "1eb30178567682ca5965e72b61936c7d599a4d4b",
+      "base": "cf2074e6f9d64143c5b61b4b45dd015e2cbb5f40",
+      "conflicted": [
+        "extensions/copilot/package-lock.json"
+      ]
+    },
+    {
+      "index": 179,
+      "repo": "microsoft/vscode",
+      "kind": "positive",
+      "merge": "72c7ba84e0d938598378dc6405d438e446f107ff",
+      "first": "0f60dd3e7a1892ba8201113a2a7ef87f7ad21f41",
+      "second": "c5ac25e125f695bfa6df44374c45e3ff7538e94e",
+      "base": "b5dd5ac449007e5be7e0f796a3abe24c5b243413",
+      "conflicted": [
+        "extensions/copilot/package-lock.json",
+        "extensions/copilot/package.json"
+      ]
+    },
+    {
+      "index": 180,
+      "repo": "microsoft/vscode",
+      "kind": "positive",
+      "merge": "9700aa12c991550a8b88282b0d99571fab8fd732",
+      "first": "b72f636fd9f9cccb7b2e94b23e63227503ec62df",
+      "second": "6451a218d5388840fc3bcce2321e8bba98f2f27d",
+      "base": "cc27248bda4c64118c2efbf643e6bcf6288592a7",
+      "conflicted": [
+        "extensions/copilot/package-lock.json",
+        "extensions/copilot/package.json"
+      ]
+    },
+    {
+      "index": 181,
+      "repo": "microsoft/vscode",
+      "kind": "positive",
+      "merge": "b9c8f7bbf4e6c5cca67d5afbdf343ce3e4260be3",
+      "first": "26f568538a05a4dd4f03cf53c714c31252efb974",
+      "second": "cc27248bda4c64118c2efbf643e6bcf6288592a7",
+      "base": "66ee721ba8b0534ef686351808c0f1aabb5fbcb0",
+      "conflicted": [
+        "extensions/copilot/package-lock.json",
+        "extensions/copilot/package.json"
+      ]
+    },
+    {
+      "index": 182,
+      "repo": "microsoft/vscode",
+      "kind": "positive",
+      "merge": "ee6b7639ca2eb9ae89fd18020c920277118deddb",
+      "first": "dfa8a7a237b95b186344b4cd316d72c6dfafed64",
+      "second": "66ee721ba8b0534ef686351808c0f1aabb5fbcb0",
+      "base": "9cfac8094c277e345d1480ded8aa56dd40afc29e",
+      "conflicted": [
+        "extensions/copilot/package-lock.json",
+        "extensions/copilot/package.json"
+      ]
+    },
+    {
+      "index": 183,
+      "repo": "microsoft/vscode",
+      "kind": "positive",
+      "merge": "1cc342a089595ef1e9984319582272efa83bef7d",
+      "first": "2de481e6cc45e3f036f360a34bbd00e52090f076",
+      "second": "f030344cf19e76e6b47d2d8ab003780a7fdb8171",
+      "base": "c2ae0705001414d8e7611843d98e43a933cb69c8",
+      "conflicted": [
+        "extensions/markdown-language-features/package-lock.json",
+        "extensions/markdown-language-features/package.json"
+      ]
+    },
+    {
+      "index": 184,
+      "repo": "microsoft/vscode",
+      "kind": "positive",
+      "merge": "496f2eea00ad27efb973fb6b364455495a7578de",
+      "first": "d18906705c80a2c169b2b52dc5f5401fb5586760",
+      "second": "274d71002ec805c8b4f61ade3f058dd3cac1aceb",
+      "base": "2a256ef7eb5472ea4883458cd1686d00a4afb4bf",
+      "conflicted": [
+        "package-lock.json",
+        "package.json"
+      ]
+    },
+    {
+      "index": 185,
+      "repo": "microsoft/vscode",
+      "kind": "positive",
+      "merge": "98e69ca6ea187976805d4db46c5167c601d25cde",
+      "first": "2e249c9ddd403ad69be0d1f70b0c35f4208c2092",
+      "second": "7f269ef38ff355019d5b8460114698e2abcf9b9a",
+      "base": "00b294a7326555fe3ed4dbef0f153e0245b8d1c7",
+      "conflicted": [
+        "package-lock.json",
+        "package.json"
+      ]
+    },
+    {
+      "index": 186,
+      "repo": "microsoft/vscode",
+      "kind": "positive",
+      "merge": "7c79e3d0c103e795ce7f6915a79ffbc50722dd0e",
+      "first": "a92d50eb18a2207a872fa9b095aaf12945f61768",
+      "second": "51b69d42b80fa294fa4072d0091021f523273e4f",
+      "base": "abb449ca9812c797c490ee1ddaabdbd259d59f65",
+      "conflicted": [
+        "yarn.lock"
+      ]
+    },
+    {
+      "index": 187,
+      "repo": "microsoft/vscode",
+      "kind": "positive",
+      "merge": "821e3a1fa131148af90df968b58fa012d0e7fe78",
+      "first": "1ac620aeca2a8858d2c60e49e6c34ccc0dee04b9",
+      "second": "2d58a3979339142bc56dc786da533b3942479296",
+      "base": "e4595ad3998a436bbf68d32a6c59e9d49fc63e32",
+      "conflicted": [
+        "yarn.lock"
+      ]
+    },
+    {
+      "index": 188,
+      "repo": "microsoft/vscode",
+      "kind": "positive",
+      "merge": "75dfb8993e3fd86344e993b79ed6785b3fec98f9",
+      "first": "cb1b7ec10b3993280568a80f852144b5d54266f4",
+      "second": "b4e1d3b68704050b7ff6b906c71b243e460bf232",
+      "base": "4c53499e8ab7530ce13ee09d36c115d1c6c91ef9",
+      "conflicted": [
+        "cli/Cargo.lock",
+        "cli/Cargo.toml"
+      ]
+    },
+    {
+      "index": 189,
+      "repo": "microsoft/vscode",
+      "kind": "negative",
+      "merge": "39cc2e34306b9d4b8f74da765bb794ebcaa6ffb7",
+      "first": "93c79de15a8ec11c594b7b366d3139e068dd1a92",
+      "second": "595ec42c0e995a879f984bfeafde7a8809cb417e",
+      "base": "3d2d9159d172d57103388c6b90d18d983bfaca6c",
+      "conflicted": []
+    },
+    {
+      "index": 190,
+      "repo": "microsoft/vscode",
+      "kind": "negative",
+      "merge": "abb54349981451cd344fc1dd7a4299f7bcf0152e",
+      "first": "28cad0310a44455535dbcabe35a833316dbde94e",
+      "second": "2b92153006cc985fbc1bcb0b307b11e79ce93625",
+      "base": "3a0cad084abb7b85d909c87e12fabc3d75c9992a",
+      "conflicted": []
+    },
+    {
+      "index": 191,
+      "repo": "microsoft/vscode",
+      "kind": "negative",
+      "merge": "99078efc49decfc6bd2b55a878b07a64104cd5b1",
+      "first": "472fbb3522dfb5c38f883f0b8a6969b9bbf4dca4",
+      "second": "e23b74e3aa5f6cc805ef8261b59c4f263c503944",
+      "base": "35c48f9946eecf40beed751940607f184a03b6de",
+      "conflicted": []
+    },
+    {
+      "index": 192,
+      "repo": "microsoft/vscode",
+      "kind": "negative",
+      "merge": "3c6fc0fd944b6be3736c6e35bd2c797c79f20eac",
+      "first": "72e074151017dd61af80512c00981dfc7cb7c416",
+      "second": "70ecf84aab5851d95879c0bade33268253b9c909",
+      "base": "3e078a39dc95d262123da38f916225a126fb1ccf",
+      "conflicted": []
+    },
+    {
+      "index": 193,
+      "repo": "microsoft/vscode",
+      "kind": "negative",
+      "merge": "2a6f4bd5c75be5b9b00db13ca2bc9a9d2e3ae6d9",
+      "first": "ed50831627633ebb9e29dbb7fa6a51ebd2b280fd",
+      "second": "65dd0221127a3448c32d5d236e4414768cbd5962",
+      "base": "add330dbd5704e5e27a4aa1bba7f41549ca7e671",
+      "conflicted": []
+    },
+    {
+      "index": 194,
+      "repo": "microsoft/vscode",
+      "kind": "negative",
+      "merge": "2aef175f613b86b016feeb851da77e30e802f54f",
+      "first": "92718f4057da8b6220d92e74cd52d5886ba4aba4",
+      "second": "aa2b7b38b5e68652047c9e9050b8b537b41bb8c1",
+      "base": "055061c84ef9cc40f429b1d17f10fde207c0657d",
+      "conflicted": []
+    },
+    {
+      "index": 195,
+      "repo": "microsoft/vscode",
+      "kind": "negative",
+      "merge": "841ce52d0a2588d370e200e047199d575de46555",
+      "first": "c83b87ffb27e2fe0cf7a7f358d48b2edb3e797de",
+      "second": "6be9580f791a45c9bc74b19dbfc8b450c2caa291",
+      "base": "d56ae73e325a75640200963f726df6a822c8238a",
+      "conflicted": []
+    },
+    {
+      "index": 196,
+      "repo": "microsoft/vscode",
+      "kind": "negative",
+      "merge": "b7ebe9cc2732d42d297a16df1cf2c266378938ba",
+      "first": "121c6fff419df9c8e3fc8dca6e1360f2b7993b6e",
+      "second": "5b8bdd020dfab8640c8db16e5742268dea7a7d05",
+      "base": "176a9676e5176710ae404778546b3c01b011832e",
+      "conflicted": []
+    },
+    {
+      "index": 197,
+      "repo": "microsoft/vscode",
+      "kind": "negative",
+      "merge": "75e5aceefd0da139b65d4c22451b43d372e9b97e",
+      "first": "5e517570c7e0808bb6fa68443ffdb1636f0c85d8",
+      "second": "5c4d9a275639b6ad7b2dad7192c07a5f2112c185",
+      "base": "8d9a4bbeae8c55d7a1bb577001c612d42f3ea6af",
+      "conflicted": []
+    },
+    {
+      "index": 198,
+      "repo": "microsoft/vscode",
+      "kind": "negative",
+      "merge": "e5c31ee6f39c7faab21e21174aa6b1ef17f2dcfb",
+      "first": "86599c8f177810874b2faf4061e6a438a4a28b2f",
+      "second": "e41148800a57bfd6c39096a9d5b41aa42a563ed2",
+      "base": "41499ac00af6cb5985b09053c885e90ce1457b5f",
+      "conflicted": []
+    },
+    {
+      "index": 199,
+      "repo": "microsoft/vscode",
+      "kind": "negative",
+      "merge": "c4ffdb5da72aa6cfb73aab52dd7dae8b81700ae7",
+      "first": "06d480b4f977a3acc3d5615fc8f7ac5941ee1f3b",
+      "second": "f1def1447c8662f2feb03f1210de6117db7b1a00",
+      "base": "8ee6428137ee07741f7ee504cb486e290d7fe58a",
+      "conflicted": []
+    },
+    {
+      "index": 200,
+      "repo": "microsoft/vscode",
+      "kind": "negative",
+      "merge": "40b9c37eef4b016c8e041c494ffd57ac3dbd09fa",
+      "first": "a08b83eb658dfec5c3a3f58205baab93bc3ce7af",
+      "second": "53db5e07d6ff0aa29287b6e9f49324aeb8824d9c",
+      "base": "4f2f275a95721cab3c5830f460d2a86615dd2626",
+      "conflicted": []
+    },
+    {
+      "index": 201,
+      "repo": "microsoft/vscode",
+      "kind": "negative",
+      "merge": "eed2fb43ec9affefdd6597fe744cbb6fedcf2190",
+      "first": "e8291e3676b785d0a454196bbdc22a58981d963f",
+      "second": "31f39ded2199265e92d70d5c4bf114e9a7399ac2",
+      "base": "83cbe7469949ff8c1d145fb46870f764e2f733d4",
+      "conflicted": []
+    },
+    {
+      "index": 202,
+      "repo": "microsoft/vscode",
+      "kind": "negative",
+      "merge": "3317944fde31faf02e47a20347e9b11bea98547a",
+      "first": "2c36ddb55ea8dbce6299ee1046046365e30fd1ad",
+      "second": "757e7d37244dcffbdc1ed29b7de6cc6de1ccc98a",
+      "base": "bb09e7379b060060bb6fa6b1a9cc9aee4fe34b83",
+      "conflicted": []
+    },
+    {
+      "index": 203,
+      "repo": "microsoft/vscode",
+      "kind": "negative",
+      "merge": "91e2d5c1964dbce11ca34786f5e1fb53b811621a",
+      "first": "af16366a8dd03e843c8cc94d540a16a3d947808b",
+      "second": "4f2f275a95721cab3c5830f460d2a86615dd2626",
+      "base": "603ca23a7623678dea30c8f77d129d167af7622d",
+      "conflicted": []
+    },
+    {
+      "index": 204,
+      "repo": "microsoft/vscode",
+      "kind": "negative",
+      "merge": "b4347c5814bcb898e851bb58d094398d7179e138",
+      "first": "bccdfa8bb564789ef5764dac24240d8b72d60287",
+      "second": "8a565ba4cc275f5351581f98e422cd1d3f01ce91",
+      "base": "3981b5d4fd52539c8fd978ccd9a0613191d1855e",
+      "conflicted": []
+    },
+    {
+      "index": 205,
+      "repo": "microsoft/vscode",
+      "kind": "negative",
+      "merge": "74fca4377e0fbedae0fb79367c2c132094ff5d68",
+      "first": "6c8f319b328ac11fa2f0838a2ebc914fb28ec2e7",
+      "second": "a261ac606a5c6e1cdb0723230d8dfa4db3a46ae8",
+      "base": "2f926976902f7d293ec3135b8c51cf95e3dbc6ac",
+      "conflicted": []
+    },
+    {
+      "index": 206,
+      "repo": "microsoft/vscode",
+      "kind": "negative",
+      "merge": "24838ca669972eb66503776071ff1e68e9aaa757",
+      "first": "1cb20cf2311769ce6eff0ad0259729f7a865dcd6",
+      "second": "32ca9719c90b527b0ffa96b288bd2964256e5ac3",
+      "base": "32ccba704f6f0265fa874791a75b2a108756635f",
+      "conflicted": []
+    },
+    {
+      "index": 207,
+      "repo": "microsoft/vscode",
+      "kind": "negative",
+      "merge": "23bf8f6efa1ea8643ea5659e2f3182124179b53e",
+      "first": "15cb380931503feda0d90fbcc259f5967e8d3e37",
+      "second": "ef34fe62d2c2013968709e6d42479b1676922120",
+      "base": "a14d0306921f937f5644bb89bfbb66c699e66409",
+      "conflicted": []
+    },
+    {
+      "index": 208,
+      "repo": "microsoft/vscode",
+      "kind": "negative",
+      "merge": "65e9db564260c489a5591238b6aba817ea3cc325",
+      "first": "e534b2c741acc484ec7097292b5ea2b0624ba1fa",
+      "second": "17c0b4f6b990405efabed0fe372bca1078ced72e",
+      "base": "cec7c1c5951f35412d99308ae915e01e40d011e2",
+      "conflicted": []
+    }
+  ],
+  "exclusions": [
+    {
+      "repo": "opf/openproject",
+      "merge": "90b9c87a3637288c59597939c5a96638145cbac1",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "opf/openproject",
+      "merge": "e5920da7c8fd166109b8d679a920e6091e745579",
+      "reason": "submodule or binary conflict"
+    },
+    {
+      "repo": "opf/openproject",
+      "merge": "f3ee986b382686d714041ecb044850ea45dc12b4",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "opf/openproject",
+      "merge": "18bc3b71bf971ce46254000cfb0ecc9b424b079c",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "PrestaShop/PrestaShop",
+      "merge": "883797250977940e6585be38ed7af61e0c62dc33",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "PrestaShop/PrestaShop",
+      "merge": "38cf01f762d06c4900af010be157cdac4d8348ee",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "1e1f3be5d16a5f18aac5a248f469e1779f81c9ff",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "d44dbb68a00c51361ce49d34c157d1aa2133d4bf",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "4b1000ad4123234af75a93d9bb4d014efac5d24d",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "6a466b47031bb4e28f0d4245aae2d887c1f8ecc8",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "f541f4913ad1a7b576bab72a44f5de2298ee2e42",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "317811d4ca1d1a1d2ed4a3efbf40e66418181127",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "002648a486d976617b06b2176df6a243288ef774",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "038f5732522bdad448523c215d53054db7280963",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "357ce92f68b47d9c4191251012ddbab0d2395267",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "656f4783b10f6288d4cab0aa9ff30f7dc66edc7d",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "64e327e93e372f4df213a2432432a97e7897e203",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "e6feb70e209b93e11d9bf00f178972f1e29e0193",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "50529d3d95650fef1904b4c9da755c78e4fed863",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "92ee2b5dc46f1a772d5d8eb8d98f37bccf77a4fa",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "d745a67f58ee10780fb7c88db6d4514ad9af5010",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "b026746893a4c6efbf133032f721794d82de16c9",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "8b6d6e5f17beaffef768e941db447b31db79702e",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "aab079d0c9614e63aaf6f73f1081b75356ae9e2a",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "942bca58425cd0f5a606eb08df2ef4e42272caa7",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "423e44a5a6e4be7d3e1c667b0253f74c20d4848f",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "65f26a6b4b6d97580c78c54853d1e6043a1a831e",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "65468538b7a1fecaddc1f6c6a2423f59db03ed1a",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "a930ec2d82aeff96308855f802299cb23f082a6c",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "05cd9943b228e73bec1646f4d5291cf759386772",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "104d75284ec830a5a4af9fe136485ddc7abbfd3a",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "298981fa126133bbf3ac837657dd92de99b213b9",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "9876e471c3aa7775bae8274eb10b8d65fccf6c3a",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "7090d01ed250bbd536c0e3fd3280549dbed1f733",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "d586b88aa1c6bac40fb34e2db912967ab07fb126",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "74fa55e0012543dc91baf231e70e67093fbf431a",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "8e74798171cd4a5fffd5f06b6e654617ecbf27ab",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "871bf0b4ab22b1c32d481cd8c6feed3816e862e1",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "782a084bdd5495e99940c31d45ed48c0432589ad",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "5748d254b4018973a47d48761908473349369839",
+      "reason": "criss-cross"
+    },
+    {
+      "repo": "magento/magento2",
+      "merge": "b971d87142a53c126d8bba3352da22fa3d378500",
+      "reason": "criss-cross"
+    }
+  ]
+}

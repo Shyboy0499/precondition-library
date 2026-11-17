@@ -1,0 +1,122 @@
+[
+  {
+    "configuration": "0",
+    "order": 0,
+    "library": "results/refusal-population-2026-11-15/builds/0-0/library-two-sided",
+    "library_hash": "b46875fc5c5d223cfcb40bbf85a930c6c12711ca74762d26dacbe55a7ba4af7a"
+  },
+  {
+    "configuration": "0",
+    "order": 1,
+    "library": "results/refusal-population-2026-11-15/builds/0-1/library-two-sided",
+    "library_hash": "67bc94e6c24ac5fdc9baf53b3be0dbc0d37fc2c7b15c8ff0b68db8c7dd546a68"
+  },
+  {
+    "configuration": "0",
+    "order": 2,
+    "library": "results/refusal-population-2026-11-15/builds/0-2/library-two-sided",
+    "library_hash": "7aa23eaaaf600be40d9f4f9513eca066dae99ec6081ad27db4858baa95d4b9cf"
+  },
+  {
+    "configuration": "0",
+    "order": 3,
+    "library": "results/refusal-population-2026-11-15/builds/0-3/library-two-sided",
+    "library_hash": "6889203cea08a3dd0a994720f0dc55dda51db17c1fb6aae8d29bb894a53503e1"
+  },
+  {
+    "configuration": "0",
+    "order": 4,
+    "library": "results/refusal-population-2026-11-15/builds/0-4/library-two-sided",
+    "library_hash": "48ab89ee52109992e5b4554b5b4daf1fd0d7a9f9623cd53e473dd34be893805b"
+  },
+  {
+    "configuration": "0",
+    "order": 5,
+    "library": "results/refusal-population-2026-11-15/builds/0-5/library-two-sided",
+    "library_hash": "8c44392414286ea736d01a89b778531f0a165c9e0bc07715c1742093cf67bbf7"
+  },
+  {
+    "configuration": "0",
+    "order": 6,
+    "library": "results/refusal-population-2026-11-15/builds/0-6/library-two-sided",
+    "library_hash": "6931cf695e727af7953299d102806b2e68b0d77bbbc51ce3f4e3445e4a7abf0c"
+  },
+  {
+    "configuration": "0",
+    "order": 7,
+    "library": "results/refusal-population-2026-11-15/builds/0-7/library-two-sided",
+    "library_hash": "c0af64794f83eef4e64a2f8a51a6901ec1ef0c9f113f158be3852b4e3bab9d68"
+  },
+  {
+    "configuration": "0",
+    "order": 8,
+    "library": "results/refusal-population-2026-11-15/builds/0-8/library-two-sided",
+    "library_hash": "9efb8f75bbe30c73c9eaaf6c4685c8114b4d56547a1a0e1bf1892ce0fbd1ed6d"
+  },
+  {
+    "configuration": "0",
+    "order": 9,
+    "library": "results/refusal-population-2026-11-15/builds/0-9/library-two-sided",
+    "library_hash": "e03056ab2c82dbb6f56d154298a9e73a1f36503bfaa27e9ead830861d4b9e5b6"
+  },
+  {
+    "configuration": "R",
+    "order": 0,
+    "library": "results/refusal-population-2026-11-15/builds/R-0/library-two-sided",
+    "library_hash": "5edbdac7e604e3212cbcc50e5ba46c1e9d5823efbd8e3c01b06dfdc6ca272845"
+  },
+  {
+    "configuration": "R",
+    "order": 1,
+    "library": "results/refusal-population-2026-11-15/builds/R-1/library-two-sided",
+    "library_hash": "8c1882e111773051b868e2dc10b9cd93270a4cda936a21ad82d541b4a1052517"
+  },
+  {
+    "configuration": "R",
+    "order": 2,
+    "library": "results/refusal-population-2026-11-15/builds/R-2/library-two-sided",
+    "library_hash": "aeeade86bc1f9ba4b9c249bfdd889ef9ccdabdbe845bfde50eb3a1c79723dcdb"
+  },
+  {
+    "configuration": "R",
+    "order": 3,
+    "library": "results/refusal-population-2026-11-15/builds/R-3/library-two-sided",
+    "library_hash": "7dac8e3d96773bda777446197cada9e3631d24bc12f620b83666688bf6cf2cb9"
+  },
+  {
+    "configuration": "R",
+    "order": 4,
+    "library": "results/refusal-population-2026-11-15/builds/R-4/library-two-sided",
+    "library_hash": "0f46de8333e104fb842e71a9834afcce2b9434cb3f24967ca230ab06287f7a26"
+  },
+  {
+    "configuration": "R",
+    "order": 5,
+    "library": "results/refusal-population-2026-11-15/builds/R-5/library-two-sided",
+    "library_hash": "1f59e563db9f4989e8a79e8603328a9ac09a8581b17acfcbc0509fabe81d2e4c"
+  },
+  {
+    "configuration": "R",
+    "order": 6,
+    "library": "results/refusal-population-2026-11-15/builds/R-6/library-two-sided",
+    "library_hash": "7729751bde864e69f68d9ae1f8754b99015a524a63be6f6063fee57337ebcdc8"
+  },
+  {
+    "configuration": "R",
+    "order": 7,
+    "library": "results/refusal-population-2026-11-15/builds/R-7/library-two-sided",
+    "library_hash": "1d86f40f1db2aa34072b53182d84b4eb3056d194dd47cdcdd5cbaf8eb8bea614"
+  },
+  {
+    "configuration": "R",
+    "order": 8,
+    "library": "results/refusal-population-2026-11-15/builds/R-8/library-two-sided",
+    "library_hash": "9daeaffb37f686149046114f4461ffaeb187f7436b928ec1fb735327c5ca7da4"
+  },
+  {
+    "configuration": "R",
+    "order": 9,
+    "library": "results/refusal-population-2026-11-15/builds/R-9/library-two-sided",
+    "library_hash": "bb96279c7cf6972ce3408b054a5a0baad154013ffbe213ec02675d819b6add3e"
+  }
+]

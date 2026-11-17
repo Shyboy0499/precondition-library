@@ -12,6 +12,13 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **Study 2's registered result (spec revision 165).** Over 20 builds and 209 real merges from 8
+  repositories, the primary hypothesis is not supported. A state reader taught the same refusal
+  evidence declines inexpressible conflicts about as often as refusal-tested builds, +0.060
+  [−0.009, +0.153], and is right on more clean merges. Under the current admission, builds fire on
+  1% to 100% of those conflicts. Refusal-tested admission lowers that to 0–6% (H3); its cost on
+  clean merges is unresolved (H4). Every figure is recomputed without the project
+  ([`results/refusal-population-2026-11-15/`](results/refusal-population-2026-11-15/README.md)).
 - **Study 2's 20 builds are committed** ([`results/refusal-population-2026-11-15/builds/`](results/refusal-population-2026-11-15/builds/README.md)),
   frozen before their evaluation finishes, with the two interruptions they were resumed from.
 - **The held-out lock-file paths, on the 22 libraries built since the compile prompt changed
