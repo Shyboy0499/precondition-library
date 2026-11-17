@@ -17,7 +17,10 @@ the repository, or choose the fix whose description sounds most similar. On
 states made by this project, the checks chose the wrong fix 0 times in 563
 attempts; three text methods were wrong on 71–90% of their attempts. On new
 generated names, paths and history shapes, the checks chose wrongly 42 of the 581
-times they acted, all involving a file name with a space or a non-ASCII character.
+times they acted, all involving a file name with a space or a non-ASCII character. In the 22
+libraries built since the instructions were changed to handle such names, that mistake is gone;
+one library still acted wrongly 20 times in 403, because it recognised lock files only by a
+fixed list of names.
 On 274 real lock-file merges, graded by what each maintainer committed, the checks
 were wrong on 8–54% of their attempts, depending on the library. That is still less
 often than text similarity when both acted equally often, but mostly because the
@@ -33,6 +36,15 @@ each registered before its data and run on 92 repositories this project had neve
 - **Adding the ecosystem's own consistency check widens what can be resolved,** at about the same
   error. Much of that gain disappears once the check cannot see the maintainer's resolved
   manifests.
+
+Is declining what sets the checks apart? Study 2, registered before its data, built the library
+20 times and tested every build on 209 new real merges:
+- **How often a build declines a conflict no fix can resolve depends on the build.** Under the
+  usual build rules, ten builds acted on anywhere from 1% to 100% of those conflicts.
+- **Requiring builds to decline known examples works:** they then acted on 0–6% of them.
+- **But a simple model that reads the repository's state, taught the same examples, declined
+  about as often** and got more ordinary merges right. Running checks did not beat reading the
+  state, which was the study's main question.
 
 Read [Results graded outside this project](#results-graded-outside-this-project),
 [Primary result](#primary-result), [Held-out states](#held-out-states),
@@ -72,8 +84,15 @@ Read [Results graded outside this project](#results-graded-outside-this-project)
 > repositories. Its primary hypothesis was **not supported**: a state reader taught the same
 > refusal evidence declines inexpressible conflicts about as often as the refusal-tested builds,
 > 0.083 against 0.023 fired, interval [−0.009, +0.153], and is right on more clean merges. Under
-> the current admission, the 10 builds fire on anywhere from 1% to 100% of those conflicts. Refusal-tested admission makes every build decline, at a cost on clean merges that this
-> size cannot resolve ([study 2](results/refusal-population-2026-11-15/README.md)).
+> the current admission, the 10 builds fire on anywhere from 1% to 100% of those conflicts.
+> Refusal-tested admission makes every build decline, at a cost on clean merges that this size
+> cannot resolve ([study 2](results/refusal-population-2026-11-15/README.md)).
+>
+> **Unseen lock-file paths** on the 22 libraries built since the compile prompt asked for `-z`:
+> 20 of 403 fires wrong, all one library whose check knows lock files only by name. A test at six
+> new paths finds one more such program, which the held-out paths could not reach
+> ([held-out](results/heldout-2026-11-16/README.md),
+> [unseen paths](results/lock-path-perturbation-2026-11-16/README.md), exploratory).
 >
 > **Graded by this project's own labels.** On states its own injectors build, judged by its own
 > rules, precondition dispatch mis-fired on **0 of 563** fires, against text similarity's
@@ -107,6 +126,7 @@ Stated first, because the prior art is real and the honest framing depends on it
 | That dispatching a cached plan by testing **executable preconditions** is a new mechanism | It is MACROPS, 1972: a cached generalized plan is dispatched by testing precondition *kernels* against live state, with an explicit replan fallback. |
 | That "the most similar case is not the most reusable" is a new insight | Smyth & Keane argued it in 1998, in a peer-reviewed journal, at length. |
 | That these token counts are a **cost** | They are tokens. Pricing input needs a rate table, and the provider's rates differ by peak and off-peak hours, so no currency figure is reported — input is metered as uncached, cache-read and cache-write so one can be computed once rates exist. |
+| That executing checks declines unfamiliar states better than reading them | Study 2's primary hypothesis was not supported: a state reader given the same refusal evidence declined about as often and was right on more clean merges ([study 2](results/refusal-population-2026-11-15/README.md)). |
 | That precondition dispatch rarely mis-fires | On this project's own states it did not mis-fire (0 of 563). On real lock-file merges, graded by maintainers, it mis-fired on 8–54% of its fires depending on the library, and the registered claim is falsified there ([Results graded outside this project](#results-graded-outside-this-project), ADR-0052). |
 | That an episode-level comparison has been made | Only the pair-level primary metric has been measured ([Primary result](#primary-result)). The frozen benchmark, the admission factorial and the online arms have not been run at scale; the one smoke pass that ran them ([First demonstration](#first-demonstration)) demonstrates the mechanism and measures nothing. |
 | That no text scorer could close the gap | Three were measured on the same three libraries: the shipped lexical arm (ADR-0003), the pinned embedding arm (#104) and a pinned local reranker, the strongest of thirteen models screened on arm 2's floor (lower bounds 0.571 and 0.508 against chance 0.333, where the other two only just clear it). The reranker narrows the gap to +0.71 to +0.76, from lexical +0.76 to +0.81, and no further. That is a screen of local models, not a search. A scorer reading the state through an LLM call (ADR-0034) narrows it to +0.05 to +0.17 on the two libraries where it clears the floor, and arm 3 still mis-fires less, in both of two repeats ([LLM judge](results/judge-2026-11-15/README.md)). That is one model and one prompt, not every judge. |
