@@ -62,6 +62,11 @@ States built by this project's fault injectors, graded by its own rules. Code:
   [consequences-realhost-2026-10-21](consequences-realhost-2026-10-21/),
   [abstentions-2026-10-12](abstentions-2026-10-12/).
 
+## What it cost
+
+[api-cost-2026-11-18](api-cost-2026-11-18/): the provider's dashboard, CNY 95.49 in all, divided
+among the runs.
+
 ## Checks on the instruments
 
 Code: `src/precondition_library/audits/`.
