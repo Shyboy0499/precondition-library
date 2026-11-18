@@ -33,6 +33,10 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Changed
 
+- **The paper reports study 2's result.** Its section is now "Study 2: refusal over a population of
+  builds, registered", with a Result subsection, a generated table (`paper/tables/refusal-population.tex`,
+  checked against the run's `summary.txt`) and the deviations. The abstract, contributions,
+  discussion, threats, scope and conclusion are updated to match.
 - **The code is reorganised by what each part is (spec revision 162).**
   - **Before:** one `bench/` folder held 47 modules: the benchmark, six studies, four controls and
     the audits, with a 2,082-line `report.py`. Tests were 122 files in one folder.

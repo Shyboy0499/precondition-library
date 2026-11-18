@@ -27,6 +27,7 @@ UNIFY = ROOT / "results" / "ecosystem-unify-2026-11-02"
 ANATOMY = ROOT / "results" / "lock-anatomy-2026-11-04"
 TOOL_CHECK = ROOT / "results" / "lock-tool-check-2026-11-08"
 STUDY_6 = ROOT / "results" / "tool-precondition-2026-11-09"
+STUDY_2 = ROOT / "results" / "refusal-population-2026-11-15"
 RUNS = ("run-11", "run-12", "run-13")
 SCORE_TOLERANCE = 1e-6
 """The hybrid run recomputed the reranker's scores, which agree with the rescore's to about
@@ -625,6 +626,69 @@ def tool_precondition() -> str:
     )
 
 
+def refusal_population() -> str:
+    """Study 2 as registered: H1--H4 with §9's outcomes, the controls and each configuration's
+    spread, from `report.json`, each line checked against the run's own `summary.txt`."""
+    report = json.loads((STUDY_2 / "report.json").read_text("utf-8"))
+    summary = (STUDY_2 / "summary.txt").read_text("utf-8")
+
+    def signed(x: float) -> str:
+        return f"{x:+.3f}"
+
+    def interval(estimate: dict) -> str:
+        low, high = estimate["interval"]["low"], estimate["interval"]["high"]
+        return f"{signed(estimate['statistic'])} [{signed(low)}, {signed(high)}]"
+
+    def tex(text: str) -> str:
+        return text.replace("-", "$-$").replace("+", "$+$")
+
+    outcomes = {d["rule"]: d["outcome"] for d in report["decisions"]}
+    lines = []
+    for name, text, rule in (
+        ("h1", "H1 (primary), $f$(Control-R) $-$ $f$(R's builds)", "3 H1"),
+        ("h2", "H2, $f$(Control-0) $-$ $f$(0's builds)", "4 H2"),
+        ("h3", "H3, $\\bar f_0 - \\bar f_R$", "5 H3 and H4"),
+        ("h4", "H4, right(R) $-$ right(0) on clean cases, margin $-$0.10", "5 H3 and H4"),
+    ):
+        shown = interval(report["hypotheses"][name])
+        if shown not in summary:
+            raise SystemExit(f"{name}: {shown!r} is not in summary.txt")
+        outcome = outcomes[rule]
+        if name in ("h1", "h2"):
+            verdict = outcome.split(":")[0]
+        elif name == "h3":
+            verdict = "supported" if "H3 supported" in outcome else "not supported"
+        else:
+            verdict = outcome.split(",")[1].split(":")[0].strip().replace("H4 ", "")
+        lines.append(f"{text} & {tex(shown)} & {verdict} \\\\")
+    lines.append("\\midrule")
+    lines.append("& $f$ on inexpressible conflicts & \\\\")
+    for label, key in (
+        ("Control-0", "control_zero_fire_rate"),
+        ("Control-R", "control_refusal_fire_rate"),
+    ):
+        expected = f"{label} {report[key]:.3f}"
+        if expected not in summary:
+            raise SystemExit(f"{label}: {expected!r} is not in summary.txt")
+        lines.append(f"\\quad {label} & {report[key]:.3f} & \\\\")
+    for name in ("0", "R"):
+        spread = report["spread"][name]
+        expected = (
+            f"spread of f in configuration {name}: mean {spread['mean']:.3f}, "
+            f"SD {spread['sd']:.3f}, range {spread['min']:.3f}-{spread['max']:.3f}"
+        )
+        if expected not in summary:
+            raise SystemExit(f"spread {name}: {expected!r} is not in summary.txt")
+        lines.append(
+            f"\\quad configuration {name}'s 10 builds & mean {spread['mean']:.3f}, "
+            f"SD {spread['sd']:.3f}, range {spread['min']:.3f}--{spread['max']:.3f} & \\\\"
+        )
+    return (
+        "\\begin{tabularx}{\\linewidth}{Xll}\n\\toprule\n& estimate [95\\% interval] & \\S 9 \\\\\n"
+        "\\midrule\n" + "\n".join(lines) + "\n\\bottomrule\n\\end{tabularx}\n"
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, required=True)
@@ -642,6 +706,7 @@ def main() -> None:
         ("rules", rules),
         ("tool-check", tool_check),
         ("tool-precondition", tool_precondition),
+        ("refusal-population", refusal_population),
     ):
         (args.out / f"{name}.tex").write_text(build(), encoding="utf-8")
 
