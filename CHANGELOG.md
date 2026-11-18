@@ -12,6 +12,9 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **What the model calls cost** ([`results/api-cost-2026-11-18/`](results/api-cost-2026-11-18/README.md)):
+  CNY 95.49 from 20 October to 18 November, from the provider's dashboard. That includes study
+  2's builds at about CNY 49 and run-15 at CNY 8.36 exactly.
 - **Study 2's registered result (spec revision 165).** Over 20 builds and 209 real merges from 8
   repositories, the primary hypothesis is not supported. A state reader taught the same refusal
   evidence declines inexpressible conflicts about as often as refusal-tested builds, +0.060
