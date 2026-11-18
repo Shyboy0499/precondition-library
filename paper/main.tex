@@ -54,7 +54,11 @@ precondition, roughly halves its mismatch; a fifth registered study, on 20 more 
 confirms it stays above 0.10 (0.35 [0.18, 0.53]). A sixth, on 25 more, finds merges leave lock
 files inconsistent more often than ordinary commits, narrowly (0.067 [0.003, 0.130]); run before
 manifests are resolved, adding the ecosystem's own check where that refuses covers 0.58 of files
-at mismatch 0.30. We also mutation-test the graders.
+at mismatch 0.30. A registered study of 20 builds on 209 more real merges tested refusal. How
+often a build fires on conflicts nothing can resolve ranges from 1\% to 100\% across ten builds,
+and a state reader taught the same refusal evidence declines about as often as builds admitted for
+refusing: the primary hypothesis is not supported (0.060 [$-$0.009, 0.153]). We also
+mutation-test the graders.
 \end{abstract}
 
 \clearpage
@@ -131,9 +135,11 @@ compares them with this work in detail.
   \item \textbf{A validity analysis of the graders} (Section~\ref{sec:graders}): 171 mutants,
   each of the eight survivors that could change a verdict analysed, five closed by new tests and
   three argued equivalent.
-  \item \textbf{A power analysis of the registered follow-up study, run through its own decision
-  code} (Section~\ref{sec:power}), which confirms its primary test and led to an amendment of
-  its non-inferiority guard before any of its data exists.
+  \item \textbf{A registered test of refusal over a population of builds}
+  (Section~\ref{sec:power}). A power analysis run through its own decision code confirmed its
+  primary test and led to an amendment of its non-inferiority guard before any data. The result:
+  whether a build declines depends on the build, and a state reader given the same refusal
+  evidence declines about as often.
   \item \textbf{An external oracle for real lock-file conflicts} (Section~\ref{sec:oracle}): three
   registered studies on 67 repositories, an anatomy of what conflicts at the level of packages,
   and a precondition a dispatcher could deploy, tested after it was found.
@@ -153,7 +159,7 @@ The report has four parts, and each starts on a new page.
   real lock-file conflicts read as package sets (studies 3--5).
   \item \textbf{Part III, validity and the next study} (Sections~\ref{sec:graders}
   and~\ref{sec:power}): whether the graders behind those results are right, and the registered
-  follow-up study (study 2) with its power analysis.
+  follow-up study (study 2): its power analysis and its result.
   \item \textbf{Part IV, context and conclusions} (Sections~\ref{sec:comparison}--\ref{sec:conclusion}):
   a comparison with related systems, a discussion of what the results mean, their scope, and the
   conclusion.
@@ -1276,7 +1282,7 @@ aside.
   That is the taxonomy's ``decision outside the files'', located in the manifest.
 \end{itemize}
 
-\section{The registered follow-up study, and its power}
+\section{Study 2: refusal over a population of builds, registered}
 \label{sec:power}
 
 \subsection{Design}
@@ -1413,6 +1419,55 @@ and a study that shows none has not ruled one out.
 This is the use a power analysis is for: it changed what the study will be allowed to conclude
 before it could see a result.
 
+\subsection{Result}
+\label{sec:study2result}
+
+The 20 libraries were built on the registered commit and frozen. Evaluation mining then took list
+E in order until the targets were met: 209 cases from 8 repositories, 109 inexpressible conflicts,
+97 clean merges and 3 other conflicts. Three repositories yielded no case. Both configurations
+have 10 valid builds, so the study is powered, and both fire, so rule 2 does not stop it.
+Table~\ref{tab:study2} gives the registered estimates.
+
+\begin{table}[t]
+\centering
+\caption{Study 2 as registered (\S 9 rules 3--5). $f$ is the fire rate on the 109 inexpressible
+conflicts; lower is better, since nothing is right on them. Intervals are the registered two-level
+bootstrap.}
+\label{tab:study2}
+\small
+\input{tables/refusal-population.tex}
+\end{table}
+
+\begin{itemize}
+  \item \textbf{The primary hypothesis is not supported.} Control-R, the state reader taught
+  $R$'s states as ``fire nothing'', fires on 0.083 of the inexpressible conflicts. Configuration
+  R's builds fire on 0.023 on average, and the difference's interval includes 0. On the 97 clean
+  merges Control-R is right on 94; the R builds average 0.385. Executing checks does not decline
+  better than a reader given the same evidence.
+  \item \textbf{Refusal is a property of the build.} Under the current gate, ten builds that
+  differ by design only in the admit plan's order fire on 0.009 to 1.000 of the inexpressible
+  conflicts (standard deviation 0.443). Study 1's three builds were not unusual. H2 is supported
+  because Control-0 fires on all of them, as it did in study 1.
+  \item \textbf{Refusal-tested admission makes builds decline (H3), at a cost the study cannot
+  size (H4).} Under it every build fires on at most 0.064. But six of the ten R builds are right on
+  no clean merge, and two fire on no case at all: much of their declining is not firing on these
+  repositories. H4's interval, $[-0.687, +0.098]$, neither shows nor excludes a cost beyond the
+  margin. That is the outcome the power analysis said this size would usually give.
+  \item \textbf{Few builds do both.} Builds that decline inexpressible conflicts and are right
+  on clean merges are 0-3 and 0-9 under the current gate, and R-2, R-8 and R-9 under refusal-tested
+  admission. Control-R does both without compiling anything.
+\end{itemize}
+
+\paragraph{Deviations.}
+The evaluation began on the registered commit and was stopped, before any repository finished,
+for being too slow. It was completed on a later commit whose changes to the evaluation's path are
+three: a faster snapshot of the sandbox, shown to give all 1,943 predicate verdicts of one real
+case unchanged; resuming from a journal, shown to write byte-identical files; and a compiled
+pattern that is not a valid regular expression no longer holding, where it had crashed. The run
+was interrupted nine times and resumed. Each repository was pinned on the day it was first mined.
+A script that imports nothing from the project recomputes every figure of
+Table~\ref{tab:study2} and each build's own figures from the released decisions and labels.
+
 \clearpage
 \part{Context and conclusions}
 
@@ -1506,14 +1561,15 @@ retrievers had HSR@3 of 0.346--0.372 and a resolver that uses the contracts 0.00
   \item \textbf{What both leave out.} Both assume a right skill exists among the candidates. On
   real lock-file conflicts it almost never did, 1 of 161. There the right action is to refuse,
   and the measure is how often a dispatcher declines. A one-sided gate refuses only what its
-  predicates anticipated; study 2 asks whether admission can select for refusal of what was not.
+  predicates anticipated. Study 2 found that admission can select for refusal of what was not,
+  and that a reader given the same examples learns it too.
 \end{enumerate}
 
 \section{Discussion}
 \label{sec:discussion}
 
 \paragraph{What executing a check buys.}
-Four comparisons bear on this question, each holding the evidence fixed in a different way.
+Five comparisons bear on this question, each holding the evidence fixed in a different way.
 \begin{enumerate}
   \item \textbf{On our states, nothing.} A tree reading the state's fingerprint matched
   precondition dispatch. A tree reading only the library's own precondition verdicts was at least
@@ -1525,6 +1581,10 @@ Four comparisons bear on this question, each holding the evidence fixed in a dif
   \item \textbf{On real merges, refusal.} The one place executing a check differed from reading
   the state was the compiled \code{merge} programs. They try the merge and refuse when it
   conflicts, a fact the reader's 56 training states rarely showed it (Section~\ref{sec:real}).
+  \item \textbf{On real conflicts, with the same evidence, nothing.} Study 2 gave a state reader
+  the refusal examples that refusal-tested admission gave the builds. It declined about as often
+  and was right on more clean merges (Section~\ref{sec:study2result}). What study 1 saw as
+  refusal was the reader's missing evidence, not execution.
   \item \textbf{On real conflicts read as packages, a computed fact.} The best rule found is
   itself a precondition: fire only if no package diverges (Section~\ref{sec:dispatcher}). A
   registered study confirmed on fresh repositories that it helps and is not enough
@@ -1554,7 +1614,7 @@ fault-free states & read the state; refuse by default \\
 the wrong sibling & on faulted states, 51\% (lexical) and 45\% (cross-encoder) of fires chose a
 wrong resolution & read the state \\
 a check that fails open & 41 of 101 lock-file fires on held-out paths; at least 16 such probes
-in 10 of 40 programs & absence checks that fail closed; admission on adversarial paths \\
+in 10 of 40 programs; 20 of 403 in 22 later libraries, from a closed list of names & absence checks that fail closed; admission on adversarial paths \\
 an action space that cannot express the answer & 160 of 161 real conflicts inexpressible as
 line unions & the domain's own unit: package sets (0.07 $\to$ 0.69) \\
 a package both sides changed & npm's merge misses 89 of 94 and 66 of 73 files with a divergent package &
@@ -1596,8 +1656,8 @@ than any choice of dispatcher did on these data.
 \paragraph{Threats to validity.}
 \begin{itemize}
   \item \textbf{Analytic flexibility.} The registered decisions are these: study 1's rule 2 and
-  H1--H3; study 3's H1 and H2; study 4's H1--H4; study 5's H1--H3; study 6's H1--H3; and
-  study 2's design and power. Everything
+  H1--H3; study 2's H1--H4; study 3's H1 and H2; study 4's H1--H4; study 5's H1--H3; and
+  study 6's H1--H3. Everything
   marked exploratory was chosen after seeing the data it is reported on. That covers the
   library-scoped and probe-verdict readers, unification, the anatomy, the dispatch rules, the
   closure pilot and the npm replay. Each is reported as a hypothesis. Studies 4 and 5 have since
@@ -1611,8 +1671,9 @@ than any choice of dispatcher did on these data.
   because they had at least five lock-file conflicts, and they are open-source projects, mostly
   PHP, JavaScript, Ruby, Rust and Python. The libraries come from one model at one temperature.
   \item \textbf{Statistical.} Cases cluster in repositories. Studies 3 and 4 average over
-  repositories and vote by repository, and study 1 clusters its bootstrap. Study 1 has only three
-  libraries, which is why study 2 treats builds as a population.
+  repositories and vote by repository, and studies 1 and 2 cluster their bootstraps. Study 1 has
+  only three libraries, which is why study 2 treats builds as a population; its ten builds per
+  configuration put the spread between builds at a standard deviation of 0.44.
   \item \textbf{Mining.} Every study mines with \code{git merge-tree} in a cache where no
   repository's \code{.gitattributes} applies. A maintainer's working tree applies them, and a lock
   file declared binary conflicts whenever both sides change it. An audit read the \code{merge}
@@ -1638,8 +1699,9 @@ The results hold within the following scope, and each item names the work that e
   (Section~\ref{sec:study6}). Running each project's tests as a further oracle would admit
   resolutions that differ from the maintainer's yet build and pass; it was not run, because it
   executes the projects' code.
-  \item \textbf{Builds.} The libraries come from one LLM at temperature 0. Their spread across
-  three builds (Table~\ref{tab:repositories}) is why study 2 measures a population of twenty.
+  \item \textbf{Builds.} The libraries come from one LLM at temperature 0. Under the current
+  admission, ten builds fire on 1\% to 100\% of inexpressible conflicts (study 2), so a figure
+  from one build describes that build. A second provider is not measured.
   \item \textbf{Domain and level.} The task family is git maintenance. The real-data tests cover
   lock-file merges from 11 repositories (study 1) and lock-file conflicts from 92 more
   (studies 3--6). This report measures dispatch decisions; the
@@ -1648,7 +1710,7 @@ The results hold within the following scope, and each item names the work that e
   \item \textbf{Text scorers.} The comparison covers three local scorers; an LLM judge that reads
   the state is implemented and registered as the next control.
   \item \textbf{Reproduction.} Every figure and table is regenerated from released files by
-  committed scripts, and study 1's figures and labels were recomputed by scripts that import
+  committed scripts, and the figures of studies 1 and 2 were recomputed by scripts that import
   nothing from the project, so each analysis can be repeated independently.
 \end{itemize}
 
@@ -1660,9 +1722,11 @@ did a classifier that only reads the state, and the request channel was built to
 text scorer could use. On real lock-file merges, graded by what maintainers committed, the claim
 that precondition dispatch rarely mis-fires was falsified. What survived is narrow: it fires
 \code{merge} on clean merges where text similarity does not, and some libraries refuse conflicts
-nothing can resolve. The follow-up study that tests refusal is registered; simulating it through
-its own decision rules confirmed its primary test and led to an amendment of its guard, before
-any of its data exists. A third registered study found what the task's labels should have been:
+nothing can resolve. A registered study of 20 builds then tested refusal: how often a build
+declines is a property of the build, admitting only programs that refuse known cases makes every
+build decline, and a state reader taught the same cases declines about as often. Simulating that
+study through its own decision rules had amended its guard before any data, and the guard's
+outcome, not shown, is the one the simulation said this size would usually give. A third registered study found what the task's labels should have been:
 read as package sets, two in three real lock-file conflicts have an answer computed from the
 merge's three sides that matches the maintainer's exactly, and a fourth found which merge to
 compute for each ecosystem. Why it works is structural: half of those conflicts are the line
@@ -1680,7 +1744,7 @@ receive after.
 
 \section*{Data and code availability}
 
-The apparatus, the three libraries, every result file, the six registrations and the
+The apparatus, every library, every result file, the six registrations and the
 verification scripts are at \url{https://github.com/Shyboy0499/precondition-library}. This
 report describes commit \code{c74d3aab71b942ece748462400263e28eff7a5f6} of that repository.
 The figures and tables of Sections~\ref{sec:synthetic}--\ref{sec:graders} come from committed
