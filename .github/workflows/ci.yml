@@ -35,7 +35,7 @@ jobs:
         run: uv run ruff format --check .
 
       - name: Type check
-        run: uv run mypy src
+        run: uv run mypy src lockmerge/src
 
   # The suite, split three ways (PYTEST_SHARD, tests/conftest.py). Every test builds real
   # repositories, and one runner took 13-18 minutes for all of them; three take about a
