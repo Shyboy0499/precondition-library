@@ -1,0 +1,20 @@
+cases: 897 (895 graded, 2 maintainer deleted the file)
+
+package-lock.json: 374 graded conflicts from 45 repositories
+  driver: merged 63/374 = 0.168; of those, package set differs from the maintainer's in 18 (0.286), unreadable 0; identical JSON 32, identical bytes 32
+    valid for the merged manifest: 60/63 judged; invalid 3, of which the maintainer's own file is valid 0
+    declined 311: a package changed differently on both sides 289, would break a requirement 3, other 19
+  calibration, the maintainer's own file valid: 340/374
+  baseline, take ours: same package set as the maintainer 157
+  baseline, take theirs: same package set as the maintainer 69
+
+composer.lock: 521 graded conflicts from 44 repositories
+  driver: merged 15/521 = 0.029; of those, package set differs from the maintainer's in 3 (0.200), unreadable 0; identical JSON 9, identical bytes 8
+    valid for the merged manifest: 14/15 judged; invalid 1, of which the maintainer's own file is valid 0
+    declined 506: a package changed differently on both sides 331, would break a requirement 1, other 174
+  resolve: merged 187/521 = 0.359; of those, package set differs from the maintainer's in 47 (0.251), unreadable 0; identical JSON 84, identical bytes 72
+    valid for the merged manifest: 175/187 judged; invalid 12, of which the maintainer's own file is valid 0
+    declined 334: a package changed differently on both sides 331, would break a requirement 3, other 0
+  calibration, the maintainer's own file valid: 394/521
+  baseline, take ours: same package set as the maintainer 239
+  baseline, take theirs: same package set as the maintainer 71

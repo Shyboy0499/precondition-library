@@ -10,6 +10,24 @@
   <img src="https://img.shields.io/badge/python-3.12%2B-3776AB?style=flat" alt="Python 3.12+">
 </p>
 
+## Use it: lockmerge
+
+**[`lockmerge`](lockmerge/README.md)** is the practical tool this research produced. It is a git
+merge driver that resolves `package-lock.json` and `composer.lock` conflicts package by package,
+and refuses, naming the packages, whenever a merge would not be safe.
+
+```bash
+pipx install "git+https://github.com/Shyboy0499/precondition-library#subdirectory=lockmerge"
+lockmerge install        # in your repository; lock-file conflicts now merge themselves when safe
+```
+
+We replayed it on 895 real conflicts from 68 projects. It merged 17% of npm conflicts and 36%
+of Composer ones (once `composer.json` was merged). Every merge it made passed npm's or
+Composer's lock-file consistency rules, checked offline, except where the maintainer's own
+committed file failed them too. It declined the rest, mostly
+cases where both branches moved the same package to different versions
+([measurements](results/lockmerge-2026-11-25/README.md)).
+
 ## In plain language
 
 This library tests two ways to decide whether a saved fix should run: inspect

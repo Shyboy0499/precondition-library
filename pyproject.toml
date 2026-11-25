@@ -41,8 +41,11 @@ controls = [
     "scikit-learn>=1.5",
 ]
 
+[project.scripts]
+lockmerge = "lockmerge.cli:main"
+
 [tool.hatch.build.targets.wheel]
-packages = ["src/precondition_library"]
+packages = ["src/precondition_library", "lockmerge/src/lockmerge"]
 
 [tool.ruff]
 target-version = "py312"
@@ -51,11 +54,15 @@ line-length = 100
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
 
+[tool.ruff.lint.isort]
+# lockmerge lives in `lockmerge/src` so it can ship on its own; it is still this project's code.
+known-first-party = ["lockmerge", "precondition_library"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # Test modules that others import helpers from (`from test_episode_runner import ...`) live in
 # these folders; listing them keeps those imports working wherever the importing test lives.
-pythonpath = ["tests/experiment", "tests/studies"]
+pythonpath = ["tests/experiment", "tests/studies", "lockmerge/src"]
 addopts = "-q"
 
 [tool.mypy]

@@ -12,6 +12,15 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **`lockmerge`, a git merge driver for `package-lock.json` and `composer.lock`**
+  ([`lockmerge/`](lockmerge/README.md)). It merges record by record and declines when a package
+  changed differently on both sides or a requirement would break. It is a standalone package:
+  zero dependencies, Python 3.10+, installable with `pipx`.
+  - **Measured:** on 895 real conflicts from 68 repositories it merged 17% of npm and 36% of
+    Composer ones (with the merged `composer.json`). Every merge it made was valid, except
+    where the maintainer's own file was invalid too
+    ([`results/lockmerge-2026-11-25/`](results/lockmerge-2026-11-25/README.md); exploratory, a
+    development set).
 - **What the model calls cost** ([`results/api-cost-2026-11-18/`](results/api-cost-2026-11-18/README.md)):
   CNY 95.49 from 20 October to 18 November, from the provider's dashboard. That includes study
   2's builds at about CNY 49 and run-15 at CNY 8.36 exactly.
