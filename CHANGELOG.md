@@ -12,6 +12,13 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **A dataset of 1,559 real lock-file conflicts** from 109 repositories and nine formats
+  ([`datasets/lockfile-conflicts/`](datasets/lockfile-conflicts/README.md)). Each is given by its
+  commits and labelled by which of four simple actions reproduces the maintainer's packages
+  (one does in 1,058 of 1,550). It holds no repository content, and `build.py` rebuilds it.
+- **The report describes lockmerge and the dataset**, and its abstract is shortened to 1,788
+  characters for arXiv's limit. `paper/SUBMITTING.md` gains TechRxiv and dataset-on-Zenodo
+  sections.
 - **`lockmerge`, a git merge driver for `package-lock.json` and `composer.lock`**
   ([`lockmerge/`](lockmerge/README.md)). It merges record by record and declines when a package
   changed differently on both sides or a requirement would break. It is a standalone package:

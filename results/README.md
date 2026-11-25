@@ -68,6 +68,12 @@ States built by this project's fault injectors, graded by its own rules. Code:
 on the 895 real `package-lock.json` and `composer.lock` conflicts of studies 1 and 3–6 and graded
 against each maintainer's commit (exploratory; a development set).
 
+## The dataset
+
+[`datasets/lockfile-conflicts/`](../datasets/lockfile-conflicts/README.md): every lock-file
+conflict the studies mined (1,559, nine formats), with labels derived from the maintainers'
+commits.
+
 ## What it cost
 
 [api-cost-2026-11-18](api-cost-2026-11-18/): the provider's dashboard, CNY 95.49 in all, divided
