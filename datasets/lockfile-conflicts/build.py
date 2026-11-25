@@ -23,6 +23,7 @@ import concurrent.futures
 import csv
 import json
 import sys
+import threading
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -33,7 +34,22 @@ from precondition_library.studies.lock_actions import READERS, packages, three_w
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "results" / "lockmerge-2026-11-25"))
-from evaluate import fetch, valid  # noqa: E402  (the replay's fetcher and validity check)
+from evaluate import fetch as _fetch_unsafe  # noqa: E402  (the replay's fetcher)
+from evaluate import valid  # noqa: E402  (and its validity check)
+
+_LOCKS: dict[tuple[str, str, str], threading.Lock] = {}
+_LOCKS_GUARD = threading.Lock()
+
+
+def fetch(cache: Path, repo: str, commit: str, path: str) -> str | None:
+    """The replay's fetcher, one thread per file: two rows can share a file, and a thread must
+    not read a file another is still writing (the first build of this dataset did, for two
+    rows)."""
+    with _LOCKS_GUARD:
+        lock = _LOCKS.setdefault((repo, commit, path), threading.Lock())
+    with lock:
+        return _fetch_unsafe(cache, repo, commit, path)
+
 
 MANIFESTS = {
     "study-1-stage-A": "results/real-merges-2026-10-26/stage-A/manifest.json",
@@ -240,7 +256,7 @@ def main() -> int:
             row["repo_url"] = f"https://github.com/{row['repo']}"
             out.write(json.dumps(row, sort_keys=True, ensure_ascii=False) + "\n")
     with (HERE / "conflicts.csv").open("w", encoding="utf-8", newline="") as out:
-        writer = csv.DictWriter(out, fieldnames=FIELDS)
+        writer = csv.DictWriter(out, fieldnames=FIELDS, lineterminator="\n")
         writer.writeheader()
         for row in labelled:
             writer.writerow(flat(row, repositories))
