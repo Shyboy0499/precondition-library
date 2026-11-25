@@ -58,34 +58,32 @@ Submitting is an act of authorship, so it has to be done by you, from your own a
 - **Title:** Executable Preconditions versus Text Similarity for Replaying Compiled Agent Programs:
   A Pre-registered Test on Real Lock-file Merges
 - **Primary category:** cs.SE (Software Engineering). **Cross-list:** cs.AI.
-- **Comments:** 37 pages, 3 figures, 21 tables. Code, data and pre-registrations:
+- **Comments:** 38 pages, 3 figures, 22 tables. Code, data, dataset and pre-registrations:
   https://github.com/Shyboy0499/precondition-library
-- **Abstract:** the abstract in `main.tex`, without LaTeX markup, as below. It is 1,917 characters, within arXiv's limit of 1,920.
+- **Abstract:** the abstract in `main.tex`, without LaTeX markup, as below. It is 1,788 characters, within arXiv's limit of 1,920.
 
   > Agents that compile solved tasks into reusable programs must decide when to replay one. We
-  > compare two ways of deciding at matched coverage: executable preconditions, shell probes
-  > that must hold on the live state, and text similarity between the request and a program's
-  > description. On states our own injectors built for five git maintenance faults, precondition
-  > dispatch mis-fired on 0 of 563 fires across three separately built libraries, while three
-  > text scorers mis-fired on 71-90% of theirs. But a tree reading only the state matched it,
-  > and by construction the request said nothing about the state. A pre-registered test on 274
-  > real lock-file merges from 11 repositories, labelled by what maintainers committed,
-  > falsified the claim that precondition dispatch rarely mis-fires: it was wrong on 62 of 150,
-  > 10 of 122 and 132 of 244 fires. Its margin came from merges without a conflict; on
-  > conflicts, the library's line-level resolutions could express 1 of 161 maintainer
-  > resolutions. Two more registered studies, on 47 fresh repositories, read lock files as
-  > package sets. An action computed from a merge's three sides reproduces the maintainer on
-  > 0.69 and 0.76 of a repository's conflicts, against 0.07 for line unions, and the ecosystem's
-  > resolver predicts which merge maintainers keep (91 of 91 discordant files). Exploratory
-  > analysis shows why: half of lock-file conflicts involve no package both sides changed
-  > differently. Firing the merge only when none diverges, itself a precondition, roughly halves
-  > its mismatch; a fifth registered study, on 20 more repositories, confirms it stays above
-  > 0.10 (0.35 [0.18, 0.53]). A sixth, on 25 more, finds merges leave lock files inconsistent
-  > more often than ordinary commits, narrowly (0.067 [0.003, 0.130]); run before manifests are
-  > resolved, adding the ecosystem's own check where that refuses covers 0.58 of files at
-  > mismatch 0.30. We also mutation-test the graders.
+  > compare executable preconditions, shell probes that must hold on the live state, with text
+  > similarity between the request and a program's description, at matched coverage. On states our
+  > own injectors built for five git maintenance faults, precondition dispatch mis-fired on 0 of
+  > 563 fires while three text scorers mis-fired on 71-90%, but a tree reading only the state
+  > matched it. A pre-registered test on 274 real lock-file merges from 11 repositories, labelled
+  > by what maintainers committed, falsified the claim that precondition dispatch rarely mis-fires
+  > (wrong on 62/150, 10/122 and 132/244 fires): its line-level resolutions expressed 1 of 161
+  > maintainer resolutions. Four more registered studies, on 92 fresh repositories, read lock
+  > files as package sets. An action computed from a merge's three sides reproduces the maintainer
+  > on 0.69 and 0.76 of conflicts, against 0.07 for line unions; firing it only when no package
+  > diverges, itself a precondition, roughly halves its mismatch but not below 0.10 (0.35 [0.18,
+  > 0.53]); and merges leave lock files inconsistent more often than ordinary commits (0.067
+  > [0.003, 0.130]). A registered study of 20 builds on 209 more merges tested refusal: how often
+  > a build fires on conflicts nothing can resolve ranges from 1% to 100%, and a state reader
+  > given the same refusal evidence declines about as often (primary hypothesis not supported,
+  > 0.060 [-0.009, 0.153]). What decided the outcome was the action space and giving the decision
+  > the state, not executing checks. We release 1,559 real lock-file conflicts from 109
+  > repositories, labelled by maintainers' commits, and lockmerge, a merge driver built on these
+  > results. We also mutation-test the graders.
 
-## Zenodo, with or without an endorsement
+## Zenodo, with or without an endorsement (the report)
 
 Zenodo gives the report a permanent DOI at once and needs no endorsement. Publishing is in your
 name and cannot be undone (a record can be versioned, not deleted), so it is done from your own
@@ -110,6 +108,44 @@ account at zenodo.org:
 4. **Later, arXiv.** Once endorsed, post the same version to arXiv and add the arXiv identifier
    to the Zenodo record as *Is identical to*.
 
+## TechRxiv, without an endorsement
+
+TechRxiv is IEEE's preprint server for engineering and computer science. It has no endorsement
+step. A moderator checks that a preprint is original, in scope and not plagiarised, and posts it
+with its own DOI, typically within four business days. Submit from your own account at
+techrxiv.org:
+
+1. **Upload** `main.pdf`, built with your `author.tex`.
+2. **Metadata.**
+   - **Title**, **abstract** and **keywords:** as for arXiv and Zenodo above.
+   - **Authors:** your name and affiliation exactly as in `author.tex`.
+   - **Category:** computing and processing, software engineering.
+   - **Licence:** CC BY 4.0.
+   - **Related links:** the repository; the Zenodo DOIs, once you have them.
+3. **AI disclosure.** State generative-AI use as the report's "Use of generative AI" section
+   does. Keep that section.
+4. **After posting.** Send the TechRxiv DOI back so the README and the Zenodo record can link it.
+
+## The dataset on Zenodo
+
+`datasets/lockfile-conflicts/` is a dataset in its own right: 1,559 real lock-file conflicts from
+109 repositories, labelled by what maintainers committed. Give it its own Zenodo record, so
+others can cite it apart from the report:
+
+1. **New upload** with `conflicts.jsonl`, `conflicts.csv`, `README.md` and `build.py`, from the
+   commit you publish (or the zip prepared for you).
+2. **Metadata.**
+   - **Resource type:** Dataset.
+   - **Title:** Real lock-file merge conflicts, labelled by what maintainers committed.
+   - **Creators:** as in `author.tex`.
+   - **Description:** the opening of `datasets/lockfile-conflicts/README.md`: what a row is, the
+     ecosystems table, and that no repository content is included.
+   - **Licence:** CC BY 4.0.
+   - **Keywords:** lock files; merge conflicts; dependency management; npm; Composer; dataset.
+   - **Related works:** *Is supplement to* the report's DOI; *Is supplemented by* the repository.
+   - **Version:** `v1`.
+3. **Publish**, and send the DOI back for the dataset README's citation line.
+
 ## Before you submit, check
 
 - [ ] **Your name and affiliation** in `author.tex`. arXiv lists authors by name, not by username.
@@ -133,6 +169,7 @@ review. Two routes fit this work:
 - **Study 1 as a short empirical paper or negative result** at a software-engineering venue that
   takes them, for example a workshop at ICSE or FSE, or MSR's tracks. Check each call for page
   limits, anonymity rules and whether it accepts work already posted to arXiv. Most SE venues do.
-- **Study 2 as a registered report.** It is registered and no data exists yet, which is what that
-  format reviews. MSR and ESEM have run registered-report tracks, so check their current calls
-  before the build runs.
+- **Study 2 as a registered study's result.** It was registered before its data and has now
+  run (`results/refusal-population-2026-11-15/`). Its primary hypothesis was not supported. That
+  is a result an empirical venue can publish as a negative result, with its registration as
+  evidence that the analysis was fixed in advance.

@@ -28,6 +28,12 @@ committed file failed them too. It declined the rest, mostly
 cases where both branches moved the same package to different versions
 ([measurements](results/lockmerge-2026-11-25/README.md)).
 
+**Dataset.** [`datasets/lockfile-conflicts/`](datasets/lockfile-conflicts/README.md) holds 1,559
+real lock-file merge conflicts from 109 open-source repositories, across npm, Composer, Yarn,
+pnpm, Bundler, Cargo, Poetry, Pipenv and uv. Each is given by its commits and labelled by what
+the maintainer committed. Use it to test any tool, rule or AI agent that resolves lock-file
+conflicts.
+
 ## In plain language
 
 This library tests two ways to decide whether a saved fix should run: inspect

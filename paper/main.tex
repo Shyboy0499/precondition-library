@@ -35,29 +35,24 @@ Programs: A Pre-registered Test on Real Lock-file Merges}
 
 \begin{abstract}
 Agents that compile solved tasks into reusable programs must decide when to replay one. We
-compare two ways of deciding at matched coverage: executable preconditions, shell probes that
-must hold on the live state, and text similarity between the request and a program's
-description. On states our own injectors built for five git maintenance faults, precondition
-dispatch mis-fired on 0 of 563 fires across three separately built libraries, while three text
-scorers mis-fired on 71--90\% of theirs. But a tree reading only the state matched it, and by
-construction the request said nothing about the state. A pre-registered test on 274 real
-lock-file merges from 11 repositories, labelled by what maintainers committed, \emph{falsified}
-the claim that precondition dispatch rarely mis-fires: it was wrong on 62 of 150, 10 of 122 and
-132 of 244 fires. Its margin came from merges without a conflict; on conflicts, the library's
-line-level resolutions could express 1 of 161 maintainer resolutions. Two more registered
-studies, on 47 fresh repositories, read lock files as package sets. An action computed from a
-merge's three sides reproduces the maintainer on 0.69 and 0.76 of a repository's conflicts,
-against 0.07 for line unions, and the ecosystem's resolver predicts which merge maintainers keep
-(91 of 91 discordant files). Exploratory analysis shows why: half of lock-file conflicts involve
-no package both sides changed differently. Firing the merge only when none diverges, itself a
-precondition, roughly halves its mismatch; a fifth registered study, on 20 more repositories,
-confirms it stays above 0.10 (0.35 [0.18, 0.53]). A sixth, on 25 more, finds merges leave lock
-files inconsistent more often than ordinary commits, narrowly (0.067 [0.003, 0.130]); run before
-manifests are resolved, adding the ecosystem's own check where that refuses covers 0.58 of files
-at mismatch 0.30. A registered study of 20 builds on 209 more real merges tested refusal. How
-often a build fires on conflicts nothing can resolve ranges from 1\% to 100\% across ten builds,
-and a state reader taught the same refusal evidence declines about as often as builds admitted for
-refusing: the primary hypothesis is not supported (0.060 [$-$0.009, 0.153]). We also
+compare executable preconditions, shell probes that must hold on the live state, with text
+similarity between the request and a program's description, at matched coverage. On states our
+own injectors built for five git maintenance faults, precondition dispatch mis-fired on 0 of 563
+fires while three text scorers mis-fired on 71--90\%, but a tree reading only the state matched
+it. A pre-registered test on 274 real lock-file merges from 11 repositories, labelled by what
+maintainers committed, \emph{falsified} the claim that precondition dispatch rarely mis-fires
+(wrong on 62/150, 10/122 and 132/244 fires): its line-level resolutions expressed 1 of 161
+maintainer resolutions. Four more registered studies, on 92 fresh repositories, read lock files
+as package sets. An action computed from a merge's three sides reproduces the maintainer on 0.69
+and 0.76 of conflicts, against 0.07 for line unions; firing it only when no package diverges,
+itself a precondition, roughly halves its mismatch but not below 0.10 (0.35 [0.18, 0.53]); and
+merges leave lock files inconsistent more often than ordinary commits (0.067 [0.003, 0.130]). A
+registered study of 20 builds on 209 more merges tested refusal: how often a build fires on
+conflicts nothing can resolve ranges from 1\% to 100\%, and a state reader given the same refusal
+evidence declines about as often (primary hypothesis not supported, 0.060 [$-$0.009, 0.153]).
+What decided the outcome was the action space and giving the decision the state, not executing
+checks. We release 1,559 real lock-file conflicts from 109 repositories, labelled by
+maintainers' commits, and lockmerge, a merge driver built on these results. We also
 mutation-test the graders.
 \end{abstract}
 
@@ -1639,6 +1634,26 @@ Studies 3 and 4 moved the first of those three, by changing the unit from lines 
 That change raised the share of conflicts with a reproducing action from 0.07 to 0.69, more
 than any choice of dispatcher did on these data.
 
+\paragraph{From the results to a tool and a dataset.}
+Two artefacts carry these results beyond the report.
+\begin{itemize}
+  \item \textbf{lockmerge}, a git merge driver for \code{package-lock.json} and
+  \code{composer.lock}, is the divergence gate made into a tool. It merges a lock file record by
+  record, and refuses, naming the packages, when one changed differently on both sides or the
+  merge would break a requirement neither side broke. On the 895 such conflicts of studies 1 and
+  3--6 it merged 63 of 374 npm conflicts and, once \code{composer.json} is merged, 187 of 521
+  Composer ones. All but 3 and 12 of those merges pass the package manager's consistency rules
+  for the maintainer's merged manifest. Every exception came from a conflict whose maintainer's
+  own file fails them too. Its rules were refined on these conflicts, so this is a development
+  set, not a test; a held-out test is the next step. It shows the report's pattern once more:
+  a precondition made the merge safe, and how much it can resolve is set by the actions
+  available, not by the gate.
+  \item \textbf{A dataset} of the 1,559 lock-file conflicts the studies mined, from 109
+  repositories and nine formats. Each conflict is given by its commits and labelled by which
+  of four simple actions reproduces the maintainer's resolved packages; one does in 1,058 of the
+  1,550 readable ones (0.68).
+\end{itemize}
+
 \paragraph{Implications for compiled skills.}
 \begin{itemize}
   \item \textbf{A check must fail closed.} An absence check has to distinguish ``found nothing''
@@ -1750,8 +1765,10 @@ report describes commit \code{fd13c0faea1cb814f152c7009187a6ca663afc68} of that 
 The figures and tables of Sections~\ref{sec:synthetic}--\ref{sec:graders} come from committed
 result files. The power analysis, every figure and every generated table are regenerated by
 \code{paper/analysis/power.py}, \code{paper/analysis/figures.py} and
-\code{paper/analysis/tables.py}. Only commit SHAs and derived labels from mined repositories are
-released, never their content.
+\code{paper/analysis/tables.py}. The lock-file conflicts dataset is in
+\code{datasets/lockfile-conflicts/}, and lockmerge, with its measurements, in \code{lockmerge/}
+and \code{results/lockmerge-2026-11-25/}. Only commit SHAs and derived labels from mined
+repositories are released, never their content.
 
 \section*{Use of generative AI}
 
