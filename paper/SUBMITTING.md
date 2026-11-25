@@ -157,7 +157,7 @@ others can cite it apart from the report:
 - [ ] **The disclosure.** arXiv does not allow AI tools as authors, and it requires significant use
       of generative AI to be reported. The "Use of generative AI" section does that. Keep it.
 - [x] **The commit.** "Data and code availability" names the commit the report describes
-      (`fd13c0f`), so a reader can check out exactly what it reports.
+      (`a10057c`), so a reader can check out exactly what it reports.
 - [ ] **Optional:** archive the repository on Zenodo to get a DOI, and cite it in "Data and code
       availability". A DOI outlives a branch.
 
