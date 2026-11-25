@@ -12,6 +12,10 @@ measured result, at pair level; everything before it is design and apparatus. Se
 
 ### Added
 
+- **The report and the dataset are on Zenodo:** the report as
+  [doi:10.5281/zenodo.24544472](https://doi.org/10.5281/zenodo.24544472), the dataset as
+  [doi:10.5281/zenodo.24544756](https://doi.org/10.5281/zenodo.24544756). The README gains DOI
+  badges and a "How to cite" section.
 - **A dataset of 1,559 real lock-file conflicts** from 109 repositories and nine formats
   ([`datasets/lockfile-conflicts/`](datasets/lockfile-conflicts/README.md)). Each is given by its
   commits and labelled by which of four simple actions reproduces the maintainer's packages

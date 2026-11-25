@@ -85,6 +85,12 @@ Submitting is an act of authorship, so it has to be done by you, from your own a
 
 ## Zenodo, with or without an endorsement (the report)
 
+**Done:** the report is published as
+[doi:10.5281/zenodo.24544472](https://doi.org/10.5281/zenodo.24544472) (version v1; the concept DOI
+for every version is 10.5281/zenodo.24544471), and the dataset as
+[doi:10.5281/zenodo.24544756](https://doi.org/10.5281/zenodo.24544756). The steps below are kept
+for a later version.
+
 Zenodo gives the report a permanent DOI at once and needs no endorsement. Publishing is in your
 name and cannot be undone (a record can be versioned, not deleted), so it is done from your own
 account at zenodo.org:
