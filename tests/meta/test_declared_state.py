@@ -211,6 +211,11 @@ DECLARED_SKIPS: dict[str, str] = {
     "test_process_confinement.py::test_a_write_past_the_file_size_limit_fails": "#10",
     # `refusal_study evaluate --jobs` forks its workers; on Windows it runs one process (#307).
     "test_refusal_study.py::test_deciding_on_several_processes_writes_the_same_files": "#307",
+    # lockmerge checked against the real tools: npm's semver, `npm ls`, Composer's hash in PHP.
+    # They skip only where node, npm or PHP is missing; CI's Ubuntu image has all three.
+    "test_semver.py::test_satisfies_agrees_with_npms_semver_on_every_pair": "#385",
+    "test_npm.py::test_npm_accepts_the_merged_lock_file": "#385",
+    "test_composer.py::test_content_hash_matches_composers_php": "#385",
 }
 
 

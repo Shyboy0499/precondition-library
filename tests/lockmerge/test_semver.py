@@ -88,7 +88,7 @@ def _npm_semver() -> Path | None:
     return None
 
 
-@pytest.mark.skipif(_npm_semver() is None, reason="node and npm's semver are not available")
+@pytest.mark.skipif(_npm_semver() is None, reason="node and npm's semver are not available (#385)")
 def test_satisfies_agrees_with_npms_semver_on_every_pair() -> None:
     pairs = [(v, r) for v in VERSIONS for r in RANGES]
     done = subprocess.run(
