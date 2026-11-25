@@ -127,7 +127,10 @@ The labels and this documentation are released under
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The repositories' own content is not
 redistributed, and each row records its repository's licence.
 
-When citing it, cite the dataset's Zenodo DOI (added on release) and the report in `paper/`.
+When citing it, cite the dataset,
+[doi:10.5281/zenodo.24544756](https://doi.org/10.5281/zenodo.24544756), and the report,
+[doi:10.5281/zenodo.24544472](https://doi.org/10.5281/zenodo.24544472). Version 1 on Zenodo is
+this folder at commit `0d4d36f`.
 
 ## Files
 

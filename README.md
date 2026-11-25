@@ -8,6 +8,8 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2EA44F?style=flat" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/status-falsified%20on%20real%20merges-B35900?style=flat" alt="Status: the rarely-mis-fires claim is falsified on real merges">
   <img src="https://img.shields.io/badge/python-3.12%2B-3776AB?style=flat" alt="Python 3.12+">
+  <a href="https://doi.org/10.5281/zenodo.24544472"><img src="https://img.shields.io/badge/paper-10.5281%2Fzenodo.24544472-1682D4?style=flat" alt="Paper DOI 10.5281/zenodo.24544472"></a>
+  <a href="https://doi.org/10.5281/zenodo.24544756"><img src="https://img.shields.io/badge/dataset-10.5281%2Fzenodo.24544756-1682D4?style=flat" alt="Dataset DOI 10.5281/zenodo.24544756"></a>
 </p>
 
 ## Use it: lockmerge
@@ -33,6 +35,17 @@ real lock-file merge conflicts from 109 open-source repositories, across npm, Co
 pnpm, Bundler, Cargo, Poetry, Pipenv and uv. Each is given by its commits and labelled by what
 the maintainer committed. Use it to test any tool, rule or AI agent that resolves lock-file
 conflicts.
+
+## How to cite
+
+- **The paper:** *Executable Preconditions versus Text Similarity for Replaying Compiled Agent
+  Programs: A Pre-registered Test on Real Lock-file Merges* (preprint, Zenodo, 2026),
+  [doi:10.5281/zenodo.24544472](https://doi.org/10.5281/zenodo.24544472).
+- **The dataset:** *Real lock-file merge conflicts, labelled by what maintainers committed*
+  (Zenodo, 2026), [doi:10.5281/zenodo.24544756](https://doi.org/10.5281/zenodo.24544756).
+
+Each record's Zenodo page gives the full citation in any style, BibTeX included (the *Citation*
+and *Export* boxes).
 
 ## In plain language
 
