@@ -161,7 +161,7 @@ def test_unreadable_input_is_refused_not_guessed() -> None:
     assert isinstance(outcome, Declined) and "not JSON" in outcome.reasons[0]
 
 
-@pytest.mark.skipif(shutil.which("npm") is None, reason="npm is not installed")
+@pytest.mark.skipif(shutil.which("npm") is None, reason="npm is not installed (#385)")
 def test_npm_accepts_the_merged_lock_file(tmp_path: Path) -> None:
     """`npm ls --package-lock-only` reads package.json and the lock file without installing or
     reaching a registry, and exits non-zero on a lock that does not satisfy package.json."""

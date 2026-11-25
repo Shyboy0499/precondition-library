@@ -156,7 +156,7 @@ echo md5(json_encode($r, 0));
 """
 
 
-@pytest.mark.skipif(shutil.which("php") is None, reason="php is not installed")
+@pytest.mark.skipif(shutil.which("php") is None, reason="php is not installed (#385)")
 @pytest.mark.parametrize(
     "project",
     [
